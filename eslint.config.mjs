@@ -5,6 +5,15 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    // Custom rules can be added here
+    rules: {
+      // Example customizations (uncomment and adjust as needed):
+      // '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      // 'react/no-unescaped-entities': 'off',
+      // '@next/next/no-img-element': 'warn',
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

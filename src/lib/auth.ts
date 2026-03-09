@@ -1,18 +1,19 @@
 import { betterAuth } from 'better-auth';
 import { Pool } from 'pg';
 
-// Create a separate pool for Better Auth with auth schema configuration
-// We use search_path to ensure all Better Auth tables are created in the 'auth' schema
+// Pool for Better Auth with auth schema. node-postgres does not pass connection-string
+// "options" to the server, so we set search_path on every new connection via onConnect.
 const authDbPool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  // Configure search_path to use 'auth' schema
-  options: '-c search_path=auth',
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
   ssl: process.env.DATABASE_URL?.includes('sslmode=require')
     ? { rejectUnauthorized: false }
     : false,
+  onConnect: async (client) => {
+    await client.query('SET search_path TO auth');
+  },
 });
 
 // Placeholder email sending function for password reset

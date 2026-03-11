@@ -193,16 +193,39 @@ export function ShiftBlock({
       cssInline = { borderLeftStyle: 'none' };
     }
   }
+  const isSunday = cellDate.getDay() === 0;
+
+  // Compute rounded corner classes based on continuity across midnight
+  const middleRoundedClass =
+    continuesFromPrev && continuesToNext ? '' :
+    continuesFromPrev ? 'rounded-r-[3px]' :
+    continuesToNext ? 'rounded-l-[3px]' :
+    'rounded-[3px]';
+  const stripRoundedClass =
+    continuesFromPrev && continuesToNext ? '' :
+    continuesFromPrev ? 'rounded-r-[3px]' :
+    continuesToNext ? 'rounded-l-[3px]' :
+    'rounded-[3px]';
+
   if (continuesFromPrev) {
-    cssInline = { ...cssInline, borderLeftStyle: 'none', boxShadow: '5px 0px 6px #fff inset' };
+    if (isMonday) {
+      // Cross-week boundary (Sunday→Monday row): apply inset shadow
+      cssInline = { ...cssInline, borderLeftStyle: 'none', boxShadow: '5px 0px 6px #fff inset' };
+    } else {
+      // Within same week row (overnight): seamless, no shadow
+      cssInline = { ...cssInline, borderLeftStyle: 'none' };
+    }
   }
   if (continuesToNext) {
     const existingShadow = cssInline.boxShadow ?? '';
-    const rightInset = '-5px 0px 6px #fff inset';
-    cssInline = { ...cssInline, borderRightStyle: 'none', boxShadow: existingShadow ? `${existingShadow}, ${rightInset}` : rightInset };
-  }
-  if (continuesFromPrev && continuesToNext) {
-    cssInline = { ...cssInline, boxShadow: '5px 0px 6px #fff inset, -5px 0px 6px #fff inset' };
+    if (isSunday) {
+      // Cross-week boundary (Sunday→Monday row): apply inset shadow
+      const rightInset = '-5px 0px 6px #fff inset';
+      cssInline = { ...cssInline, borderRightStyle: 'none', boxShadow: existingShadow ? `${existingShadow}, ${rightInset}` : rightInset };
+    } else {
+      // Within same week row (overnight): seamless, no shadow
+      cssInline = { ...cssInline, borderRightStyle: 'none' };
+    }
   }
 
   const achterwDoc = block.top ?? null;
@@ -255,9 +278,19 @@ export function ShiftBlock({
       data-active-shift={isActive ? 'true' : undefined}
       style={{
         top: '50%',
-        width: usePixelLayout ? `${widthPx}px` : `${widthPercent}%`,
-        left: usePixelLayout ? `${leftPx}px` : `${leftPercent}%`,
+        // Extend 1px on connecting sides to visually cover the 1px day-column divider border
+        width: usePixelLayout
+          ? `${widthPx + (continuesFromPrev ? 1 : 0) + (continuesToNext ? 1 : 0)}px`
+          : (continuesFromPrev || continuesToNext)
+            ? `calc(${widthPercent}% + ${(continuesFromPrev ? 1 : 0) + (continuesToNext ? 1 : 0)}px)`
+            : `${widthPercent}%`,
+        left: usePixelLayout
+          ? `${leftPx + (continuesFromPrev ? -1 : 0)}px`
+          : continuesFromPrev
+            ? `calc(${leftPercent}% - 1px)`
+            : `${leftPercent}%`,
         transform: 'translateY(-50%)',
+        zIndex: (continuesFromPrev || continuesToNext) ? 1 : undefined,
       }}
     >
       {onDelete && (
@@ -277,7 +310,7 @@ export function ShiftBlock({
       {!hideTopStrip &&
         (achterw === 0 ? (
           <div
-            className={`h-3 rounded-[3px] text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
+            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor="111"
             data-testid="shift-block-top"
             style={{
@@ -292,7 +325,7 @@ export function ShiftBlock({
           </div>
         ) : (
           <div
-            className={`h-3 rounded-[3px] text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
+            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={achterw}
             data-testid="shift-block-top"
             style={{
@@ -309,7 +342,7 @@ export function ShiftBlock({
         ))}
       <div className="group">
         <div
-          className={`flex h-[42px] mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] rounded-[3px] ${doctorId ? 'active-day' : ''}`}
+          className={`flex h-[42px] mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] ${middleRoundedClass} ${doctorId ? 'active-day' : ''}`}
           data-testid="shift-block-middle"
           data-doctor={doctorId}
           data-current-date={block.currentDate}
@@ -361,7 +394,7 @@ export function ShiftBlock({
       {!hideBottomStrip &&
         (extra === 0 ? (
           <div
-            className={`h-3 rounded-[3px] text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
+            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor="111"
             data-testid="shift-block-bottom"
             style={{
@@ -376,7 +409,7 @@ export function ShiftBlock({
           </div>
         ) : (
           <div
-            className={`h-3 rounded-[3px] text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
+            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={extra}
             data-testid="shift-block-bottom"
             style={{

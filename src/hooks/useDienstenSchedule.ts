@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { DienstenResponse, ShiftBlockView, Dienst, DoctorInfo } from '@/types/diensten';
+import type { CalendarGridRow } from '@/components/CalandarGrid/CalendarGrid';
 
 function formatTwoDigits(n: number): string {
   return n.toString().padStart(2, '0');
@@ -32,7 +33,8 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
     const day = start.getDate();
     const month0 = start.getMonth(); // 0-based
     const year = start.getFullYear();
-    const key = `${day}-${month0}-${year}-${dienst.van}-${dienst.tot}`;
+    const wg = dienst.idwaarneemgroep ?? '';
+    const key = `${day}-${month0}-${year}-${dienst.van}-${dienst.tot}-${wg}`;
     const existing = byKey.get(key);
     if (existing) {
       if (dienst.type === 1 && !existing.base) {
@@ -109,10 +111,27 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
       middle,
       top,
       bottom,
+      idwaarneemgroep: base.idwaarneemgroep,
     });
   }
 
   return blocks;
+}
+
+/** Groups shift blocks by idwaarneemgroep into calendar rows (one row per waarneemgroep). */
+export function groupShiftBlocksByWaarneemgroep(blocks: ShiftBlockView[]): CalendarGridRow[] {
+  const byWg = new Map<number, ShiftBlockView[]>();
+  for (const block of blocks) {
+    const wg = block.idwaarneemgroep ?? 0;
+    if (!byWg.has(wg)) byWg.set(wg, []);
+    byWg.get(wg)!.push(block);
+  }
+  const sortedIds = Array.from(byWg.keys()).sort((a, b) => a - b);
+  return sortedIds.map((id) => ({
+    id,
+    name: id === 0 ? 'Overig' : `Waarneemgroep ${id}`,
+    shiftBlocks: byWg.get(id)!,
+  }));
 }
 
 /** React hook wrapper around dienstenToShiftBlocks. */

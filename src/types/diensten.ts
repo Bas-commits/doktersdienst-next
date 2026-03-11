@@ -12,6 +12,8 @@ export interface Dienst {
   van: number;
   tot: number;
   type: number;
+  /** Optional: waarneemgroep id for grouping rows in the calendar. */
+  idwaarneemgroep?: number;
   diensten_deelnemers: DienstDeelnemer | null;
 }
 
@@ -55,5 +57,7 @@ export interface ShiftBlockView {
   bottom: DoctorInfo | null;
   /** Optional label for tooltip, e.g. "Ochtend" / "Avond". */
   label?: string;
+  /** Optional: waarneemgroep id (for grouping into calendar rows). */
+  idwaarneemgroep?: number;
 }
 

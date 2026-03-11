@@ -1,22 +1,15 @@
 'use client';
 
 import Head from 'next/head';
-import { useMemo } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
-import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep } from '@/hooks/useDienstenSchedule';
-import { dienstenData } from '@/data/diensten-data';
+import { waarneemgroepRows } from '@/components/CalandarGrid/CalendarGrid.fixtures';
+
 
 export default function RoosterInzienPage() {
   const { data: session } = authClient.useSession();
   const name = session?.user?.name ?? session?.user?.email ?? 'daar';
-
-  const rows = useMemo(() => {
-    const blocks = dienstenToShiftBlocks(dienstenData);
-    return groupShiftBlocksByWaarneemgroep(blocks);
-  }, []);
 
   return (
     <>
@@ -44,9 +37,9 @@ export default function RoosterInzienPage() {
           </CardHeader>
           <CardContent>
             <CalendarGridWithNavState
-              rows={rows}
-              initialViewMonth={0}
-              initialViewYear={2026}
+              rows={waarneemgroepRows}
+              initialViewMonth={2}
+              initialViewYear={2025}
             />
           </CardContent>
         </Card>

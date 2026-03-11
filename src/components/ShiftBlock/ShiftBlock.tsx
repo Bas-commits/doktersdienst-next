@@ -271,7 +271,7 @@ export function ShiftBlock({
         ))}
       <div className="group">
         <div
-          className={`flex h-[42px] items-center justify-between relative border border-[#a0a0a0] rounded-[3px] ${doctorId ? 'active-day' : ''}`}
+          className={`flex h-[42px] mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] rounded-[3px] ${doctorId ? 'active-day' : ''}`}
           data-testid="shift-block-middle"
           data-doctor={doctorId}
           data-current-date={block.currentDate}

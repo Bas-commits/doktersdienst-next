@@ -35,18 +35,80 @@ export interface CalendarGridProps {
   onViewMonthChange?: (month: number, year: number) => void;
 }
 
-function filterBlocksForDay(
+/** Pad number to two digits for HH:MM. */
+function pad2(n: number): string {
+  return n.toString().padStart(2, '0');
+}
+
+/**
+ * Returns blocks that overlap the given calendar day, with the segment of each shift
+ * that falls within that day (start/end as "HH:MM" in that day).
+ * Used for overnight and multi-day shifts so they render in every day they span.
+ */
+function getBlocksWithSegmentsForDay(
   blocks: ShiftBlockView[],
   day: number,
-  month1Based: number,
+  month0: number,
   year: number
-): ShiftBlockView[] {
-  return blocks.filter((item) => {
-    const d = Number(item.day);
-    const m0 = Number(item.month);
-    const y = Number(item.year);
-    return d === day && m0 === month1Based - 1 && y === year;
-  });
+): { block: ShiftBlockView; segmentStartTime: string; segmentEndTime: string }[] {
+  const dayStart = new Date(year, month0, day, 0, 0, 0, 0).getTime();
+  const dayEnd = new Date(year, month0, day, 23, 59, 59, 999).getTime();
+  const result: { block: ShiftBlockView; segmentStartTime: string; segmentEndTime: string }[] = [];
+
+  for (const block of blocks) {
+    const startStr = String(block.currentDate).replace(' ', 'T');
+    const endStr = String(block.nextDate).replace(' ', 'T');
+    const shiftStart = new Date(startStr).getTime();
+    const shiftEnd = new Date(endStr).getTime();
+    if (Number.isNaN(shiftStart) || Number.isNaN(shiftEnd)) continue;
+    if (shiftEnd <= dayStart || shiftStart > dayEnd) continue;
+
+    const segmentStartMs = Math.max(shiftStart, dayStart);
+    const segmentEndMs = Math.min(shiftEnd, dayEnd);
+
+    const segStart = new Date(segmentStartMs);
+    const segEnd = new Date(segmentEndMs);
+    const segmentStartTime = `${pad2(segStart.getHours())}:${pad2(segStart.getMinutes())}`;
+    const segmentEndTime =
+      segEnd.getHours() === 23 && segEnd.getMinutes() === 59
+        ? '24:00'
+        : `${pad2(segEnd.getHours())}:${pad2(segEnd.getMinutes())}`;
+
+    result.push({ block, segmentStartTime, segmentEndTime });
+  }
+
+  return result;
+}
+
+/** Returns true if the block's shift interval overlaps the given calendar day. */
+function blockOverlapsDay(
+  block: ShiftBlockView,
+  day: number,
+  month0: number,
+  year: number
+): boolean {
+  const dayStart = new Date(year, month0, day, 0, 0, 0, 0).getTime();
+  const dayEnd = new Date(year, month0, day, 23, 59, 59, 999).getTime();
+  const startStr = String(block.currentDate).replace(' ', 'T');
+  const endStr = String(block.nextDate).replace(' ', 'T');
+  const shiftStart = new Date(startStr).getTime();
+  const shiftEnd = new Date(endStr).getTime();
+  if (Number.isNaN(shiftStart) || Number.isNaN(shiftEnd)) return false;
+  return shiftEnd > dayStart && shiftStart <= dayEnd;
+}
+
+/** Previous calendar date (day - 1, handling month/year boundaries). */
+function getPrevDate(day: number, month0: number, year: number): { day: number; month0: number; year: number } {
+  const d = new Date(year, month0, day);
+  d.setDate(d.getDate() - 1);
+  return { day: d.getDate(), month0: d.getMonth(), year: d.getFullYear() };
+}
+
+/** Next calendar date (day + 1, handling month/year boundaries). */
+function getNextDate(day: number, month0: number, year: number): { day: number; month0: number; year: number } {
+  const d = new Date(year, month0, day);
+  d.setDate(d.getDate() + 1);
+  return { day: d.getDate(), month0: d.getMonth(), year: d.getFullYear() };
 }
 
 export function CalendarGrid({
@@ -182,10 +244,10 @@ export function CalendarGrid({
                       </div>
                       <div className="flex flex-1 flex-col gap-1.5 min-h-0">
                         {gridRows.map((row) => {
-                          const blocksForDay = filterBlocksForDay(
+                          const blocksWithSegments = getBlocksWithSegmentsForDay(
                             row.shiftBlocks,
                             rangeDay,
-                            rangeMonth1,
+                            range.Month,
                             rangeYear
                           );
                           return (
@@ -195,33 +257,43 @@ export function CalendarGrid({
                               data-block={row.id}
                               data-row-name={row.name}
                             >
-                              {blocksForDay.map((block, blockIndex) => (
-                                <ShiftBlock
-                                  key={`${block.id}-${block.van}-${block.tot}-${blockIndex}`}
-                                  block={block}
-                                  day={rangeDay}
-                                  month={range.Month}
-                                  year={rangeYear}
-                                  hideTopStrip={hideTopStrip}
-                                  hideBottomStrip={hideBottomStrip}
-                                  onDelete={
-                                    onShiftDelete
-                                      ? () => onShiftDelete(block)
-                                      : undefined
-                                  }
-                                  onClick={
-                                    onShiftClick
-                                      ? (e) => {
-                                          const rect = e.currentTarget.getBoundingClientRect();
-                                          onShiftClick(block, {
-                                            top: rect.top + window.scrollY,
-                                            left: rect.left + window.scrollX,
-                                          });
-                                        }
-                                      : undefined
-                                  }
-                                />
-                              ))}
+                              {blocksWithSegments.map(({ block, segmentStartTime, segmentEndTime }, blockIndex) => {
+                                const prev = getPrevDate(rangeDay, range.Month, rangeYear);
+                                const next = getNextDate(rangeDay, range.Month, rangeYear);
+                                const continuesFromPrev = blockOverlapsDay(block, prev.day, prev.month0, prev.year);
+                                const continuesToNext = blockOverlapsDay(block, next.day, next.month0, next.year);
+                                return (
+                                  <ShiftBlock
+                                    key={`${block.id}-${block.van}-${block.tot}-${dateKey}-${blockIndex}`}
+                                    block={block}
+                                    day={rangeDay}
+                                    month={range.Month}
+                                    year={rangeYear}
+                                    segmentStartTime={segmentStartTime}
+                                    segmentEndTime={segmentEndTime}
+                                    continuesFromPrev={continuesFromPrev}
+                                    continuesToNext={continuesToNext}
+                                    hideTopStrip={hideTopStrip}
+                                    hideBottomStrip={hideBottomStrip}
+                                    onDelete={
+                                      onShiftDelete
+                                        ? () => onShiftDelete(block)
+                                        : undefined
+                                    }
+                                    onClick={
+                                      onShiftClick
+                                        ? (e) => {
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            onShiftClick(block, {
+                                              top: rect.top + window.scrollY,
+                                              left: rect.left + window.scrollX,
+                                            });
+                                          }
+                                        : undefined
+                                    }
+                                  />
+                                );
+                              })}
                             </div>
                           );
                         })}

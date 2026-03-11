@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
-const DEFAULT_AFTER_LOGIN_URL = '/dashboard';
+const DEFAULT_AFTER_LOGIN_URL = '/rooster-inzien';
 
 export default function LoginPage() {
   const router = useRouter();

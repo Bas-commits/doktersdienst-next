@@ -88,6 +88,23 @@ export interface ShiftBlockProps {
    * Clicking it calls onDelete and does not trigger onClick.
    */
   onDelete?: () => void;
+  /**
+   * When set with segmentEndTime, this block is drawn as a day-segment (e.g. overnight shift
+   * split across days). Layout left/width use these times instead of block.startTime/endTime.
+   * Tooltip still shows full block times.
+   */
+  segmentStartTime?: string;
+  segmentEndTime?: string;
+  /**
+   * When true, this segment continues from the previous day (same shift across midnight).
+   * Removes left border so it connects visually with the previous cell.
+   */
+  continuesFromPrev?: boolean;
+  /**
+   * When true, this segment continues to the next day (same shift across midnight).
+   * Removes right border so it connects visually with the next cell.
+   */
+  continuesToNext?: boolean;
 }
 
 export function ShiftBlock({
@@ -108,6 +125,10 @@ export function ShiftBlock({
   onSectionClick,
   pendingRemoveSections,
   onDelete,
+  segmentStartTime,
+  segmentEndTime,
+  continuesFromPrev,
+  continuesToNext,
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -137,8 +158,14 @@ export function ShiftBlock({
     return minutes;
   };
 
-  const startMinutes = parseTimeToMinutes(block.startTime);
-  const endMinutes = parseTimeToMinutes(block.endTime);
+  const useSegment =
+    segmentStartTime != null && segmentEndTime != null && segmentStartTime !== '' && segmentEndTime !== '';
+  const startMinutes = useSegment
+    ? parseTimeToMinutes(segmentStartTime)
+    : parseTimeToMinutes(block.startTime);
+  const endMinutes = useSegment
+    ? parseTimeToMinutes(segmentEndTime)
+    : parseTimeToMinutes(block.endTime);
   const sameDay = endMinutes >= startMinutes;
   const durationMinutes = sameDay
     ? endMinutes - startMinutes
@@ -165,6 +192,17 @@ export function ShiftBlock({
     } else if (isMonday && startIsWeekend) {
       cssInline = { borderLeftStyle: 'none' };
     }
+  }
+  if (continuesFromPrev) {
+    cssInline = { ...cssInline, borderLeftStyle: 'none', boxShadow: '5px 0px 6px #fff inset' };
+  }
+  if (continuesToNext) {
+    const existingShadow = cssInline.boxShadow ?? '';
+    const rightInset = '-5px 0px 6px #fff inset';
+    cssInline = { ...cssInline, borderRightStyle: 'none', boxShadow: existingShadow ? `${existingShadow}, ${rightInset}` : rightInset };
+  }
+  if (continuesFromPrev && continuesToNext) {
+    cssInline = { ...cssInline, boxShadow: '5px 0px 6px #fff inset, -5px 0px 6px #fff inset' };
   }
 
   const achterwDoc = block.top ?? null;

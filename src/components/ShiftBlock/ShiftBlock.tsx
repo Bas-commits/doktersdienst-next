@@ -355,7 +355,14 @@ export function ShiftBlock({
             ...cssInline,
             ...(middleHasClick ? { cursor: 'pointer' as const } : {}),
             ...(dimMiddle ? { opacity: 0.35 } : {}),
-            ...(isActive ? { outline: '2px solid #dc2626', outlineOffset: 1, zIndex: 1 } : {}),
+            ...(isActive ? {
+              borderColor: '#dc2626',
+              borderTopWidth: '3px',
+              borderBottomWidth: '3px',
+              borderLeftWidth: continuesFromPrev ? '0' : '3px',
+              borderRightWidth: continuesToNext ? '0' : '3px',
+              zIndex: 1,
+            } : {}),
           }}
           onClick={middleHasClick ? (e) => useSectionClick ? onSectionClick!('middle', e) : onClick!(e) : undefined}
         >

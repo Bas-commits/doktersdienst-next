@@ -1,4 +1,4 @@
-import { Pool, QueryResult } from 'pg';
+import { Pool, QueryResult, QueryResultRow } from 'pg';
 
 // Create a connection pool
 // Connection pooling helps manage multiple database connections efficiently
@@ -23,7 +23,7 @@ pool.on('error', (err) => {
  * @param params - Query parameters (for parameterized queries)
  * @returns Promise with query result
  */
-export async function query<T = any>(
+export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: any[]
 ): Promise<QueryResult<T>> {

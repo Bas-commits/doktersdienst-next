@@ -83,6 +83,8 @@ describe('DoktersdienstHeader', () => {
   it('renders Mijn gegevens and Log uit links with correct hrefs', () => {
     render(<DoktersdienstHeader {...defaultProps} />);
 
+    fireEvent.click(screen.getByTestId('header-user-menu'));
+
     expect(screen.getByTestId('header-link-mijn-gegevens')).toHaveAttribute('href', '/DoktersDienst/mijn_gegevens_deelnemer_jsx');
     expect(screen.getByTestId('header-link-logout')).toHaveAttribute('href', '/logout');
   });

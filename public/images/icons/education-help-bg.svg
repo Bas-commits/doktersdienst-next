@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="57" height="44" viewBox="0 0 57 44">
+  <defs>
+    <linearGradient id="linear-gradient" y1="1" x2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#723cbd"/>
+      <stop offset="0.434" stop-color="#6e3bbd"/>
+      <stop offset="1" stop-color="#9772e9"/>
+    </linearGradient>
+  </defs>
+  <g id="Group_9" data-name="Group 9" transform="translate(-97 -310.699)">
+    <rect id="Rectangle" width="57" height="44" transform="translate(97 310.699)" fill="url(#linear-gradient)"/>
+    <g id="Page-1" transform="translate(110 324.699)">
+      <g id="Praktijk-Planner">
+        <g id="Group-6" transform="translate(0)">
+          <g id="noun_education_3406896" transform="translate(0 7.058)">
+            <g id="Group" transform="translate(0)">
+              <path id="Path" d="M9.5,6.462a3.359,3.359,0,0,1-.752-.1L4.037,5.154V8.442A.618.618,0,0,0,4.394,9,12.2,12.2,0,0,0,9.5,9.942,11.882,11.882,0,0,0,14.606,9a.64.64,0,0,0,.356-.558V5.154l-4.71,1.212A3.359,3.359,0,0,1,9.5,6.462Z" transform="translate(-0.084 -0.058)" fill="#fff"/>
+              <path id="Path-2" data-name="Path" d="M18.644,2.365,9.935.115a1.747,1.747,0,0,0-.891,0L.336,2.365A.326.326,0,0,0,.336,3L9.045,5.25a1.748,1.748,0,0,0,.891,0l6.591-1.692V5.885a.927.927,0,1,0,1.267.865.916.916,0,0,0-.633-.865v-2.5L18.624,3A.324.324,0,0,0,18.644,2.365Z" transform="translate(-0.084 -0.058)" fill="#fff"/>
+            </g>
+          </g>
+          <g id="h" transform="translate(19.916)">
+            <path id="Path_3" data-name="Path 3" d="M26.013,12a6,6,0,1,0-6-6A6,6,0,0,0,26.013,12Zm.75-4.75h-1.5v-.5c0-1.5,2-1.5,2-2.5a1.144,1.144,0,0,0-1.25-1,2.619,2.619,0,0,0-1.5.75l-1-1a3.541,3.541,0,0,1,2.5-1.25,2.562,2.562,0,0,1,2.75,2.5c0,2-2,2-2,2.75Zm-.75,3.25a1,1,0,1,1,1-1A1,1,0,0,1,26.013,10.5Z" transform="translate(-20.013)" fill="#22303e"/>
+            <path id="Path_4" data-name="Path 4" d="M26.013,12a6,6,0,1,0-6-6A6,6,0,0,0,26.013,12Zm.75-4.75h-1.5v-.5c0-1.5,2-1.5,2-2.5a1.144,1.144,0,0,0-1.25-1,2.619,2.619,0,0,0-1.5.75l-1-1a3.541,3.541,0,0,1,2.5-1.25,2.562,2.562,0,0,1,2.75,2.5c0,2-2,2-2,2.75Zm-.75,3.25a1,1,0,1,1,1-1A1,1,0,0,1,26.013,10.5Z" transform="translate(-20.013)" fill="#fff"/>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

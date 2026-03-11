@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
-const WAARNEMGROEPEN_URL = '/waarneemgroepen';
+const DEFAULT_AFTER_LOGIN_URL = '/dashboard';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,11 +33,11 @@ export default function LoginPage() {
       {
         email,
         password,
-        callbackURL: WAARNEMGROEPEN_URL,
+        callbackURL: DEFAULT_AFTER_LOGIN_URL,
       },
       {
         onSuccess: () => {
-          router.push(WAARNEMGROEPEN_URL);
+          router.push(DEFAULT_AFTER_LOGIN_URL);
         },
       }
     );
@@ -50,7 +50,7 @@ export default function LoginPage() {
     }
 
     if (data) {
-      router.push(WAARNEMGROEPEN_URL);
+      router.push(DEFAULT_AFTER_LOGIN_URL);
     }
   }
 

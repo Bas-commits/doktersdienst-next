@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="57" height="44" viewBox="0 0 57 44">
+  <defs>
+    <linearGradient id="linear-gradient" x1="0.939" y1="0.978" x2="0.069" y2="0.127" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#c46712"/>
+      <stop offset="1" stop-color="#c24613"/>
+    </linearGradient>
+  </defs>
+  <g id="Group_16" data-name="Group 16" transform="translate(-96 -516)">
+    <rect id="Rectangle" width="57" height="44" transform="translate(96 516)" fill="url(#linear-gradient)"/>
+    <g id="Page-1" transform="translate(115 529)">
+      <g id="Praktijk-Planner" transform="translate(-283 -493)">
+        <g id="noun_balance_1159106" transform="translate(282.354 493)">
+          <path id="Shape" d="M20.642,6.005,17.327,0,12.188,2.111a1.674,1.674,0,0,0-1.89-.577A1.729,1.729,0,0,0,9.153,3.175q0,.088,0,.177l-5.2,2.136h0L.646,11.493h0A3.352,3.352,0,0,0,3.962,14.88a3.352,3.352,0,0,0,3.316-3.387h0L4.51,6.48l5.11-2.1a1.691,1.691,0,0,0,.666.436V16.865H3.09V18H18.6V16.865H11.4V4.814A1.732,1.732,0,0,0,12.548,3.18l3.91-1.6-2.444,4.43h0a3.317,3.317,0,1,0,6.632,0h0ZM1.957,11.493l2-3.631,2,3.631ZM15.31,6.008l2-3.631,2,3.631Z" fill="#fff"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

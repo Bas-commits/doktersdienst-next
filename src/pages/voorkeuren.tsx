@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
 import { ChipSelector } from '@/components/voorkeuren/ChipSelector';
-import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep } from '@/hooks/useDienstenSchedule';
+import { dienstenToShiftBlocks, dienstenToShiftBlocksFromParticipant, groupShiftBlocksByWaarneemgroep } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
+import { useDienstenVoorkeurenSubscription } from '@/hooks/useDienstenVoorkeurenSubscription';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { shiftKeyFromBlock, getChipByCode } from '@/types/voorkeuren';
 import type { ShiftBlockView } from '@/types/diensten';
@@ -25,10 +26,10 @@ function totLteForMonth(viewMonth: number, viewYear: number): number {
   return Math.floor(new Date(viewYear, viewMonth + 1, 0, 23, 59, 59, 999).getTime() / 1000) + TWO_WEEKS_SECONDS;
 }
 
-/** Type 1 = unassigned slot (no one assigned yet). */
-const TYPE_UNASSIGNED_SLOT = 1;
-
 const WEGHALEN_CODE = '1014';
+
+/** Type 1 = unassigned slot (empty shift block). */
+const TYPE_UNASSIGNED_SLOT = 1;
 
 export default function VoorkeurenPage() {
   const { data: session } = authClient.useSession();
@@ -53,24 +54,52 @@ export default function VoorkeurenPage() {
 
   const vanGte = useMemo(() => vanGteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
   const totLte = useMemo(() => totLteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
-  const { data: dienstenResponse, loading: dienstenLoading, error: dienstenError } = useDienstenSubscription(
+  const idDeelnemer = useMemo(() => {
+    const id = session?.user?.id;
+    if (id == null) return null;
+    const n = Number(id);
+    return Number.isNaN(n) ? null : n;
+  }, [session?.user?.id]);
+  /** Empty slots (type 1) for the calendar grid. */
+  const { data: type1Response, loading: type1Loading, error: type1Error } = useDienstenSubscription(
     vanGte,
     totLte,
     waarneemgroepIds,
     [TYPE_UNASSIGNED_SLOT]
   );
+  /** User's assigned diensten (types 3, 2, 9, 10, 5001) via subscription. */
+  const { data: userDienstenResponse, loading: userDienstenLoading, error: userDienstenError } = useDienstenVoorkeurenSubscription(
+    vanGte,
+    totLte,
+    waarneemgroepIds,
+    idDeelnemer
+  );
 
   const rows = useMemo(() => {
-    const blocks = dienstenToShiftBlocks(dienstenResponse ?? null);
+    const emptyBlocks = dienstenToShiftBlocks(type1Response ?? null);
+    const userBlocks = dienstenToShiftBlocksFromParticipant(userDienstenResponse ?? null);
+    const userBySlot = new Map<string, (typeof userBlocks)[0]['middle']>();
+    for (const b of userBlocks) {
+      const key = `${b.van}-${b.tot}-${b.idwaarneemgroep ?? ''}`;
+      userBySlot.set(key, b.middle);
+    }
+    const blocks = emptyBlocks.map((block) => {
+      const key = `${block.van}-${block.tot}-${block.idwaarneemgroep ?? ''}`;
+      const assigned = userBySlot.get(key);
+      if (assigned) {
+        return { ...block, middle: assigned };
+      }
+      return block;
+    });
     const grouped = groupShiftBlocksByWaarneemgroep(blocks);
     return grouped.map((row) => ({
       ...row,
       name: activeWaarneemgroep?.naam ?? row.name,
     }));
-  }, [dienstenResponse, activeWaarneemgroep?.naam]);
+  }, [type1Response, userDienstenResponse, activeWaarneemgroep?.naam]);
 
-  const loading = waarneemgroepContextLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
-  const error = waarneemgroepContextError ?? dienstenError;
+  const loading = waarneemgroepContextLoading || (waarneemgroepIds.length > 0 && (type1Loading || userDienstenLoading));
+  const error = waarneemgroepContextError ?? type1Error ?? userDienstenError;
 
   const handleShiftClick = useCallback(
     (block: ShiftBlockView) => {
@@ -111,7 +140,7 @@ export default function VoorkeurenPage() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              Openstaande diensten (type 1) voor de geselecteerde waarneemgroep in de header.
+              Openstaande diensten (type 1) voor de geselecteerde waarneemgroep; uw toegewezen diensten worden realtime getoond.
               {activeWaarneemgroep ? ` Huidige groep: ${activeWaarneemgroep.naam}.` : ' Selecteer een waarneemgroep in de header.'}
               {' '}Welkom, {name}. Selecteer een voorkeur en klik op een dienst in de kalender om deze toe te wijzen.
             </p>
@@ -146,7 +175,7 @@ export default function VoorkeurenPage() {
                   Selecteer een waarneemgroep in de header om openstaande diensten te zien.
                 </p>
               )}
-              {loading && !dienstenResponse && waarneemgroepIds.length > 0 && (
+              {loading && !type1Response && waarneemgroepIds.length > 0 && (
                 <p className="mb-4 text-muted-foreground">Voorkeuren laden…</p>
               )}
               {selectedChipCode && (

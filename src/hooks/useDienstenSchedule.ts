@@ -20,6 +20,51 @@ function toDoctorInfo(dienst: Dienst): DoctorInfo | null {
   };
 }
 
+/**
+ * Converts a list of diensten (each with one participant, e.g. from voorkeuren subscription)
+ * into one ShiftBlockView per dienst. Use for "my diensten" views where each dienst
+ * is a single assigned shift (types 2, 3, 9, 10, 5001).
+ */
+export function dienstenToShiftBlocksFromParticipant(
+  response: DienstenResponse | null | undefined
+): ShiftBlockView[] {
+  if (!response?.data?.diensten?.length) return [];
+  const blocks: ShiftBlockView[] = [];
+  for (const dienst of response.data.diensten) {
+    const start = new Date(dienst.van * 1000);
+    const end = new Date(dienst.tot * 1000);
+    const day = start.getDate();
+    const month0 = start.getMonth();
+    const year = start.getFullYear();
+    const startTime = `${formatTwoDigits(start.getHours())}:${formatTwoDigits(start.getMinutes())}`;
+    const endTime = `${formatTwoDigits(end.getHours())}:${formatTwoDigits(end.getMinutes())}`;
+    const currentDate = `${start.getFullYear()}-${formatTwoDigits(
+      start.getMonth() + 1
+    )}-${formatTwoDigits(start.getDate())} ${startTime}:00`;
+    const nextDate = `${end.getFullYear()}-${formatTwoDigits(
+      end.getMonth() + 1
+    )}-${formatTwoDigits(end.getDate())} ${endTime}:00`;
+    const middle = toDoctorInfo(dienst);
+    blocks.push({
+      id: dienst.id,
+      day,
+      month: month0,
+      year,
+      van: dienst.van,
+      tot: dienst.tot,
+      startTime,
+      endTime,
+      currentDate,
+      nextDate,
+      middle: middle ?? null,
+      top: null,
+      bottom: null,
+      idwaarneemgroep: dienst.idwaarneemgroep,
+    });
+  }
+  return blocks;
+}
+
 /** Pure transformer: converts diensten API response into flat ShiftBlockView list. */
 export function dienstenToShiftBlocks(response: DienstenResponse | null | undefined): ShiftBlockView[] {
   if (!response?.data?.diensten?.length) return [];

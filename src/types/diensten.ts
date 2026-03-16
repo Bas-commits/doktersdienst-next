@@ -59,5 +59,7 @@ export interface ShiftBlockView {
   label?: string;
   /** Optional: waarneemgroep id (for grouping into calendar rows). */
   idwaarneemgroep?: number;
+  /** Optional: preference type code when block has a saved preference (e.g. "2", "3", "9", "10", "5001"). Used on voorkeuren to show icon + color instead of initials. */
+  assignedPreferenceCode?: string;
 }
 

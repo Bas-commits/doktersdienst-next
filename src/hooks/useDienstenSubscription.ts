@@ -45,14 +45,16 @@ function toDienstenResponse(diensten: Array<{
 
 /**
  * Fetches diensten from GET /api/diensten for the given date range and waarneemgroep IDs.
- * Re-runs when vanGte, totLte, idwaarneemgroepen or typeIn change.
+ * Re-runs when vanGte, totLte, idwaarneemgroepen, typeIn or iddeelnemer change.
  * @param typeIn - Optional: only return diensten with these types (e.g. [1] for unassigned slots).
+ * @param iddeelnemer - Optional: only return diensten where iddeelnemer = this (e.g. for "my" preferences).
  */
 export function useDienstenSubscription(
   vanGte: number,
   totLte: number,
   idwaarneemgroepen: number[],
-  typeIn?: number[]
+  typeIn?: number[],
+  iddeelnemer?: number | null
 ): UseDienstenSubscriptionResult {
   const [data, setData] = useState<DienstenResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +63,11 @@ export function useDienstenSubscription(
   useEffect(() => {
     if (idwaarneemgroepen.length === 0) {
       setData(null);
+      setLoading(false);
+      return;
+    }
+    if (iddeelnemer !== undefined && (iddeelnemer === null || iddeelnemer <= 0)) {
+      setData({ data: { diensten: [] } });
       setLoading(false);
       return;
     }
@@ -76,6 +83,9 @@ export function useDienstenSubscription(
     });
     if (typeIn != null && typeIn.length > 0) {
       params.set('typeIn', typeIn.join(','));
+    }
+    if (iddeelnemer != null && iddeelnemer > 0) {
+      params.set('iddeelnemer', String(iddeelnemer));
     }
 
     fetch(`/api/diensten?${params}`, { credentials: 'include' })
@@ -104,7 +114,7 @@ export function useDienstenSubscription(
     return () => {
       cancelled = true;
     };
-  }, [vanGte, totLte, idwaarneemgroepen.join(','), typeIn?.join(',') ?? '']);
+  }, [vanGte, totLte, idwaarneemgroepen.join(','), typeIn?.join(',') ?? '', iddeelnemer ?? '']);
 
   return { data, error, loading };
 }

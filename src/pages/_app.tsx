@@ -3,6 +3,7 @@ import type { AppProps } from "next/app";
 import { useRouter } from "next/router";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { HasuraApolloProvider } from "@/lib/hasura-apollo-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 const AUTHENTICATED_PATHS = [
   "/dashboard",
@@ -27,9 +28,15 @@ export default function App({ Component, pageProps }: AppProps) {
         <AuthenticatedLayout>
           <Component {...pageProps} />
         </AuthenticatedLayout>
+        <Toaster />
       </HasuraApolloProvider>
     );
   }
 
-  return <Component {...pageProps} />;
+  return (
+    <>
+      <Component {...pageProps} />
+      <Toaster />
+    </>
+  );
 }

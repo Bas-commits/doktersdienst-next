@@ -285,7 +285,9 @@ export function CalendarGrid({
                                     ? getChipByCode('1014')
                                     : pendingCode
                                       ? getChipByCode(pendingCode)
-                                      : undefined;
+                                      : block.assignedPreferenceCode
+                                        ? getChipByCode(block.assignedPreferenceCode)
+                                        : undefined;
                                 return (
                                   <ShiftBlock
                                     key={`${block.id}-${block.van}-${block.tot}-${dateKey}-${blockIndex}`}

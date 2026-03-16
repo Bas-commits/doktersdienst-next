@@ -2,6 +2,7 @@
 
 import Head from 'next/head';
 import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -9,7 +10,6 @@ import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGrid
 import { ChipSelector } from '@/components/voorkeuren/ChipSelector';
 import { dienstenToShiftBlocks, dienstenToShiftBlocksFromParticipant, groupShiftBlocksByWaarneemgroep } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
-import { useDienstenVoorkeurenSubscription } from '@/hooks/useDienstenVoorkeurenSubscription';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { shiftKeyFromBlock, getChipByCode } from '@/types/voorkeuren';
 import type { ShiftBlockView } from '@/types/diensten';
@@ -30,6 +30,8 @@ const WEGHALEN_CODE = '1014';
 
 /** Type 1 = unassigned slot (empty shift block). */
 const TYPE_UNASSIGNED_SLOT = 1;
+/** Types for user preference rows (2, 3, 9, 10, 5001). */
+const USER_DIENST_TYPES = [2, 3, 9, 10, 5001] as const;
 
 export default function VoorkeurenPage() {
   const { data: session } = authClient.useSession();
@@ -44,6 +46,7 @@ export default function VoorkeurenPage() {
   const [selectedChipCode, setSelectedChipCode] = useState<string | null>(null);
   const [pendingInsert, setPendingInsert] = useState<Map<string, string>>(new Map());
   const [pendingDelete, setPendingDelete] = useState<Set<string>>(new Set());
+  const [preferenceApiError, setPreferenceApiError] = useState<string | null>(null);
 
   /** Only the selected waarneemgroep in the header (one at a time). */
   const waarneemgroepIds = useMemo(() => {
@@ -67,25 +70,35 @@ export default function VoorkeurenPage() {
     waarneemgroepIds,
     [TYPE_UNASSIGNED_SLOT]
   );
-  /** User's assigned diensten (types 3, 2, 9, 10, 5001) via subscription. */
-  const { data: userDienstenResponse, loading: userDienstenLoading, error: userDienstenError } = useDienstenVoorkeurenSubscription(
+  /** User's assigned diensten (types 2, 3, 9, 10, 5001), one-time fetch at page load. */
+  const { data: userDienstenResponse, loading: userDienstenLoading, error: userDienstenError } = useDienstenSubscription(
     vanGte,
     totLte,
     waarneemgroepIds,
-    idDeelnemer
+    [...USER_DIENST_TYPES],
+    idDeelnemer ?? null
   );
 
   const rows = useMemo(() => {
     const emptyBlocks = dienstenToShiftBlocks(type1Response ?? null);
     const userBlocks = dienstenToShiftBlocksFromParticipant(userDienstenResponse ?? null);
     const userBySlot = new Map<string, (typeof userBlocks)[0]['middle']>();
+    const typeBySlot = new Map<string, number>();
     for (const b of userBlocks) {
       const key = `${b.van}-${b.tot}-${b.idwaarneemgroep ?? ''}`;
       userBySlot.set(key, b.middle);
     }
+    for (const d of userDienstenResponse?.data?.diensten ?? []) {
+      const key = `${d.van}-${d.tot}-${d.idwaarneemgroep ?? ''}`;
+      typeBySlot.set(key, d.type);
+    }
     const blocks = emptyBlocks.map((block) => {
       const key = `${block.van}-${block.tot}-${block.idwaarneemgroep ?? ''}`;
       const assigned = userBySlot.get(key);
+      const type = typeBySlot.get(key);
+      if (assigned && type != null) {
+        return { ...block, middle: assigned, assignedPreferenceCode: String(type) };
+      }
       if (assigned) {
         return { ...block, middle: assigned };
       }
@@ -102,10 +115,15 @@ export default function VoorkeurenPage() {
   const error = waarneemgroepContextError ?? type1Error ?? userDienstenError;
 
   const handleShiftClick = useCallback(
-    (block: ShiftBlockView) => {
+    async (block: ShiftBlockView) => {
       if (selectedChipCode === null) return;
+      if (block.idwaarneemgroep == null) return;
       const key = shiftKeyFromBlock(block);
-      if (selectedChipCode === WEGHALEN_CODE) {
+      const idwaarneemgroep = block.idwaarneemgroep;
+      const action = selectedChipCode === WEGHALEN_CODE ? 'remove' : 'add';
+
+      setPreferenceApiError(null);
+      if (action === 'remove') {
         setPendingInsert((prev) => {
           const next = new Map(prev);
           next.delete(key);
@@ -119,6 +137,70 @@ export default function VoorkeurenPage() {
           return next;
         });
         setPendingInsert((prev) => new Map(prev).set(key, selectedChipCode));
+      }
+
+      const body = {
+        action,
+        van: block.van,
+        tot: block.tot,
+        idwaarneemgroep,
+        ...(action === 'add' && { type: Number(selectedChipCode) }),
+        currentDate: block.currentDate,
+        nextDate: block.nextDate,
+      };
+
+      const PREFERENCE_REQUEST_TIMEOUT_MS = 2000;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), PREFERENCE_REQUEST_TIMEOUT_MS);
+
+      function revertPending() {
+        if (action === 'remove') {
+          setPendingDelete((prev) => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          });
+        } else {
+          setPendingInsert((prev) => {
+            const next = new Map(prev);
+            next.delete(key);
+            return next;
+          });
+        }
+      }
+
+      function showFailure(reason: string) {
+        setPreferenceApiError(reason);
+        toast.error('Voorkeur niet opgeslagen', { description: reason });
+      }
+
+      try {
+        const res = await fetch('/api/diensten/preference', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          credentials: 'include',
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          revertPending();
+          const message = typeof data?.error === 'string' ? data.error : 'Voorkeur opslaan mislukt.';
+          showFailure(message);
+        }
+      } catch (err) {
+        clearTimeout(timeoutId);
+        revertPending();
+        const reason =
+          err instanceof Error && err.name === 'AbortError'
+            ? 'Verzoek duurde te lang. Probeer het opnieuw.'
+            : err instanceof Error
+              ? err.message
+              : 'Voorkeur opslaan mislukt.';
+        showFailure(reason);
       }
     },
     [selectedChipCode]
@@ -140,7 +222,7 @@ export default function VoorkeurenPage() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              Openstaande diensten (type 1) voor de geselecteerde waarneemgroep; uw toegewezen diensten worden realtime getoond.
+              Openstaande diensten (type 1) voor de geselecteerde waarneemgroep; uw toegewezen diensten worden bij het laden opgehaald.
               {activeWaarneemgroep ? ` Huidige groep: ${activeWaarneemgroep.naam}.` : ' Selecteer een waarneemgroep in de header.'}
               {' '}Welkom, {name}. Selecteer een voorkeur en klik op een dienst in de kalender om deze toe te wijzen.
             </p>
@@ -168,6 +250,11 @@ export default function VoorkeurenPage() {
               {error && (
                 <p className="mb-4 text-destructive" role="alert">
                   {error}
+                </p>
+              )}
+              {preferenceApiError && (
+                <p className="mb-4 text-destructive" role="alert">
+                  {preferenceApiError}
                 </p>
               )}
               {!activeWaarneemgroepId && !loading && (

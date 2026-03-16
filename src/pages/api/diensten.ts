@@ -40,6 +40,7 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
  *   totLte (number, Unix seconds) - diensten.tot <= this
  *   idwaarneemgroepIn (comma-separated IDs) - diensten.idwaarneemgroep in these
  *   typeIn (optional, comma-separated) - diensten.type in these (e.g. 1 = unassigned slots)
+ *   iddeelnemer (optional, number) - only return diensten where iddeelnemer = this (e.g. for "my" preferences)
  *
  * Returns diensten with joined deelnemer (voornaam, achternaam, color) in same shape as Hasura.
  */
@@ -75,6 +76,13 @@ export default async function handler(
           ? typeInRaw.split(',').map(Number).filter((n) => !Number.isNaN(n))
           : null;
 
+  const iddeelnemerRaw = req.query.iddeelnemer;
+  const iddeelnemer =
+    iddeelnemerRaw == null
+      ? null
+      : Number(Array.isArray(iddeelnemerRaw) ? iddeelnemerRaw[0] : iddeelnemerRaw);
+  const iddeelnemerFilter = iddeelnemer != null && !Number.isNaN(iddeelnemer) ? iddeelnemer : null;
+
   if (Number.isNaN(vanGte) || Number.isNaN(totLte) || idwaarneemgroepIn.length === 0) {
     return res.status(400).json({
       error: 'Missing or invalid vanGte, totLte, or idwaarneemgroepIn',
@@ -88,6 +96,9 @@ export default async function handler(
   ];
   if (typeIn != null && typeIn.length > 0) {
     whereConditions.push(inArray(dienstenTable.type, typeIn));
+  }
+  if (iddeelnemerFilter != null) {
+    whereConditions.push(eq(dienstenTable.iddeelnemer, iddeelnemerFilter));
   }
 
   try {

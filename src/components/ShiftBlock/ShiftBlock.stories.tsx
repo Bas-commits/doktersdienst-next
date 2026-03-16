@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { ShiftBlock } from './ShiftBlock';
 import type { ShiftBlockView, DoctorInfo } from '@/types/diensten';
+import { getChipByCode } from '@/types/voorkeuren';
 
 const meta = {
   title: 'Components/ShiftBlock',
@@ -207,6 +208,31 @@ export const PendingRemoveSections: Story = {
     block: blockWithAchterwachtAndExtra,
     ...cellDate,
     pendingRemoveSections: new Set(['top', 'bottom']),
+  },
+};
+
+/** Voorkeuren page: block with a saved preference (Liever wel). Shows preference icon and color instead of user initials. */
+export const VoorkeurenPreferenceFilled: Story = {
+  args: {
+    block: baseBlock,
+    ...cellDate,
+    preferenceChip: getChipByCode('3'),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Middle strip shows the preference icon and background color (Liever wel: green + check). Same look as when a preference is clicked on the voorkeuren page. Other codes (2, 9, 10, 5001) use the same mechanism.',
+      },
+    },
+  },
+};
+
+/** Voorkeuren: Vakantie preference (yellow + palm icon). */
+export const VoorkeurenPreferenceVakantie: Story = {
+  args: {
+    block: baseBlock,
+    ...cellDate,
+    preferenceChip: getChipByCode('9'),
   },
 };
 

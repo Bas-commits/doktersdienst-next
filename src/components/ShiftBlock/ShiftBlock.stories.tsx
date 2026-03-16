@@ -47,6 +47,14 @@ const meta = {
       control: 'boolean',
       description: 'Hide the bottom strip',
     },
+    continuesFromPrev: {
+      control: 'boolean',
+      description: 'Segment continues from previous day/row; removes left border, gradient on Monday',
+    },
+    continuesToNext: {
+      control: 'boolean',
+      description: 'Segment continues to next day/row; removes right border, gradient on Sunday',
+    },
   },
   args: {
     onDelete: undefined,
@@ -263,5 +271,161 @@ export const TimeScaleTwoBlocks: Story = {
         />
       </div>
     );
+  },
+};
+
+/** March 9, 2025 is Sunday; March 10, 2025 is Monday (for cross-row shadow). */
+const sundayCell = { day: 9, month: 2, year: 2025 };
+const mondayCell = { day: 10, month: 2, year: 2025 };
+
+/** Block that continues from the previous day (e.g. overnight into this cell). Left border removed; on Monday, inset shadow creates gradient to the left. */
+export const ContinuesFromPrev: Story = {
+  args: {
+    block: {
+      ...baseBlock,
+      id: 6,
+      startTime: '22:00',
+      endTime: '08:00',
+      currentDate: '2025-03-09 22:00:00',
+      nextDate: '2025-03-10 08:00:00',
+      middle: doctor1,
+    },
+    ...mondayCell,
+    containerWidth: 400,
+    continuesFromPrev: true,
+    segmentStartTime: '00:00',
+    segmentEndTime: '08:00',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Segment that continues from the previous row/cell. Left border is removed; on Monday (new row) a white inset shadow gives a gradient to the left.',
+      },
+    },
+  },
+};
+
+/** Block that continues to the next day. Right border removed; on Sunday, inset shadow creates gradient to the right. */
+export const ContinuesToNext: Story = {
+  args: {
+    block: {
+      ...baseBlock,
+      id: 7,
+      startTime: '22:00',
+      endTime: '08:00',
+      currentDate: '2025-03-09 22:00:00',
+      nextDate: '2025-03-10 08:00:00',
+      middle: doctor2,
+    },
+    ...sundayCell,
+    containerWidth: 400,
+    continuesToNext: true,
+    segmentStartTime: '22:00',
+    segmentEndTime: '24:00',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Segment that continues to the next row/cell. Right border is removed; on Sunday (end of row) a white inset shadow gives a gradient to the right.',
+      },
+    },
+  },
+};
+
+/** Middle of a multi-day segment: continues both from previous and to next (no rounded corners on sides). */
+export const ContinuesBoth: Story = {
+  args: {
+    block: {
+      ...baseBlock,
+      id: 8,
+      startTime: '22:00',
+      endTime: '08:00',
+      currentDate: '2025-03-11 22:00:00',
+      nextDate: '2025-03-12 08:00:00',
+      middle: doctor3,
+    },
+    day: 12,
+    month: 2,
+    year: 2025,
+    containerWidth: 400,
+    continuesFromPrev: true,
+    continuesToNext: true,
+    segmentStartTime: '00:00',
+    segmentEndTime: '24:00',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Segment in the middle of a multi-day shift. Both left and right borders removed; no rounding on sides.',
+      },
+    },
+  },
+};
+
+/** Two blocks simulating end of one row (Sunday) and start of next row (Monday) to show the gradient effect when a shift continues across rows. */
+export const CrossRowContinuation: Story = {
+  args: {
+    block: baseBlock,
+    ...cellDate,
+    containerWidth: 400,
+  },
+  render(args) {
+    const containerWidth = (args as any).containerWidth ?? 400;
+    const overnightBlock: ShiftBlockView = {
+      ...baseBlock,
+      id: 9,
+      startTime: '22:00',
+      endTime: '08:00',
+      currentDate: '2025-03-09 22:00:00',
+      nextDate: '2025-03-10 08:00:00',
+      middle: doctor1,
+    };
+    return (
+      <div className="space-y-4">
+        <div>
+          <p className="text-xs text-gray-600 mb-1">Sunday (end of row) — continues to next → gradient to the right</p>
+          <div
+            className="relative bg-[#a7a2a2]"
+            style={{ width: containerWidth, minHeight: 96, overflow: 'visible' }}
+          >
+            <ShiftBlock
+              block={overnightBlock}
+              {...sundayCell}
+              containerWidth={containerWidth}
+              continuesToNext={true}
+              segmentStartTime="22:00"
+              segmentEndTime="24:00"
+            />
+          </div>
+        </div>
+        <div>
+          <p className="text-xs text-gray-600 mb-1">Monday (start of row) — continues from previous → gradient to the left</p>
+          <div
+            className="relative bg-[#a7a2a2]"
+            style={{ width: containerWidth, minHeight: 96, overflow: 'visible' }}
+          >
+            <ShiftBlock
+              block={overnightBlock}
+              {...mondayCell}
+              containerWidth={containerWidth}
+              continuesFromPrev={true}
+              segmentStartTime="00:00"
+              segmentEndTime="08:00"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Overnight shift split across two rows: Sunday segment (right gradient) and Monday segment (left gradient). Shows the inset shadow effect when a shift continues on another row.',
+      },
+    },
   },
 };

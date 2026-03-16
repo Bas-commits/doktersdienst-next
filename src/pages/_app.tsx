@@ -6,6 +6,8 @@ import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 const AUTHENTICATED_PATHS = [
   "/dashboard",
   "/rooster-inzien",
+  "/overnames",
+  "/voorkeuren",
 ];
 
 function useIsAuthenticatedRoute(): boolean {

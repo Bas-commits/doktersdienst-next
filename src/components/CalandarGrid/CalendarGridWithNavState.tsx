@@ -13,20 +13,53 @@ export interface CalendarGridWithNavStateProps {
   initialViewMonth?: number;
   /** Initial year. Default 2025. */
   initialViewYear?: number;
+  /** When set, view is controlled by parent (use with viewMonth, viewYear, onViewMonthChange). */
+  viewMonth?: number;
+  /** When set with viewMonth and onViewMonthChange, view is controlled. */
+  viewYear?: number;
+  /** Called when user changes month/year. When set with viewMonth/viewYear, view is controlled. */
+  onViewMonthChange?: (month: number, year: number) => void;
+  /** When true, the top (Achterwacht) strip is not rendered. */
+  hideTopStrip?: boolean;
+  /** When true, the bottom (Extra Dokter) strip is not rendered. */
+  hideBottomStrip?: boolean;
 }
 
 /**
  * Calendar grid with internal month/year state and navigation.
  * Use this when you don't need to control the view from outside.
+ * Pass viewMonth, viewYear and onViewMonthChange to control the view from the parent.
  */
 export function CalendarGridWithNavState({
   rows,
   shiftBlocks,
   initialViewMonth = 2,
   initialViewYear = 2025,
+  viewMonth: controlledViewMonth,
+  viewYear: controlledViewYear,
+  onViewMonthChange,
+  hideTopStrip,
+  hideBottomStrip,
 }: CalendarGridWithNavStateProps) {
-  const [viewMonth, setViewMonth] = useState(initialViewMonth);
-  const [viewYear, setViewYear] = useState(initialViewYear);
+  const [internalViewMonth, setInternalViewMonth] = useState(initialViewMonth);
+  const [internalViewYear, setInternalViewYear] = useState(initialViewYear);
+
+  const isControlled =
+    controlledViewMonth !== undefined &&
+    controlledViewYear !== undefined &&
+    onViewMonthChange !== undefined;
+
+  const viewMonth = isControlled ? controlledViewMonth : internalViewMonth;
+  const viewYear = isControlled ? controlledViewYear : internalViewYear;
+
+  const handleViewMonthChange = (month: number, year: number) => {
+    if (isControlled) {
+      onViewMonthChange(month, year);
+    } else {
+      setInternalViewMonth(month);
+      setInternalViewYear(year);
+    }
+  };
 
   return (
     <CalendarGrid
@@ -34,10 +67,9 @@ export function CalendarGridWithNavState({
       shiftBlocks={shiftBlocks}
       viewMonth={viewMonth}
       viewYear={viewYear}
-      onViewMonthChange={(month, year) => {
-        setViewMonth(month);
-        setViewYear(year);
-      }}
+      onViewMonthChange={handleViewMonthChange}
+      hideTopStrip={hideTopStrip}
+      hideBottomStrip={hideBottomStrip}
     />
   );
 }

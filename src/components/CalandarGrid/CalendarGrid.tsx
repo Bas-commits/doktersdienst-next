@@ -185,7 +185,7 @@ export function CalendarGrid({
         {weekdays.map((dayLabel) => (
           <div
             key={dayLabel}
-            className="min-w-[100px] max-w-[200px] flex-1 h-[20px] mb-2 pl-2 text-base font-bold text-[#292727]"
+            className="min-w-[100px] flex-1 h-[20px] mb-2 pl-2 text-base font-bold text-[#292727]"
           >
             {dayLabel}
           </div>
@@ -219,7 +219,7 @@ export function CalendarGrid({
                   return (
                     <div
                       key={dateKey}
-                      className="min-w-[100px] max-w-[200px] flex-1 min-h-[110px] p-0 border-r border-[#c4c4c4] first:rounded-l-[13px] last:rounded-r-[13px] last:border-r-0 last:border-0 overflow-visible flex flex-col"
+                      className="min-w-[100px] flex-1 min-h-[110px] p-0 border-r border-[#c4c4c4] first:rounded-l-[13px] last:rounded-r-[13px] last:border-r-0 last:border-0 overflow-visible flex flex-col"
                     >
                       <div
                         className="text-[#a0a0a0] text-[25px] my-0 mx-[5px] ml-2.5 flex items-center justify-between leading-none [&>span]:text-sm [&>span]:font-semibold [&>span]:tracking-[0.5px] [&>span]:text-[#c5c5c5]"

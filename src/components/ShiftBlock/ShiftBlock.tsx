@@ -182,9 +182,9 @@ export function ShiftBlock({
   let cssInline: CSSProperties = {};
   if (doctorId !== 0) {
     if (!isMonday && startIsWeekend && !endIsWeekend) {
-      cssInline = { borderRightStyle: 'none', boxShadow: '-5px 0px 0px #fff inset' };
+      cssInline = { borderRightStyle: 'none' };
     } else if (isMonday && startIsWeekend) {
-      cssInline = { borderLeftStyle: 'none', boxShadow: '5px 0px 0px #fff inset' };
+      cssInline = { borderLeftStyle: 'none' };
     }
   } else {
     if (!isMonday && startIsWeekend && !endIsWeekend) {
@@ -194,6 +194,10 @@ export function ShiftBlock({
     }
   }
   const isSunday = cellDate.getDay() === 0;
+
+  // Flags for applying edge gradients when a segment continues across rows (Sunday→Monday).
+  const hasLeftEdgeGradient = !!continuesFromPrev && isMonday;
+  const hasRightEdgeGradient = !!continuesToNext && isSunday;
 
   // Compute rounded corner classes based on continuity across midnight
   const middleRoundedClass =
@@ -208,24 +212,12 @@ export function ShiftBlock({
     'rounded-[3px]';
 
   if (continuesFromPrev) {
-    if (isMonday) {
-      // Cross-week boundary (Sunday→Monday row): apply inset shadow
-      cssInline = { ...cssInline, borderLeftStyle: 'none', boxShadow: '5px 0px 0px #fff inset' };
-    } else {
-      // Within same week row (overnight): seamless, no shadow
-      cssInline = { ...cssInline, borderLeftStyle: 'none' };
-    }
+    // Seamless join on the left; extra visual cue handled via gradient flags above.
+    cssInline = { ...cssInline, borderLeftStyle: 'none' };
   }
   if (continuesToNext) {
-    const existingShadow = cssInline.boxShadow ?? '';
-    if (isSunday) {
-      // Cross-week boundary (Sunday→Monday row): apply inset shadow
-      const rightInset = '-5px 0px 0px #fff inset';
-      cssInline = { ...cssInline, borderRightStyle: 'none', boxShadow: existingShadow ? `${existingShadow}, ${rightInset}` : rightInset };
-    } else {
-      // Within same week row (overnight): seamless, no shadow
-      cssInline = { ...cssInline, borderRightStyle: 'none' };
-    }
+    // Seamless join on the right; extra visual cue handled via gradient flags above.
+    cssInline = { ...cssInline, borderRightStyle: 'none' };
   }
 
   const achterwDoc = block.top ?? null;
@@ -254,6 +246,38 @@ export function ShiftBlock({
   }
   if (!isUnassignedSlot && (doctorId || achterw || extra)) {
     cssInline = { ...cssInline, minHeight: 42 };
+  }
+
+  // Apply linear gradients on the left/right edges when the segment continues across rows.
+  if (!isUnassignedSlot && (hasLeftEdgeGradient || hasRightEdgeGradient) && mainColor && mainColor !== 'transparent') {
+    const backgroundColor = (cssInline.backgroundColor as string) || mainColor;
+
+    const gradientLayers: string[] = [];
+    const positions: string[] = [];
+    const sizes: string[] = [];
+
+    if (hasLeftEdgeGradient) {
+      gradientLayers.push(`linear-gradient(to left, ${backgroundColor}, #ffffff)`);
+      positions.push('left top');
+      sizes.push('8px 100%');
+    }
+    if (hasRightEdgeGradient) {
+      gradientLayers.push(`linear-gradient(to right, ${backgroundColor}, #ffffff)`);
+      positions.push('right top');
+      sizes.push('8px 100%');
+    }
+
+    const existingImage = cssInline.backgroundImage as string | undefined;
+    const mergedImages = [gradientLayers.join(', '), existingImage].filter(Boolean).join(', ');
+
+    cssInline = {
+      ...cssInline,
+      backgroundColor,
+      backgroundImage: mergedImages || undefined,
+      backgroundRepeat: 'no-repeat',
+      backgroundPosition: positions.join(', ') || undefined,
+      backgroundSize: sizes.join(', ') || undefined,
+    };
   }
 
   // When onSectionClick is set, each stripe is clickable by its show prop; otherwise use activeSection + onClick.

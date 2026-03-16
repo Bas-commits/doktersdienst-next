@@ -12,13 +12,6 @@ export function getHasuraGraphqlUrl(): string {
   return HASURA_GRAPHQL_URL;
 }
 
-/**
- * WebSocket URL for Hasura subscriptions (same host, wss instead of https).
- */
-export function getHasuraWebSocketUrl(): string {
-  return HASURA_GRAPHQL_URL.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
-}
-
 export type HasuraFetchOptions = {
   query: string;
   variables?: Record<string, unknown>;

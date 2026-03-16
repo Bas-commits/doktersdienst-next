@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { cachedGetJson } from '@/lib/cached-fetch';
 import type { DienstenResponse, Dienst } from '@/types/diensten';
 
 export type UseDienstenSubscriptionResult = {
@@ -88,9 +89,9 @@ export function useDienstenSubscription(
       params.set('iddeelnemer', String(iddeelnemer));
     }
 
-    fetch(`/api/diensten?${params}`, { credentials: 'include' })
-      .then((res) => res.json())
-      .then((json: { diensten?: unknown[]; error?: string }) => {
+    const url = `/api/diensten?${params}`;
+    cachedGetJson<{ diensten?: unknown[]; error?: string }>(url)
+      .then((json) => {
         if (cancelled) return;
         if (json.error) {
           setError(json.error);

@@ -6,8 +6,8 @@ import { CHIP_DEFINITIONS } from '@/types/voorkeuren';
 
 const WEGHALEN_CODE = '1014';
 
-/** Same filled style as ShiftBlock: background color + Lucide icon per preference code. */
-const CHIP_STYLE: Record<
+/** Same filled style as ShiftBlock: background color + Lucide icon per preference code. Exported for cursor preview. */
+export const CHIP_STYLE: Record<
   string,
   { backgroundColor: string; Icon: typeof Check; iconColor: string }
 > = {

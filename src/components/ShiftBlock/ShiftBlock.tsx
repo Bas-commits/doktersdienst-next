@@ -306,8 +306,8 @@ export function ShiftBlock({
     if (!preferenceChip) return null;
     const map: Record<string, { backgroundColor: string; Icon: typeof Check; iconColor: string }> = {
       '3': { backgroundColor: '#22c55e', Icon: Check, iconColor: 'white' },
-      '2': { backgroundColor: '#ef4444', Icon: X, iconColor: 'white' },
-      '9': { backgroundColor: '#eab308', Icon: TreePalm, iconColor: 'white' },
+      '2': { backgroundColor: '#eab308', Icon: X, iconColor: 'white' },
+      '9': { backgroundColor: '#ef4444', Icon: TreePalm, iconColor: 'white' },
       '10': { backgroundColor: '#a855f7', Icon: GraduationCap, iconColor: 'white' },
       '5001': { backgroundColor: '#64748b', Icon: Briefcase, iconColor: 'white' },
     };

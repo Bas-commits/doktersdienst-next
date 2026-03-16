@@ -282,7 +282,7 @@ export function CalendarGrid({
                                 const pendingCode = pendingInsert?.get(blockKey);
                                 const preferenceChip: ChipDefinition | undefined =
                                   isPendingDelete
-                                    ? getChipByCode('1014')
+                                    ? undefined
                                     : pendingCode
                                       ? getChipByCode(pendingCode)
                                       : block.assignedPreferenceCode

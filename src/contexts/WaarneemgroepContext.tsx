@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { WaarneemgroepItem } from '@/components/header/DoktersdienstHeader';
+import { cachedGetJson } from '@/lib/cached-fetch';
 
 const STORAGE_GROUP_ID_KEY = 'groupid';
 
@@ -67,9 +68,8 @@ export function WaarneemgroepProvider({ children }: WaarneemgroepProviderProps) 
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch('/api/waarneemgroepen', { credentials: 'include' })
-      .then((res) => res.json())
-      .then((data: { waarneemgroepen?: ApiWaarneemgroep[]; error?: string }) => {
+    cachedGetJson<{ waarneemgroepen?: ApiWaarneemgroep[]; error?: string }>('/api/waarneemgroepen')
+      .then((data) => {
         if (cancelled) return;
         if (data.error) {
           setError(data.error);

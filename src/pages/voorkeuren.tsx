@@ -1,13 +1,13 @@
 'use client';
 
 import Head from 'next/head';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
-import { ChipSelector } from '@/components/voorkeuren/ChipSelector';
+import { ChipSelector, CHIP_STYLE } from '@/components/voorkeuren/ChipSelector';
 import { dienstenToShiftBlocks, dienstenToShiftBlocksFromParticipant, groupShiftBlocksByWaarneemgroep } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
@@ -47,6 +47,10 @@ export default function VoorkeurenPage() {
   const [pendingInsert, setPendingInsert] = useState<Map<string, string>>(new Map());
   const [pendingDelete, setPendingDelete] = useState<Set<string>>(new Set());
   const [preferenceApiError, setPreferenceApiError] = useState<string | null>(null);
+  /** Block duplicate API calls: keys of slots that have a request in flight. */
+  const inFlightKeysRef = useRef<Set<string>>(new Set());
+  /** Cursor position for chip preview (only used when selectedChipCode is set). */
+  const [cursorPreview, setCursorPreview] = useState<{ x: number; y: number } | null>(null);
 
   /** Only the selected waarneemgroep in the header (one at a time). */
   const waarneemgroepIds = useMemo(() => {
@@ -94,6 +98,7 @@ export default function VoorkeurenPage() {
     }
     const blocks = emptyBlocks.map((block) => {
       const key = `${block.van}-${block.tot}-${block.idwaarneemgroep ?? ''}`;
+      if (pendingDelete.has(key)) return block;
       const assigned = userBySlot.get(key);
       const type = typeBySlot.get(key);
       if (assigned && type != null) {
@@ -109,7 +114,7 @@ export default function VoorkeurenPage() {
       ...row,
       name: activeWaarneemgroep?.naam ?? row.name,
     }));
-  }, [type1Response, userDienstenResponse, activeWaarneemgroep?.naam]);
+  }, [type1Response, userDienstenResponse, activeWaarneemgroep?.naam, pendingDelete]);
 
   const loading = waarneemgroepContextLoading || (waarneemgroepIds.length > 0 && (type1Loading || userDienstenLoading));
   const error = waarneemgroepContextError ?? type1Error ?? userDienstenError;
@@ -119,6 +124,9 @@ export default function VoorkeurenPage() {
       if (selectedChipCode === null) return;
       if (block.idwaarneemgroep == null) return;
       const key = shiftKeyFromBlock(block);
+      if (inFlightKeysRef.current.has(key)) return;
+      inFlightKeysRef.current.add(key);
+
       const idwaarneemgroep = block.idwaarneemgroep;
       const action = selectedChipCode === WEGHALEN_CODE ? 'remove' : 'add';
 
@@ -201,13 +209,64 @@ export default function VoorkeurenPage() {
               ? err.message
               : 'Voorkeur opslaan mislukt.';
         showFailure(reason);
+      } finally {
+        inFlightKeysRef.current.delete(key);
       }
     },
     [selectedChipCode]
   );
 
+  const calendarGridRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!selectedChipCode) {
+      setCursorPreview(null);
+      return;
+    }
+    function onMove(e: MouseEvent) {
+      setCursorPreview({ x: e.clientX, y: e.clientY });
+    }
+    function onLeave() {
+      setCursorPreview(null);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setSelectedChipCode(null);
+    }
+    function onPointerDown(e: MouseEvent) {
+      const el = calendarGridRef.current;
+      if (!el || !el.contains(e.target as Node)) setSelectedChipCode(null);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseleave', onLeave);
+    window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseleave', onLeave);
+      window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [selectedChipCode]);
+
+  const chipStyle = selectedChipCode ? CHIP_STYLE[selectedChipCode] : null;
+  const CursorChipIcon = chipStyle?.Icon;
+
   return (
     <>
+      {cursorPreview && chipStyle && CursorChipIcon && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed z-9999 flex h-9 w-9 items-center justify-center rounded-md border-2 border-primary shadow-lg"
+          style={{
+            left: cursorPreview.x + 12,
+            top: cursorPreview.y + 12,
+            backgroundColor: chipStyle.backgroundColor,
+            borderColor: 'var(--primary)',
+          }}
+        >
+          <CursorChipIcon className="h-4 w-4 shrink-0" style={{ color: chipStyle.iconColor }} />
+        </div>
+      )}
       <Head>
         <title>Voorkeuren | Doktersdienst</title>
       </Head>
@@ -271,27 +330,29 @@ export default function VoorkeurenPage() {
                 </p>
               )}
               {waarneemgroepIds.length > 0 && (
-                <CalendarGridWithNavState
-                  rows={rows}
-                  initialViewMonth={now.getMonth()}
-                  initialViewYear={now.getFullYear()}
-                  viewMonth={viewMonth}
-                  viewYear={viewYear}
-                  onViewMonthChange={(month, year) => {
-                    setViewMonth(month);
-                    setViewYear(year);
-                  }}
-                  hideTopStrip
-                  hideBottomStrip
-                  onShiftClick={
-                    selectedChipCode
-                      ? (block) => handleShiftClick(block)
-                      : undefined
-                  }
-                  pendingInsert={pendingInsert}
-                  pendingDelete={pendingDelete}
-                  getChipByCode={getChipByCode}
-                />
+                <div ref={calendarGridRef}>
+                  <CalendarGridWithNavState
+                    rows={rows}
+                    initialViewMonth={now.getMonth()}
+                    initialViewYear={now.getFullYear()}
+                    viewMonth={viewMonth}
+                    viewYear={viewYear}
+                    onViewMonthChange={(month, year) => {
+                      setViewMonth(month);
+                      setViewYear(year);
+                    }}
+                    hideTopStrip
+                    hideBottomStrip
+                    onShiftClick={
+                      selectedChipCode
+                        ? (block) => handleShiftClick(block)
+                        : undefined
+                    }
+                    pendingInsert={pendingInsert}
+                    pendingDelete={pendingDelete}
+                    getChipByCode={getChipByCode}
+                  />
+                </div>
               )}
             </CardContent>
           </Card>

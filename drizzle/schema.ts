@@ -419,33 +419,40 @@ export const migrations = pgTable("migrations", {
 // 	opiaat: boolean(),
 // });
 
-export const diensten = pgTable("diensten", {
-	id: integer(),
-	idwaarneemgroep: integer(),
-	idpraktijk: integer(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	van: bigint({ mode: "number" }),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	tot: bigint({ mode: "number" }),
-	iddeelnemer: integer(),
-	rol: integer(),
-	iddienstherhalen: integer(),
-	idaantekening: integer(),
-	iddeelnovern: integer(),
-	iddienstovern: integer(),
-	type: integer(),
-	idshift: integer(),
-	idtarief: integer(),
-	idkamer: integer(),
-	idtelnr: integer(),
-	idlocatie: integer(),
-	iddeelnemer2: integer(),
-	idtaaktype: integer(),
-	currentDate: date("current_date"),
-	nextDate: date("next_date"),
-	senderId: integer("sender_id"),
-	deleteRequest: integer("delete_request"),
-});
+export const diensten = pgTable(
+	"diensten",
+	{
+		id: integer(),
+		idwaarneemgroep: integer(),
+		idpraktijk: integer(),
+		// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+		van: bigint({ mode: "number" }),
+		// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+		tot: bigint({ mode: "number" }),
+		iddeelnemer: integer(),
+		rol: integer(),
+		iddienstherhalen: integer(),
+		idaantekening: integer(),
+		iddeelnovern: integer(),
+		iddienstovern: integer(),
+		type: integer(),
+		idshift: integer(),
+		idtarief: integer(),
+		idkamer: integer(),
+		idtelnr: integer(),
+		idlocatie: integer(),
+		iddeelnemer2: integer(),
+		idtaaktype: integer(),
+		currentDate: date("current_date"),
+		nextDate: date("next_date"),
+		senderId: integer("sender_id"),
+		deleteRequest: integer("delete_request"),
+	},
+	(table) => ({
+		// GET /api/diensten: filter by idwaarneemgroep and date range (van, tot)
+		listIdx: index("diensten_list_idx").on(table.idwaarneemgroep, table.van, table.tot),
+	})
+);
 
 // export const teoBackup = pgTable("teo_backup", {
 // 	firstName: varchar("first_name", { length: 50 }),

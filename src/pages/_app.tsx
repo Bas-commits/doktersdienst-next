@@ -2,6 +2,7 @@ import "@/styles/globals.css";
 import type { AppProps } from "next/app";
 import { useRouter } from "next/router";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
+import { HasuraApolloProvider } from "@/lib/hasura-apollo-provider";
 
 const AUTHENTICATED_PATHS = [
   "/dashboard",
@@ -9,6 +10,7 @@ const AUTHENTICATED_PATHS = [
   "/overnames",
   "/voorkeuren",
   "/mijn-gegevens",
+  "/test",
 ];
 
 function useIsAuthenticatedRoute(): boolean {
@@ -21,9 +23,11 @@ export default function App({ Component, pageProps }: AppProps) {
 
   if (useAuthenticatedLayout) {
     return (
-      <AuthenticatedLayout>
-        <Component {...pageProps} />
-      </AuthenticatedLayout>
+      <HasuraApolloProvider>
+        <AuthenticatedLayout>
+          <Component {...pageProps} />
+        </AuthenticatedLayout>
+      </HasuraApolloProvider>
     );
   }
 

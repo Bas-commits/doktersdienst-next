@@ -1,0 +1,95 @@
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773680755242,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773680755243,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773680782796,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773680782796,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773680782943,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773680782943,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773680783089,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773680783089,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773680955573,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773680955573,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773680968471,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773680968471,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681697283,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681697283,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681757175,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681757177,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681757180,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681757180,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681757184,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681757185,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681757185,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681757185,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:useEffect","message":"Token from authClient","data":{"hasToken":true,"tokenLength":542,"cancelled":false},"timestamp":1773681757581,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681757582,"hypothesisId":"H1"}
+{"location":"hasura-ws.ts:createHasuraWsClient","message":"createHasuraWsClient called","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681757582,"hypothesisId":"H3"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":true,"linkType":"split"},"timestamp":1773681757583,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681757583,"hypothesisId":"H1"}
+{"location":"hasura-ws.ts:createHasuraWsClient","message":"createHasuraWsClient called","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681757584,"hypothesisId":"H3"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":true,"linkType":"split"},"timestamp":1773681757584,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681759966,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681759967,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681760130,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681760131,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681760131,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681760132,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:useEffect","message":"Token from authClient","data":{"hasToken":true,"tokenLength":542,"cancelled":false},"timestamp":1773681760227,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681760228,"hypothesisId":"H1"}
+{"location":"hasura-ws.ts:createHasuraWsClient","message":"createHasuraWsClient called","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681760228,"hypothesisId":"H3"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":true,"linkType":"split"},"timestamp":1773681760228,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681760228,"hypothesisId":"H1"}
+{"location":"hasura-ws.ts:createHasuraWsClient","message":"createHasuraWsClient called","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681760228,"hypothesisId":"H3"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":true,"linkType":"split"},"timestamp":1773681760229,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681765762,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681765762,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681766029,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681766029,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681766030,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681766030,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:useEffect","message":"Token from authClient","data":{"hasToken":true,"tokenLength":542,"cancelled":false},"timestamp":1773681766142,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681766143,"hypothesisId":"H1"}
+{"location":"hasura-ws.ts:createHasuraWsClient","message":"createHasuraWsClient called","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681766143,"hypothesisId":"H3"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":true,"linkType":"split"},"timestamp":1773681766143,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681766143,"hypothesisId":"H1"}
+{"location":"hasura-ws.ts:createHasuraWsClient","message":"createHasuraWsClient called","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681766144,"hypothesisId":"H3"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":true,"linkType":"split"},"timestamp":1773681766144,"hypothesisId":"H2"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":true,"hasData":false,"errorMessage":null,"dienstenCount":0},"timestamp":1773681766228,"hypothesisId":"H4"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":true,"hasData":false,"errorMessage":null,"dienstenCount":0},"timestamp":1773681766228,"hypothesisId":"H4"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":false,"hasData":false,"errorMessage":"Socket closed","dienstenCount":0},"timestamp":1773681766323,"hypothesisId":"H4"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":false,"hasData":false,"errorMessage":"Socket closed","dienstenCount":0},"timestamp":1773681766324,"hypothesisId":"H4"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681775125,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681775125,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681775279,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681775280,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773681775279,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773681775280,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:useEffect","message":"Token from authClient","data":{"hasToken":true,"tokenLength":542,"cancelled":false},"timestamp":1773681775376,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681775377,"hypothesisId":"H1"}
+{"location":"hasura-ws.ts:createHasuraWsClient","message":"createHasuraWsClient called","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681775377,"hypothesisId":"H3"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":true,"linkType":"split"},"timestamp":1773681775377,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681775377,"hypothesisId":"H1"}
+{"location":"hasura-ws.ts:createHasuraWsClient","message":"createHasuraWsClient called","data":{"hasToken":true,"tokenLength":542},"timestamp":1773681775378,"hypothesisId":"H3"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":true,"linkType":"split"},"timestamp":1773681775378,"hypothesisId":"H2"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":true,"hasData":false,"errorMessage":null,"dienstenCount":0},"timestamp":1773681775457,"hypothesisId":"H4"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":true,"hasData":false,"errorMessage":null,"dienstenCount":0},"timestamp":1773681775457,"hypothesisId":"H4"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":false,"hasData":false,"errorMessage":"Socket closed","dienstenCount":0},"timestamp":1773681775546,"hypothesisId":"H4"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":false,"hasData":false,"errorMessage":"Socket closed","dienstenCount":0},"timestamp":1773681775546,"hypothesisId":"H4"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":true,"tokenLength":542},"timestamp":1773682005549,"hypothesisId":"H1"}
+{"location":"hasura-ws.ts:createHasuraWsClient","message":"createHasuraWsClient called","data":{"hasToken":true,"tokenLength":542},"timestamp":1773682005550,"hypothesisId":"H3"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":true,"linkType":"split"},"timestamp":1773682005550,"hypothesisId":"H2"}
+{"location":"hasura-ws.ts:createHasuraWsClient","message":"createHasuraWsClient called","data":{"hasToken":true,"tokenLength":542},"timestamp":1773682005551,"hypothesisId":"H3"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":true,"tokenLength":542},"timestamp":1773682005551,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":true,"linkType":"split"},"timestamp":1773682005551,"hypothesisId":"H2"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":true,"hasData":false,"errorMessage":null,"dienstenCount":0},"timestamp":1773682005554,"hypothesisId":"H4"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":true,"hasData":false,"errorMessage":null,"dienstenCount":0},"timestamp":1773682005554,"hypothesisId":"H4"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":true,"hasData":false,"errorMessage":null,"dienstenCount":0},"timestamp":1773682005555,"hypothesisId":"H4"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":false,"hasData":false,"errorMessage":"Socket closed","dienstenCount":0},"timestamp":1773682005644,"hypothesisId":"H4"}
+{"location":"test.tsx:TestPage","message":"useSubscription state","data":{"loading":false,"hasData":false,"errorMessage":"Socket closed","dienstenCount":0},"timestamp":1773682005645,"hypothesisId":"H4"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773682037811,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773682037811,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773682149033,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773682149034,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773682200968,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773682200969,"hypothesisId":"H2"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Building Apollo client","data":{"hasToken":false,"tokenLength":0},"timestamp":1773682229805,"hypothesisId":"H1"}
+{"location":"hasura-apollo-provider.tsx:buildHasuraApolloClient","message":"Apollo client link type","data":{"hasWsLink":false,"linkType":"httpOnly"},"timestamp":1773682229805,"hypothesisId":"H2"}

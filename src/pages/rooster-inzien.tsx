@@ -112,7 +112,7 @@ export default function RoosterInzienPage() {
           </CardContent>
         </Card>
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-          <Card className="w-full shrink-0 lg:w-56">
+          <Card className="sticky top-6 w-full shrink-0 self-start lg:w-56">
             <CardHeader>
               <CardTitle>Waarneemgroepen</CardTitle>
             </CardHeader>

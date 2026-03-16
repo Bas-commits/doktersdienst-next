@@ -334,7 +334,7 @@ export function CalendarGrid({
   return (
     <div>
       {onViewMonthChange && (
-        <div className="mb-4 ml-[60px]">
+        <div className="mb-4 ml-[60px] mr-[140px]">
           <MonthNavigation
             month={viewMonth}
             year={viewYear}

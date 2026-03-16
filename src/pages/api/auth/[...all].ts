@@ -5,5 +5,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 // Disallow body parsing, we will parse it manually
 export const config = { api: { bodyParser: false } };
 
-// Convert Better Auth handler to Next.js Pages Router format
-export default toNodeHandler(auth.handler);
+const authHandler = toNodeHandler(auth.handler);
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  return authHandler(req, res);
+}

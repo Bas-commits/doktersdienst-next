@@ -182,9 +182,9 @@ export function ShiftBlock({
   let cssInline: CSSProperties = {};
   if (doctorId !== 0) {
     if (!isMonday && startIsWeekend && !endIsWeekend) {
-      cssInline = { borderRightStyle: 'none', boxShadow: '-5px 0px 6px #fff inset' };
+      cssInline = { borderRightStyle: 'none', boxShadow: '-5px 0px 0px #fff inset' };
     } else if (isMonday && startIsWeekend) {
-      cssInline = { borderLeftStyle: 'none', boxShadow: '5px 0px 6px #fff inset' };
+      cssInline = { borderLeftStyle: 'none', boxShadow: '5px 0px 0px #fff inset' };
     }
   } else {
     if (!isMonday && startIsWeekend && !endIsWeekend) {
@@ -210,7 +210,7 @@ export function ShiftBlock({
   if (continuesFromPrev) {
     if (isMonday) {
       // Cross-week boundary (Sunday→Monday row): apply inset shadow
-      cssInline = { ...cssInline, borderLeftStyle: 'none', boxShadow: '5px 0px 6px #fff inset' };
+      cssInline = { ...cssInline, borderLeftStyle: 'none', boxShadow: '5px 0px 0px #fff inset' };
     } else {
       // Within same week row (overnight): seamless, no shadow
       cssInline = { ...cssInline, borderLeftStyle: 'none' };
@@ -220,7 +220,7 @@ export function ShiftBlock({
     const existingShadow = cssInline.boxShadow ?? '';
     if (isSunday) {
       // Cross-week boundary (Sunday→Monday row): apply inset shadow
-      const rightInset = '-5px 0px 6px #fff inset';
+      const rightInset = '-5px 0px 0px #fff inset';
       cssInline = { ...cssInline, borderRightStyle: 'none', boxShadow: existingShadow ? `${existingShadow}, ${rightInset}` : rightInset };
     } else {
       // Within same week row (overnight): seamless, no shadow

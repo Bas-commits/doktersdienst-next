@@ -1,6 +1,9 @@
 import { betterAuth } from 'better-auth';
+import { createAuthMiddleware } from 'better-auth/api';
 import { jwt } from 'better-auth/plugins';
 import { Pool } from 'pg';
+import { legacyMD5Verify } from '@/lib/legacy-password';
+import { pool as appPool } from '@/lib/db';
 
 const rawPool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -12,13 +15,12 @@ const rawPool = new Pool({
     : false,
 });
 
-// node-postgres Pool does not support onConnect; options in connection string are not
-// always passed. Wrap connect() so every connection sets search_path to auth before use.
+// All Better Auth tables (deelnemers, account, session, auth_verification) live in public.
 const authDbPool = {
   ...rawPool,
   connect: async function () {
     const client = await rawPool.connect();
-    await client.query('SET search_path TO auth');
+    await client.query('SET search_path TO public');
     return client;
   },
 };
@@ -81,25 +83,22 @@ async function sendVerificationEmail({
   // });
 }
 
-// #region agent log
 const _authBaseURL = process.env.BETTER_AUTH_URL || 'http://localhost:3000';
-fetch('http://127.0.0.1:7253/ingest/a82f229b-2fdf-4ed8-b109-9a2c6d129ff7', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    location: 'auth.ts:baseURL',
-    message: 'Better Auth baseURL (JWT iss source)',
-    data: { baseURL: _authBaseURL, BETTER_AUTH_URL_set: !!process.env.BETTER_AUTH_URL },
-    timestamp: Date.now(),
-    hypothesisId: 'A',
-  }),
-}).catch(() => {});
-// #endregion
 export const auth = betterAuth({
   database: authDbPool,
   baseURL: _authBaseURL,
   secret: process.env.BETTER_AUTH_SECRET || process.env.AUTH_SECRET,
+  trustedOrigins: [
+    'http://localhost:3005',
+    'http://127.0.0.1:3005',
+    ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL] : []),
+  ],
   user: {
+    modelName: 'deelnemers',
+    fields: {
+      email: 'login',
+      password: 'encrypted_password',
+    } as Record<string, string>,
     additionalFields: {
       role: {
         type: 'string',
@@ -111,17 +110,61 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    // Email verification is optional (not required for sign-in)
     requireEmailVerification: false,
-    // Password reset is enabled
     sendResetPassword: sendResetPasswordEmail,
-    // Password requirements
     minPasswordLength: 8,
     maxPasswordLength: 128,
+    password: {
+      verify: async ({ hash, password }) => legacyMD5Verify(hash, password),
+    },
+  },
+  advanced: {
+    database: {
+      // User (deelnemers) uses existing numeric ids; session/account/verification need generated ids.
+      generateId: (options) => {
+        if (options.model === 'user' || options.model === 'deelnemers') return false;
+        return crypto.randomUUID();
+      },
+    },
+  },
+  verification: {
+    modelName: 'auth_verification',
   },
   emailVerification: {
     // Optional email verification (can be triggered manually)
     sendVerificationEmail: sendVerificationEmail,
+  },
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // Ensure credential account exists for deelnemers so Better Auth finds the hash and calls our verify.
+      // Use app pool to avoid connection contention with Better Auth's authDbPool.
+      if (ctx.path === '/sign-in/email' && ctx.body?.email) {
+        const client = await appPool.connect();
+        try {
+          await client.query('SET search_path TO public');
+          const deelnemerRes = await client.query<{ id: number; encrypted_password: string | null }>(
+            'SELECT id, encrypted_password FROM deelnemers WHERE login = $1 LIMIT 1',
+            [ctx.body.email]
+          );
+          const row = deelnemerRes.rows?.[0];
+          if (row?.id != null && row?.encrypted_password) {
+            const userId = String(row.id);
+            const accountId = `credential-${userId}`;
+            await client.query(
+              `INSERT INTO account (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt")
+               VALUES ($1, $2, $2, 'credential', $3, now(), now())
+               ON CONFLICT (id) DO UPDATE SET password = EXCLUDED.password, "updatedAt" = now()`,
+              [accountId, userId, row.encrypted_password]
+            );
+          }
+        } catch (err) {
+          throw err;
+        } finally {
+          client.release();
+        }
+      }
+    }),
+    after: createAuthMiddleware(async () => {}),
   },
   plugins: [
     jwt({

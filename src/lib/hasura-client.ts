@@ -50,19 +50,6 @@ export async function fetchHasura<T = unknown>({
 
   if (!res.ok) {
     const rawErrors = json.errors ?? [{ message: res.status === 401 ? 'Unauthorized' : `HTTP ${res.status}` }];
-    // #region agent log
-    fetch('http://127.0.0.1:7253/ingest/a82f229b-2fdf-4ed8-b109-9a2c6d129ff7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        location: 'hasura-client.ts:error',
-        message: 'Hasura error response',
-        data: { status: res.status, errorMessages: rawErrors.map((e) => e.message) },
-        timestamp: Date.now(),
-        hypothesisId: 'D',
-      }),
-    }).catch(() => {});
-    // #endregion
     const hasuraConfigError = rawErrors.some((e) =>
       /x-hasura-admin-secret|x-hasura-access-key|required.*not found/i.test(e.message)
     );

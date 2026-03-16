@@ -2,10 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DoktersdienstHeader } from './DoktersdienstHeader';
 
-vi.mock('./HeaderSwitchRequests', () => ({
-  HeaderSwitchRequests: () => <div data-testid="header-switch-requests-mock">Switch requests</div>,
-}));
-
 vi.mock('@inertiajs/react', () => ({
   router: { reload: vi.fn() },
   Link: ({ href, children, ...props }: { href: string; children?: unknown }) => (
@@ -23,8 +19,6 @@ const defaultProps = {
     ShortName: 'JD',
     TypeOfUser: 'Admin',
   },
-  switchRequestUrl: 'https://app.example.com/DoktersDienst/switch-request',
-  invalidateSwitchRequestUrl: 'https://app.example.com/DoktersDienst/invalidate-switch-request',
   routes: {
     spreekuren: '/spreekuren',
     mijn_gegevens_deelnemer: '/mijn-gegevens',

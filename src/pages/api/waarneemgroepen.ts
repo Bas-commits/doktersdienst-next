@@ -39,7 +39,9 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const t0 = Date.now();
   const session = await auth.api.getSession({ headers: toHeaders(req.headers) });
+  const tSession = Date.now() - t0;
   if (!session?.user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -52,11 +54,13 @@ export default async function handler(
       });
     }
 
+    const t1 = Date.now();
     const [deelnemer] = await db
       .select({ id: deelnemers.id })
       .from(deelnemers)
       .where(eq(deelnemers.email, email))
       .limit(1);
+    const tDeelnemer = Date.now() - t1;
 
     const idDeelnemer = deelnemer?.id ?? null;
     const idRegioParam = req.query.idRegio;
@@ -77,6 +81,7 @@ export default async function handler(
       orConditions.push(eq(waarneemgroepen.idregio, idRegio));
     }
 
+    const t2 = Date.now();
     const rows = await db
       .select({ wg: waarneemgroepen })
       .from(waarneemgroepen)
@@ -87,6 +92,16 @@ export default async function handler(
       .where(
         and(eq(waarneemgroepen.afgemeld, false), or(...orConditions))
       );
+    const tQuery = Date.now() - t2;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[waarneemgroepen]', {
+        sessionMs: tSession,
+        deelnemerMs: tDeelnemer,
+        mainQueryMs: tQuery,
+        totalMs: Date.now() - t0,
+      });
+    }
 
     const unique = Array.from(
       new Map(

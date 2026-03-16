@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ChevronDown } from 'lucide-react';
-import { HeaderSwitchRequests } from './HeaderSwitchRequests';
+import {
+  WaarneemgroepContext,
+  type WaarneemgroepContextValue,
+} from '@/contexts/WaarneemgroepContext';
 
 const STORAGE_GROUP_ID_KEY = 'groupid';
 
@@ -26,8 +29,6 @@ export interface AssetUrls {
 export interface DoktersdienstHeaderProps {
   waarneemgroepen: WaarneemgroepItem[];
   headerUser: HeaderUser;
-  switchRequestUrl: string;
-  invalidateSwitchRequestUrl: string;
   routes: Record<string, string>;
   routeName?: string | null;
   assetUrls: AssetUrls;
@@ -40,16 +41,20 @@ function getStoredGroupId(): string | null {
 }
 
 export function DoktersdienstHeader({
-  waarneemgroepen,
+  waarneemgroepen: propsWaarneemgroepen,
   headerUser,
-  switchRequestUrl,
-  invalidateSwitchRequestUrl,
   routes,
   routeName = null,
   assetUrls,
 }: DoktersdienstHeaderProps) {
   const router = useRouter();
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(() => getStoredGroupId());
+  const ctx = useContext(WaarneemgroepContext) as WaarneemgroepContextValue | null;
+  const [internalGroupId, setInternalGroupId] = useState<string | null>(() => getStoredGroupId());
+
+  const waarneemgroepen: WaarneemgroepItem[] = ctx ? ctx.waarneemgroepen : propsWaarneemgroepen;
+  const selectedGroupId = ctx ? ctx.activeWaarneemgroepId : internalGroupId;
+  const setSelectedGroupId = ctx ? ctx.setActiveWaarneemgroepId : setInternalGroupId;
+
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLLIElement>(null);
 
@@ -70,56 +75,40 @@ export function DoktersdienstHeader({
         Doktersdienst?: {
           waarneemgroepen: WaarneemgroepItem[];
           typeOfUser: string;
-          switchRequestUrl: string;
           activeWaarneemgroepId: string | null;
           getActiveWaarneemgroepId: () => string | null;
-          refreshSwitchRequest?: () => void;
         };
       };
       win.Doktersdienst = {
         waarneemgroepen,
         typeOfUser: headerUser.TypeOfUser ?? '',
-        switchRequestUrl,
         activeWaarneemgroepId: activeId,
         getActiveWaarneemgroepId: () => (win.Doktersdienst?.activeWaarneemgroepId ?? null) ?? null,
       };
     },
-    [waarneemgroepen, headerUser.TypeOfUser, switchRequestUrl]
+    [waarneemgroepen, headerUser.TypeOfUser]
   );
 
   useEffect(() => {
     syncWindowDoktersdienst(selectedGroupId);
   }, [selectedGroupId, syncWindowDoktersdienst]);
 
-  useEffect(() => {
-    const onRefresh = (): void => {
-      const gid = getStoredGroupId();
-      setSelectedGroupId(gid);
-      if (typeof window !== 'undefined') {
-        const win = window as unknown as { Doktersdienst?: { refreshSwitchRequest?: () => void } };
-        win.Doktersdienst?.refreshSwitchRequest?.();
-      }
-    };
-    window.addEventListener('doktersdienst-refresh-switch-request', onRefresh);
-    return () => window.removeEventListener('doktersdienst-refresh-switch-request', onRefresh);
-  }, []);
-
   const handleGroupChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       const value = e.target.value?.trim() || null;
       if (value) {
-        localStorage.setItem(STORAGE_GROUP_ID_KEY, value);
+        if (!ctx) {
+          localStorage.setItem(STORAGE_GROUP_ID_KEY, value);
+          syncWindowDoktersdienst(value);
+          router.reload();
+        }
         setSelectedGroupId(value);
-        syncWindowDoktersdienst(value);
-        window.dispatchEvent(new Event('doktersdienst-refresh-switch-request'));
-        router.reload();
       }
     },
-    [syncWindowDoktersdienst]
+    [ctx, setSelectedGroupId, syncWindowDoktersdienst, router]
   );
 
   const showAdminTools = headerUser.TypeOfUser !== 'Doctor';
-  const frontendBaseUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
   return (
     <header className="relative" data-testid="doktersdienst-header">
@@ -148,14 +137,14 @@ export function DoktersdienstHeader({
           <div className="relative ml-auto mr-auto w-[30%]">
             <select
               name="role"
-              className="w-full h-[50px] pl-4 pr-10 rounded-[30px] text-xl font-semibold appearance-none text-[#333333] bg-white border-0"
+              className="w-full h-[50px] pl-4 pr-10 rounded-[30px] text-l font-semibold appearance-none text-[#333333] bg-white border-0"
               id="groupname"
               value={selectedGroupId ?? ''}
               onChange={handleGroupChange}
               aria-label="Waarneemgroep"
               data-testid="header-group-select"
             >
-              {waarneemgroepen.map((wg) => (
+              {waarneemgroepen.map((wg: WaarneemgroepItem) => (
                 <option key={wg.ID} value={String(wg.ID)}>
                   {wg.naam}
                 </option>
@@ -168,13 +157,6 @@ export function DoktersdienstHeader({
           </div>
 
           <ul className="flex flex-row items-center list-none p-0 mb-0">
-            <li className="relative">
-              <HeaderSwitchRequests
-                frontendBaseUrl={frontendBaseUrl}
-                invalidateSwitchRequestUrl={invalidateSwitchRequestUrl}
-              />
-            </li>
-
             {showAdminTools && (
               <li className="relative font-normal mr-6 group" data-testid="header-admin-tools">
                 <div className="cursor-pointer">

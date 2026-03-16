@@ -8,7 +8,7 @@ export const DEFAULT_ASSET_URLS: AssetUrls = {
 
 export const DEFAULT_ROUTES: Record<string, string> = {
   spreekuren: '/spreekuren',
-  waarneemgroep_gegevens: '/waarneemgroepen',
+  waarneemgroep_gegevens: '/dashboard',
   waarneemgroep_wissel: '/waarneemgroep-wissel',
   regio_toevoegen: '/regio-toevoegen',
   waarneemgroep_toevoegen: '/waarneemgroep-toevoegen',

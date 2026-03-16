@@ -6,13 +6,11 @@ CREATE TABLE "waarneemgroepkentekens" (
 	"idwaarneemgroep" integer,
 	"idkenteken" integer
 );
---> statement-breakpoint
 CREATE TABLE "ziekten" (
 	"id" integer,
 	"type" integer,
 	"naam" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "cal_cteams" (
 	"id" integer,
 	"naam" varchar(50),
@@ -21,7 +19,6 @@ CREATE TABLE "cal_cteams" (
 	"tijd" integer,
 	"meldenbij" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "locaties_temp" (
 	"id" integer,
 	"idinstellingtype" integer,
@@ -37,13 +34,11 @@ CREATE TABLE "locaties_temp" (
 	"faxnr" varchar(50),
 	"email" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "omschrijvingtelnrs" (
 	"id" integer,
 	"omschrijving" varchar(30),
 	"rowguid" uuid
 );
---> statement-breakpoint
 CREATE TABLE "ritten" (
 	"id" integer,
 	"type" varchar(5),
@@ -71,14 +66,12 @@ CREATE TABLE "ritten" (
 	"idinterneverrekening" integer,
 	"idkenteken" integer
 );
---> statement-breakpoint
 CREATE TABLE "cal_scenarios" (
 	"id" integer,
 	"naam" varchar(50),
 	"idinstelling" integer,
 	"verwijderd" boolean
 );
---> statement-breakpoint
 CREATE TABLE "diensten_old" (
 	"id" integer,
 	"idwaarneemgroep" integer,
@@ -104,7 +97,6 @@ CREATE TABLE "diensten_old" (
 	"sender_id" integer,
 	"delete_request" integer
 );
---> statement-breakpoint
 CREATE TABLE "new_absence" (
 	"id" bigint,
 	"team" integer,
@@ -115,7 +107,6 @@ CREATE TABLE "new_absence" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "cal_cteamrollen" (
 	"id" integer,
 	"idcteam" integer,
@@ -124,7 +115,6 @@ CREATE TABLE "cal_cteamrollen" (
 	"tijd" integer,
 	"meldenbij" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "veldfilters" (
 	"id" integer,
 	"rit_aanvraagtijd" boolean,
@@ -150,7 +140,6 @@ CREATE TABLE "veldfilters" (
 	"af_factureren" boolean,
 	"af_statistiek" boolean
 );
---> statement-breakpoint
 CREATE TABLE "cdr" (
 	"id" integer,
 	"clid" varchar(255),
@@ -173,14 +162,12 @@ CREATE TABLE "cdr" (
 	"userfield" varchar(255),
 	"telsrv_ip" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "new_functie" (
 	"id" bigint,
 	"functie" varchar(50),
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "expertises" (
 	"id" integer,
 	"afkorting" varchar(10),
@@ -188,7 +175,6 @@ CREATE TABLE "expertises" (
 	"idspecialisme" integer,
 	"verwijderd" integer
 );
---> statement-breakpoint
 CREATE TABLE "new_urentelling" (
 	"id" bigint,
 	"team_id" integer,
@@ -197,7 +183,6 @@ CREATE TABLE "new_urentelling" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "instellingtype" (
 	"id" integer,
 	"naam" varchar(50),
@@ -227,7 +212,6 @@ CREATE TABLE "instellingtype" (
 	"letselschadeorderplaats" integer,
 	"zedendelictorderplaats" integer
 );
---> statement-breakpoint
 CREATE TABLE "medicijnvorm" (
 	"id" integer,
 	"vorm" varchar(50),
@@ -238,14 +222,12 @@ CREATE TABLE "medicijnvorm" (
 	"opmerking" varchar(255),
 	"idmedicijnmerk" integer
 );
---> statement-breakpoint
 CREATE TABLE "waarneemgroeplocaties" (
 	"id" integer,
 	"idlocatie" integer,
 	"idwaarneemgroep" integer,
 	"rowguid" uuid
 );
---> statement-breakpoint
 CREATE TABLE "new_activity" (
 	"id" integer,
 	"team" integer,
@@ -257,13 +239,11 @@ CREATE TABLE "new_activity" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "migrations" (
 	"id" integer,
 	"migration" varchar(255),
 	"batch" integer
 );
---> statement-breakpoint
 CREATE TABLE "cdr_old" (
 	"id" integer,
 	"call_id" integer,
@@ -304,14 +284,12 @@ CREATE TABLE "cdr_old" (
 	"transfer_time" varchar(255),
 	"disconnect_reason" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "cal_afdelingen" (
 	"id" integer,
 	"naam" varchar(255),
 	"idinstelling" integer,
 	"verwijderd" boolean
 );
---> statement-breakpoint
 CREATE TABLE "plaatsregios" (
 	"id" integer,
 	"idregio" integer,
@@ -319,7 +297,6 @@ CREATE TABLE "plaatsregios" (
 	"gemeente" varchar(255),
 	"cbs" boolean
 );
---> statement-breakpoint
 CREATE TABLE "new_expertise" (
 	"id" bigint,
 	"team" integer,
@@ -328,7 +305,6 @@ CREATE TABLE "new_expertise" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "new_location" (
 	"id" bigint,
 	"team" integer,
@@ -338,14 +314,12 @@ CREATE TABLE "new_location" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "cal_teams" (
 	"id" integer,
 	"naam" varchar(50),
 	"idinstelling" integer,
 	"verwijderd" boolean
 );
---> statement-breakpoint
 CREATE TABLE "schouwing" (
 	"id" integer,
 	"idverrichting" integer,
@@ -380,13 +354,11 @@ CREATE TABLE "schouwing" (
 	"letsel" varchar(1024),
 	"plaatsgebeurtenis" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "Overig" (
 	"id" integer,
 	"idverrichting" integer,
 	"aantekening" varchar(2048)
 );
---> statement-breakpoint
 CREATE TABLE "cal_calamiteiten" (
 	"id" integer,
 	"datum" integer,
@@ -397,19 +369,16 @@ CREATE TABLE "cal_calamiteiten" (
 	"afgemeld" boolean,
 	"iddeelnemer" integer
 );
---> statement-breakpoint
 CREATE TABLE "waarneemgroepmedicijnvormen" (
 	"id" integer,
 	"idwaarneemgroep" integer,
 	"idmedicijnvorm" integer
 );
---> statement-breakpoint
 CREATE TABLE "medicijngeneriek" (
 	"id" integer,
 	"naam" varchar(50),
 	"opiaat" boolean
 );
---> statement-breakpoint
 CREATE TABLE "diensten" (
 	"id" integer,
 	"idwaarneemgroep" integer,
@@ -435,13 +404,11 @@ CREATE TABLE "diensten" (
 	"sender_id" integer,
 	"delete_request" integer
 );
---> statement-breakpoint
 CREATE TABLE "teo_backup" (
 	"first_name" varchar(50),
 	"first_md5" varchar(255),
 	"zoutje" varchar(32)
 );
---> statement-breakpoint
 CREATE TABLE "cal_scenarioafdelingteams" (
 	"id" integer,
 	"idscenarioafdeling" integer,
@@ -449,13 +416,11 @@ CREATE TABLE "cal_scenarioafdelingteams" (
 	"aantal" integer,
 	"verwijderd" boolean
 );
---> statement-breakpoint
 CREATE TABLE "onderzoekingen" (
 	"id" integer,
 	"type" integer,
 	"naam" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "artsen_temp" (
 	"id" integer,
 	"naam" varchar(50),
@@ -468,40 +433,34 @@ CREATE TABLE "artsen_temp" (
 	"email" varchar(50),
 	"gecontrolleerd" boolean
 );
---> statement-breakpoint
 CREATE TABLE "verrekeningen" (
 	"id" integer,
 	"idwaarneemgroep" integer,
 	"verrekening" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "praktijkdeelnemers" (
 	"id" integer,
 	"idpraktijk" integer,
 	"iddeelnemer" integer,
 	"rowguid" uuid
 );
---> statement-breakpoint
 CREATE TABLE "medicijnmerk" (
 	"id" integer,
 	"naam" varchar(50),
 	"idfabrikant" integer,
 	"idmedicijngeneriek" integer
 );
---> statement-breakpoint
 CREATE TABLE "verrichtingstatistieken" (
 	"id" integer,
 	"idverrichting" integer,
 	"idstatistiek" integer
 );
---> statement-breakpoint
 CREATE TABLE "specialismen" (
 	"id" integer,
 	"omschrijving" varchar(40),
 	"bigcode" varchar(20),
 	"type" integer
 );
---> statement-breakpoint
 CREATE TABLE "role" (
 	"id" integer,
 	"name" varchar(30),
@@ -513,7 +472,6 @@ CREATE TABLE "role" (
 	"capacityplanner" boolean,
 	"capacityoverview" boolean
 );
---> statement-breakpoint
 CREATE TABLE "deelnemers" (
 	"id" integer,
 	"idgroep" integer,
@@ -591,7 +549,6 @@ CREATE TABLE "deelnemers" (
 	"mijn_expertises" varchar(500),
 	"is_forgot_password" varchar(500)
 );
---> statement-breakpoint
 CREATE TABLE "groepen" (
 	"id" integer,
 	"naam" varchar(30),
@@ -632,7 +589,6 @@ CREATE TABLE "groepen" (
 	"calamiteiten" boolean,
 	"maatschapplanner" boolean
 );
---> statement-breakpoint
 CREATE TABLE "new_dagdelen" (
 	"id" bigint,
 	"daypart_with_date" varchar(255),
@@ -648,7 +604,6 @@ CREATE TABLE "new_dagdelen" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "formmails" (
 	"id" integer,
 	"idverrichting" integer,
@@ -658,7 +613,6 @@ CREATE TABLE "formmails" (
 	"tekst" text,
 	"datum" integer
 );
---> statement-breakpoint
 CREATE TABLE "forensisch" (
 	"id" integer,
 	"idverrichting" integer,
@@ -674,7 +628,6 @@ CREATE TABLE "forensisch" (
 	"inwinnen" boolean,
 	"opmerkingen" varchar(2048)
 );
---> statement-breakpoint
 CREATE TABLE "kamers" (
 	"id" integer,
 	"iddeelnemer" integer,
@@ -682,7 +635,6 @@ CREATE TABLE "kamers" (
 	"idpraktijk" integer,
 	"kamer" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "protocolblokken" (
 	"id" integer,
 	"idprotocol" integer,
@@ -690,13 +642,11 @@ CREATE TABLE "protocolblokken" (
 	"filename" varchar(255),
 	"type" varchar(20)
 );
---> statement-breakpoint
 CREATE TABLE "sessionHashes" (
 	"user_id" integer,
 	"hash" integer,
 	"aanmaakdatum" date
 );
---> statement-breakpoint
 CREATE TABLE "personen" (
 	"id" integer,
 	"naam" varchar(50),
@@ -707,7 +657,6 @@ CREATE TABLE "personen" (
 	"nationaliteit" varchar(50),
 	"notitie" text
 );
---> statement-breakpoint
 CREATE TABLE "oauth_clients" (
 	"id" bigint,
 	"user_id" bigint,
@@ -721,7 +670,6 @@ CREATE TABLE "oauth_clients" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "deelnemers_backup" (
 	"id" integer,
 	"idgroep" integer,
@@ -791,7 +739,6 @@ CREATE TABLE "deelnemers_backup" (
 	"is_voicemail_doorschakeling" boolean,
 	"encrypted_password" varchar(32)
 );
---> statement-breakpoint
 CREATE TABLE "visitor" (
 	"id" integer,
 	"datetime" integer,
@@ -800,7 +747,6 @@ CREATE TABLE "visitor" (
 	"forwarded_for" varchar(255),
 	"layout" varchar(10)
 );
---> statement-breakpoint
 CREATE TABLE "verification" (
 	"id" text PRIMARY KEY NOT NULL,
 	"identifier" text NOT NULL,
@@ -809,7 +755,6 @@ CREATE TABLE "verification" (
 	"createdAt" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	"updatedAt" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
---> statement-breakpoint
 CREATE TABLE "arrestanten" (
 	"id" integer,
 	"idverrichting" integer,
@@ -829,7 +774,6 @@ CREATE TABLE "arrestanten" (
 	"camera" boolean,
 	"wekadviesuur" double precision
 );
---> statement-breakpoint
 CREATE TABLE "diensten_new_old" (
 	"id" integer,
 	"idwaarneemgroep" integer,
@@ -855,20 +799,17 @@ CREATE TABLE "diensten_new_old" (
 	"sender_id" integer,
 	"delete_request" integer
 );
---> statement-breakpoint
 CREATE TABLE "dienstherhalen" (
 	"id" integer,
 	"weken" integer,
 	"startdatum" integer,
 	"einddatum" integer
 );
---> statement-breakpoint
 CREATE TABLE "kentekens" (
 	"id" integer,
 	"kenteken" varchar(10),
 	"iddeelnemer" integer
 );
---> statement-breakpoint
 CREATE TABLE "dienstaantekening" (
 	"id" integer,
 	"tekst" varchar(25),
@@ -879,7 +820,6 @@ CREATE TABLE "dienstaantekening" (
 	"prio" integer,
 	"idtarief_default" integer
 );
---> statement-breakpoint
 CREATE TABLE "gesprekken" (
 	"id" integer,
 	"vannummer" varchar(20),
@@ -893,20 +833,17 @@ CREATE TABLE "gesprekken" (
 	"telsrv" varchar(50),
 	"recording_show" integer
 );
---> statement-breakpoint
 CREATE TABLE "deelnemerexpertises" (
 	"id" integer,
 	"iddeelnemer" integer,
 	"idexpertise" integer
 );
---> statement-breakpoint
 CREATE TABLE "kamertelnrs" (
 	"id" integer,
 	"idpraktijk" integer,
 	"idkamer" integer,
 	"telnr" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "praktijken" (
 	"id" integer,
 	"naam" varchar(50),
@@ -923,7 +860,6 @@ CREATE TABLE "praktijken" (
 	"idsecretaris" integer,
 	"rowguid" uuid
 );
---> statement-breakpoint
 CREATE TABLE "pagehit" (
 	"id" integer,
 	"datetime" integer,
@@ -936,7 +872,6 @@ CREATE TABLE "pagehit" (
 	"refererid" integer,
 	"referername" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "locaties" (
 	"id" integer,
 	"idinstellingtype" integer,
@@ -956,7 +891,6 @@ CREATE TABLE "locaties" (
 	"kleur" varchar(50),
 	"afkorting" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "new_fte" (
 	"id" bigint,
 	"team_id" integer,
@@ -966,24 +900,20 @@ CREATE TABLE "new_fte" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "cbspg" (
 	"plaats" varchar(255),
 	"gemeente" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "oauth_personal_access_clients" (
 	"id" bigint,
 	"client_id" bigint,
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "vakantieregios" (
 	"id" integer,
 	"naam" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "cal_teamrollen" (
 	"id" integer,
 	"idteam" integer,
@@ -991,7 +921,6 @@ CREATE TABLE "cal_teamrollen" (
 	"aantal" integer,
 	"verwijderd" boolean
 );
---> statement-breakpoint
 CREATE TABLE "instellingen" (
 	"id" integer,
 	"idinstellingtype" integer,
@@ -1002,7 +931,6 @@ CREATE TABLE "instellingen" (
 	"idhoofdlocatie" integer,
 	"rowguid" uuid
 );
---> statement-breakpoint
 CREATE TABLE "artsen" (
 	"id" integer,
 	"naam" varchar(50),
@@ -1016,7 +944,6 @@ CREATE TABLE "artsen" (
 	"email" varchar(50),
 	"rowguid" uuid
 );
---> statement-breakpoint
 CREATE TABLE "persoonadressen" (
 	"id" integer,
 	"adres" varchar(50),
@@ -1026,30 +953,25 @@ CREATE TABLE "persoonadressen" (
 	"idverzekeraar" integer,
 	"polisnummer" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "icdgroepen" (
 	"id" integer,
 	"code" varchar(50),
 	"naam" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "regios" (
 	"id" integer,
 	"naam" varchar(40),
 	"rowguid" uuid
 );
---> statement-breakpoint
 CREATE TABLE "deviceTokens" (
 	"user_id" integer,
 	"device_token" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "statistieken" (
 	"id" integer,
 	"type" varchar(50),
 	"naam" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "tarieven" (
 	"id" integer,
 	"idtariefregel" integer,
@@ -1060,13 +982,11 @@ CREATE TABLE "tarieven" (
 	"totdag" integer,
 	"pm" boolean
 );
---> statement-breakpoint
 CREATE TABLE "waarneemgroepvakantieregios" (
 	"id" integer,
 	"idwaarneemgroep" integer,
 	"idvakantieregio" integer
 );
---> statement-breakpoint
 CREATE TABLE "protocollen" (
 	"id" integer,
 	"iddeelnemer" integer,
@@ -1074,7 +994,6 @@ CREATE TABLE "protocollen" (
 	"naam" varchar(255),
 	"datum" integer
 );
---> statement-breakpoint
 CREATE TABLE "taaktypen" (
 	"id" integer,
 	"idwaarneemgroep" integer,
@@ -1093,7 +1012,6 @@ CREATE TABLE "taaktypen" (
 	"type" integer,
 	"niet_locatie_gebonden" boolean
 );
---> statement-breakpoint
 CREATE TABLE "uitvaart_limburg" (
 	"naam" varchar(255),
 	"type" varchar(255),
@@ -1102,14 +1020,12 @@ CREATE TABLE "uitvaart_limburg" (
 	"plaats" varchar(255),
 	"f6" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "waarneemgroepprotocollen" (
 	"id" integer,
 	"idwaarneemgroep" integer,
 	"idprotocol" integer,
 	"rowguid" uuid
 );
---> statement-breakpoint
 CREATE TABLE "syncqueries" (
 	"id" integer,
 	"type" varchar(50),
@@ -1122,7 +1038,6 @@ CREATE TABLE "syncqueries" (
 	"qid" integer,
 	"oid" integer
 );
---> statement-breakpoint
 CREATE TABLE "waarneemgroepdeelnemers" (
 	"id" integer,
 	"iddeelnemer" integer,
@@ -1141,7 +1056,6 @@ CREATE TABLE "waarneemgroepdeelnemers" (
 	"practice_scheduler_stop_date" varchar(50),
 	"idfunctie" integer
 );
---> statement-breakpoint
 CREATE TABLE "cal_oproepen" (
 	"id" integer,
 	"idcalamiteit" integer,
@@ -1162,7 +1076,6 @@ CREATE TABLE "cal_oproepen" (
 	"idmeldenbijteam" integer,
 	"idmeldenbijrol" integer
 );
---> statement-breakpoint
 CREATE TABLE "tariefregels" (
 	"id" integer,
 	"factuur" integer,
@@ -1178,13 +1091,11 @@ CREATE TABLE "tariefregels" (
 	"bonus" boolean,
 	"specificiteit" integer
 );
---> statement-breakpoint
 CREATE TABLE "verrichtingactiviteiten" (
 	"id" integer,
 	"idverrichting" integer,
 	"idactiviteit" integer
 );
---> statement-breakpoint
 CREATE TABLE "vakanties" (
 	"id" integer,
 	"idvakantieregio" integer,
@@ -1193,7 +1104,6 @@ CREATE TABLE "vakanties" (
 	"tot" integer,
 	"type" integer
 );
---> statement-breakpoint
 CREATE TABLE "new_expertisecompetenie" (
 	"id" bigint,
 	"team" integer,
@@ -1202,7 +1112,6 @@ CREATE TABLE "new_expertisecompetenie" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "waarneemgroepen" (
 	"id" integer,
 	"naam" varchar(50),
@@ -1241,7 +1150,6 @@ CREATE TABLE "waarneemgroepen" (
 	"gebruikt_voicemail" boolean,
 	"gespreksopname" integer
 );
---> statement-breakpoint
 CREATE TABLE "verrichtingmedicijnen" (
 	"id" integer,
 	"idmedicijnvorm" integer,
@@ -1259,14 +1167,12 @@ CREATE TABLE "verrichtingmedicijnen" (
 	"tot" integer,
 	"opmerking" varchar(2048)
 );
---> statement-breakpoint
 CREATE TABLE "cal_scenarioafdelingen" (
 	"id" integer,
 	"idscenario" integer,
 	"idafdeling" integer,
 	"verwijderd" boolean
 );
---> statement-breakpoint
 CREATE TABLE "sms" (
 	"id" integer,
 	"iddeelnemer" integer,
@@ -1275,7 +1181,6 @@ CREATE TABLE "sms" (
 	"van" integer,
 	"newid" integer
 );
---> statement-breakpoint
 CREATE TABLE "new_chipsdaypart" (
 	"id" bigint,
 	"date" timestamp,
@@ -1304,19 +1209,16 @@ CREATE TABLE "new_chipsdaypart" (
 	"tplastedited" timestamp,
 	"tplastdateedited" integer
 );
---> statement-breakpoint
 CREATE TABLE "gemeentearrondissement" (
 	"id" integer,
 	"gemeente" varchar(255),
 	"arrondissement" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "nhnplaatsgemeente" (
 	"id" integer,
 	"gemeente" varchar(255),
 	"plaats" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "settelnrs" (
 	"id" integer,
 	"telnr1" varchar(20),
@@ -1342,12 +1244,10 @@ CREATE TABLE "settelnrs" (
 	"rowguid" uuid,
 	"laatstopgenomen" integer
 );
---> statement-breakpoint
 CREATE TABLE "verzekeraars" (
 	"id" integer,
 	"naam" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "nhnlocaties" (
 	"id" integer,
 	"naam" varchar(255),
@@ -1356,27 +1256,23 @@ CREATE TABLE "nhnlocaties" (
 	"plaats" varchar(255),
 	"type" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "verrichtingicdsubgroepen" (
 	"id" integer,
 	"idverrichting" integer,
 	"idicdsubgroep" integer,
 	"type" varchar(50)
 );
---> statement-breakpoint
 CREATE TABLE "rollen" (
 	"id" integer,
 	"idspecialisme" integer,
 	"naam" varchar(255),
 	"rowguid" uuid
 );
---> statement-breakpoint
 CREATE TABLE "teo" (
 	"first_name" varchar(51),
 	"first_md5" varchar(255),
 	"zoutje" varchar(32)
 );
---> statement-breakpoint
 CREATE TABLE "verrichtingen" (
 	"id" integer,
 	"idrit" integer,
@@ -1403,20 +1299,17 @@ CREATE TABLE "verrichtingen" (
 	"duurauto" boolean,
 	"printletter" varchar(5)
 );
---> statement-breakpoint
 CREATE TABLE "activiteiten" (
 	"id" integer,
 	"type" varchar(20),
 	"naam" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "icdsubgroepen" (
 	"id" integer,
 	"idgroep" integer,
 	"code" varchar(50),
 	"naam" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "new_users" (
 	"id" bigint,
 	"name" varchar(255),
@@ -1428,7 +1321,6 @@ CREATE TABLE "new_users" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "oauth_access_tokens" (
 	"id" varchar(100),
 	"user_id" bigint,
@@ -1440,14 +1332,12 @@ CREATE TABLE "oauth_access_tokens" (
 	"updated_at" timestamp,
 	"expires_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "cal_meldenbij" (
 	"id" integer,
 	"idlocatie" integer,
 	"tijd" integer,
 	"meldenbij" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "new_task" (
 	"id" bigint,
 	"team" integer,
@@ -1458,7 +1348,6 @@ CREATE TABLE "new_task" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "new_specification_activity" (
 	"id" bigint,
 	"team" integer,
@@ -1468,7 +1357,6 @@ CREATE TABLE "new_specification_activity" (
 	"created_at" timestamp,
 	"updated_at" timestamp
 );
---> statement-breakpoint
 CREATE TABLE "voicemails" (
 	"id" integer,
 	"idwaarneemgroep" integer,
@@ -1478,12 +1366,10 @@ CREATE TABLE "voicemails" (
 	"afgeluisterd_timestamp" integer,
 	"afgehandeld_timestamp" integer
 );
---> statement-breakpoint
 CREATE TABLE "cbsga" (
 	"gemeente" varchar(255),
 	"arrondissement" varchar(255)
 );
---> statement-breakpoint
 CREATE TABLE "ddtarieven" (
 	"id" integer,
 	"idwaarneemgroep" integer,
@@ -1491,6 +1377,5 @@ CREATE TABLE "ddtarieven" (
 	"inteuros" integer,
 	"intpercentage" integer
 );
---> statement-breakpoint
 CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("identifier" text_ops);
 */

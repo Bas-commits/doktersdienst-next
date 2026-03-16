@@ -25,8 +25,6 @@ const meta = {
       ShortName: 'JV',
       TypeOfUser: 'Doctor',
     },
-    switchRequestUrl: '/api/switch-requests',
-    invalidateSwitchRequestUrl: '/api/switch-requests/invalidate',
     routes: DEFAULT_ROUTES,
     routeName: null,
     assetUrls: DEFAULT_ASSET_URLS,

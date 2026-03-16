@@ -127,6 +127,13 @@ export const auth = betterAuth({
       },
     },
   },
+  session: {
+    // Avoid DB hit on every getSession: validate from signed cookie for 5 min
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // seconds
+    },
+  },
   verification: {
     modelName: 'auth_verification',
   },

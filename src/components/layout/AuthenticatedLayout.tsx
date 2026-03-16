@@ -4,21 +4,14 @@ import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { authClient } from '@/lib/auth-client';
 import { DoktersdienstHeader } from '@/components/header/DoktersdienstHeader';
+import { Sidebar } from '@/components/layout/Sidebar';
+import { WaarneemgroepProvider } from '@/contexts/WaarneemgroepContext';
 import {
   DEFAULT_ASSET_URLS,
   DEFAULT_ROUTES,
   headerUserFromSession,
   EMPTY_WAARNEMGROEPEN,
 } from '@/lib/header-defaults';
-
-function getSwitchRequestUrls(): { switchRequestUrl: string; invalidateSwitchRequestUrl: string } {
-  if (typeof window === 'undefined') return { switchRequestUrl: '', invalidateSwitchRequestUrl: '' };
-  const base = window.location.origin;
-  return {
-    switchRequestUrl: `${base}/api/switch-request`,
-    invalidateSwitchRequestUrl: `${base}/api/invalidate-switch-request`,
-  };
-}
 
 export interface AuthenticatedLayoutProps {
   children: React.ReactNode;
@@ -33,14 +26,12 @@ export function AuthenticatedLayout({ children, headerProps }: AuthenticatedLayo
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
 
-  const { switchRequestUrl, invalidateSwitchRequestUrl } = useMemo(getSwitchRequestUrls, []);
-
   const headerUser = useMemo(
     () => headerUserFromSession(session?.user ?? null),
     [session?.user]
   );
 
-  const waarneemgroepen = headerProps?.waarneemgroepen ?? EMPTY_WAARNEMGROEPEN;
+  const fallbackWaarneemgroepen = headerProps?.waarneemgroepen ?? EMPTY_WAARNEMGROEPEN;
 
   useEffect(() => {
     if (isPending) return;
@@ -62,17 +53,20 @@ export function AuthenticatedLayout({ children, headerProps }: AuthenticatedLayo
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <DoktersdienstHeader
-        waarneemgroepen={waarneemgroepen}
-        headerUser={headerUser}
-        switchRequestUrl={switchRequestUrl}
-        invalidateSwitchRequestUrl={invalidateSwitchRequestUrl}
-        routes={DEFAULT_ROUTES}
-        routeName={headerProps?.routeName ?? null}
-        assetUrls={DEFAULT_ASSET_URLS}
-      />
-      <main className="flex-1">{children}</main>
-    </div>
+    <WaarneemgroepProvider>
+      <div className="flex min-h-screen flex-col">
+        <DoktersdienstHeader
+          waarneemgroepen={fallbackWaarneemgroepen}
+          headerUser={headerUser}
+          routes={DEFAULT_ROUTES}
+          routeName={headerProps?.routeName ?? null}
+          assetUrls={DEFAULT_ASSET_URLS}
+        />
+        <div className="flex flex-1">
+          <Sidebar />
+          <main className="flex-1">{children}</main>
+        </div>
+      </div>
+    </WaarneemgroepProvider>
   );
 }

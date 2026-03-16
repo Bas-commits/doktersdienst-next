@@ -8,6 +8,7 @@ const AUTHENTICATED_PATHS = [
   "/rooster-inzien",
   "/overnames",
   "/voorkeuren",
+  "/mijn-gegevens",
 ];
 
 function useIsAuthenticatedRoute(): boolean {

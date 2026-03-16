@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CalendarGrid, type CalendarGridRow } from './CalendarGrid';
 import type { ShiftBlockView } from '@/types/diensten';
+import type { ChipDefinition } from '@/types/voorkeuren';
 
 export interface CalendarGridWithNavStateProps {
   /** Rows per waarneemgroep (when set, shiftBlocks is ignored). */
@@ -23,6 +24,14 @@ export interface CalendarGridWithNavStateProps {
   hideTopStrip?: boolean;
   /** When true, the bottom (Extra Dokter) strip is not rendered. */
   hideBottomStrip?: boolean;
+  /** Optional: when set, shift blocks are clickable (e.g. for voorkeuren). */
+  onShiftClick?: (block: ShiftBlockView, position: { top: number; left: number }) => void;
+  /** Optional: shiftKey -> chip code for pending preference inserts. */
+  pendingInsert?: Map<string, string>;
+  /** Optional: shiftKeys marked for preference removal (Weghalen). */
+  pendingDelete?: Set<string>;
+  /** Optional: resolve chip code to definition for rendering on blocks. */
+  getChipByCode?: (code: string) => ChipDefinition | undefined;
 }
 
 /**
@@ -40,6 +49,10 @@ export function CalendarGridWithNavState({
   onViewMonthChange,
   hideTopStrip,
   hideBottomStrip,
+  onShiftClick,
+  pendingInsert,
+  pendingDelete,
+  getChipByCode,
 }: CalendarGridWithNavStateProps) {
   const [internalViewMonth, setInternalViewMonth] = useState(initialViewMonth);
   const [internalViewYear, setInternalViewYear] = useState(initialViewYear);
@@ -70,6 +83,10 @@ export function CalendarGridWithNavState({
       onViewMonthChange={handleViewMonthChange}
       hideTopStrip={hideTopStrip}
       hideBottomStrip={hideBottomStrip}
+      onShiftClick={onShiftClick}
+      pendingInsert={pendingInsert}
+      pendingDelete={pendingDelete}
+      getChipByCode={getChipByCode}
     />
   );
 }

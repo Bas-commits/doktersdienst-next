@@ -2,6 +2,8 @@ import React, { useMemo } from 'react';
 import type { VakantieItem, WeekDateRangeItem } from '@/types/rooster';
 import type { ShiftBlockSection } from '@/types/rooster-maken';
 import type { ShiftBlockView } from '@/types/diensten';
+import type { ChipDefinition } from '@/types/voorkeuren';
+import { shiftKeyFromBlock, getChipByCode as getChipByCodeFromTypes } from '@/types/voorkeuren';
 import { getWeek, monthWeekCount, getDateRangeOfWeek, getWeekNumber } from '@/utils/calendarUtils';
 import { ShiftBlock } from '@/components/ShiftBlock/ShiftBlock';
 import { MonthNavigation } from './MonthNavigation';
@@ -33,6 +35,12 @@ export interface CalendarGridProps {
   vakanties?: VakantieItem[];
   /** Optional: when set, month navigation is shown above the calendar and this is called when the user selects a month/year. */
   onViewMonthChange?: (month: number, year: number) => void;
+  /** Optional: shiftKey -> chip code for pending preference inserts (voorkeuren). */
+  pendingInsert?: Map<string, string>;
+  /** Optional: shiftKeys marked for preference removal (voorkeuren Weghalen). */
+  pendingDelete?: Set<string>;
+  /** Optional: resolve chip code to definition for rendering on blocks. Defaults to getChipByCode from types. */
+  getChipByCode?: (code: string) => ChipDefinition | undefined;
 }
 
 /** Width of the right-hand column that shows waarneemgroep names per row (when multiple rows). */
@@ -125,6 +133,9 @@ export function CalendarGrid({
   onShiftDelete,
   vakanties,
   onViewMonthChange,
+  pendingInsert,
+  pendingDelete,
+  getChipByCode = getChipByCodeFromTypes,
 }: CalendarGridProps) {
   const vakantieList: VakantieItem[] = vakanties ?? [];
 
@@ -266,6 +277,15 @@ export function CalendarGrid({
                                 const next = getNextDate(rangeDay, range.Month, rangeYear);
                                 const continuesFromPrev = blockOverlapsDay(block, prev.day, prev.month0, prev.year);
                                 const continuesToNext = blockOverlapsDay(block, next.day, next.month0, next.year);
+                                const blockKey = shiftKeyFromBlock(block);
+                                const isPendingDelete = pendingDelete?.has(blockKey);
+                                const pendingCode = pendingInsert?.get(blockKey);
+                                const preferenceChip: ChipDefinition | undefined =
+                                  isPendingDelete
+                                    ? getChipByCode('1014')
+                                    : pendingCode
+                                      ? getChipByCode(pendingCode)
+                                      : undefined;
                                 return (
                                   <ShiftBlock
                                     key={`${block.id}-${block.van}-${block.tot}-${dateKey}-${blockIndex}`}
@@ -295,6 +315,7 @@ export function CalendarGrid({
                                           }
                                         : undefined
                                     }
+                                    preferenceChip={preferenceChip ?? null}
                                   />
                                 );
                               })}
@@ -334,7 +355,9 @@ export function CalendarGrid({
   return (
     <div>
       {onViewMonthChange && (
-        <div className="mb-4 ml-[60px] mr-[140px]">
+        <div
+          className={`mb-4 ml-[60px]${gridRows.length > 2 ? ' mr-[140px]' : ''}`}
+        >
           <MonthNavigation
             month={viewMonth}
             year={viewYear}

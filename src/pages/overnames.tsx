@@ -6,9 +6,9 @@ import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
+import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
-import { useWaarneemgroepenApi } from '@/hooks/use-waarneemgroepen-api';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -33,11 +33,16 @@ export default function OvernamesPage() {
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
 
-  const { data: waarneemgroepen, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroepenApi();
+  const { waarneemgroepen, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
   const waarneemgroepIds = useMemo(() => {
     if (!waarneemgroepen?.length) return [];
-    return waarneemgroepen.map((wg) => wg.id).filter((id): id is number => id != null && !Number.isNaN(id));
+    return waarneemgroepen.map((wg) => wg.ID).filter((id): id is number => id != null && !Number.isNaN(id));
   }, [waarneemgroepen]);
+  /** Name source for calendar rows: context uses ID/naam, schedule helpers expect id/naam. */
+  const waarneemgroepNameSource = useMemo(
+    () => (waarneemgroepen?.length ? waarneemgroepen.map((w) => ({ id: w.ID, naam: w.naam })) : null),
+    [waarneemgroepen]
+  );
 
   const vanGte = useMemo(() => vanGteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
   const totLte = useMemo(() => totLteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
@@ -50,8 +55,8 @@ export default function OvernamesPage() {
 
   const rows = useMemo(() => {
     const blocks = dienstenToShiftBlocks(dienstenResponse ?? null);
-    return withWaarneemgroepNames(groupShiftBlocksByWaarneemgroep(blocks), waarneemgroepen);
-  }, [dienstenResponse, waarneemgroepen]);
+    return withWaarneemgroepNames(groupShiftBlocksByWaarneemgroep(blocks), waarneemgroepNameSource);
+  }, [dienstenResponse, waarneemgroepNameSource]);
 
   const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
   const error = waarneemgroepenError ?? dienstenError;

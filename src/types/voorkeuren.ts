@@ -4,6 +4,7 @@
  */
 
 import type { RoosterChip, VakantieItem } from './rooster';
+import type { ShiftBlockView } from './diensten';
 
 // Re-export for convenience: ChipData items share the same shape as rooster chips
 export type { RoosterChip, VakantieItem };
@@ -61,38 +62,38 @@ export const CHIP_DEFINITIONS: ChipDefinition[] = [
   {
     code: '1014',
     label: 'Weghalen',
-    selectorIconPath: '/assets/images/icons/trash-icon.png',
-    chipIconPath: '/assets/images/icons/trash-icon1.png',
+    selectorIconPath: '',
+    chipIconPath: '',
   },
   {
-    code: '1006',
+    code: '3',
     label: 'Liever wel',
-    selectorIconPath: '/assets/images/icons/check.svg',
-    chipIconPath: '/assets/images/rather-yes-chip.jpg',
+    selectorIconPath: '/images/icons/check.svg',
+    chipIconPath: '/images/icons/check.svg',
   },
   {
-    code: '1007',
+    code: '2',
     label: 'Liever niet',
-    selectorIconPath: '/assets/images/icons/cross.svg',
-    chipIconPath: '/assets/images/rather-no-chip.jpg',
+    selectorIconPath: '/images/icons/cross.svg',
+    chipIconPath: '/images/icons/cross.svg',
   },
   {
-    code: '1008',
+    code: '9',
     label: 'Vakantie',
-    selectorIconPath: '/assets/images/icons/holliday.svg',
-    chipIconPath: '/assets/images/icons/holliday-bg.svg',
+    selectorIconPath: '/images/icons/holliday.svg',
+    chipIconPath: '/images/icons/holliday-bg.svg',
   },
   {
-    code: '1009',
+    code: '10',
     label: 'Nascholing',
-    selectorIconPath: '/assets/images/icons/education.svg',
-    chipIconPath: '/assets/images/icons/education-bg.svg',
+    selectorIconPath: '/images/icons/education.svg',
+    chipIconPath: '/images/icons/education-bg.svg',
   },
   {
-    code: '1010',
+    code: '5001',
     label: 'FTE',
-    selectorIconPath: '/assets/images/icons/FTE.svg',
-    chipIconPath: '/assets/images/icons/FTE-bg.svg',
+    selectorIconPath: '/images/icons/FTE.svg',
+    chipIconPath: '/images/icons/FTE-bg.svg',
   },
 ];
 
@@ -104,6 +105,16 @@ export function shiftKey(
   doctorId: number
 ): string {
   return `${currentDate}_${van}_${tot}_${doctorId}`;
+}
+
+/** Unique key for a shift block (ShiftBlockView), used for pending preference state. */
+export function shiftKeyFromBlock(block: ShiftBlockView): string {
+  return `${block.currentDate}_${block.van}_${block.tot}_${block.id}`;
+}
+
+/** Look up chip definition by code for rendering on blocks. */
+export function getChipByCode(code: string): ChipDefinition | undefined {
+  return CHIP_DEFINITIONS.find((c) => c.code === code);
 }
 
 /** Format a day/month/year to "DD-MM-YYYY" as expected by the POST API. */

@@ -134,10 +134,10 @@ export function groupShiftBlocksByWaarneemgroep(blocks: ShiftBlockView[]): Calen
   }));
 }
 
-/** Where naam comes from (e.g. API waarneemgroepen list). */
+/** Where naam comes from (e.g. WaarneemgroepContext or API waarneemgroepen list). */
 export type WaarneemgroepNameSource = { id: number | null; naam?: string | null }[] | null | undefined;
 
-/** Enriches calendar rows with waarneemgroep names from the given list (e.g. from useWaarneemgroepenApi). */
+/** Enriches calendar rows with waarneemgroep names from the given list (e.g. from useWaarneemgroep() context). */
 export function withWaarneemgroepNames(
   rows: CalendarGridRow[],
   waarneemgroepen: WaarneemgroepNameSource

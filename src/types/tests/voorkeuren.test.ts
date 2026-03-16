@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   buildPreferencePayload,
   shiftKey,
+  shiftKeyFromBlock,
 } from '../voorkeuren';
 import type { RoosterChip } from '../rooster';
+import type { ShiftBlockView } from '../diensten';
 
 describe('buildPreferencePayload', () => {
   const baseChip: RoosterChip = {
@@ -70,5 +72,26 @@ describe('buildPreferencePayload', () => {
     expect(deleteItems).toHaveLength(1);
     expect(deleteItems[0].doctorid).toBe(200);
     expect(deleteItems[0].code).toBe('1014');
+  });
+});
+
+describe('shiftKeyFromBlock', () => {
+  it('returns key from currentDate, van, tot, id', () => {
+    const block: ShiftBlockView = {
+      id: 42,
+      day: 15,
+      month: 1,
+      year: 2026,
+      van: 1700000000,
+      tot: 1700010800,
+      startTime: '08:00',
+      endTime: '20:00',
+      currentDate: '2026-02-15 08:00:00',
+      nextDate: '2026-02-15 20:00:00',
+      middle: null,
+      top: null,
+      bottom: null,
+    };
+    expect(shiftKeyFromBlock(block)).toBe('2026-02-15 08:00:00_1700000000_1700010800_42');
   });
 });

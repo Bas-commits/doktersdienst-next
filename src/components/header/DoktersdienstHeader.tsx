@@ -134,7 +134,11 @@ export function DoktersdienstHeader({
             </a>
           )}
 
-          <div className="relative ml-auto mr-auto w-[30%]">
+          <div
+            className="relative ml-auto mr-auto w-[30%]"
+            style={router.pathname === '/mijn-gegevens' ? { visibility: 'hidden' } : undefined}
+            aria-hidden={router.pathname === '/mijn-gegevens'}
+          >
             <select
               name="role"
               className="w-full h-[50px] pl-4 pr-10 rounded-[30px] text-l font-semibold appearance-none text-[#333333] bg-white border-0"
@@ -143,6 +147,7 @@ export function DoktersdienstHeader({
               onChange={handleGroupChange}
               aria-label="Waarneemgroep"
               data-testid="header-group-select"
+              tabIndex={router.pathname === '/mijn-gegevens' ? -1 : undefined}
             >
               {waarneemgroepen.map((wg: WaarneemgroepItem) => (
                 <option key={wg.ID} value={String(wg.ID)}>

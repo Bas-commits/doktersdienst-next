@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Briefcase, Check, GraduationCap, Trash2, TreePalm, X } from 'lucide-react';
 import type { ShiftBlockView } from '@/types/diensten';
 
 /** Returns whether the given date lies within the shift's start and end (inclusive). Exported for testing. */
@@ -105,6 +105,11 @@ export interface ShiftBlockProps {
    * Removes right border so it connects visually with the next cell.
    */
   continuesToNext?: boolean;
+  /**
+   * When set (voorkeuren), shows a small preference chip icon on the middle strip.
+   * Use Weghalen (code 1014, empty chipIconPath) to show Trash2 for "remove" state.
+   */
+  preferenceChip?: { code: string; label: string; chipIconPath: string } | null;
 }
 
 export function ShiftBlock({
@@ -129,6 +134,7 @@ export function ShiftBlock({
   segmentEndTime,
   continuesFromPrev,
   continuesToNext,
+  preferenceChip,
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -295,6 +301,22 @@ export function ShiftBlock({
   const dimMiddle = pendingRemoveSections?.has('middle');
   const dimBottom = pendingRemoveSections?.has('bottom');
 
+  /** Filled preference styles: block background + Lucide icon (Liever wel, Liever niet, Vakantie, Nascholing). */
+  const preferenceFill = useMemo(() => {
+    if (!preferenceChip) return null;
+    const map: Record<string, { backgroundColor: string; Icon: typeof Check; iconColor: string }> = {
+      '3': { backgroundColor: '#22c55e', Icon: Check, iconColor: 'white' },
+      '2': { backgroundColor: '#ef4444', Icon: X, iconColor: 'white' },
+      '9': { backgroundColor: '#eab308', Icon: TreePalm, iconColor: 'white' },
+      '10': { backgroundColor: '#a855f7', Icon: GraduationCap, iconColor: 'white' },
+      '5001': { backgroundColor: '#64748b', Icon: Briefcase, iconColor: 'white' },
+    };
+    return map[preferenceChip.code] ?? null;
+  }, [preferenceChip]);
+
+  const showPreferenceFill = preferenceFill != null;
+  const showPreferenceBadge = preferenceChip != null && !showPreferenceFill;
+
   return (
     <div
       className="absolute"
@@ -366,7 +388,7 @@ export function ShiftBlock({
         ))}
       <div className="group">
         <div
-          className={`flex h-[42px] mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] ${middleRoundedClass} ${doctorId ? 'active-day' : ''}`}
+          className={`flex h-[42px] mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] ${middleRoundedClass} ${doctorId ? 'active-day' : ''} ${showPreferenceFill ? 'justify-center' : ''}`}
           data-testid="shift-block-middle"
           data-doctor={doctorId}
           data-current-date={block.currentDate}
@@ -377,6 +399,13 @@ export function ShiftBlock({
           data-morning={doctorId}
           style={{
             ...cssInline,
+            ...(showPreferenceFill
+              ? {
+                  backgroundColor: preferenceFill!.backgroundColor,
+                  backgroundImage: undefined,
+                  border: '1px solid rgba(0,0,0,0.15)',
+                }
+              : {}),
             ...(middleHasClick ? { cursor: 'pointer' as const } : {}),
             ...(dimMiddle ? { opacity: 0.35 } : {}),
             ...(isActive ? {
@@ -389,18 +418,49 @@ export function ShiftBlock({
             } : {}),
           }}
           onClick={middleHasClick ? (e) => useSectionClick ? onSectionClick!('middle', e) : onClick!(e) : undefined}
+          title={preferenceChip?.label}
         >
-          <span
-            className={`rotate-180 whitespace-nowrap text-sm font-mono ${doctorId ? 'text-white' : 'text-[#a0a0a0]'}`}
-            style={{ writingMode: 'vertical-rl' }}
-          />
-          <span className="text-white text-[10px] font-semibold tracking-[0.5px] break-words leading-[15px]">
-            {showPendingDoctor ? pendingDoctor!.shortName : displayShortName}
-          </span>
-          <span
-            className={`rotate-180 whitespace-nowrap text-sm font-mono ${doctorId ? 'text-white' : 'text-[#a0a0a0]'}`}
-            style={{ writingMode: 'vertical-rl' }}
-          />
+          {showPreferenceFill ? (() => {
+            const { Icon, iconColor } = preferenceFill!;
+            return (
+              <Icon
+                className="h-5 w-5 shrink-0"
+                style={{ color: iconColor }}
+                aria-hidden
+              />
+            );
+          })() : (
+            <>
+              <span
+                className={`rotate-180 whitespace-nowrap text-sm font-mono ${doctorId ? 'text-white' : 'text-[#a0a0a0]'}`}
+                style={{ writingMode: 'vertical-rl' }}
+              />
+              <span className="text-white text-[10px] font-semibold tracking-[0.5px] break-words leading-[15px]">
+                {showPendingDoctor ? pendingDoctor!.shortName : displayShortName}
+              </span>
+              <span
+                className={`rotate-180 whitespace-nowrap text-sm font-mono ${doctorId ? 'text-white' : 'text-[#a0a0a0]'}`}
+                style={{ writingMode: 'vertical-rl' }}
+              />
+            </>
+          )}
+          {showPreferenceBadge && (
+            <span
+              className="absolute bottom-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded bg-black/30 pointer-events-none"
+              title={preferenceChip!.label}
+              aria-hidden
+            >
+              {preferenceChip!.chipIconPath ? (
+                <img
+                  src={preferenceChip!.chipIconPath}
+                  alt=""
+                  className="h-3 w-3 object-contain"
+                />
+              ) : (
+                <Trash2 className="h-3 w-3 text-white" aria-hidden />
+              )}
+            </span>
+          )}
         </div>
         <div
           className="hidden group-hover:flex absolute right-0 bottom-[-50%] left-1/2 -translate-x-1/2 min-w-[90px] w-max h-[45px] border-2 rounded-md list-none items-center z-10 bg-[#f7e5e6] after:content-[''] after:absolute after:left-1/2 after:top-[-8px] after:-translate-x-1/2 after:rotate-45 after:w-3 after:h-3 after:bg-[#f7e5e6] after:border-t-2 after:border-l-2 after:[border-top-color:var(--afterBorder)] after:[border-left-color:var(--afterBorder)]"

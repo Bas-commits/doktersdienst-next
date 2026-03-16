@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
-import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep } from '@/hooks/useDienstenSchedule';
+import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
 import { useWaarneemgroepenApi } from '@/hooks/use-waarneemgroepen-api';
 
@@ -68,8 +68,11 @@ export default function RoosterInzienPage() {
   );
 
   const rows = useMemo(
-    () => allRows.filter((row) => idsToShow.has(row.id)),
-    [allRows, idsToShow]
+    () => withWaarneemgroepNames(
+      allRows.filter((row) => idsToShow.has(row.id)),
+      waarneemgroepen
+    ),
+    [allRows, idsToShow, waarneemgroepen]
   );
 
   const toggleWaarneemgroep = useCallback(
@@ -93,7 +96,7 @@ export default function RoosterInzienPage() {
       <Head>
         <title>Rooster inzien | Doktersdienst</title>
       </Head>
-      <div className="mx-auto max-w-screen-2xl space-y-6 px-4 py-8">
+      <div className="mx-auto max-w-[2000px] space-y-6 px-4 py-8">
         <Card>
           <CardHeader>
             <CardTitle>

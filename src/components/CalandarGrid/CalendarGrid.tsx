@@ -35,6 +35,9 @@ export interface CalendarGridProps {
   onViewMonthChange?: (month: number, year: number) => void;
 }
 
+/** Width of the right-hand column that shows waarneemgroep names per row (when multiple rows). */
+const ROW_LABEL_WIDTH = 140;
+
 /** Pad number to two digits for HH:MM. */
 function pad2(n: number): string {
   return n.toString().padStart(2, '0');
@@ -190,6 +193,7 @@ export function CalendarGrid({
             {dayLabel}
           </div>
         ))}
+        {gridRows.length > 1 && <div className="shrink-0" style={{ width: ROW_LABEL_WIDTH }} />}
       </div>
 
       <div className="w-full mx-auto" data-tooltip="Chip Active">
@@ -302,6 +306,24 @@ export function CalendarGrid({
                   );
                 })}
               </div>
+              {gridRows.length > 1 && (
+                <div
+                  className="shrink-0 pl-2 mb-2.5 flex flex-col"
+                  style={{ width: ROW_LABEL_WIDTH }}
+                >
+                  <div className="min-h-[36px]" aria-hidden />
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    {gridRows.map((row) => (
+                      <div
+                        key={row.id}
+                        className="flex items-center min-h-[80px] m-0 text-sm text-[#292727]"
+                      >
+                        {row.name ?? `Waarneemgroep ${row.id}`}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

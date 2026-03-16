@@ -129,9 +129,25 @@ export function groupShiftBlocksByWaarneemgroep(blocks: ShiftBlockView[]): Calen
   const sortedIds = Array.from(byWg.keys()).sort((a, b) => a - b);
   return sortedIds.map((id) => ({
     id,
-    name: id === 0 ? 'Overig' : `Waarneemgroep ${id}`,
+    name: id === 0 ? 'Overig' : undefined,
     shiftBlocks: byWg.get(id)!,
   }));
+}
+
+/** Where naam comes from (e.g. API waarneemgroepen list). */
+export type WaarneemgroepNameSource = { id: number | null; naam?: string | null }[] | null | undefined;
+
+/** Enriches calendar rows with waarneemgroep names from the given list (e.g. from useWaarneemgroepenApi). */
+export function withWaarneemgroepNames(
+  rows: CalendarGridRow[],
+  waarneemgroepen: WaarneemgroepNameSource
+): CalendarGridRow[] {
+  if (!waarneemgroepen?.length) return rows;
+  return rows.map((row) => {
+    const wg = waarneemgroepen.find((w) => w.id != null && w.id === row.id);
+    const name = wg?.naam ?? row.name ?? (row.id === 0 ? 'Overig' : `Waarneemgroep ${row.id}`);
+    return { ...row, name };
+  });
 }
 
 /** React hook wrapper around dienstenToShiftBlocks. */

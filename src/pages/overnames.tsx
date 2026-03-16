@@ -6,7 +6,7 @@ import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
-import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep } from '@/hooks/useDienstenSchedule';
+import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
 import { useWaarneemgroepenApi } from '@/hooks/use-waarneemgroepen-api';
 
@@ -50,8 +50,8 @@ export default function OvernamesPage() {
 
   const rows = useMemo(() => {
     const blocks = dienstenToShiftBlocks(dienstenResponse ?? null);
-    return groupShiftBlocksByWaarneemgroep(blocks);
-  }, [dienstenResponse]);
+    return withWaarneemgroepNames(groupShiftBlocksByWaarneemgroep(blocks), waarneemgroepen);
+  }, [dienstenResponse, waarneemgroepen]);
 
   const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
   const error = waarneemgroepenError ?? dienstenError;

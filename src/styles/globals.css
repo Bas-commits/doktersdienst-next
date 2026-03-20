@@ -129,6 +129,15 @@ body {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Single opaque style for shift block hover tooltip (no see-through in any context). */
+[data-shift-block-tooltip] {
+  background-color: #f7e5e6 !important;
+  opacity: 1 !important;
+}
+[data-shift-block-tooltip]::after {
+  background-color: #f7e5e6 !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

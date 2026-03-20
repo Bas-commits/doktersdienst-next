@@ -83,7 +83,7 @@ export default function OvernamesPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Openstaande diensten</CardTitle>
+            <CardTitle>Voorkeuren kiezen</CardTitle>
           </CardHeader>
           <CardContent>
             {error && (

@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 const AUTHENTICATED_PATHS = [
   "/dashboard",
   "/rooster-inzien",
+  "/rooster-maken-secretaris",
   "/overnames",
   "/voorkeuren",
   "/mijn-gegevens",

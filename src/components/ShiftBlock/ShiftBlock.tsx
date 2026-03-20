@@ -463,8 +463,12 @@ export function ShiftBlock({
           )}
         </div>
         <div
-          className="hidden group-hover:flex absolute right-0 bottom-[-50%] left-1/2 -translate-x-1/2 min-w-[90px] w-max h-[45px] border-2 rounded-md list-none items-center z-10 bg-[#f7e5e6] after:content-[''] after:absolute after:left-1/2 after:top-[-8px] after:-translate-x-1/2 after:rotate-45 after:w-3 after:h-3 after:bg-[#f7e5e6] after:border-t-2 after:border-l-2 after:[border-top-color:var(--afterBorder)] after:[border-left-color:var(--afterBorder)]"
-          style={{ ['--afterBorder' as string]: mainColor, borderColor: mainColor }}
+          data-shift-block-tooltip
+          className="hidden group-hover:flex absolute right-0 top-full mt-1 left-1/2 -translate-x-1/2 min-w-[90px] w-max h-[45px] border-2 rounded-md list-none items-center z-[100] pointer-events-none after:content-[''] after:absolute after:left-1/2 after:top-[-8px] after:-translate-x-1/2 after:rotate-45 after:w-3 after:h-3 after:border-t-2 after:border-l-2 after:[border-top-color:var(--afterBorder)] after:[border-left-color:var(--afterBorder)]"
+          style={{
+            ['--afterBorder' as string]: mainColor,
+            borderColor: mainColor,
+          }}
         >
           <div className="flex items-center justify-between w-full px-2">
             <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>

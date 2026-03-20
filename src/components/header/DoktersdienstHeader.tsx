@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ChevronDown } from 'lucide-react';
+import { authClient } from '@/lib/auth-client';
 import {
   WaarneemgroepContext,
   type WaarneemgroepContextValue,
@@ -109,6 +110,13 @@ export function DoktersdienstHeader({
   );
 
   const showAdminTools = headerUser.TypeOfUser !== 'Doctor';
+  const handleLogout = useCallback(async () => {
+    try {
+      await authClient.signOut();
+    } finally {
+      await router.push('/login');
+    }
+  }, [router]);
 
   return (
     <header className="relative" data-testid="doktersdienst-header">
@@ -312,20 +320,21 @@ export function DoktersdienstHeader({
                 >
                   <Link
                     className="block w-full py-1 px-6 font-normal text-[#222222] no-underline whitespace-nowrap bg-transparent border-0 hover:bg-gray-100 hover:text-[#151515] focus:bg-gray-100"
-                    href={routes.mijn_gegevens_deelnemer_jsx ?? routes.mijn_gegevens_deelnemer}
+                    href={routes.mijn_gegevens_deelnemer}
                     id="mijnGegevensLink"
                     data-testid="header-link-mijn-gegevens"
                   >
                     Mijn gegevens
                   </Link>
-                  <a
+                  <button
+                    type="button"
                     className="block w-full py-1 px-6 font-normal text-[#222222] no-underline whitespace-nowrap bg-transparent border-0 hover:bg-gray-100 hover:text-[#151515] focus:bg-gray-100"
-                    href={routes.logout}
                     id="logoutDokter"
                     data-testid="header-link-logout"
+                    onClick={handleLogout}
                   >
                     Log uit
-                  </a>
+                  </button>
                 </div>
               )}
             </li>

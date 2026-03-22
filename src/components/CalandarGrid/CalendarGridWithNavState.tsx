@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CalendarGrid, type CalendarGridRow } from './CalendarGrid';
 import type { ShiftBlockView } from '@/types/diensten';
 import type { ChipDefinition, VoorkeurItem } from '@/types/voorkeuren';
+import type { ShiftBlockSection } from '@/types/rooster-maken';
 
 export interface CalendarGridWithNavStateProps {
   /** Rows per waarneemgroep (when set, shiftBlocks is ignored). */
@@ -36,6 +37,17 @@ export interface CalendarGridWithNavStateProps {
   showPreferences?: boolean;
   /** When set, renders voorkeur blocks per user below the shift lane (secretaris view). */
   voorkeuren?: VoorkeurItem[];
+  /**
+   * When set, each stripe (top/middle/bottom) is individually clickable for the planning view.
+   */
+  onSectionShiftClick?: (block: ShiftBlockView, section: ShiftBlockSection) => void;
+  /**
+   * Preference preview for the currently selected planner doctor.
+   * Key: "${van}_${tot}", value: ChipDefinition shown on the shift block.
+   */
+  plannerDoctorPreferenceMap?: Map<string, ChipDefinition>;
+  /** Optional: when set, each shift block shows a delete button that calls this with the block. */
+  onShiftDelete?: (block: ShiftBlockView) => void;
 }
 
 /**
@@ -59,6 +71,9 @@ export function CalendarGridWithNavState({
   getChipByCode,
   showPreferences,
   voorkeuren,
+  onSectionShiftClick,
+  plannerDoctorPreferenceMap,
+  onShiftDelete,
 }: CalendarGridWithNavStateProps) {
   const [internalViewMonth, setInternalViewMonth] = useState(initialViewMonth);
   const [internalViewYear, setInternalViewYear] = useState(initialViewYear);
@@ -95,6 +110,9 @@ export function CalendarGridWithNavState({
       getChipByCode={getChipByCode}
       showPreferences={showPreferences}
       voorkeuren={voorkeuren}
+      onSectionShiftClick={onSectionShiftClick}
+      plannerDoctorPreferenceMap={plannerDoctorPreferenceMap}
+      onShiftDelete={onShiftDelete}
     />
   );
 }

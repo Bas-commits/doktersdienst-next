@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { cachedGetJson } from '@/lib/cached-fetch';
+export { clearCacheByPrefix } from '@/lib/cached-fetch';
 import type { DienstenResponse, Dienst } from '@/types/diensten';
 
 export type UseDienstenSubscriptionResult = {
   data: DienstenResponse | null;
   error: string | null;
   loading: boolean;
+  /** Increment to force a re-fetch (bypasses cache). */
+  refreshKey?: number;
 };
 
 /** API returns diensten with van/tot as number and diensten_deelnemers; normalize to our type. */
@@ -55,7 +58,8 @@ export function useDienstenSubscription(
   totLte: number,
   idwaarneemgroepen: number[],
   typeIn?: number[],
-  iddeelnemer?: number | null
+  iddeelnemer?: number | null,
+  _refreshKey?: number
 ): UseDienstenSubscriptionResult {
   const [data, setData] = useState<DienstenResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,7 +119,7 @@ export function useDienstenSubscription(
     return () => {
       cancelled = true;
     };
-  }, [vanGte, totLte, idwaarneemgroepen.join(','), typeIn?.join(',') ?? '', iddeelnemer ?? '']);
+  }, [vanGte, totLte, idwaarneemgroepen.join(','), typeIn?.join(',') ?? '', iddeelnemer ?? '', _refreshKey ?? 0]);
 
   return { data, error, loading };
 }

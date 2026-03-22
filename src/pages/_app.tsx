@@ -16,6 +16,7 @@ const AUTHENTICATED_PATHS = [
   "/waarneemgroep-gegevens",
   "/regio-toevoegen",
   "/waarneemgroep-wijzigen",
+  "/diensten-toevoegen",
 ];
 
 function useIsAuthenticatedRoute(): boolean {

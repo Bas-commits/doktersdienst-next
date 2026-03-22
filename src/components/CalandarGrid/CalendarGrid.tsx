@@ -25,6 +25,18 @@ export interface CalendarGridProps {
   viewYear: number;
   /** Optional: when set, shift blocks are clickable and this is called with block, position, and optionally section (top/middle/bottom) */
   onShiftClick?: (block: ShiftBlockView, position: { top: number; left: number }, section?: ShiftBlockSection) => void;
+  /**
+   * Optional: when set, each stripe (top/middle/bottom) is individually clickable for planning.
+   * All empty strip borders are shown to indicate clickability.
+   * Use this instead of onShiftClick in the secretaris planning view.
+   */
+  onSectionShiftClick?: (block: ShiftBlockView, section: 'top' | 'middle' | 'bottom') => void;
+  /**
+   * Optional: preference map for the currently selected planner doctor.
+   * Key: "${van}_${tot}", value: ChipDefinition to show on that shift block.
+   * When set, overrides the block's own assignedPreferenceCode rendering.
+   */
+  plannerDoctorPreferenceMap?: Map<string, ChipDefinition>;
   /** Optional: when true, the top (Achterwacht) strip is not rendered on any shift block. */
   hideTopStrip?: boolean;
   /** Optional: when true, the bottom (Extra Dokter) strip is not rendered on any shift block. */
@@ -335,6 +347,8 @@ export function CalendarGrid({
   viewMonth,
   viewYear,
   onShiftClick,
+  onSectionShiftClick,
+  plannerDoctorPreferenceMap,
   hideTopStrip,
   hideBottomStrip,
   onShiftDelete,
@@ -500,14 +514,17 @@ export function CalendarGrid({
                                 const blockKey = shiftKeyFromBlock(block);
                                 const isPendingDelete = pendingDelete?.has(blockKey);
                                 const pendingCode = pendingInsert?.get(blockKey);
+                                // Planner preference preview overrides block's own preference
+                                const plannerChip = plannerDoctorPreferenceMap?.get(`${block.van}_${block.tot}`);
                                 const preferenceChip: ChipDefinition | undefined =
-                                  isPendingDelete
+                                  plannerChip ??
+                                  (isPendingDelete
                                     ? undefined
                                     : pendingCode
                                       ? getChipByCode(pendingCode)
                                       : block.assignedPreferenceCode
                                         ? getChipByCode(block.assignedPreferenceCode)
-                                        : undefined;
+                                        : undefined);
                                 return (
                                   <ShiftBlock
                                     key={`${block.id}-${block.van}-${block.tot}-${dateKey}-${blockIndex}`}
@@ -521,6 +538,8 @@ export function CalendarGrid({
                                     continuesToNext={continuesToNext}
                                     hideTopStrip={hideTopStrip}
                                     hideBottomStrip={hideBottomStrip}
+                                    showEmptyTopStripBorder={onSectionShiftClick != null}
+                                    showEmptyBottomStripBorder={onSectionShiftClick != null}
                                     onDelete={
                                       onShiftDelete
                                         ? () => onShiftDelete(block)
@@ -535,6 +554,11 @@ export function CalendarGrid({
                                               left: rect.left + window.scrollX,
                                             });
                                           }
+                                        : undefined
+                                    }
+                                    onSectionClick={
+                                      onSectionShiftClick
+                                        ? (section) => onSectionShiftClick(block, section)
                                         : undefined
                                     }
                                     preferenceChip={preferenceChip ?? null}

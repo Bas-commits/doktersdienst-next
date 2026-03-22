@@ -21,6 +21,13 @@ function pruneCache() {
   }
 }
 
+/** Removes all cache entries whose URL starts with the given prefix. */
+export function clearCacheByPrefix(prefix: string): void {
+  for (const key of responseCache.keys()) {
+    if (key.startsWith(prefix)) responseCache.delete(key);
+  }
+}
+
 /**
  * GET the given URL and parse JSON. Deduplicates in-flight requests for the
  * same URL and returns cached result for repeat calls within CACHE_TTL_MS.

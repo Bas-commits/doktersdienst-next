@@ -6,6 +6,7 @@ import {
   Calendar,
   Settings,
   ArrowLeftRight,
+  PlusSquare,
 } from 'lucide-react';
 
 const SIDEBAR_NAV_ITEMS: {
@@ -18,6 +19,7 @@ const SIDEBAR_NAV_ITEMS: {
   { id: 'voorkeuren', label: 'Voorkeuren', href: '/voorkeuren', icon: <Settings className="size-4 shrink-0" /> },
   { id: 'rooster-maken-secretaris', label: 'Rooster maken secretaris', href: '/rooster-maken-secretaris', icon: <Calendar className="size-4 shrink-0" /> },
   { id: 'overnames', label: 'Overnames', href: '/overnames', icon: <ArrowLeftRight className="size-4 shrink-0" /> },
+  { id: 'diensten-toevoegen', label: 'Diensten toevoegen', href: '/diensten-toevoegen', icon: <PlusSquare className="size-4 shrink-0" /> },
 ];
 
 const ACTIVE_BG = '#c91b23';

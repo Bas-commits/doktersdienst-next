@@ -110,10 +110,9 @@ export default async function handler(
           gte(dienstenTable.tot, vanGte),
           // Only aangemelde deelnemers
           inArray(dienstenTable.iddeelnemer, aangemeldeSq),
-          // Voorkeur types: 2 (graag), 3 (niet), or 8 (taken) with taaktype.type >= 2
+          // Voorkeur types: 2, 3, 9, 10, 5001 (all preference chips), or type 8 (taken) with taaktype.type >= 2
           or(
-            eq(dienstenTable.type, 2),
-            eq(dienstenTable.type, 3),
+            inArray(dienstenTable.type, [2, 3, 9, 10, 5001]),
             and(
               eq(dienstenTable.type, 8),
               sql`${taaktypen.type} >= 2`

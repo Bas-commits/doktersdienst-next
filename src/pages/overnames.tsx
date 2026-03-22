@@ -106,6 +106,7 @@ export default function OvernamesPage() {
               }}
               hideTopStrip
               hideBottomStrip
+              showPreferences={false}
             />
           </CardContent>
         </Card>

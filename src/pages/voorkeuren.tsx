@@ -351,6 +351,7 @@ export default function VoorkeurenPage() {
                     pendingInsert={pendingInsert}
                     pendingDelete={pendingDelete}
                     getChipByCode={getChipByCode}
+                    showPreferences={false}
                   />
                 </div>
               )}

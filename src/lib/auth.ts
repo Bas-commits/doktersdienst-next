@@ -1,6 +1,5 @@
 import { betterAuth } from 'better-auth';
 import { createAuthMiddleware } from 'better-auth/api';
-import { jwt } from 'better-auth/plugins';
 import { Pool } from 'pg';
 import { legacyMD5Verify } from '@/lib/legacy-password';
 import { pool as appPool } from '@/lib/db';
@@ -173,22 +172,4 @@ export const auth = betterAuth({
     }),
     after: createAuthMiddleware(async () => {}),
   },
-  plugins: [
-    jwt({
-      jwt: {
-        definePayload: ({ user }) => {
-          const role = (user as { role?: string }).role ?? 'user';
-          return {
-            sub: user.id,
-            // Hasura expects these claims under this namespace for JWT auth
-            'https://hasura.io/jwt/claims': {
-              'x-hasura-default-role': role,
-              'x-hasura-allowed-roles': [role],
-              'x-hasura-user-id': user.id,
-            },
-          };
-        },
-      },
-    }),
-  ],
 });

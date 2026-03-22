@@ -41,6 +41,8 @@ export interface CalendarGridProps {
   pendingDelete?: Set<string>;
   /** Optional: resolve chip code to definition for rendering on blocks. Defaults to getChipByCode from types. */
   getChipByCode?: (code: string) => ChipDefinition | undefined;
+  /** When false, preference UI on shift blocks is hidden. Default true. */
+  showPreferences?: boolean;
 }
 
 /** Width of the right-hand column that shows waarneemgroep names per row (when multiple rows). */

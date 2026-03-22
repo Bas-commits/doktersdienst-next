@@ -32,6 +32,8 @@ export interface CalendarGridWithNavStateProps {
   pendingDelete?: Set<string>;
   /** Optional: resolve chip code to definition for rendering on blocks. */
   getChipByCode?: (code: string) => ChipDefinition | undefined;
+  /** When false, preference UI on shift blocks is hidden. Default true. */
+  showPreferences?: boolean;
 }
 
 /**
@@ -53,6 +55,7 @@ export function CalendarGridWithNavState({
   pendingInsert,
   pendingDelete,
   getChipByCode,
+  showPreferences,
 }: CalendarGridWithNavStateProps) {
   const [internalViewMonth, setInternalViewMonth] = useState(initialViewMonth);
   const [internalViewYear, setInternalViewYear] = useState(initialViewYear);
@@ -87,6 +90,7 @@ export function CalendarGridWithNavState({
       pendingInsert={pendingInsert}
       pendingDelete={pendingDelete}
       getChipByCode={getChipByCode}
+      showPreferences={showPreferences}
     />
   );
 }

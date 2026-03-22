@@ -12,7 +12,6 @@ Added to `.env.local`:
 - `BETTER_AUTH_SECRET` - Secret key for encryption/signing
 - `BETTER_AUTH_URL` - Base URL (http://localhost:3000)
 - `NEXT_PUBLIC_BETTER_AUTH_URL` - Client-side base URL
-- `NEXT_PUBLIC_HASURA_GRAPHQL_URL` - (Optional) Hasura GraphQL endpoint for direct frontend calls. If unset, the default Hasura project URL is used. See [HASURA_SETUP.md](./HASURA_SETUP.md).
 
 ### 3. Database Configuration
 - Created separate `auth` schema in PostgreSQL
@@ -39,12 +38,12 @@ Added to `.env.local`:
 
 ### 5. Database Schema
 The following tables were created in the `auth` schema:
-- `user` - User accounts (includes optional `role` column, default `'user'`; used in JWT for Hasura)
+- `user` - User accounts (includes optional `role` column, default `'user'`, for app authorization)
 - `session` - User sessions
 - `account` - Authentication accounts (email/password)
 - `verification` - Email verification tokens
 
-**User role:** The `auth.user` table has a `role` column (string, default `'user'`). This value is included in the JWT for Hasura (`x-hasura-default-role`, `x-hasura-allowed-roles`). Users cannot set their own role at signup. To change a user's role, update `auth.user.role` in the database or use the Better Auth admin API if configured.
+**User role:** The `deelnemers` user model has a `role` column (string, default `'user'`). Users cannot set their own role at signup. To change a user's role, update it in the database or use the Better Auth admin API if configured.
 
 ## Usage
 

@@ -1,5 +1,4 @@
 import { createAuthClient } from 'better-auth/react';
-import { jwtClient } from 'better-auth/client/plugins';
 
 // In the browser always use the current origin so sign-in fetches hit the same host
 // (avoids "Failed to fetch" when NEXT_PUBLIC_BETTER_AUTH_URL points to ngrok/tunnel that is down).
@@ -11,7 +10,6 @@ const baseURL =
 
 export const authClient = createAuthClient({
   baseURL,
-  plugins: [jwtClient()],
 });
 
 // Export commonly used hooks and methods for convenience

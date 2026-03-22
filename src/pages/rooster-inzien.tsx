@@ -170,6 +170,7 @@ export default function RoosterInzienPage() {
                   setViewMonth(month);
                   setViewYear(year);
                 }}
+                showPreferences={false}
               />
             </CardContent>
           </Card>

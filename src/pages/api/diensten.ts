@@ -42,7 +42,7 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
  *   typeIn (optional, comma-separated) - diensten.type in these (e.g. 1 = unassigned slots)
  *   iddeelnemer (optional, number) - only return diensten where iddeelnemer = this (e.g. for "my" preferences)
  *
- * Returns diensten with joined deelnemer (voornaam, achternaam, color) in same shape as Hasura.
+ * Returns diensten with joined deelnemer (voornaam, achternaam, color).
  */
 export default async function handler(
   req: NextApiRequest,

@@ -11,6 +11,8 @@ const AUTHENTICATED_PATHS = [
   "/overnames",
   "/voorkeuren",
   "/mijn-gegevens",
+  "/lijst-deelnemers",
+  "/rollen-afmelden",
 ];
 
 function useIsAuthenticatedRoute(): boolean {

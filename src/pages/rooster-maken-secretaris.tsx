@@ -1,7 +1,7 @@
 'use client';
 
 import Head from 'next/head';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,6 +11,7 @@ import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGrid
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
+import { useVoorkeurenSubscription } from '@/hooks/useVoorkeurenSubscription';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -73,6 +74,15 @@ export default function RoosterMakenSecretarisPage() {
     ),
     [allRows, idsToShow, waarneemgroepNameSource]
   );
+
+  const selectedWaarneemgroepIds = useMemo(() => Array.from(idsToShow), [idsToShow]);
+  const { data: voorkeuren } = useVoorkeurenSubscription(vanGte, totLte, selectedWaarneemgroepIds);
+
+  useEffect(() => {
+    if (voorkeuren !== null) {
+      console.log('[rooster-maken-secretaris] voorkeuren:', voorkeuren);
+    }
+  }, [voorkeuren]);
 
   const toggleWaarneemgroep = useCallback(
     (wgId: number, checked: boolean) => {

@@ -110,6 +110,16 @@ export interface ShiftBlockProps {
    * Use Weghalen (code 1014, empty chipIconPath) to show Trash2 for "remove" state.
    */
   preferenceChip?: { code: string; label: string; chipIconPath: string } | null;
+  /**
+   * When set, overrides the default 42px middle strip height.
+   * Use 20 for compact preference-only blocks in the secretaris rooster view.
+   */
+  middleHeight?: number;
+  /**
+   * When true, suppresses the red active-shift border even when the shift is currently active.
+   * Use for voorkeur blocks where the time range is a preference period, not a live shift.
+   */
+  disableActiveHighlight?: boolean;
 }
 
 export function ShiftBlock({
@@ -135,13 +145,18 @@ export function ShiftBlock({
   continuesFromPrev,
   continuesToNext,
   preferenceChip,
+  middleHeight,
+  disableActiveHighlight,
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(id);
   }, []);
-  const isActive = useMemo(() => isShiftActiveAt(block, now), [block, now]);
+  const isActive = useMemo(
+    () => !disableActiveHighlight && isShiftActiveAt(block, now),
+    [block, now, disableActiveHighlight],
+  );
 
   const doctorId = block.middle?.id ?? 0;
   const achterw = block.top?.id ?? 0;
@@ -251,7 +266,7 @@ export function ShiftBlock({
     cssInline = { ...cssInline, backgroundColor: mainColor };
   }
   if (!isUnassignedSlot && (doctorId || achterw || extra)) {
-    cssInline = { ...cssInline, minHeight: 42 };
+    cssInline = { ...cssInline, minHeight: middleHeight ?? 42 };
   }
 
   // Apply linear gradients on the left/right edges when the segment continues across rows.
@@ -388,7 +403,7 @@ export function ShiftBlock({
         ))}
       <div className="group">
         <div
-          className={`flex h-[42px] mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] ${middleRoundedClass} ${doctorId ? 'active-day' : ''} ${showPreferenceFill ? 'justify-center' : ''}`}
+          className={`flex mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] ${middleRoundedClass} ${doctorId ? 'active-day' : ''} ${showPreferenceFill ? 'justify-center' : ''}`}
           data-testid="shift-block-middle"
           data-doctor={doctorId}
           data-current-date={block.currentDate}
@@ -398,6 +413,7 @@ export function ShiftBlock({
           data-year={year}
           data-morning={doctorId}
           style={{
+            height: middleHeight ?? 42,
             ...cssInline,
             ...(showPreferenceFill
               ? {
@@ -421,13 +437,14 @@ export function ShiftBlock({
           title={preferenceChip?.label}
         >
           {showPreferenceFill ? (() => {
-            const { Icon, iconColor } = preferenceFill!;
-            return (
-              <Icon
-                className="h-5 w-5 shrink-0"
-                style={{ color: iconColor }}
-                aria-hidden
-              />
+            const { Icon } = preferenceFill!;
+            return displayShortName ? (
+              <>
+                <span className="text-white text-[8px] font-bold leading-none pl-0.5">{displayShortName}</span>
+                <Icon className="h-3 w-3 shrink-0 text-white pr-0.5" aria-hidden />
+              </>
+            ) : (
+              <Icon className="h-5 w-5 shrink-0 text-white" aria-hidden />
             );
           })() : (
             <>

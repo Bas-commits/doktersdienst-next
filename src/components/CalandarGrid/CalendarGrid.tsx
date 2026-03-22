@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 import type { VakantieItem, WeekDateRangeItem } from '@/types/rooster';
 import type { ShiftBlockSection } from '@/types/rooster-maken';
 import type { ShiftBlockView } from '@/types/diensten';
-import type { ChipDefinition } from '@/types/voorkeuren';
-import { shiftKeyFromBlock, getChipByCode as getChipByCodeFromTypes } from '@/types/voorkeuren';
+import type { ChipDefinition, VoorkeurItem } from '@/types/voorkeuren';
+import { CHIP_DEFINITIONS, shiftKeyFromBlock, getChipByCode as getChipByCodeFromTypes } from '@/types/voorkeuren';
 import { getWeek, monthWeekCount, getDateRangeOfWeek, getWeekNumber } from '@/utils/calendarUtils';
 import { ShiftBlock } from '@/components/ShiftBlock/ShiftBlock';
 import { MonthNavigation } from './MonthNavigation';
@@ -43,6 +43,8 @@ export interface CalendarGridProps {
   getChipByCode?: (code: string) => ChipDefinition | undefined;
   /** When false, preference UI on shift blocks is hidden. Default true. */
   showPreferences?: boolean;
+  /** When set, renders voorkeur blocks per user below the shift lane (secretaris view). */
+  voorkeuren?: VoorkeurItem[];
 }
 
 /** Width of the right-hand column that shows waarneemgroep names per row (when multiple rows). */
@@ -124,6 +126,187 @@ function getNextDate(day: number, month0: number, year: number): { day: number; 
   return { day: d.getDate(), month0: d.getMonth(), year: d.getFullYear() };
 }
 
+// ─── Voorkeur lane computation ────────────────────────────────────────────────
+
+type VoorkeurLaneEntry = {
+  voorkeur: VoorkeurItem;
+  segmentStartTime: string;
+  segmentEndTime: string;
+  continuesFromPrev: boolean;
+  continuesToNext: boolean;
+};
+
+/** Per-user slot in the week layout: fixed row position and fixed lane count across all days. */
+type WeekUserSlot = { userId: number; initials: string; numLanes: number };
+
+/**
+ * Pre-computed voorkeur layout for one week row.
+ * Contains the ordered list of user slots (same for every day) and per-day lane data.
+ * Every day in the week renders the same user slots in the same order,
+ * guaranteeing consistent row heights across the week.
+ */
+type WeekVoorkeurLayout = {
+  /** Ordered user slots — the same list is used for every day in the week. */
+  users: WeekUserSlot[];
+  /**
+   * Per day (key = "day-month1-year"), per user slot index: the lane entries to render.
+   * If a user has no preference on a given day, their lanes array is empty ([]).
+   */
+  byDay: Map<string, VoorkeurLaneEntry[][][]>;
+};
+
+/** Assign per-day lane entries for one user on one day. */
+function computeUserLanesForDay(
+  vks: VoorkeurItem[],
+  dayStartMs: number,
+  dayEndMs: number,
+): VoorkeurLaneEntry[][] {
+  const sorted = [...vks].sort((a, b) => a.van - b.van);
+  const laneGroups: { items: VoorkeurItem[] }[] = [];
+  for (const vk of sorted) {
+    let placed = false;
+    for (const lane of laneGroups) {
+      const conflicts = lane.items.some(
+        (ex) =>
+          ex.type !== vk.type &&
+          ex.van * 1000 < vk.tot * 1000 &&
+          ex.tot * 1000 > vk.van * 1000,
+      );
+      if (!conflicts) { lane.items.push(vk); placed = true; break; }
+    }
+    if (!placed) laneGroups.push({ items: [vk] });
+  }
+  const p2 = (n: number) => n.toString().padStart(2, '0');
+  return laneGroups.map((lane) =>
+    lane.items.map((vk) => {
+      const startMs = Math.max(vk.van * 1000, dayStartMs);
+      const endMs = Math.min(vk.tot * 1000, dayEndMs);
+      const segStart = new Date(startMs);
+      const segEnd = new Date(endMs);
+      return {
+        voorkeur: vk,
+        segmentStartTime: `${p2(segStart.getHours())}:${p2(segStart.getMinutes())}`,
+        segmentEndTime:
+          segEnd.getHours() === 23 && segEnd.getMinutes() === 59
+            ? '24:00'
+            : `${p2(segEnd.getHours())}:${p2(segEnd.getMinutes())}`,
+        continuesFromPrev: vk.van * 1000 < dayStartMs,
+        continuesToNext: vk.tot * 1000 > dayEndMs,
+      };
+    }),
+  );
+}
+
+/**
+ * Computes the voorkeur layout for an entire week row.
+ * Determines which users appear in any day of the week, assigns each a stable slot,
+ * and records the per-day lane data so every day can render the same structure.
+ */
+function computeWeekVoorkeurLayout(
+  voorkeuren: VoorkeurItem[],
+  weekDates: WeekDateRangeItem[],
+): WeekVoorkeurLayout {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  // Step 1: collect all user IDs that appear in any day of this week and their initials.
+  const userInitials = new Map<number, string>();
+  const userMaxLanes = new Map<number, number>();
+
+  // Step 2: build per-day data.
+  const byDay = new Map<string, Map<number, VoorkeurLaneEntry[][]>>();
+
+  for (const range of weekDates) {
+    const day = range.Day;
+    const month0 = range.Month;
+    const year = range.Year;
+    const dateKey = `${day}-${range.Month + 1}-${year}`;
+    const dayStartMs = new Date(year, month0, day, 0, 0, 0, 0).getTime();
+    const dayEndMs = dayStartMs + DAY_MS;
+
+    // Filter voorkeuren overlapping this day
+    const dayVks = voorkeuren.filter(
+      (vk) => vk.van * 1000 < dayEndMs && vk.tot * 1000 > dayStartMs,
+    );
+
+    // Group by user
+    const byUser = new Map<number, VoorkeurItem[]>();
+    for (const vk of dayVks) {
+      if (vk.iddeelnemer == null) continue;
+      if (!byUser.has(vk.iddeelnemer)) byUser.set(vk.iddeelnemer, []);
+      byUser.get(vk.iddeelnemer)!.push(vk);
+    }
+
+    const dayMap = new Map<number, VoorkeurLaneEntry[][]>();
+    for (const [userId, vks] of byUser) {
+      const d = vks[0].deelnemer;
+      if (!userInitials.has(userId)) {
+        userInitials.set(
+          userId,
+          ((d?.voornaam?.[0] ?? '') + (d?.achternaam?.[0] ?? '')).toUpperCase(),
+        );
+      }
+      const lanes = computeUserLanesForDay(vks, dayStartMs, dayEndMs);
+      dayMap.set(userId, lanes);
+      // Track max lanes this user needs in any single day
+      const prev = userMaxLanes.get(userId) ?? 0;
+      userMaxLanes.set(userId, Math.max(prev, lanes.length));
+    }
+    byDay.set(dateKey, dayMap);
+  }
+
+  // Step 3: build stable user slot order (sorted by userId for consistency).
+  const users: WeekUserSlot[] = Array.from(userInitials.keys())
+    .sort((a, b) => a - b)
+    .map((userId) => ({
+      userId,
+      initials: userInitials.get(userId)!,
+      numLanes: userMaxLanes.get(userId) ?? 1,
+    }));
+
+  // Step 4: transform byDay to indexed arrays matching users order.
+  const byDayIndexed = new Map<string, VoorkeurLaneEntry[][][]>();
+  for (const [dateKey, dayMap] of byDay) {
+    byDayIndexed.set(
+      dateKey,
+      users.map((u) => dayMap.get(u.userId) ?? []),
+    );
+  }
+
+  return { users, byDay: byDayIndexed };
+}
+
+function voorkeurToShiftBlockView(vk: VoorkeurItem): ShiftBlockView {
+  const d = vk.deelnemer;
+  const vanDate = new Date(vk.van * 1000);
+  const totDate = new Date(vk.tot * 1000);
+  const p2 = (n: number) => n.toString().padStart(2, '0');
+  const fmtDate = (dt: Date) =>
+    `${dt.getFullYear()}-${p2(dt.getMonth() + 1)}-${p2(dt.getDate())} ${p2(dt.getHours())}:${p2(dt.getMinutes())}:00`;
+  const initials = ((d?.voornaam?.[0] ?? '') + (d?.achternaam?.[0] ?? '')).toUpperCase();
+  const fullName = [d?.voornaam, d?.achternaam].filter(Boolean).join(' ');
+  return {
+    id: vk.id ?? 0,
+    day: vanDate.getDate(),
+    month: vanDate.getMonth(),
+    year: vanDate.getFullYear(),
+    van: vk.van,
+    tot: vk.tot,
+    currentDate: fmtDate(vanDate),
+    nextDate: fmtDate(totDate),
+    startTime: `${p2(vanDate.getHours())}:${p2(vanDate.getMinutes())}`,
+    endTime: `${p2(totDate.getHours())}:${p2(totDate.getMinutes())}`,
+    label: '',
+    middle: d
+      ? { id: d.id ?? 0, name: fullName, shortName: initials, color: d.color ?? '#888888' }
+      : null,
+    top: null,
+    bottom: null,
+    assignedPreferenceCode: String(vk.type ?? ''),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function CalendarGrid({
   shiftBlocks,
   rows,
@@ -139,6 +322,7 @@ export function CalendarGrid({
   pendingDelete,
   getChipByCode = getChipByCodeFromTypes,
   showPreferences = true,
+  voorkeuren,
 }: CalendarGridProps) {
   const vakantieList: VakantieItem[] = vakanties ?? [];
 
@@ -213,6 +397,12 @@ export function CalendarGrid({
       <div className="w-full mx-auto" data-tooltip="Chip Active">
         {weekRows.map(({ weekNo, year: weekYear, dates }) => {
           const weekInfo = getWeekNumber(dates[0].Date);
+          // Compute voorkeur layout once per week row so all 7 days share the same
+          // user order and lane counts → consistent row heights across the week.
+          const weekVoorkeurLayout =
+            voorkeuren && voorkeuren.length > 0
+              ? computeWeekVoorkeurLayout(voorkeuren, dates)
+              : null;
           return (
             <div key={`${weekNo}-${weekYear}`} className="flex w-full items-center justify-center">
               {/* Left week-number column (e.g. "Week 12"). */}
@@ -333,9 +523,53 @@ export function CalendarGrid({
                           );
                         })}
                       </div>
-                      {/* Extra row placeholder: render second-row ShiftBlock items here. */}
-                      {showPreferences && (
-                        <div className="min-h-[80px] mt-2 border-t border-[#979797]" aria-label="preferences row" />
+                      {/* Voorkeur blocks: rendered using the week-level layout so every
+                          day in the week shows the same user rows in the same order
+                          with the same lane heights — ensuring visual alignment. */}
+                      {(showPreferences || weekVoorkeurLayout) && (
+                        <div className="mt-2 border-t border-[#979797]" aria-label="preferences row">
+                          {weekVoorkeurLayout && weekVoorkeurLayout.users.length > 0 ? (
+                            // Per-user band: same structure for every day in the week.
+                            weekVoorkeurLayout.users.map((slot, slotIdx) => {
+                              const dayLanes = weekVoorkeurLayout.byDay.get(dateKey)?.[slotIdx] ?? [];
+                              return (
+                                <div key={slot.userId} className="mb-px">
+                                  {/* Render slot.numLanes lanes; empty lanes keep the height stable. */}
+                                  {Array.from({ length: slot.numLanes }).map((_, laneIdx) => {
+                                    const lane = dayLanes[laneIdx] ?? [];
+                                    return (
+                                      <div key={laneIdx} className="relative" style={{ height: 22 }}>
+                                        {lane.map(({ voorkeur, segmentStartTime, segmentEndTime, continuesFromPrev, continuesToNext }) => (
+                                          <ShiftBlock
+                                            key={`vk-${voorkeur.id}-${voorkeur.van}`}
+                                            block={voorkeurToShiftBlockView(voorkeur)}
+                                            day={rangeDay}
+                                            month={range.Month}
+                                            year={rangeYear}
+                                            hideTopStrip
+                                            hideBottomStrip
+                                            middleHeight={20}
+                                            disableActiveHighlight
+                                            segmentStartTime={segmentStartTime}
+                                            segmentEndTime={segmentEndTime}
+                                            continuesFromPrev={continuesFromPrev}
+                                            continuesToNext={continuesToNext}
+                                            preferenceChip={
+                                              CHIP_DEFINITIONS.find((c) => c.code === String(voorkeur.type ?? '')) ?? null
+                                            }
+                                          />
+                                        ))}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            // No voorkeuren this week: render empty placeholder for showPreferences pages.
+                            <div className="min-h-[80px]" />
+                          )}
+                        </div>
                       )}
                     </div>
                   );

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { CalendarGrid, type CalendarGridRow } from './CalendarGrid';
 import type { ShiftBlockView } from '@/types/diensten';
-import type { ChipDefinition } from '@/types/voorkeuren';
+import type { ChipDefinition, VoorkeurItem } from '@/types/voorkeuren';
 
 export interface CalendarGridWithNavStateProps {
   /** Rows per waarneemgroep (when set, shiftBlocks is ignored). */
@@ -34,6 +34,8 @@ export interface CalendarGridWithNavStateProps {
   getChipByCode?: (code: string) => ChipDefinition | undefined;
   /** When false, preference UI on shift blocks is hidden. Default true. */
   showPreferences?: boolean;
+  /** When set, renders voorkeur blocks per user below the shift lane (secretaris view). */
+  voorkeuren?: VoorkeurItem[];
 }
 
 /**
@@ -56,6 +58,7 @@ export function CalendarGridWithNavState({
   pendingDelete,
   getChipByCode,
   showPreferences,
+  voorkeuren,
 }: CalendarGridWithNavStateProps) {
   const [internalViewMonth, setInternalViewMonth] = useState(initialViewMonth);
   const [internalViewYear, setInternalViewYear] = useState(initialViewYear);
@@ -91,6 +94,7 @@ export function CalendarGridWithNavState({
       pendingDelete={pendingDelete}
       getChipByCode={getChipByCode}
       showPreferences={showPreferences}
+      voorkeuren={voorkeuren}
     />
   );
 }

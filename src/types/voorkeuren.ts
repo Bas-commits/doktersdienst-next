@@ -112,6 +112,21 @@ export function shiftKeyFromBlock(block: ShiftBlockView): string {
   return `${block.currentDate}_${block.van}_${block.tot}_${block.id}`;
 }
 
+/** A voorkeur entry for rendering in the calendar (used by CalendarGrid). */
+export interface VoorkeurItem {
+  id: number | null;
+  iddeelnemer: number | null;
+  van: number;         // Unix seconds
+  tot: number;         // Unix seconds
+  type: number | null; // 2=Liever niet, 3=Liever wel, 8=Taken, 9=Vakantie, 10=Nascholing, 5001=FTE
+  deelnemer: {
+    id: number | null;
+    voornaam: string | null;
+    achternaam: string | null;
+    color: string | null;
+  } | null;
+}
+
 /** Look up chip definition by code for rendering on blocks. */
 export function getChipByCode(code: string): ChipDefinition | undefined {
   return CHIP_DEFINITIONS.find((c) => c.code === code);

@@ -2,26 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { cachedGetJson } from '@/lib/cached-fetch';
+import type { VoorkeurItem } from '@/types/voorkeuren';
 
-export type Voorkeur = {
-  id: number | null;
-  iddeelnemer: number | null;
-  van: number;
-  tot: number;
-  type: number | null;
-  idwaarneemgroep: number | null;
-  idtaaktype: number | null;
-  taaktypeKleur: string | null;
-  deelnemer: {
-    id: number | null;
-    voornaam: string | null;
-    achternaam: string | null;
-    color: string | null;
-  } | null;
-};
+export type { VoorkeurItem };
 
 export type UseVoorkeurenSubscriptionResult = {
-  data: Voorkeur[] | null;
+  data: VoorkeurItem[] | null;
   error: string | null;
   loading: boolean;
 };
@@ -35,7 +21,7 @@ export function useVoorkeurenSubscription(
   totLte: number,
   idwaarneemgroepen: number[]
 ): UseVoorkeurenSubscriptionResult {
-  const [data, setData] = useState<Voorkeur[] | null>(null);
+  const [data, setData] = useState<VoorkeurItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -64,7 +50,7 @@ export function useVoorkeurenSubscription(
           setError(json.error);
           setData(null);
         } else if (Array.isArray(json.voorkeuren)) {
-          setData(json.voorkeuren as Voorkeur[]);
+          setData(json.voorkeuren as VoorkeurItem[]);
           setError(null);
         } else {
           setData([]);

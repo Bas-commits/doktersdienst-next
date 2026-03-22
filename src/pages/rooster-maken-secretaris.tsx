@@ -176,6 +176,7 @@ export default function RoosterMakenSecretarisPage() {
                   setViewMonth(month);
                   setViewYear(year);
                 }}
+                voorkeuren={voorkeuren ?? undefined}
               />
             </CardContent>
           </Card>

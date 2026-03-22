@@ -15,6 +15,7 @@ const AUTHENTICATED_PATHS = [
   "/rollen-afmelden",
   "/waarneemgroep-gegevens",
   "/regio-toevoegen",
+  "/waarneemgroep-wijzigen",
 ];
 
 function useIsAuthenticatedRoute(): boolean {

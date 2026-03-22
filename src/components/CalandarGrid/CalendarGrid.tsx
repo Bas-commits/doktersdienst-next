@@ -136,6 +136,7 @@ export function CalendarGrid({
   pendingInsert,
   pendingDelete,
   getChipByCode = getChipByCodeFromTypes,
+  showPreferences = true,
 }: CalendarGridProps) {
   const vakantieList: VakantieItem[] = vakanties ?? [];
 
@@ -212,11 +213,13 @@ export function CalendarGrid({
           const weekInfo = getWeekNumber(dates[0].Date);
           return (
             <div key={`${weekNo}-${weekYear}`} className="flex w-full items-center justify-center">
+              {/* Left week-number column (e.g. "Week 12"). */}
               <div className="w-[60px] shrink-0">
                 <div className="h-[30px] -rotate-90 text-base font-bold text-[#c1c1c1] whitespace-nowrap">
                   Week {weekInfo.week}
                 </div>
               </div>
+              {/* One visual "week row" container that holds all 7 day cells. */}
               <div className="flex flex-1 min-w-0 relative border border-[#979797] rounded-[13px] mb-2.5">
                 {dates.map((range) => {
                   const rangeDay = range.Day;
@@ -236,6 +239,7 @@ export function CalendarGrid({
                       key={dateKey}
                       className="min-w-[100px] flex-1 min-h-[110px] p-0 border-r border-[#c4c4c4] first:rounded-l-[13px] last:rounded-r-[13px] last:border-r-0 last:border-0 overflow-visible flex flex-col"
                     >
+                      {/* Day header in this cell: date number + optional vacation labels. */}
                       <div
                         className="text-[#a0a0a0] text-[25px] my-0 mx-[5px] ml-2.5 flex items-center justify-between leading-none [&>span]:text-sm [&>span]:font-semibold [&>span]:tracking-[0.5px] [&>span]:text-[#c5c5c5]"
                         data-day-month-year={dateKey}
@@ -257,7 +261,9 @@ export function CalendarGrid({
                           </span>
                         )}
                       </div>
+                      {/* Shift-lane wrapper for this day cell (currently one lane per grid row). */}
                       <div className="flex flex-1 flex-col gap-1.5 min-h-0">
+                        {/* Primary shift row in this day cell. */}
                         {gridRows.map((row) => {
                           const blocksWithSegments = getBlocksWithSegmentsForDay(
                             row.shiftBlocks,
@@ -325,10 +331,15 @@ export function CalendarGrid({
                           );
                         })}
                       </div>
+                      {/* Extra row placeholder: render second-row ShiftBlock items here. */}
+                      {showPreferences && (
+                        <div className="min-h-[80px] mt-2 border-t border-[#979797]" aria-label="preferences row" />
+                      )}
                     </div>
                   );
                 })}
               </div>
+              {/* Right column with row labels; mirrors the vertical shift lanes. */}
               {gridRows.length > 1 && (
                 <div
                   className="shrink-0 pl-2 mb-2.5 flex flex-col"
@@ -348,7 +359,10 @@ export function CalendarGrid({
                 </div>
               )}
             </div>
+            
+            
           );
+          
         })}
       </div>
     </>

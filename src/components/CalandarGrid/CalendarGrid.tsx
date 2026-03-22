@@ -587,7 +587,7 @@ export function CalendarGrid({
                                       <div key={laneIdx} className="relative" style={{ height: 22 }}>
                                         {lane.map(({ voorkeur, segmentStartTime, segmentEndTime, continuesFromPrev, continuesToNext }) => (
                                           <ShiftBlock
-                                            key={`vk-${voorkeur.id}-${voorkeur.van}`}
+                                            key={`vk-${voorkeur.id ?? `${voorkeur.iddeelnemer}_${voorkeur.idwaarneemgroep ?? 0}_${voorkeur.type}`}-${voorkeur.van}-${voorkeur.tot}`}
                                             block={voorkeurToShiftBlockView(voorkeur)}
                                             day={rangeDay}
                                             month={range.Month}

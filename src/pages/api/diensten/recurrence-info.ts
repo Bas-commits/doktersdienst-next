@@ -17,10 +17,9 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
 }
 
 /**
- * GET /api/diensten/recurrence-info?id=<n>
+ * GET /api/diensten/recurrence-info?van=<n>&tot=<n>&idwaarneemgroep=<n>
  *
- * Returns recurrence info for a shift: whether it has future recurrences,
- * how many, and when the last one is.
+ * Returns recurrence info for a shift slot identified by van+tot+idwaarneemgroep.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -35,34 +34,36 @@ export default async function handler(
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const id = Number(req.query.id);
-  if (Number.isNaN(id) || id <= 0) {
-    return res.status(400).json({ error: 'Ongeldig shift ID.' });
+  const van = Number(req.query.van);
+  const tot = Number(req.query.tot);
+  const idwaarneemgroep = Number(req.query.idwaarneemgroep);
+
+  if (Number.isNaN(van) || Number.isNaN(tot) || Number.isNaN(idwaarneemgroep)) {
+    return res.status(400).json({ error: 'Ongeldige van, tot of idwaarneemgroep.' });
   }
 
   const { diensten: dienstenTable } = schema;
 
   try {
     const rows = await db
-      .select({
-        van: dienstenTable.van,
-        iddienstherhalen: dienstenTable.iddienstherhalen,
-      })
+      .select({ iddienstherhalen: dienstenTable.iddienstherhalen })
       .from(dienstenTable)
-      .where(eq(dienstenTable.id, id))
+      .where(
+        and(
+          eq(dienstenTable.van, van),
+          eq(dienstenTable.tot, tot),
+          eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+          eq(dienstenTable.type, 1)
+        )
+      )
       .limit(1);
 
-    if (rows.length === 0) {
+    const iddienstherhalen = rows[0]?.iddienstherhalen;
+
+    if (iddienstherhalen == null) {
       return res.status(200).json({ has_recurrence: false });
     }
 
-    const { van, iddienstherhalen } = rows[0];
-
-    if (iddienstherhalen == null || van == null) {
-      return res.status(200).json({ has_recurrence: false });
-    }
-
-    // Count future occurrences (van >= this shift's van) in the same series
     const futureRows = await db
       .select({
         count: sql<number>`count(*)::int`,
@@ -82,7 +83,7 @@ export default async function handler(
 
     return res.status(200).json({
       has_recurrence: futureCount > 1,
-      future_count: futureCount > 1 ? futureCount - 1 : 0, // exclude self
+      future_count: futureCount > 1 ? futureCount - 1 : 0,
       last_van: lastVan,
     });
   } catch (err) {

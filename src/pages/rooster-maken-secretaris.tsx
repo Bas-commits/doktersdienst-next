@@ -2,7 +2,8 @@
 
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { authClient } from '@/lib/auth-client';
+import { Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
@@ -31,6 +32,7 @@ interface Doctor {
   color: string | null;
   initials: string;
   fullName: string;
+  waarneemgroepIds: number[];
 }
 
 function toInitials(voornaam: string | null, achternaam: string | null): string {
@@ -41,22 +43,30 @@ function toFullName(voornaam: string | null, achternaam: string | null): string 
   return [voornaam, achternaam].filter(Boolean).join(' ') || 'Onbekend';
 }
 
+/** Section label for toast messages. */
+const SECTION_LABEL: Record<string, string> = {
+  middle: 'Standaard',
+  top: 'Achterwacht',
+  bottom: 'Extra Dokter',
+};
+
 export default function RoosterMakenSecretarisPage() {
-  const { data: session } = authClient.useSession();
   const { activeWaarneemgroepId, waarneemgroepen, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
 
   const now = useMemo(() => new Date(), []);
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
 
-  // Doctors sidebar state
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  // All doctors fetched from API
+  const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(false);
+  // Currently selected doctor (follows cursor)
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  // Delete mode: clicking a filled stripe removes the assignment
+  const [deleteMode, setDeleteMode] = useState(false);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
-
-  // Mutation feedback
-  const [assignError, setAssignError] = useState<string | null>(null);
+  // Prevent double-click during in-flight API call
+  const [isAssigning, setIsAssigning] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const waarneemgroepIds = useMemo(() => {
@@ -86,7 +96,7 @@ export default function RoosterMakenSecretarisPage() {
     return groupShiftBlocksByWaarneemgroep(blocks);
   }, [dienstenResponse]);
 
-  // Show all accessible waarneemgroepen (use activeWaarneemgroepId as default selection)
+  // Use the active waarneemgroep as default; fall back to all groups
   const idsToShow = useMemo(() => {
     if (!waarneemgroepIds.length) return new Set<number>();
     if (activeWaarneemgroepId) {
@@ -107,33 +117,61 @@ export default function RoosterMakenSecretarisPage() {
   const selectedWaarneemgroepIds = useMemo(() => Array.from(idsToShow), [idsToShow]);
   const { data: voorkeuren } = useVoorkeurenSubscription(vanGte, totLte, selectedWaarneemgroepIds);
 
-  // Fetch doctors for the visible waarneemgroepen
+  // Fetch doctors (full DeelnemerWithGroepen) once on mount / when groups change
   useEffect(() => {
     if (!waarneemgroepIds.length) return;
     setDoctorsLoading(true);
     fetch('/api/deelnemers')
       .then((r) => r.json())
-      .then((data) => {
+      .then((data: {
+        deelnemers?: Array<{
+          id: number;
+          voornaam: string | null;
+          achternaam: string | null;
+          color: string | null;
+          waarneemgroepen: { id: number; naam: string | null; aangemeld: boolean }[];
+        }>
+      }) => {
         if (data?.deelnemers) {
-          setDoctors(
-            (data.deelnemers as Array<{ id: number; voornaam: string | null; achternaam: string | null; color: string | null }>).map((d) => ({
+          setAllDoctors(
+            data.deelnemers.map((d) => ({
               id: d.id,
               voornaam: d.voornaam,
               achternaam: d.achternaam,
               color: d.color,
               initials: toInitials(d.voornaam, d.achternaam),
               fullName: toFullName(d.voornaam, d.achternaam),
+              waarneemgroepIds: d.waarneemgroepen
+                .filter((wg) => wg.aangemeld)
+                .map((wg) => wg.id),
             }))
           );
         }
       })
       .catch(() => {/* silently ignore */})
       .finally(() => setDoctorsLoading(false));
-  }, [waarneemgroepIds]);
+  }, [waarneemgroepIds.join(',')]);
 
-  // Floating chip: follow cursor when a doctor is selected
+  // Filter to only doctors aangemeld in the currently visible waarneemgroepen
+  const doctors = useMemo(
+    () => allDoctors.filter((d) =>
+      d.waarneemgroepIds.some((wgId) => selectedWaarneemgroepIds.includes(wgId))
+    ),
+    [allDoctors, selectedWaarneemgroepIds]
+  );
+
+  // When selected doctor is no longer in the filtered list, deselect
   useEffect(() => {
-    if (!selectedDoctor) {
+    if (selectedDoctor && !doctors.some((d) => d.id === selectedDoctor.id)) {
+      setSelectedDoctor(null);
+    }
+  }, [doctors, selectedDoctor]);
+
+  const isActive = selectedDoctor !== null || deleteMode;
+
+  // Floating chip: follow cursor when a doctor is selected or delete mode is active
+  useEffect(() => {
+    if (!isActive) {
       setDragPosition(null);
       return;
     }
@@ -141,31 +179,37 @@ export default function RoosterMakenSecretarisPage() {
     const onMove = (e: MouseEvent) => setDragPosition({ x: e.clientX + offset, y: e.clientY + offset });
     window.addEventListener('mousemove', onMove);
     return () => window.removeEventListener('mousemove', onMove);
-  }, [selectedDoctor]);
+  }, [isActive]);
 
-  // Cancel selection on Escape
+  // Cancel selection/mode on Escape
   useEffect(() => {
-    if (!selectedDoctor) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedDoctor(null); };
+    if (!isActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedDoctor(null);
+        setDeleteMode(false);
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedDoctor]);
+  }, [isActive]);
 
-  // Deselect doctor when clicking outside sidebar + calendar
+  // Clear when clicking outside sidebar + calendar
   const sidebarRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!selectedDoctor) return;
+    if (!isActive) return;
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (sidebarRef.current?.contains(t) || calendarRef.current?.contains(t)) return;
       setSelectedDoctor(null);
+      setDeleteMode(false);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [selectedDoctor]);
+  }, [isActive]);
 
-  // Preference map for the selected doctor: van_tot → ChipDefinition
+  // Preference preview map for the selected doctor: `${van}_${tot}` → ChipDefinition
   const plannerDoctorPreferenceMap = useMemo<Map<string, ChipDefinition> | undefined>(() => {
     if (!selectedDoctor || !voorkeuren?.length) return undefined;
     const map = new Map<string, ChipDefinition>();
@@ -177,11 +221,11 @@ export default function RoosterMakenSecretarisPage() {
     return map.size > 0 ? map : undefined;
   }, [selectedDoctor, voorkeuren]);
 
-  // Assign a doctor to a shift section by calling the API immediately
-  const handleSectionShiftClick = useCallback(
-    async (block: ShiftBlockView, section: 'top' | 'middle' | 'bottom') => {
-      if (!selectedDoctor) return;
-      setAssignError(null);
+  /** Call assign or unassign API, refresh, show toast. */
+  const callAssign = useCallback(
+    async (block: ShiftBlockView, section: 'top' | 'middle' | 'bottom', iddeelnemer: number | null) => {
+      if (isAssigning) return;
+      setIsAssigning(true);
       try {
         const res = await fetch('/api/diensten/assign', {
           method: 'POST',
@@ -190,23 +234,51 @@ export default function RoosterMakenSecretarisPage() {
             idwaarneemgroep: block.idwaarneemgroep,
             van: block.van,
             tot: block.tot,
-            iddeelnemer: selectedDoctor.id,
+            iddeelnemer,
             section,
           }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          setAssignError(data?.error ?? 'Toewijzen mislukt');
+          toast.error(data?.error ?? 'Toewijzen mislukt');
           return;
         }
-        // Clear cache and trigger re-fetch
         clearCacheByPrefix('/api/diensten');
         setRefreshKey((k) => k + 1);
+        if (iddeelnemer == null) {
+          toast.success(`${SECTION_LABEL[section]} ontkoppeld`);
+        } else {
+          const doc = allDoctors.find((d) => d.id === iddeelnemer);
+          toast.success(`${doc?.fullName ?? 'Dokter'} toegewezen als ${SECTION_LABEL[section]}`);
+        }
       } catch {
-        setAssignError('Netwerkfout bij toewijzen');
+        toast.error('Netwerkfout bij toewijzen');
+      } finally {
+        setIsAssigning(false);
       }
     },
-    [selectedDoctor]
+    [isAssigning, allDoctors]
+  );
+
+  /**
+   * Stripe click handler.
+   * - Delete mode + stripe filled → unassign
+   * - Delete mode + stripe empty → no-op
+   * - Doctor selected → assign that doctor (replaces existing)
+   * - No mode/doctor → no-op
+   */
+  const handleSectionShiftClick = useCallback(
+    (block: ShiftBlockView, section: 'top' | 'middle' | 'bottom') => {
+      if (isAssigning) return;
+      const currentDoctor = section === 'top' ? block.top : section === 'bottom' ? block.bottom : block.middle;
+      if (deleteMode) {
+        if (currentDoctor) void callAssign(block, section, null);
+        // else: delete mode but stripe is empty → nothing to do
+      } else if (selectedDoctor) {
+        void callAssign(block, section, selectedDoctor.id);
+      }
+    },
+    [selectedDoctor, deleteMode, isAssigning, callAssign]
   );
 
   const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
@@ -219,7 +291,7 @@ export default function RoosterMakenSecretarisPage() {
       </Head>
 
       {/* Floating chip following cursor */}
-      {selectedDoctor && dragPosition && (
+      {dragPosition && deleteMode && (
         <div
           aria-hidden
           style={{
@@ -227,7 +299,30 @@ export default function RoosterMakenSecretarisPage() {
             left: dragPosition.x,
             top: dragPosition.y,
             pointerEvents: 'none',
-            zIndex: 9999,
+            zIndex: 99999,
+            transform: 'translate(-50%, -50%)',
+            padding: '6px 8px',
+            borderRadius: 6,
+            backgroundColor: '#ef4444',
+            color: '#fff',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        </div>
+      )}
+      {dragPosition && selectedDoctor && !deleteMode && (
+        <div
+          aria-hidden
+          style={{
+            position: 'fixed',
+            left: dragPosition.x,
+            top: dragPosition.y,
+            pointerEvents: 'none',
+            zIndex: 99999,
             transform: 'translate(-50%, -50%)',
             padding: '4px 10px',
             borderRadius: 6,
@@ -247,14 +342,13 @@ export default function RoosterMakenSecretarisPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Rooster maken
-              </h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Rooster maken</h1>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground text-sm">
-              Selecteer een dokter uit de lijst en klik daarna op een dienst om toe te wijzen. Druk op <kbd className="rounded border border-border bg-muted px-1 py-0.5 text-xs font-mono">Esc</kbd> om de selectie te annuleren.
+              Selecteer een dokter en klik op een stripe om toe te wijzen. Klik op een bezette stripe zonder selectie om te verwijderen.{' '}
+              <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">Esc</kbd> annuleert de selectie.
             </p>
           </CardContent>
         </Card>
@@ -267,11 +361,37 @@ export default function RoosterMakenSecretarisPage() {
                 <CardTitle className="text-base">Dokters</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1 p-3 pt-0">
+                {/* Trash / delete mode button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteMode((prev) => !prev);
+                    setSelectedDoctor(null);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
+                    deleteMode
+                      ? 'bg-destructive/10 text-destructive outline outline-2 outline-destructive'
+                      : 'hover:bg-accent text-muted-foreground'
+                  }`}
+                >
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded ${
+                      deleteMode ? 'bg-destructive text-white' : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    <Trash2 size={13} />
+                  </span>
+                  <span className={`truncate ${deleteMode ? 'font-semibold' : ''}`}>Verwijderen</span>
+                  {deleteMode && <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-destructive" />}
+                </button>
+
+                <div className="my-1 border-t border-border" />
+
                 {doctorsLoading && (
-                  <p className="text-sm text-muted-foreground px-1">Laden…</p>
+                  <p className="px-1 text-sm text-muted-foreground">Laden…</p>
                 )}
                 {!doctorsLoading && doctors.length === 0 && (
-                  <p className="text-sm text-muted-foreground px-1">Geen dokters gevonden.</p>
+                  <p className="px-1 text-sm text-muted-foreground">Geen dokters gevonden.</p>
                 )}
                 {!doctorsLoading && doctors.map((doctor) => {
                   const isSelected = selectedDoctor?.id === doctor.id;
@@ -280,16 +400,13 @@ export default function RoosterMakenSecretarisPage() {
                       key={doctor.id}
                       type="button"
                       onClick={() => setSelectedDoctor(isSelected ? null : doctor)}
-                      className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
-                        isSelected
-                          ? 'bg-accent'
-                          : 'hover:bg-accent'
+                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
+                        isSelected ? 'bg-accent' : 'hover:bg-accent'
                       }`}
                       style={isSelected ? { outline: `2px solid ${doctor.color ?? '#6b7280'}`, outlineOffset: '1px' } : undefined}
                     >
-                      {/* Color badge */}
                       <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[11px] font-bold text-white"
                         style={{ backgroundColor: doctor.color ?? '#6b7280' }}
                       >
                         {doctor.initials}
@@ -298,7 +415,7 @@ export default function RoosterMakenSecretarisPage() {
                         {doctor.fullName}
                       </span>
                       {isSelected && (
-                        <span className="ml-auto shrink-0 h-2 w-2 rounded-full bg-green-500" title="Geselecteerd" />
+                        <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-green-500" />
                       )}
                     </button>
                   );
@@ -306,20 +423,39 @@ export default function RoosterMakenSecretarisPage() {
               </CardContent>
             </Card>
 
-            {selectedDoctor && (
-              <div className="mt-3 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{selectedDoctor.fullName}</span> geselecteerd.{' '}
-                Klik op een dienst om toe te wijzen.
-                <br />
-                <button
-                  type="button"
-                  onClick={() => setSelectedDoctor(null)}
-                  className="mt-1 text-destructive underline-offset-2 hover:underline"
-                >
-                  Annuleren (Esc)
-                </button>
-              </div>
-            )}
+            {/* Status hint */}
+            <div className="mt-3 space-y-1 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
+              {deleteMode ? (
+                <>
+                  <p className="font-medium text-destructive">
+                    Verwijdermodus{isAssigning ? ' — bezig…' : '. Klik op een bezette stripe.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteMode(false)}
+                    className="text-destructive underline-offset-2 hover:underline"
+                  >
+                    Annuleren (Esc)
+                  </button>
+                </>
+              ) : selectedDoctor ? (
+                <>
+                  <p>
+                    <span className="font-medium text-foreground">{selectedDoctor.fullName}</span> geselecteerd
+                    {isAssigning ? ' — bezig…' : '. Klik op een stripe.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDoctor(null)}
+                    className="text-destructive underline-offset-2 hover:underline"
+                  >
+                    Annuleren (Esc)
+                  </button>
+                </>
+              ) : (
+                <p>Selecteer een dokter of verwijdermodus om toe te wijzen.</p>
+              )}
+            </div>
           </div>
 
           {/* Calendar */}
@@ -328,13 +464,11 @@ export default function RoosterMakenSecretarisPage() {
               <CardTitle>Kalenderoverzicht</CardTitle>
             </CardHeader>
             <CardContent>
-              {(error || assignError) && (
-                <p className="mb-4 text-destructive text-sm" role="alert">
-                  {assignError ?? error}
-                </p>
+              {error && (
+                <p className="mb-4 text-sm text-destructive" role="alert">{error}</p>
               )}
               {loading && !dienstenResponse && (
-                <p className="mb-4 text-muted-foreground text-sm">Rooster laden…</p>
+                <p className="mb-4 text-sm text-muted-foreground">Rooster laden…</p>
               )}
               <div ref={calendarRef}>
                 <CalendarGridWithNavState
@@ -348,7 +482,7 @@ export default function RoosterMakenSecretarisPage() {
                     setViewYear(year);
                   }}
                   voorkeuren={voorkeuren ?? undefined}
-                  onSectionShiftClick={selectedDoctor ? handleSectionShiftClick : undefined}
+                  onSectionShiftClick={handleSectionShiftClick}
                   plannerDoctorPreferenceMap={plannerDoctorPreferenceMap}
                 />
               </div>

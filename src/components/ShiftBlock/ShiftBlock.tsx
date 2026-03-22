@@ -149,6 +149,7 @@ export function ShiftBlock({
   disableActiveHighlight,
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
+  const [isHovered, setIsHovered] = useState(false);
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(id);
@@ -337,6 +338,8 @@ export function ShiftBlock({
       className="absolute"
       data-box-type="morning"
       data-active-shift={isActive ? 'true' : undefined}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
         top: '50%',
         // Extend 1px on connecting sides to visually cover the 1px day-column divider border
@@ -351,7 +354,7 @@ export function ShiftBlock({
             ? `calc(${leftPercent}% - 1px)`
             : `${leftPercent}%`,
         transform: 'translateY(-50%)',
-        zIndex: (continuesFromPrev || continuesToNext) ? 1 : undefined,
+        zIndex: isHovered ? 9999 : (continuesFromPrev || continuesToNext) ? 1 : undefined,
       }}
     >
       {onDelete && (

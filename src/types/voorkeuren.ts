@@ -116,6 +116,7 @@ export function shiftKeyFromBlock(block: ShiftBlockView): string {
 export interface VoorkeurItem {
   id: number | null;
   iddeelnemer: number | null;
+  idwaarneemgroep?: number | null;
   van: number;         // Unix seconds
   tot: number;         // Unix seconds
   type: number | null; // 2=Liever niet, 3=Liever wel, 8=Taken, 9=Vakantie, 10=Nascholing, 5001=FTE

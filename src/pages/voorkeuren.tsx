@@ -270,7 +270,7 @@ export default function VoorkeurenPage() {
       <Head>
         <title>Voorkeuren | Doktersdienst</title>
       </Head>
-      <div className="mx-auto max-w-screen-2xl space-y-6 px-4 py-8">
+      <div className="mx-auto max-w-[2000px] space-y-6 px-4 py-8">
         <Card>
           <CardHeader>
             <CardTitle>

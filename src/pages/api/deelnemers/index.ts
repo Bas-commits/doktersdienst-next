@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, ne, isNotNull } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 
@@ -141,7 +141,8 @@ export default async function handler(
       return res.status(200).json(response);
     }
 
-    // Fetch deelnemers
+    // Fetch deelnemers — match legacy getDoctorDataForGroup filters:
+    // echtedeelnemer=1, afgemeld=0, abonnementdd=1, non-empty color
     const deelnemerRows = await db
       .select({
         id: deelnemers.id,
@@ -156,7 +157,12 @@ export default async function handler(
       .where(
         and(
           inArray(deelnemers.id, targetDeelnemerIds),
-          eq(deelnemers.abonnementdd, true)
+          eq(deelnemers.abonnementdd, true),
+          eq(deelnemers.echtedeelnemer, true),
+          eq(deelnemers.afgemeld, false),
+          isNotNull(deelnemers.color),
+          ne(deelnemers.color, ''),
+          ne(deelnemers.color, ' '),
         )
       )
       .orderBy(deelnemers.achternaam, deelnemers.voornaam);

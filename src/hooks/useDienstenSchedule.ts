@@ -6,6 +6,11 @@ function formatTwoDigits(n: number): string {
   return n.toString().padStart(2, '0');
 }
 
+/** True if [aVan, aTot] and [bVan, bTot] overlap (half-open-style boundary check matches PHP shift overlap). */
+function intervalsOverlap(aVan: number, aTot: number, bVan: number, bTot: number): boolean {
+  return aVan < bTot && aTot > bVan;
+}
+
 function toDoctorInfo(dienst: Dienst): DoctorInfo | null {
   const d = dienst.diensten_deelnemers;
   if (!d) return null;
@@ -69,7 +74,8 @@ export function dienstenToShiftBlocksFromParticipant(
 export function dienstenToShiftBlocks(response: DienstenResponse | null | undefined): ShiftBlockView[] {
   if (!response?.data?.diensten?.length) return [];
 
-  const relevantTypes = new Set<number>([0, 1, 5, 9]);
+  // 0/4/6=Standaard (legacy PHP uses 4 and 6 alongside 0), 1=slot, 5=Achterwacht, 9=legacy Extra, 11=Extra
+  const relevantTypes = new Set<number>([0, 1, 4, 5, 6, 9, 11]);
   const byKey = new Map<string, { base: Dienst | null; items: Dienst[] }>();
 
   for (const dienst of response.data.diensten) {
@@ -125,7 +131,9 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
 
     for (const dienst of items) {
       switch (dienst.type) {
-        case 0: {
+        case 0:
+        case 4:
+        case 6: {
           if (!middle) middle = toDoctorInfo(dienst);
           break;
         }
@@ -133,12 +141,30 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
           if (!top) top = toDoctorInfo(dienst);
           break;
         }
-        case 9: {
+        case 9:
+        case 11: {
+          // 9 = legacy Extra Dokter, 11 = Extra Dokter (current)
           if (!bottom) bottom = toDoctorInfo(dienst);
           break;
         }
         default:
           break;
+      }
+    }
+
+    // Standaard assignment may be one wide row (types 0/4/6) overlapping this type=1 chunk only — not in `items`.
+    if (!middle) {
+      const wg = base.idwaarneemgroep ?? 0;
+      for (const dienst of response.data.diensten) {
+        const t = dienst.type;
+        if (t !== 0 && t !== 4 && t !== 6) continue;
+        if ((dienst.idwaarneemgroep ?? 0) !== wg) continue;
+        if (!intervalsOverlap(dienst.van, dienst.tot, base.van, base.tot)) continue;
+        const d = toDoctorInfo(dienst);
+        if (d) {
+          middle = d;
+          break;
+        }
       }
     }
 

@@ -17,10 +17,10 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
 /**
  * POST /api/diensten/delete-shift
  *
- * Body: { id: number, delete_future_recurrences?: boolean }
+ * Body: { van: number, tot: number, idwaarneemgroep: number, delete_future_recurrences?: boolean }
  *
- * Deletes a single type=1 dienst by id, or the shift and all future recurrences
- * if delete_future_recurrences=true and the shift is part of a recurrence series.
+ * Deletes a single type=1 dienst identified by van+tot+idwaarneemgroep,
+ * or the shift and all future recurrences when delete_future_recurrences=true.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -36,54 +36,63 @@ export default async function handler(
   }
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-  const id = Number(body?.id);
+  const van = Number(body?.van);
+  const tot = Number(body?.tot);
+  const idwaarneemgroep = Number(body?.idwaarneemgroep);
   const deleteFutureRecurrences = body?.delete_future_recurrences === true;
 
-  if (Number.isNaN(id) || id <= 0) {
-    return res.status(400).json({ error: 'Ongeldig shift ID.' });
+  if (Number.isNaN(van) || Number.isNaN(tot) || Number.isNaN(idwaarneemgroep)) {
+    return res.status(400).json({ error: 'Ongeldige van, tot of idwaarneemgroep.' });
   }
 
   const { diensten: dienstenTable } = schema;
 
   try {
-    // Fetch the dienst to get iddienstherhalen and van
+    // Look up the exact row to get iddienstherhalen
     const rows = await db
       .select({
-        id: dienstenTable.id,
-        van: dienstenTable.van,
         iddienstherhalen: dienstenTable.iddienstherhalen,
       })
       .from(dienstenTable)
-      .where(eq(dienstenTable.id, id))
+      .where(
+        and(
+          eq(dienstenTable.van, van),
+          eq(dienstenTable.tot, tot),
+          eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+          eq(dienstenTable.type, 1)
+        )
+      )
       .limit(1);
 
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Shift niet gevonden.' });
     }
 
-    const dienst = rows[0];
+    const { iddienstherhalen } = rows[0];
 
-    if (
-      deleteFutureRecurrences &&
-      dienst.iddienstherhalen != null &&
-      dienst.van != null
-    ) {
-      // Delete this shift and all future occurrences in the same recurrence series
+    if (deleteFutureRecurrences && iddienstherhalen != null) {
       await db
         .delete(dienstenTable)
         .where(
           and(
-            eq(dienstenTable.iddienstherhalen, dienst.iddienstherhalen),
-            gte(dienstenTable.van, dienst.van),
+            eq(dienstenTable.iddienstherhalen, iddienstherhalen),
+            gte(dienstenTable.van, van),
             eq(dienstenTable.type, 1)
           )
         );
-
       return res.status(200).json({ success: true, message: 'Shift en toekomstige herhalingen verwijderd.' });
     }
 
-    // Delete only this single shift
-    await db.delete(dienstenTable).where(eq(dienstenTable.id, id));
+    await db
+      .delete(dienstenTable)
+      .where(
+        and(
+          eq(dienstenTable.van, van),
+          eq(dienstenTable.tot, tot),
+          eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+          eq(dienstenTable.type, 1)
+        )
+      );
 
     return res.status(200).json({ success: true, message: 'Shift verwijderd.' });
   } catch (err) {

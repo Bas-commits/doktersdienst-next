@@ -8,9 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DateTimePicker } from '@/components/ui/datetime-picker';
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep } from '@/hooks/useDienstenSchedule';
-import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
+import { useDienstenSubscription, clearCacheByPrefix } from '@/hooks/useDienstenSubscription';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import type { ShiftBlockView } from '@/types/diensten';
 
@@ -139,7 +140,12 @@ export default function DienstenToevoegenPage() {
       return;
     }
     setRecurrenceLoading(true);
-    fetch(`/api/diensten/recurrence-info?id=${deleteBlock.id}`, { credentials: 'include' })
+    const params = new URLSearchParams({
+      van: String(deleteBlock.van),
+      tot: String(deleteBlock.tot),
+      idwaarneemgroep: String(deleteBlock.idwaarneemgroep ?? ''),
+    });
+    fetch(`/api/diensten/recurrence-info?${params}`, { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
         setRecurrenceInfo(data);
@@ -232,6 +238,7 @@ export default function DienstenToevoegenPage() {
           toast.success(data.message ?? 'Shift toegevoegd.');
           setNieuweAant('');
           setHerhalenOpen(false);
+          clearCacheByPrefix('/api/diensten');
           setRefreshKey((k) => k + 1);
         }
       } catch {
@@ -243,13 +250,6 @@ export default function DienstenToevoegenPage() {
     [activeWaarneemgroepId, van, tot, aantekeningId, tariefId, nieuweAant, weken, startDatum, eindDatum]
   );
 
-  const handleReset = useCallback(() => {
-    setVan(defaultVan);
-    setTot(defaultTot);
-    setAantekeningId('0');
-    setNieuweAant('');
-    setTariefId('0');
-  }, [defaultVan, defaultTot]);
 
   const handleShiftDelete = useCallback((block: ShiftBlockView) => {
     setDeleteBlock(block);
@@ -264,7 +264,9 @@ export default function DienstenToevoegenPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: deleteBlock.id,
+          van: deleteBlock.van,
+          tot: deleteBlock.tot,
+          idwaarneemgroep: deleteBlock.idwaarneemgroep,
           delete_future_recurrences: recurrenceInfo?.has_recurrence && deleteChoice === 'future',
         }),
         credentials: 'include',
@@ -277,6 +279,7 @@ export default function DienstenToevoegenPage() {
         setDeleteBlock(null);
         setDeleteChoice('single');
         setRecurrenceInfo(null);
+        clearCacheByPrefix('/api/diensten');
         setRefreshKey((k) => k + 1);
       }
     } catch {
@@ -456,7 +459,7 @@ export default function DienstenToevoegenPage() {
         </div>
       )}
 
-      <div className="mx-auto max-w-screen-2xl space-y-6 px-4 py-8">
+      <div className="mx-auto max-w-[2000px] space-y-6 px-4 py-8">
         <Card>
           <CardHeader>
             <CardTitle>
@@ -479,25 +482,27 @@ export default function DienstenToevoegenPage() {
               <CardTitle className="text-base">Gegevens nieuwe dienst</CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4">
+              <form
+                onSubmit={(e) => handleSubmit(e, false)}
+                onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+                className="space-y-4"
+              >
                 <div className="space-y-1.5">
                   <Label htmlFor="dienst-van">Van</Label>
-                  <Input
+                  <DateTimePicker
                     id="dienst-van"
-                    type="datetime-local"
                     value={van}
-                    onChange={(e) => setVan(e.target.value)}
+                    onChange={setVan}
                     disabled={submitting}
                   />
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="dienst-tot">Tot</Label>
-                  <Input
+                  <DateTimePicker
                     id="dienst-tot"
-                    type="datetime-local"
                     value={tot}
-                    onChange={(e) => setTot(e.target.value)}
+                    onChange={setTot}
                     disabled={submitting}
                   />
                 </div>
@@ -559,9 +564,7 @@ export default function DienstenToevoegenPage() {
                   <Button type="submit" disabled={submitting || groepLoading || !activeWaarneemgroepId}>
                     Verzenden
                   </Button>
-                  <Button type="button" variant="outline" onClick={handleReset} disabled={submitting}>
-                    Opnieuw
-                  </Button>
+
                   <Button
                     type="button"
                     variant="secondary"

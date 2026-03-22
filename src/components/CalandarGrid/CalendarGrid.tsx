@@ -155,52 +155,16 @@ type WeekVoorkeurLayout = {
   byDay: Map<string, VoorkeurLaneEntry[][][]>;
 };
 
-/** Assign per-day lane entries for one user on one day. */
-function computeUserLanesForDay(
-  vks: VoorkeurItem[],
-  dayStartMs: number,
-  dayEndMs: number,
-): VoorkeurLaneEntry[][] {
-  const sorted = [...vks].sort((a, b) => a.van - b.van);
-  const laneGroups: { items: VoorkeurItem[] }[] = [];
-  for (const vk of sorted) {
-    let placed = false;
-    for (const lane of laneGroups) {
-      const conflicts = lane.items.some(
-        (ex) =>
-          ex.type !== vk.type &&
-          ex.van * 1000 < vk.tot * 1000 &&
-          ex.tot * 1000 > vk.van * 1000,
-      );
-      if (!conflicts) { lane.items.push(vk); placed = true; break; }
-    }
-    if (!placed) laneGroups.push({ items: [vk] });
-  }
-  const p2 = (n: number) => n.toString().padStart(2, '0');
-  return laneGroups.map((lane) =>
-    lane.items.map((vk) => {
-      const startMs = Math.max(vk.van * 1000, dayStartMs);
-      const endMs = Math.min(vk.tot * 1000, dayEndMs);
-      const segStart = new Date(startMs);
-      const segEnd = new Date(endMs);
-      return {
-        voorkeur: vk,
-        segmentStartTime: `${p2(segStart.getHours())}:${p2(segStart.getMinutes())}`,
-        segmentEndTime:
-          segEnd.getHours() === 23 && segEnd.getMinutes() === 59
-            ? '24:00'
-            : `${p2(segEnd.getHours())}:${p2(segEnd.getMinutes())}`,
-        continuesFromPrev: vk.van * 1000 < dayStartMs,
-        continuesToNext: vk.tot * 1000 > dayEndMs,
-      };
-    }),
-  );
-}
-
 /**
  * Computes the voorkeur layout for an entire week row.
- * Determines which users appear in any day of the week, assigns each a stable slot,
- * and records the per-day lane data so every day can render the same structure.
+ *
+ * Lane assignment is done GLOBALLY per user across all voorkeuren for the whole
+ * week (not per day). This guarantees that an overnight voorkeur always occupies
+ * the same lane on both the starting day and the ending day, so it appears as a
+ * visually continuous bar across the midnight boundary.
+ *
+ * segmentEndTime boundary fix: uses `endMs >= dayEndMs` to emit '24:00' instead
+ * of checking getHours() === 23, which fails when dayEndMs is midnight (00:00).
  */
 function computeWeekVoorkeurLayout(
   voorkeuren: VoorkeurItem[],
@@ -208,12 +172,67 @@ function computeWeekVoorkeurLayout(
 ): WeekVoorkeurLayout {
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  // Step 1: collect all user IDs that appear in any day of this week and their initials.
+  // Determine the time range covered by this week row.
+  const firstRange = weekDates[0];
+  const lastRange = weekDates[weekDates.length - 1];
+  const weekStartMs = new Date(firstRange.Year, firstRange.Month, firstRange.Day, 0, 0, 0, 0).getTime();
+  const weekEndMs = new Date(lastRange.Year, lastRange.Month, lastRange.Day, 0, 0, 0, 0).getTime() + DAY_MS;
+
+  // Filter voorkeuren that overlap this week at all.
+  const weekVks = voorkeuren.filter(
+    (vk) => vk.van * 1000 < weekEndMs && vk.tot * 1000 > weekStartMs,
+  );
+
+  // Group by user across the full week.
+  const byUser = new Map<number, VoorkeurItem[]>();
+  for (const vk of weekVks) {
+    if (vk.iddeelnemer == null) continue;
+    if (!byUser.has(vk.iddeelnemer)) byUser.set(vk.iddeelnemer, []);
+    byUser.get(vk.iddeelnemer)!.push(vk);
+  }
+
+  // Global lane assignment per user: each voorkeur gets a fixed lane index that
+  // is consistent across ALL days it spans (no per-day re-assignment).
   const userInitials = new Map<number, string>();
   const userMaxLanes = new Map<number, number>();
+  const vkToLane = new Map<VoorkeurItem, number>();
 
-  // Step 2: build per-day data.
-  const byDay = new Map<string, Map<number, VoorkeurLaneEntry[][]>>();
+  for (const [userId, vks] of byUser) {
+    const d = vks[0].deelnemer;
+    userInitials.set(
+      userId,
+      ((d?.voornaam?.[0] ?? '') + (d?.achternaam?.[0] ?? '')).toUpperCase(),
+    );
+
+    const sorted = [...vks].sort((a, b) => a.van - b.van);
+    // laneContents tracks which vks are assigned to each lane, for conflict checking.
+    const laneContents = new Map<number, VoorkeurItem[]>();
+
+    for (const vk of sorted) {
+      for (let laneIdx = 0; ; laneIdx++) {
+        const existing = laneContents.get(laneIdx) ?? [];
+        // Different-type temporal overlap → conflict, try next lane.
+        const hasConflict = existing.some(
+          (ex) =>
+            ex.type !== vk.type &&
+            ex.van * 1000 < vk.tot * 1000 &&
+            ex.tot * 1000 > vk.van * 1000,
+        );
+        if (!hasConflict) {
+          if (!laneContents.has(laneIdx)) laneContents.set(laneIdx, []);
+          laneContents.get(laneIdx)!.push(vk);
+          vkToLane.set(vk, laneIdx);
+          break;
+        }
+      }
+    }
+
+    userMaxLanes.set(userId, laneContents.size);
+  }
+
+  // Build per-day lane data using the globally assigned lane indices.
+  const p2 = (n: number) => n.toString().padStart(2, '0');
+  const byDayRaw = new Map<string, Map<number, VoorkeurLaneEntry[][]>>();
 
   for (const range of weekDates) {
     const day = range.Day;
@@ -221,40 +240,43 @@ function computeWeekVoorkeurLayout(
     const year = range.Year;
     const dateKey = `${day}-${range.Month + 1}-${year}`;
     const dayStartMs = new Date(year, month0, day, 0, 0, 0, 0).getTime();
-    const dayEndMs = dayStartMs + DAY_MS;
-
-    // Filter voorkeuren overlapping this day
-    const dayVks = voorkeuren.filter(
-      (vk) => vk.van * 1000 < dayEndMs && vk.tot * 1000 > dayStartMs,
-    );
-
-    // Group by user
-    const byUser = new Map<number, VoorkeurItem[]>();
-    for (const vk of dayVks) {
-      if (vk.iddeelnemer == null) continue;
-      if (!byUser.has(vk.iddeelnemer)) byUser.set(vk.iddeelnemer, []);
-      byUser.get(vk.iddeelnemer)!.push(vk);
-    }
+    const dayEndMs = dayStartMs + DAY_MS; // = midnight of the next day
 
     const dayMap = new Map<number, VoorkeurLaneEntry[][]>();
+
     for (const [userId, vks] of byUser) {
-      const d = vks[0].deelnemer;
-      if (!userInitials.has(userId)) {
-        userInitials.set(
-          userId,
-          ((d?.voornaam?.[0] ?? '') + (d?.achternaam?.[0] ?? '')).toUpperCase(),
-        );
+      const numLanes = userMaxLanes.get(userId) ?? 1;
+      const lanes: VoorkeurLaneEntry[][] = Array.from({ length: numLanes }, () => []);
+
+      for (const vk of vks) {
+        if (vk.van * 1000 >= dayEndMs || vk.tot * 1000 <= dayStartMs) continue;
+
+        const laneIdx = vkToLane.get(vk) ?? 0;
+        const startMs = Math.max(vk.van * 1000, dayStartMs);
+        const endMs = Math.min(vk.tot * 1000, dayEndMs);
+        const segStart = new Date(startMs);
+        const segEnd = new Date(endMs);
+
+        lanes[laneIdx].push({
+          voorkeur: vk,
+          segmentStartTime: `${p2(segStart.getHours())}:${p2(segStart.getMinutes())}`,
+          // endMs === dayEndMs means the segment reaches midnight: emit '24:00'.
+          // (segEnd.getHours() would be 0 here, not 23, so the old hours-check was wrong.)
+          segmentEndTime: endMs >= dayEndMs
+            ? '24:00'
+            : `${p2(segEnd.getHours())}:${p2(segEnd.getMinutes())}`,
+          continuesFromPrev: vk.van * 1000 < dayStartMs,
+          continuesToNext: vk.tot * 1000 > dayEndMs,
+        });
       }
-      const lanes = computeUserLanesForDay(vks, dayStartMs, dayEndMs);
+
       dayMap.set(userId, lanes);
-      // Track max lanes this user needs in any single day
-      const prev = userMaxLanes.get(userId) ?? 0;
-      userMaxLanes.set(userId, Math.max(prev, lanes.length));
     }
-    byDay.set(dateKey, dayMap);
+
+    byDayRaw.set(dateKey, dayMap);
   }
 
-  // Step 3: build stable user slot order (sorted by userId for consistency).
+  // Build stable user slot order (sorted by userId for consistency across re-renders).
   const users: WeekUserSlot[] = Array.from(userInitials.keys())
     .sort((a, b) => a - b)
     .map((userId) => ({
@@ -263,9 +285,9 @@ function computeWeekVoorkeurLayout(
       numLanes: userMaxLanes.get(userId) ?? 1,
     }));
 
-  // Step 4: transform byDay to indexed arrays matching users order.
+  // Convert to indexed arrays matching the users order.
   const byDayIndexed = new Map<string, VoorkeurLaneEntry[][][]>();
-  for (const [dateKey, dayMap] of byDay) {
+  for (const [dateKey, dayMap] of byDayRaw) {
     byDayIndexed.set(
       dateKey,
       users.map((u) => dayMap.get(u.userId) ?? []),

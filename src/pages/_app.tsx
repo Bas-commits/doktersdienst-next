@@ -13,6 +13,8 @@ const AUTHENTICATED_PATHS = [
   "/mijn-gegevens",
   "/lijst-deelnemers",
   "/rollen-afmelden",
+  "/waarneemgroep-gegevens",
+  "/regio-toevoegen",
 ];
 
 function useIsAuthenticatedRoute(): boolean {

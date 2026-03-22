@@ -1026,16 +1026,16 @@ export const vakantieregios = pgTable("vakantieregios", {
 // 	verwijderd: boolean(),
 // });
 
-// export const instellingen = pgTable("instellingen", {
-// 	id: integer(),
-// 	idinstellingtype: integer(),
-// 	naam: varchar({ length: 50 }),
-// 	naamlang: varchar({ length: 255 }),
-// 	url: varchar({ length: 40 }),
-// 	telnr: varchar({ length: 20 }),
-// 	idhoofdlocatie: integer(),
-// 	rowguid: uuid(),
-// });
+export const instellingen = pgTable("instellingen", {
+	id: integer(),
+	idinstellingtype: integer(),
+	naam: varchar({ length: 50 }),
+	naamlang: varchar({ length: 255 }),
+	url: varchar({ length: 40 }),
+	telnr: varchar({ length: 20 }),
+	idhoofdlocatie: integer(),
+	rowguid: uuid(),
+});
 
 // export const artsen = pgTable("artsen", {
 // 	id: integer(),
@@ -1067,11 +1067,11 @@ export const vakantieregios = pgTable("vakantieregios", {
 // 	naam: varchar({ length: 255 }),
 // });
 
-// export const regios = pgTable("regios", {
-// 	id: integer(),
-// 	naam: varchar({ length: 40 }),
-// 	rowguid: uuid(),
-// });
+export const regios = pgTable("regios", {
+	id: integer(),
+	naam: varchar({ length: 40 }),
+	rowguid: uuid(),
+});
 
 // export const deviceTokens = pgTable("deviceTokens", {
 // 	userId: integer("user_id"),

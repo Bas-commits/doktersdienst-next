@@ -422,6 +422,10 @@ export function ShiftBlock({
                   border: '1px solid rgba(0,0,0,0.15)',
                 }
               : {}),
+            // Re-apply continuation overrides: the `border` shorthand above resets borderLeft/RightStyle,
+            // so we must restore 'none' afterwards for multi-day blocks to connect seamlessly.
+            ...(continuesFromPrev ? { borderLeftStyle: 'none' as const } : {}),
+            ...(continuesToNext ? { borderRightStyle: 'none' as const } : {}),
             ...(middleHasClick ? { cursor: 'pointer' as const } : {}),
             ...(dimMiddle ? { opacity: 0.35 } : {}),
             ...(isActive ? {

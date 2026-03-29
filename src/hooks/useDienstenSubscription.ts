@@ -28,13 +28,17 @@ function toDienstenResponse(diensten: Array<{
     color: string | null;
   } | null;
 }>): DienstenResponse {
-  const list: Dienst[] = diensten.map((d) => ({
+  const list: Dienst[] = diensten.map((d: Record<string, unknown> & (typeof diensten)[number]) => ({
     id: d.id ?? 0,
     iddeelnemer: d.iddeelnemer ?? 0,
     van: d.van,
     tot: d.tot,
     type: d.type ?? 0,
     idwaarneemgroep: d.idwaarneemgroep ?? undefined,
+    status: (d as { status?: string | null }).status ?? undefined,
+    iddienstovern: (d as { iddienstovern?: number }).iddienstovern ?? undefined,
+    iddeelnovern: (d as { iddeelnovern?: number }).iddeelnovern ?? undefined,
+    senderId: (d as { senderId?: number }).senderId ?? undefined,
     diensten_deelnemers: d.diensten_deelnemers
       ? {
           id: d.diensten_deelnemers.id ?? 0,

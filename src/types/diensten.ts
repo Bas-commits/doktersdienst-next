@@ -14,6 +14,14 @@ export interface Dienst {
   type: number;
   /** Optional: waarneemgroep id for grouping rows in the calendar. */
   idwaarneemgroep?: number;
+  /** Overname lifecycle status: 'pending', 'declined', 'accepted', or null/undefined for non-overname records. */
+  status?: string | null;
+  /** ID of the original dienst being taken over (overname records only). */
+  iddienstovern?: number;
+  /** ID of the target doctor for the overname (overname records only). */
+  iddeelnovern?: number;
+  /** ID of the doctor who created the overname proposal. */
+  senderId?: number;
   diensten_deelnemers: DienstDeelnemer | null;
 }
 
@@ -61,5 +69,7 @@ export interface ShiftBlockView {
   idwaarneemgroep?: number;
   /** Optional: preference type code when block has a saved preference (e.g. "2", "3", "9", "10", "5001"). Used on voorkeuren to show icon + color instead of initials. */
   assignedPreferenceCode?: string;
+  /** Optional: overname visual state. Set when this block represents an overname record. */
+  overnameType?: 'overname' | 'voorstelOvername' | 'vraagtekenOvername';
 }
 

@@ -110,6 +110,10 @@ export default async function handler(
         tot: dienstenTable.tot,
         type: dienstenTable.type,
         idwaarneemgroep: dienstenTable.idwaarneemgroep,
+        status: dienstenTable.status,
+        iddienstovern: dienstenTable.iddienstovern,
+        iddeelnovern: dienstenTable.iddeelnovern,
+        senderId: dienstenTable.senderId,
         deelnemerId: deelnemers.id,
         voornaam: deelnemers.voornaam,
         achternaam: deelnemers.achternaam,
@@ -126,6 +130,10 @@ export default async function handler(
       tot: Number(r.tot ?? 0),
       type: r.type,
       idwaarneemgroep: r.idwaarneemgroep,
+      status: r.status,
+      iddienstovern: r.iddienstovern,
+      iddeelnovern: r.iddeelnovern,
+      senderId: r.senderId,
       diensten_deelnemers:
         r.deelnemerId != null
           ? {

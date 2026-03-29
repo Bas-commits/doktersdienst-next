@@ -70,6 +70,15 @@ export function dienstenToShiftBlocksFromParticipant(
   return blocks;
 }
 
+/** Returns the overnameType for a dienst based on its type and status, or undefined for non-overname records. */
+function getOvernameType(dienst: Dienst): ShiftBlockView['overnameType'] {
+  if (!dienst.status) return undefined;
+  if (dienst.type === 4 && dienst.status === 'pending') return 'voorstelOvername';
+  if (dienst.type === 4 && dienst.status === 'declined') return 'vraagtekenOvername';
+  if (dienst.type === 6 && dienst.status === 'accepted') return 'overname';
+  return undefined;
+}
+
 /** Pure transformer: converts diensten API response into flat ShiftBlockView list. */
 export function dienstenToShiftBlocks(response: DienstenResponse | null | undefined): ShiftBlockView[] {
   if (!response?.data?.diensten?.length) return [];
@@ -77,9 +86,14 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
   // 0/4/6=Standaard (legacy PHP uses 4 and 6 alongside 0), 1=slot, 5=Achterwacht, 9=Extra Dokter, 11=deprecated (old Next) still merged into bottom
   const relevantTypes = new Set<number>([0, 1, 4, 5, 6, 9, 11]);
   const byKey = new Map<string, { base: Dienst | null; items: Dienst[] }>();
+  const overnameRecords: Dienst[] = [];
 
   for (const dienst of response.data.diensten) {
     if (!relevantTypes.has(dienst.type)) continue;
+    if (getOvernameType(dienst)) {
+      overnameRecords.push(dienst);
+      continue;
+    }
     const start = new Date(dienst.van * 1000);
     const day = start.getDate();
     const month0 = start.getMonth(); // 0-based
@@ -209,6 +223,42 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
       top,
       bottom,
       idwaarneemgroep: base.idwaarneemgroep,
+    });
+  }
+
+  // Create overlay blocks for overname records (type=4/6 with status set).
+  for (const dienst of overnameRecords) {
+    const start = new Date(dienst.van * 1000);
+    const end = new Date(dienst.tot * 1000);
+    const day = start.getDate();
+    const month0 = start.getMonth();
+    const year = start.getFullYear();
+    const startTime = `${formatTwoDigits(start.getHours())}:${formatTwoDigits(start.getMinutes())}`;
+    const endTime = `${formatTwoDigits(end.getHours())}:${formatTwoDigits(end.getMinutes())}`;
+    const currentDate = `${start.getFullYear()}-${formatTwoDigits(
+      start.getMonth() + 1
+    )}-${formatTwoDigits(start.getDate())} ${startTime}:00`;
+    const nextDate = `${end.getFullYear()}-${formatTwoDigits(
+      end.getMonth() + 1
+    )}-${formatTwoDigits(end.getDate())} ${endTime}:00`;
+    const middle = toDoctorInfo(dienst);
+
+    blocks.push({
+      id: dienst.id,
+      day,
+      month: month0,
+      year,
+      van: dienst.van,
+      tot: dienst.tot,
+      startTime,
+      endTime,
+      currentDate,
+      nextDate,
+      middle,
+      top: null,
+      bottom: null,
+      idwaarneemgroep: dienst.idwaarneemgroep,
+      overnameType: getOvernameType(dienst),
     });
   }
 

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { TbSwitch3 } from 'react-icons/tb';
 import { authClient } from '@/lib/auth-client';
 import {
   WaarneemgroepContext,
@@ -56,11 +57,58 @@ export function DoktersdienstHeader({
   const selectedGroupId = ctx ? ctx.activeWaarneemgroepId : internalGroupId;
   const setSelectedGroupId = ctx ? ctx.setActiveWaarneemgroepId : setInternalGroupId;
 
+  // Overname verzoeken state
+  interface OvernameVerzoek {
+    id: number;
+    datum: string;
+    van: string;
+    tot: string;
+    week: number;
+    vanArts: { initialen: string; naam: string; akkoord: boolean };
+    naarArts: { initialen: string; naam: string; akkoord: boolean };
+  }
+  const [verzoeken, setVerzoeken] = useState<OvernameVerzoek[]>([]);
+  const [verzoekPopoverOpen, setVerzoekPopoverOpen] = useState(false);
+  const [verzoekIndex, setVerzoekIndex] = useState(0);
+  const verzoekRef = useRef<HTMLLIElement>(null);
+
+  const fetchVerzoeken = useCallback(() => {
+    fetch('/api/overnames/pending', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data.verzoeken)) setVerzoeken(data.verzoeken);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchVerzoeken();
+  }, [fetchVerzoeken]);
+
+  const handleVerzoekRespond = useCallback(
+    async (action: 'accept' | 'decline') => {
+      const v = verzoeken[verzoekIndex];
+      if (!v) return;
+      await fetch('/api/overnames/respond', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: v.id, action }),
+      });
+      fetchVerzoeken();
+      setVerzoekIndex(0);
+    },
+    [verzoeken, verzoekIndex, fetchVerzoeken]
+  );
+
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      if (verzoekRef.current && !verzoekRef.current.contains(e.target as Node)) {
+        setVerzoekPopoverOpen(false);
+      }
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setUserMenuOpen(false);
       }
@@ -232,6 +280,117 @@ export function DoktersdienstHeader({
                 </div>
               </li>
             )}
+
+            <li className="relative" ref={verzoekRef}>
+              <button
+                type="button"
+                className="relative flex items-center py-2 px-3 bg-transparent border-0 cursor-pointer"
+                onClick={() => setVerzoekPopoverOpen((o) => !o)}
+                aria-label="Overname verzoeken"
+                data-testid="header-overname-btn"
+              >
+                <TbSwitch3 size={30} className="text-[#333]" />
+                {verzoeken.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold">
+                    {verzoeken.length}
+                  </span>
+                )}
+              </button>
+              {verzoekPopoverOpen && verzoeken.length > 0 && (() => {
+                const v = verzoeken[verzoekIndex];
+                if (!v) return null;
+                return (
+                  <div
+                    className="absolute top-full right-0 z-1000 w-[320px] bg-white border border-gray-300 rounded-lg shadow-lg p-4 mt-1"
+                    data-testid="overname-popover"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <button
+                        type="button"
+                        className="p-1 bg-transparent border-0 cursor-pointer disabled:opacity-30"
+                        onClick={() => setVerzoekIndex((i) => Math.max(0, i - 1))}
+                        disabled={verzoekIndex === 0}
+                        aria-label="Vorige"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span className="text-sm text-gray-500 font-medium">
+                        {verzoekIndex + 1}/{verzoeken.length} verzoeken
+                      </span>
+                      <button
+                        type="button"
+                        className="p-1 bg-transparent border-0 cursor-pointer disabled:opacity-30"
+                        onClick={() => setVerzoekIndex((i) => Math.min(verzoeken.length - 1, i + 1))}
+                        disabled={verzoekIndex === verzoeken.length - 1}
+                        aria-label="Volgende"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="text-sm mb-3">
+                      <p className="font-semibold mb-1">{v.datum}</p>
+                      <p className="text-gray-600">{v.van} – {v.tot} (week {v.week})</p>
+                    </div>
+
+                    <div className="flex items-center justify-between mb-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded bg-[#7b2d8e] text-white text-xs font-bold">
+                          {v.vanArts.initialen}
+                        </span>
+                        <div>
+                          <p className="font-medium leading-tight">{v.vanArts.naam}</p>
+                          <p className="text-xs text-gray-500">van</p>
+                        </div>
+                        {v.vanArts.akkoord ? (
+                          <Check className="w-4 h-4 text-green-600" />
+                        ) : (
+                          <span className="text-orange-500 font-bold text-sm">?</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between mb-4 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded bg-[#7b2d8e] text-white text-xs font-bold">
+                          {v.naarArts.initialen}
+                        </span>
+                        <div>
+                          <p className="font-medium leading-tight">{v.naarArts.naam}</p>
+                          <p className="text-xs text-gray-500">naar</p>
+                        </div>
+                        {v.naarArts.akkoord ? (
+                          <Check className="w-4 h-4 text-green-600" />
+                        ) : (
+                          <span className="text-orange-500 font-bold text-sm">?</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-center gap-4">
+                      <button
+                        type="button"
+                        className="flex items-center justify-center h-10 w-10 rounded-full border border-gray-300 bg-white hover:bg-gray-50"
+                        onClick={() => handleVerzoekRespond('accept')}
+                        aria-label="Verzoek accepteren"
+                        data-testid="overname-accept"
+                      >
+                        <Check className="w-6 h-6 text-[#333]" />
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center justify-center h-10 w-10 rounded-full border border-gray-300 bg-white hover:bg-gray-50"
+                        onClick={() => handleVerzoekRespond('decline')}
+                        aria-label="Verzoek afwijzen"
+                        data-testid="overname-decline"
+                      >
+                        <X className="w-6 h-6 text-[#333]" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </li>
 
             <li className="relative" ref={userMenuRef}>
               <button

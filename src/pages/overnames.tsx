@@ -1,7 +1,7 @@
 'use client';
 
 import Head from 'next/head';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -9,6 +9,9 @@ import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGrid
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
+import { OvernameModal } from '@/components/OvernameModal';
+import type { OvernameDoctor } from '@/components/OvernameModal';
+import type { ShiftBlockView } from '@/types/diensten';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -22,8 +25,8 @@ function totLteForMonth(viewMonth: number, viewYear: number): number {
   return Math.floor(new Date(viewYear, viewMonth + 1, 0, 23, 59, 59, 999).getTime() / 1000) + TWO_WEEKS_SECONDS;
 }
 
-/** Type 1 = unassigned slot (no one assigned yet). */
-const TYPE_UNASSIGNED_SLOT = 1;
+/** Type 0 = standard assigned, 1 = unassigned slot, 4 = overname voorstel, 6 = confirmed overname. */
+const OVERNAME_TYPES = [0, 1, 4, 6];
 
 export default function OvernamesPage() {
   const { data: session } = authClient.useSession();
@@ -33,7 +36,7 @@ export default function OvernamesPage() {
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
 
-  const { waarneemgroepen, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
+  const { waarneemgroepen, activeWaarneemgroepId, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
   const waarneemgroepIds = useMemo(() => {
     if (!waarneemgroepen?.length) return [];
     return waarneemgroepen.map((wg) => wg.ID).filter((id): id is number => id != null && !Number.isNaN(id));
@@ -46,11 +49,14 @@ export default function OvernamesPage() {
 
   const vanGte = useMemo(() => vanGteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
   const totLte = useMemo(() => totLteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
+  const [refreshKey, setRefreshKey] = useState(0);
   const { data: dienstenResponse, loading: dienstenLoading, error: dienstenError } = useDienstenSubscription(
     vanGte,
     totLte,
     waarneemgroepIds,
-    [TYPE_UNASSIGNED_SLOT]
+    OVERNAME_TYPES,
+    undefined,
+    refreshKey
   );
 
   const rows = useMemo(() => {
@@ -60,6 +66,83 @@ export default function OvernamesPage() {
 
   const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
   const error = waarneemgroepenError ?? dienstenError;
+
+  // Modal state
+  const [selectedShift, setSelectedShift] = useState<ShiftBlockView | null>(null);
+  const [doctors, setDoctors] = useState<OvernameDoctor[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Fetch doctors for the dropdown when the modal opens
+  useEffect(() => {
+    if (!selectedShift || !activeWaarneemgroepId) return;
+    fetch(`/api/deelnemers?idwaarneemgroep=${activeWaarneemgroepId}`, { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.deelnemers) {
+          setDoctors(
+            data.deelnemers.map((d: { id: number; voornaam: string | null; achternaam: string | null }) => ({
+              id: d.id,
+              voornaam: d.voornaam ?? '',
+              achternaam: d.achternaam ?? '',
+              initialen: (d.voornaam?.[0] ?? '').toUpperCase() + (d.achternaam?.[0] ?? '').toUpperCase(),
+            }))
+          );
+        }
+      })
+      .catch(() => setDoctors([]));
+  }, [selectedShift, activeWaarneemgroepId]);
+
+  const handleShiftClick = useCallback((block: ShiftBlockView) => {
+    // Only open modal for assigned shifts (has a middle doctor), not for overlays or unassigned slots
+    if (!block.middle || block.overnameType) return;
+    setSelectedShift(block);
+    setSubmitError(null);
+  }, []);
+
+  const handleModalClose = useCallback(() => {
+    setSelectedShift(null);
+    setSubmitError(null);
+  }, []);
+
+  const handleModalSubmit = useCallback(
+    async (data: { iddeelnovern: number; van: number; tot: number; isPartial: boolean }) => {
+      if (!selectedShift || !activeWaarneemgroepId) return;
+
+      setSubmitting(true);
+      setSubmitError(null);
+
+      try {
+        const res = await fetch('/api/overnames/propose', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            iddienstovern: selectedShift.id,
+            iddeelnovern: data.iddeelnovern,
+            van: data.van,
+            tot: data.tot,
+            idwaarneemgroep: Number(activeWaarneemgroepId),
+          }),
+        });
+
+        const result = await res.json();
+
+        if (!res.ok) {
+          setSubmitError(result.error || 'Er is een fout opgetreden');
+          return;
+        }
+
+        setSelectedShift(null);
+        setRefreshKey((k) => k + 1);
+      } catch {
+        setSubmitError('Er is een fout opgetreden');
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [selectedShift, activeWaarneemgroepId]
+  );
 
   return (
     <>
@@ -107,10 +190,22 @@ export default function OvernamesPage() {
               hideTopStrip
               hideBottomStrip
               showPreferences={false}
+              onShiftClick={handleShiftClick}
             />
           </CardContent>
         </Card>
       </div>
+
+      {selectedShift && (
+        <OvernameModal
+          shift={selectedShift}
+          doctors={doctors}
+          onSubmit={handleModalSubmit}
+          onClose={handleModalClose}
+          submitting={submitting}
+          error={submitError}
+        />
+      )}
     </>
   );
 }

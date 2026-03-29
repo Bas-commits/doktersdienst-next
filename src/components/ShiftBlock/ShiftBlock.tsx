@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Briefcase, Check, GraduationCap, Trash2, TreePalm, X } from 'lucide-react';
+import { TbQuestionMark, TbSwitch3 } from 'react-icons/tb';
 import type { ShiftBlockView } from '@/types/diensten';
 
 /** Returns whether the given date lies within the shift's start and end (inclusive). Exported for testing. */
@@ -120,6 +121,13 @@ export interface ShiftBlockProps {
    * Use for voorkeur blocks where the time range is a preference period, not a live shift.
    */
   disableActiveHighlight?: boolean;
+  /**
+   * When set, shows an overname (shift takeover) indicator on the block.
+   * - 'overname': confirmed takeover — small TbSwitch3 badge top-right
+   * - 'voorstelOvername': pending confirmation — TbSwitch3 + orange TbQuestionMark badge
+   * - 'vraagtekenOvername': declined, no replacement — large red question mark overlay
+   */
+  overnameType?: 'overname' | 'voorstelOvername' | 'vraagtekenOvername';
 }
 
 export function ShiftBlock({
@@ -147,6 +155,7 @@ export function ShiftBlock({
   preferenceChip,
   middleHeight,
   disableActiveHighlight,
+  overnameType,
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
   const [isHovered, setIsHovered] = useState(false);
@@ -483,6 +492,37 @@ export function ShiftBlock({
               ) : (
                 <Trash2 className="h-3 w-3 text-white" aria-hidden />
               )}
+            </span>
+          )}
+          {overnameType === 'overname' && (
+            <span
+              className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40 pointer-events-none"
+              title="Overname"
+              aria-hidden
+              data-testid="overname-badge"
+            >
+              <TbSwitch3 className="h-3.5 w-3.5 text-white" />
+            </span>
+          )}
+          {overnameType === 'voorstelOvername' && (
+            <span
+              className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40 pointer-events-none"
+              title="Voorstel overname"
+              aria-hidden
+              data-testid="voorstel-overname-badge"
+            >
+              <TbSwitch3 className="h-3.5 w-3.5 text-white" />
+              <TbQuestionMark className="absolute h-3 w-3 text-orange-400" />
+            </span>
+          )}
+          {overnameType === 'vraagtekenOvername' && (
+            <span
+              className="absolute inset-0 flex items-center justify-center pointer-events-none"
+              title="Overname geweigerd — geen arts toegewezen"
+              aria-hidden
+              data-testid="vraagteken-overname-badge"
+            >
+              <TbQuestionMark className="h-7 w-7 text-red-600 drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]" />
             </span>
           )}
         </div>

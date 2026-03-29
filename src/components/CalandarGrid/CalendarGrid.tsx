@@ -562,6 +562,7 @@ export function CalendarGrid({
                                         : undefined
                                     }
                                     preferenceChip={preferenceChip ?? null}
+                                    overnameType={block.overnameType}
                                   />
                                 );
                               })}

@@ -43,9 +43,13 @@ reads or writes diensten MUST respect the type system exactly:
   - **9** = Vakantie (vacation)
   - **10** = Nascholing (professional education)
   - **5001** = FTE adjustment
-- **Type 4 (overname context)** — Overname (shift takeover).
-  This feature is NOT yet built. Any new code MUST NOT assume
-  overname functionality exists.
+- **Type 4 (overname context)** — Overname Voorstel (shift takeover
+  proposal). Discriminated from legacy type=4 by `status IS NOT NULL`.
+  Uses `iddienstovern` to reference original dienst and `iddeelnovern`
+  for the target doctor. Status: `pending` or `declined`.
+- **Type 6 (overname context)** — Confirmed Overname. Discriminated
+  from legacy type=6 by `status = 'accepted'`. Same column usage
+  as type=4 overname.
 
 Context determines whether type 9 is "Extra Dokter" (assignment)
 or "Vakantie" (preference). Assignment rows have a nonzero
@@ -121,8 +125,8 @@ this table:
 |------|------|----------|-------------|-------|
 | 1 | Base Slot | Slot | N/A | Defines time boundaries |
 | 0 | Standaard | Assignment | Middle | Regular doctor |
-| 4 | Standaard (legacy) | Assignment | Middle | Legacy PHP |
-| 6 | Standaard (legacy) | Assignment | Middle | Legacy PHP |
+| 4 | Standaard (legacy) / Overname Voorstel | Assignment / Overname | Middle / Overlay | Legacy PHP (status=NULL) or overname voorstel (status=pending/declined) |
+| 6 | Standaard (legacy) / Overname Bevestigd | Assignment / Overname | Middle / Overlay | Legacy PHP (status=NULL) or confirmed overname (status=accepted) |
 | 5 | Achterwacht | Assignment | Top | On-call doctor |
 | 9 | Extra Dokter | Assignment | Bottom | Additional doctor |
 | 11 | Deprecated | Assignment | Bottom | Old Next.js version |
@@ -131,7 +135,7 @@ this table:
 | 9 | Vakantie | Preference | Chip | Vacation |
 | 10 | Nascholing | Preference | Chip | Education/training |
 | 5001 | FTE | Preference | Chip | FTE adjustment |
-| 4 | Overname | Overname | TBD | NOT YET BUILT |
+| 4 | Overname Voorstel | Overname | Overlay | status=pending or declined; uses iddienstovern + iddeelnovern |
 | 8 | Taak | Task | N/A | Legacy task type |
 
 **Note on type 9 and type 4 dual meaning**: Context (assignment vs

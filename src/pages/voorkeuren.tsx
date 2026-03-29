@@ -98,7 +98,7 @@ export default function VoorkeurenPage() {
     }
     const blocks = emptyBlocks.map((block) => {
       const key = `${block.van}-${block.tot}-${block.idwaarneemgroep ?? ''}`;
-      if (pendingDelete.has(key)) return block;
+      if (pendingDelete.has(shiftKeyFromBlock(block))) return block;
       const assigned = userBySlot.get(key);
       const type = typeBySlot.get(key);
       if (assigned && type != null) {

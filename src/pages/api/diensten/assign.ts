@@ -19,7 +19,7 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
 const SECTION_TYPE: Record<string, number> = {
   middle: 0,
   top: 5,
-  bottom: 11, // Extra Dokter
+  bottom: 9, // Extra Dokter (legacy PHP type)
 };
 
 /** Legacy DB: Standaard rows may be type 0, 4, or 6 (see PHP diensten.verwijderen / shift.persoon2). */
@@ -41,7 +41,7 @@ const MIDDLE_ASSIGNMENT_TYPES = [0, 4, 6] as const;
  *   - type=1 record: always present, defines the unassigned slot (never modified here)
  *   - type=0, 4, or 6: regular (Standaard) assignment  → section=middle (legacy uses 4 and 6 too)
  *   - type=5: Achterwacht assignment           → section=top
- *   - type=11 (or legacy 9): Extra Dokter     → section=bottom
+ *   - type=9: Extra Dokter                     → section=bottom
  *
  * Behaviour:
  *   - If an assignment record of the target type already exists → update iddeelnemer

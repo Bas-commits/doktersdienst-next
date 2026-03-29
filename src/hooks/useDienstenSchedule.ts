@@ -74,7 +74,7 @@ export function dienstenToShiftBlocksFromParticipant(
 export function dienstenToShiftBlocks(response: DienstenResponse | null | undefined): ShiftBlockView[] {
   if (!response?.data?.diensten?.length) return [];
 
-  // 0/4/6=Standaard (legacy PHP uses 4 and 6 alongside 0), 1=slot, 5=Achterwacht, 9=legacy Extra, 11=Extra
+  // 0/4/6=Standaard (legacy PHP uses 4 and 6 alongside 0), 1=slot, 5=Achterwacht, 9=Extra Dokter, 11=deprecated (old Next) still merged into bottom
   const relevantTypes = new Set<number>([0, 1, 4, 5, 6, 9, 11]);
   const byKey = new Map<string, { base: Dienst | null; items: Dienst[] }>();
 
@@ -143,7 +143,7 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
         }
         case 9:
         case 11: {
-          // 9 = legacy Extra Dokter, 11 = Extra Dokter (current)
+          // 9 = Extra Dokter (legacy PHP); 11 kept only so older rows from this app still render
           if (!bottom) bottom = toDoctorInfo(dienst);
           break;
         }

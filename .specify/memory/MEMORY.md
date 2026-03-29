@@ -1,0 +1,1 @@
+- [Constitution](constitution.md) — Project principles, diensten type system reference, and governance rules

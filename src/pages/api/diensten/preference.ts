@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, inArray } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { logger } from '@/lib/logger';
 
 const { diensten: dienstenTable } = schema;
 
@@ -104,7 +105,10 @@ export default async function handler(
     if (message.includes('unique') || message.includes('duplicate') || message.includes('diensten_one_preference_per_slot_user')) {
       return res.status(200).json({ success: true });
     }
-    console.error('[api/diensten/preference]', err);
+    logger.error(
+      { err, action: body?.action, van, tot, idwaarneemgroep, idDeelnemer },
+      'Failed to save preference'
+    );
     return res.status(500).json({
       error: err instanceof Error ? err.message : 'Internal server error',
     });

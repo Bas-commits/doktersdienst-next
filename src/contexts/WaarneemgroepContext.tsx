@@ -92,6 +92,15 @@ export function WaarneemgroepProvider({ children }: WaarneemgroepProviderProps) 
     };
   }, []);
 
+  // Auto-select first waarneemgroep when none is stored (fresh session)
+  useEffect(() => {
+    if (!activeWaarneemgroepId && waarneemgroepen.length > 0) {
+      const firstId = String(waarneemgroepen[0].ID);
+      localStorage.setItem(STORAGE_GROUP_ID_KEY, firstId);
+      setActiveWaarneemgroepIdState(firstId);
+    }
+  }, [activeWaarneemgroepId, waarneemgroepen]);
+
   const setActiveWaarneemgroepId = useCallback((id: string | null) => {
     if (id) {
       localStorage.setItem(STORAGE_GROUP_ID_KEY, id);

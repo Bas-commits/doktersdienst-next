@@ -25,10 +25,14 @@ function totLteForMonth(viewMonth: number, viewYear: number): number {
 }
 
 /** Selected waarneemgroep ids to show in the calendar. null = use header default (only active). */
-function defaultSelectedIds(activeId: string | null): Set<number> {
-  if (!activeId) return new Set();
-  const n = Number(activeId);
-  return Number.isNaN(n) ? new Set() : new Set([n]);
+function defaultSelectedIds(activeId: string | null, waarneemgroepIds: number[]): Set<number> {
+  if (activeId) {
+    const n = Number(activeId);
+    if (!Number.isNaN(n)) return new Set([n]);
+  }
+  // Fall back to first waarneemgroep when no active selection exists (e.g. fresh session)
+  if (waarneemgroepIds.length > 0) return new Set([waarneemgroepIds[0]]);
+  return new Set();
 }
 
 export default function RoosterInzienPage() {
@@ -66,8 +70,8 @@ export default function RoosterInzienPage() {
   }, [dienstenResponse]);
 
   const idsToShow = useMemo(
-    () => (selectedIds !== null ? selectedIds : defaultSelectedIds(activeWaarneemgroepId)),
-    [selectedIds, activeWaarneemgroepId]
+    () => (selectedIds !== null ? selectedIds : defaultSelectedIds(activeWaarneemgroepId, waarneemgroepIds)),
+    [selectedIds, activeWaarneemgroepId, waarneemgroepIds]
   );
 
   const rows = useMemo(
@@ -81,14 +85,14 @@ export default function RoosterInzienPage() {
   const toggleWaarneemgroep = useCallback(
     (wgId: number, checked: boolean) => {
       setSelectedIds((prev) => {
-        const base = prev ?? defaultSelectedIds(activeWaarneemgroepId);
+        const base = prev ?? defaultSelectedIds(activeWaarneemgroepId, waarneemgroepIds);
         const next = new Set(base);
         if (checked) next.add(wgId);
         else next.delete(wgId);
         return next;
       });
     },
-    [activeWaarneemgroepId]
+    [activeWaarneemgroepId, waarneemgroepIds]
   );
 
   const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);

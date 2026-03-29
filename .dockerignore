@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.gitignore
+.env*
+infra
+test-results
+playwright-report
+coverage
+e2e
+.storybook
+.playwright-mcp
+specs
+**/__tests__
+**/*.test.*
+**/*.spec.*
+*.md

@@ -7,8 +7,6 @@ import {
   Settings,
   ArrowLeftRight,
   PlusSquare,
-  Users,
-  Sun,
 } from 'lucide-react';
 
 const SIDEBAR_NAV_ITEMS: {
@@ -22,8 +20,6 @@ const SIDEBAR_NAV_ITEMS: {
   { id: 'rooster-maken-secretaris', label: 'Rooster maken secretaris', href: '/rooster-maken-secretaris', icon: <Calendar className="size-4 shrink-0" /> },
   { id: 'overnames', label: 'Overnames', href: '/overnames', icon: <ArrowLeftRight className="size-4 shrink-0" /> },
   { id: 'diensten-toevoegen', label: 'Diensten toevoegen', href: '/diensten-toevoegen', icon: <PlusSquare className="size-4 shrink-0" /> },
-  { id: 'waarneemgroep-toevoegen', label: 'Waarneemgroep toevoegen', href: '/waarneemgroep-toevoegen', icon: <Users className="size-4 shrink-0" /> },
-  { id: 'vakanties', label: 'Vakanties', href: '/vakanties', icon: <Sun className="size-4 shrink-0" /> },
 ];
 
 const ACTIVE_BG = '#c91b23';

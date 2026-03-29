@@ -58,10 +58,15 @@ export default function RoosterInzienPage() {
 
   const vanGte = useMemo(() => vanGteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
   const totLte = useMemo(() => totLteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
+  // Only fetch assignment types — exclude preference types (2, 3, 10, 5001) and avoid
+  // type=9 dual-meaning (Vakantie preference vs Extra Dokter assignment) leaking into shift blocks.
+  const ASSIGNMENT_TYPES = useMemo(() => [0, 1, 4, 5, 6, 9, 11], []);
+
   const { data: dienstenResponse, loading: dienstenLoading, error: dienstenError } = useDienstenSubscription(
     vanGte,
     totLte,
-    waarneemgroepIds
+    waarneemgroepIds,
+    ASSIGNMENT_TYPES
   );
 
   const allRows = useMemo(() => {

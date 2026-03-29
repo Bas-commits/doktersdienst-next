@@ -105,7 +105,7 @@ export default async function handler(
         })
         .from(waarneemgroepdeelnemers)
         .leftJoin(waarneemgroepen, eq(waarneemgroepdeelnemers.idwaarneemgroep, waarneemgroepen.id))
-        .where(eq(waarneemgroepdeelnemers.iddeelnemer, currentUser.id))
+        .where(eq(waarneemgroepdeelnemers.iddeelnemer, currentUser.id!))
         .orderBy(waarneemgroepen.naam);
       templateGroups = myMemberships
         .filter((m) => m.id !== null)

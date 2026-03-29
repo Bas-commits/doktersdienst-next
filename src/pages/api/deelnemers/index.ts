@@ -63,7 +63,7 @@ export default async function handler(
       .where(eq(deelnemers.email, email))
       .limit(1);
 
-    if (!currentDeelnemer) {
+    if (!currentDeelnemer || currentDeelnemer.id === null) {
       return res.status(403).json({ error: 'Deelnemer not found' });
     }
 

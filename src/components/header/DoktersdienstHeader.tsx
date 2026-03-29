@@ -182,20 +182,16 @@ export function DoktersdienstHeader({
                         waarneemgroepen
                       </a>
                     </li>
-                    <li>
-                      <a href={routes.waarneemgroep_wissel} data-inertia-link className="text-black text-base my-2 block">
-                        Andere waarneemgroep
-                      </a>
-                    </li>
+                    
                     <li>
                       <a href={routes.regio_toevoegen} data-inertia-link className="text-black text-base my-2 block">
                         Regio toevoegen
                       </a>
                     </li>
                     <li>
-                      <a href={routes.waarneemgroep_toevoegen} data-inertia-link className="text-black text-base my-2 block">
+                      <Link href="/waarneemgroep-toevoegen" className="text-black text-base my-2 block">
                         Waarneemgroep toevoegen
-                      </a>
+                      </Link>
                     </li>
                     <li>
                       <a href={routes.waarneemgroep_wijzigen} data-inertia-link className="text-black text-base my-2 block">
@@ -203,9 +199,9 @@ export function DoktersdienstHeader({
                       </a>
                     </li>
                     <li>
-                      <a href={routes.vakantie} data-inertia-link className="text-black text-base my-2 block">
-                        Vakantie
-                      </a>
+                      <Link href="/vakanties" className="text-black text-base my-2 block">
+                        Vakanties
+                      </Link>
                     </li>
                     <li>
                       <span className="text-black text-base my-2 block">deelnemers</span>
@@ -231,55 +227,6 @@ export function DoktersdienstHeader({
                           </a>
                         </li>
                       </ul>
-                    </li>
-                    <li>
-                      <span className="text-black text-base my-2 block">shifts</span>
-                      <ul className="list-none pl-0">
-                        <li>
-                          <a href={routes.shift_toevoegen_jsx ?? routes.shift_toevoegen} className="text-[13px] my-1 block">
-                            Shift toevoegen
-                          </a>
-                        </li>
-                        <li>
-                          <a href={routes.shift_verwijderen} className="text-[13px] my-1 block">
-                            Shift verwijderen
-                          </a>
-                        </li>
-                      </ul>
-                    </li>
-                    <li>
-                      <a href={routes.activiteit_soorten_jsx ?? routes.Activiteit_Soorten} className="text-black text-base my-2 block">
-                        activiteiten beheren
-                      </a>
-                    </li>
-                    <li>
-                      <a href={routes.taak_soorten_beheren_jsx ?? routes.taak_soorten_beheren} className="text-black text-base my-2 block">
-                        taken beheren
-                      </a>
-                    </li>
-                    <li>
-                      <a href={routes.locaties_jsx ?? routes.location} className="text-black text-base my-2 block">
-                        locaties beheren
-                      </a>
-                    </li>
-                    <li>
-                      <a href={routes.Expertise_competences} className="text-black text-base my-2 block">
-                        Deskundige beheren
-                      </a>
-                    </li>
-                    <li>
-                      <a href={routes.absentie_soorten} className="text-black text-base my-2 block">
-                        afwezige beheren
-                      </a>
-                    </li>
-                    <li>
-                      <a
-                        href={routes.gebruikers_jsx ?? routes.Gebruikers}
-                        className={`text-base my-2 block ${routeName === 'gebruikers_jsx' ? 'text-white bg-[#c91b23]' : 'text-black'}`}
-                        data-inertia-link
-                      >
-                        Gebruikers beheren
-                      </a>
                     </li>
                   </ul>
                 </div>

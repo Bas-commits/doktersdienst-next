@@ -1,0 +1,13 @@
+{
+    "name": "doktersdienst-infra",
+    "main": "index.ts",
+    "devDependencies": {
+        "@types/node": "^18",
+        "typescript": "^5.0.0"
+    },
+    "dependencies": {
+        "@ediri/scaleway": "^2.48.1",
+        "@pulumi/pulumi": "^3.113.0",
+        "dotenv": "^17.3.1"
+    }
+}

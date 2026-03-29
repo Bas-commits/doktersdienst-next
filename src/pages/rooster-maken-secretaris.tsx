@@ -12,8 +12,6 @@ import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgro
 import { useDienstenSubscription, clearCacheByPrefix } from '@/hooks/useDienstenSubscription';
 import { useVoorkeurenSubscription } from '@/hooks/useVoorkeurenSubscription';
 import type { ShiftBlockView } from '@/types/diensten';
-import type { ChipDefinition } from '@/types/voorkeuren';
-import { CHIP_DEFINITIONS } from '@/types/voorkeuren';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -82,11 +80,15 @@ export default function RoosterMakenSecretarisPage() {
   const vanGte = useMemo(() => vanGteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
   const totLte = useMemo(() => totLteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
 
+  // Only fetch assignment types — exclude preference types (2, 3, 9-as-vakantie, 10, 5001)
+  // to prevent preferences from leaking into the shift block stripes.
+  const ASSIGNMENT_TYPES = useMemo(() => [0, 1, 4, 5, 6, 9, 11], []);
+
   const { data: dienstenResponse, loading: dienstenLoading, error: dienstenError } = useDienstenSubscription(
     vanGte,
     totLte,
     waarneemgroepIds,
-    undefined,
+    ASSIGNMENT_TYPES,
     undefined,
     refreshKey
   );
@@ -209,17 +211,6 @@ export default function RoosterMakenSecretarisPage() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [isActive]);
 
-  // Preference preview map for the selected doctor: `${van}_${tot}` → ChipDefinition
-  const plannerDoctorPreferenceMap = useMemo<Map<string, ChipDefinition> | undefined>(() => {
-    if (!selectedDoctor || !voorkeuren?.length) return undefined;
-    const map = new Map<string, ChipDefinition>();
-    for (const vk of voorkeuren) {
-      if (vk.iddeelnemer !== selectedDoctor.id) continue;
-      const chip = CHIP_DEFINITIONS.find((c) => c.code === String(vk.type ?? ''));
-      if (chip) map.set(`${vk.van}_${vk.tot}`, chip);
-    }
-    return map.size > 0 ? map : undefined;
-  }, [selectedDoctor, voorkeuren]);
 
   /** Call assign or unassign API, refresh, show toast. */
   const callAssign = useCallback(
@@ -399,7 +390,10 @@ export default function RoosterMakenSecretarisPage() {
                     <button
                       key={doctor.id}
                       type="button"
-                      onClick={() => setSelectedDoctor(isSelected ? null : doctor)}
+                      onClick={() => {
+                        setSelectedDoctor(isSelected ? null : doctor);
+                        setDeleteMode(false);
+                      }}
                       className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
                         isSelected ? 'bg-accent' : 'hover:bg-accent'
                       }`}
@@ -483,7 +477,6 @@ export default function RoosterMakenSecretarisPage() {
                   }}
                   voorkeuren={voorkeuren ?? undefined}
                   onSectionShiftClick={handleSectionShiftClick}
-                  plannerDoctorPreferenceMap={plannerDoctorPreferenceMap}
                 />
               </div>
             </CardContent>

@@ -7,11 +7,11 @@ function formatTwoDigits(n: number): string {
 }
 
 /** True if [aVan, aTot] and [bVan, bTot] overlap (half-open-style boundary check matches PHP shift overlap). */
-function intervalsOverlap(aVan: number, aTot: number, bVan: number, bTot: number): boolean {
+export function intervalsOverlap(aVan: number, aTot: number, bVan: number, bTot: number): boolean {
   return aVan < bTot && aTot > bVan;
 }
 
-function toDoctorInfo(dienst: Dienst): DoctorInfo | null {
+export function toDoctorInfo(dienst: Dienst): DoctorInfo | null {
   const d = dienst.diensten_deelnemers;
   if (!d) return null;
   const fullName = `${d.voornaam} ${d.achternaam}`.trim();
@@ -152,9 +152,10 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
       }
     }
 
-    // Standaard assignment may be one wide row (types 0/4/6) overlapping this type=1 chunk only — not in `items`.
+    // Assignment rows may have partial or wider van/tot than the type=1 slot (legacy PHP
+    // creates split shifts). Fall back to overlap matching when exact grouping missed them.
+    const wg = base.idwaarneemgroep ?? 0;
     if (!middle) {
-      const wg = base.idwaarneemgroep ?? 0;
       for (const dienst of response.data.diensten) {
         const t = dienst.type;
         if (t !== 0 && t !== 4 && t !== 6) continue;
@@ -163,6 +164,31 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
         const d = toDoctorInfo(dienst);
         if (d) {
           middle = d;
+          break;
+        }
+      }
+    }
+    if (!top) {
+      for (const dienst of response.data.diensten) {
+        if (dienst.type !== 5) continue;
+        if ((dienst.idwaarneemgroep ?? 0) !== wg) continue;
+        if (!intervalsOverlap(dienst.van, dienst.tot, base.van, base.tot)) continue;
+        const d = toDoctorInfo(dienst);
+        if (d) {
+          top = d;
+          break;
+        }
+      }
+    }
+    if (!bottom) {
+      for (const dienst of response.data.diensten) {
+        const t = dienst.type;
+        if (t !== 9 && t !== 11) continue;
+        if ((dienst.idwaarneemgroep ?? 0) !== wg) continue;
+        if (!intervalsOverlap(dienst.van, dienst.tot, base.van, base.tot)) continue;
+        const d = toDoctorInfo(dienst);
+        if (d) {
+          bottom = d;
           break;
         }
       }

@@ -25,6 +25,9 @@ const SECTION_TYPE: Record<string, number> = {
 /** Legacy DB: Standaard rows may be type 0, 4, or 6 (see PHP diensten.verwijderen / shift.persoon2). */
 const MIDDLE_ASSIGNMENT_TYPES = [0, 4, 6] as const;
 
+/** Extra Dokter: legacy PHP uses 9; older Next rows may still be type 11 (see useDienstenSchedule). */
+const BOTTOM_ASSIGNMENT_TYPES = [9, 11] as const;
+
 /**
  * POST /api/diensten/assign
  *
@@ -41,7 +44,7 @@ const MIDDLE_ASSIGNMENT_TYPES = [0, 4, 6] as const;
  *   - type=1 record: always present, defines the unassigned slot (never modified here)
  *   - type=0, 4, or 6: regular (Standaard) assignment  → section=middle (legacy uses 4 and 6 too)
  *   - type=5: Achterwacht assignment           → section=top
- *   - type=9: Extra Dokter                     → section=bottom
+ *   - type=9 or 11: Extra Dokter               → section=bottom (11 deprecated; still cleared on assign/unassign)
  *
  * Behaviour:
  *   - If an assignment record of the target type already exists → update iddeelnemer
@@ -100,104 +103,46 @@ export default async function handler(
         )
         .limit(1);
 
+      // Build the overlap clause for this section's assignment types.
+      // Overlap matching handles legacy split assignments whose van/tot
+      // may be a sub-range of the type=1 base slot.
+      const sectionTypes =
+        section === 'middle'
+          ? [...MIDDLE_ASSIGNMENT_TYPES]
+          : section === 'bottom'
+            ? [...BOTTOM_ASSIGNMENT_TYPES]
+            : [targetType];
+      const overlapClause = and(
+        eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+        inArray(dienstenTable.type, sectionTypes),
+        lt(dienstenTable.van, tot),
+        gt(dienstenTable.tot, van),
+      );
+
       if (isUnassign) {
-        if (section === 'middle') {
-          const overlapClause = and(
-            eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
-            inArray(dienstenTable.type, [...MIDDLE_ASSIGNMENT_TYPES]),
-            lt(dienstenTable.van, tot),
-            gt(dienstenTable.tot, van),
-          );
-          const victims = await tx
-            .select({ id: dienstenTable.id })
-            .from(dienstenTable)
-            .where(overlapClause);
-          for (const v of victims) {
-            if (v.id != null) {
-              await tx.delete(dienstenTable).where(eq(dienstenTable.id, v.id));
-            }
-          }
-          return;
-        }
-        const [ex] = await tx
-          .select({ id: dienstenTable.id })
-          .from(dienstenTable)
-          .where(
-            and(
-              eq(dienstenTable.van, van),
-              eq(dienstenTable.tot, tot),
-              eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
-              eq(dienstenTable.type, targetType),
-            )
-          )
-          .limit(1);
-        if (ex?.id != null) {
-          await tx.delete(dienstenTable).where(eq(dienstenTable.id, ex.id));
-        }
+        // Delete ALL overlapping assignment records for this section.
+        // Uses the WHERE clause directly — safe even for rows with NULL id.
+        await tx.delete(dienstenTable).where(overlapClause);
         return;
       }
 
-      let existingId: number | null = null;
-      if (section === 'middle') {
-        const exactMiddle = and(
-          eq(dienstenTable.van, van),
-          eq(dienstenTable.tot, tot),
-          eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
-          inArray(dienstenTable.type, [...MIDDLE_ASSIGNMENT_TYPES]),
-        );
-        let [row] = await tx
-          .select({ id: dienstenTable.id })
-          .from(dienstenTable)
-          .where(exactMiddle)
-          .limit(1);
-        if (!row?.id) {
-          const overlapMiddle = and(
-            eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
-            inArray(dienstenTable.type, [...MIDDLE_ASSIGNMENT_TYPES]),
-            lt(dienstenTable.van, tot),
-            gt(dienstenTable.tot, van),
-          );
-          [row] = await tx
-            .select({ id: dienstenTable.id })
-            .from(dienstenTable)
-            .where(overlapMiddle)
-            .limit(1);
-        }
-        existingId = row?.id ?? null;
-      } else {
-        const [row] = await tx
-          .select({ id: dienstenTable.id })
-          .from(dienstenTable)
-          .where(
-            and(
-              eq(dienstenTable.van, van),
-              eq(dienstenTable.tot, tot),
-              eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
-              eq(dienstenTable.type, targetType),
-            )
-          )
-          .limit(1);
-        existingId = row?.id ?? null;
-      }
+      // Delete-then-insert strategy: remove ALL existing overlapping records for this
+      // section first, then insert exactly one. This prevents duplicates (legacy data or
+      // race conditions) and cleans up split assignments from the PHP system.
+      // Uses WHERE clause directly — safe even for rows with NULL id.
+      await tx.delete(dienstenTable).where(overlapClause);
 
-      if (existingId != null) {
-        await tx
-          .update(dienstenTable)
-          .set({ iddeelnemer: iddeelnemer as number })
-          .where(eq(dienstenTable.id, existingId));
-      } else {
-        await tx.insert(dienstenTable).values({
-          idwaarneemgroep,
-          van,
-          tot,
-          type: targetType,
-          iddeelnemer: iddeelnemer as number,
-          idpraktijk: base?.idpraktijk ?? null,
-          idshift: base?.idshift ?? null,
-          currentDate: base?.currentDate ?? null,
-          nextDate: base?.nextDate ?? null,
-        });
-      }
+      await tx.insert(dienstenTable).values({
+        idwaarneemgroep,
+        van,
+        tot,
+        type: targetType,
+        iddeelnemer: iddeelnemer as number,
+        idpraktijk: base?.idpraktijk ?? null,
+        idshift: base?.idshift ?? null,
+        currentDate: base?.currentDate ?? null,
+        nextDate: base?.nextDate ?? null,
+      });
     });
 
     return res.status(200).json({ success: true });

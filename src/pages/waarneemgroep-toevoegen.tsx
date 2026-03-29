@@ -248,7 +248,7 @@ export default function WaarneemgroepToevoegenPage() {
         {optionsLoading && <p className="text-sm text-muted-foreground">Laden…</p>}
         {optionsError && <p className="text-sm text-destructive" role="alert">{optionsError}</p>}
 
-        {!optionsLoading && !optionsError && (
+        {!optionsLoading && !optionsError && options && (
           <>
             <Card>
               <CardHeader>

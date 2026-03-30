@@ -10,6 +10,7 @@ import {
   makeStandaardAssignment,
   makeAchterwachtAssignment,
   makeExtraDokterAssignment,
+  makeOvernameProposal,
   makeDienst,
   makeDeelnemer,
   makeDienstenResponse,
@@ -459,5 +460,77 @@ describe('groupShiftBlocksByWaarneemgroep (US4)', () => {
     expect(rows[1].id).toBe(45);
     expect(rows[0].shiftBlocks).toHaveLength(1);
     expect(rows[1].shiftBlocks).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Overname overlay blocks
+// ---------------------------------------------------------------------------
+describe('dienstenToShiftBlocks — overname overlay blocks', () => {
+  it('overlay block uses target doctor for middle, stores original in originalDoctor', () => {
+    const originalDoc = makeDeelnemer({ id: 50, voornaam: 'Piet', achternaam: 'Origineel', color: '#ff0000' });
+    const targetDoc = makeDeelnemer({ id: 60, voornaam: 'Jan', achternaam: 'Doelarts', color: '#00ff00' });
+    const slot = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID);
+    const proposal = makeOvernameProposal(SHIFT_VAN, SHIFT_TOT, WG_ID, originalDoc, targetDoc, {
+      iddienstovern: slot.id,
+      senderId: 50,
+    });
+
+    const blocks = dienstenToShiftBlocks(makeDienstenResponse([slot, proposal]));
+    const overlay = blocks.find((b) => b.overnameType === 'voorstelOvername');
+
+    expect(overlay).toBeDefined();
+    // middle should be the TARGET doctor
+    expect(overlay!.middle?.id).toBe(60);
+    expect(overlay!.middle?.color).toBe('#00ff00');
+    expect(overlay!.middle?.shortName).toBe('JD');
+    // originalDoctor should be the ORIGINAL doctor
+    expect(overlay!.originalDoctor?.id).toBe(50);
+    expect(overlay!.originalDoctor?.color).toBe('#ff0000');
+    // iddienstovern and senderId should be propagated
+    expect(overlay!.iddienstovern).toBe(slot.id);
+    expect(overlay!.senderId).toBe(50);
+  });
+
+  it('overlay block falls back to original doctor when target_deelnemers is null', () => {
+    const originalDoc = makeDeelnemer({ id: 50, voornaam: 'Piet', achternaam: 'Origineel', color: '#ff0000' });
+    const slot = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID);
+    const proposal = makeDienst({
+      type: 4,
+      van: SHIFT_VAN,
+      tot: SHIFT_TOT,
+      idwaarneemgroep: WG_ID,
+      status: 'pending',
+      iddeelnemer: originalDoc.id,
+      diensten_deelnemers: originalDoc,
+      target_deelnemers: null,
+      iddienstovern: slot.id,
+    });
+
+    const blocks = dienstenToShiftBlocks(makeDienstenResponse([slot, proposal]));
+    const overlay = blocks.find((b) => b.overnameType === 'voorstelOvername');
+
+    expect(overlay).toBeDefined();
+    // Falls back to original doctor
+    expect(overlay!.middle?.id).toBe(50);
+  });
+
+  it('declined overlay block has middle=null (gray, no initials)', () => {
+    const originalDoc = makeDeelnemer({ id: 50, voornaam: 'Piet', achternaam: 'Origineel', color: '#ff0000' });
+    const targetDoc = makeDeelnemer({ id: 60, voornaam: 'Jan', achternaam: 'Doelarts', color: '#00ff00' });
+    const slot = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID);
+    const declined = makeOvernameProposal(SHIFT_VAN, SHIFT_TOT, WG_ID, originalDoc, targetDoc, {
+      iddienstovern: slot.id,
+      status: 'declined',
+    });
+
+    const blocks = dienstenToShiftBlocks(makeDienstenResponse([slot, declined]));
+    const overlay = blocks.find((b) => b.overnameType === 'vraagtekenOvername');
+
+    expect(overlay).toBeDefined();
+    // Declined: middle should be null (gray block, no initials)
+    expect(overlay!.middle).toBeNull();
+    // Original doctor should still be stored
+    expect(overlay!.originalDoctor?.id).toBe(50);
   });
 });

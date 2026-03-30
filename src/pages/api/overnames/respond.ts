@@ -2,8 +2,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { logger } from '@/lib/logger';
 
-const { diensten: dienstenTable, deelnemers } = schema;
+const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
+const GROEP_SECRETARIS = 2;
 
 type Data = { success: true } | { error: string };
 
@@ -19,11 +21,11 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
 /**
  * POST /api/overnames/respond
  *
- * Accept or decline an overname voorstel.
+ * Accept, decline, or delete an overname voorstel.
  *
  * Body:
- *   id      number  — ID of the type=4 dienst (the proposal)
- *   action  string  — "accept" or "decline"
+ *   iddienstovern  number  — ID of the original dienst (unique key for pending proposals)
+ *   action         string  — "accept", "decline", or "delete"
  */
 export default async function handler(
   req: NextApiRequest,
@@ -38,63 +40,95 @@ export default async function handler(
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { id, action } = req.body;
+  try {
+    const { iddienstovern, action } = req.body;
 
-  if (!id || (action !== 'accept' && action !== 'decline')) {
-    return res.status(400).json({ error: 'Invalid action' });
-  }
+    if (!iddienstovern || (action !== 'accept' && action !== 'decline' && action !== 'delete')) {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
 
-  // Get the logged-in doctor's deelnemer ID
-  const currentDoctor = await db
-    .select({ id: deelnemers.id })
-    .from(deelnemers)
-    .where(eq(deelnemers.login, session.user.email))
-    .limit(1);
+    // Get the logged-in doctor's deelnemer ID
+    const currentDoctor = await db
+      .select({ id: deelnemers.id })
+      .from(deelnemers)
+      .where(eq(deelnemers.login, session.user.email))
+      .limit(1);
 
-  if (!currentDoctor.length) {
-    return res.status(403).json({ error: 'Not authorized' });
-  }
+    if (!currentDoctor.length) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
 
-  const doctorId = currentDoctor[0].id;
+    const doctorId = currentDoctor[0].id;
 
-  // Find the proposal
-  const proposal = await db
-    .select({
-      id: dienstenTable.id,
-      type: dienstenTable.type,
-      status: dienstenTable.status,
-      iddeelnovern: dienstenTable.iddeelnovern,
-    })
-    .from(dienstenTable)
-    .where(
-      and(
-        eq(dienstenTable.id, id),
-        eq(dienstenTable.type, 4),
-        eq(dienstenTable.status, 'pending')
+    // Find the proposal by composite key (iddienstovern is unique per pending proposal)
+    const proposalCondition = and(
+      eq(dienstenTable.iddienstovern, iddienstovern),
+      eq(dienstenTable.type, 4),
+      eq(dienstenTable.status, 'pending')
+    );
+
+    const proposal = await db
+      .select({
+        iddienstovern: dienstenTable.iddienstovern,
+        iddeelnovern: dienstenTable.iddeelnovern,
+        senderId: dienstenTable.senderId,
+        idwaarneemgroep: dienstenTable.idwaarneemgroep,
+      })
+      .from(dienstenTable)
+      .where(proposalCondition)
+      .limit(1);
+
+    if (!proposal.length) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    const { iddeelnovern, senderId, idwaarneemgroep } = proposal[0];
+
+    // Check if the current user is secretaris of this waarneemgroep
+    const isSecretaris = idwaarneemgroep != null && (await db
+      .select({ idgroep: waarneemgroepdeelnemers.idgroep })
+      .from(waarneemgroepdeelnemers)
+      .where(
+        and(
+          eq(waarneemgroepdeelnemers.iddeelnemer, doctorId),
+          eq(waarneemgroepdeelnemers.idwaarneemgroep, idwaarneemgroep)
+        )
       )
-    )
-    .limit(1);
+      .limit(1)
+    ).some((r) => r.idgroep === GROEP_SECRETARIS);
 
-  if (!proposal.length) {
-    return res.status(404).json({ error: 'Proposal not found' });
+    if (action === 'delete') {
+      // Sender or secretaris can delete/cancel a proposal
+      if (senderId !== doctorId && !isSecretaris) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      await db.delete(dienstenTable).where(proposalCondition);
+      logger.info({ msg: 'overname-respond:deleted', iddienstovern, doctorId, isSecretaris });
+    } else {
+      // Target doctor or secretaris can accept/decline
+      if (iddeelnovern !== doctorId && !isSecretaris) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      if (action === 'accept') {
+        await db
+          .update(dienstenTable)
+          .set({ type: 6, status: 'accepted' })
+          .where(proposalCondition);
+        logger.info({ msg: 'overname-respond:accepted', iddienstovern, doctorId, isSecretaris });
+      } else {
+        await db
+          .update(dienstenTable)
+          .set({ status: 'declined' })
+          .where(proposalCondition);
+        logger.info({ msg: 'overname-respond:declined', iddienstovern, doctorId, isSecretaris });
+      }
+    }
+
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    logger.error({ err, msg: 'overname-respond:error', body: req.body });
+    return res.status(500).json({
+      error: err instanceof Error ? err.message : 'Internal server error',
+    });
   }
-
-  // Verify the logged-in user is the target doctor
-  if (proposal[0].iddeelnovern !== doctorId) {
-    return res.status(403).json({ error: 'Not authorized' });
-  }
-
-  if (action === 'accept') {
-    await db
-      .update(dienstenTable)
-      .set({ type: 6, status: 'accepted' })
-      .where(eq(dienstenTable.id, id));
-  } else {
-    await db
-      .update(dienstenTable)
-      .set({ status: 'declined' })
-      .where(eq(dienstenTable.id, id));
-  }
-
-  return res.status(200).json({ success: true });
 }

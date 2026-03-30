@@ -163,18 +163,6 @@ describe('POST /api/overnames/propose', () => {
     expect(res._json).toEqual({ error: 'Invalid time range' });
   });
 
-  // -- Self-proposal --
-
-  it('returns 400 when proposing to yourself', async () => {
-    selectResults = [
-      [{ id: SENDER_ID }],  // proposingDoctor
-    ];
-    const res = makeRes();
-    await handler(makeReq({ iddeelnovern: SENDER_ID }), res);
-    expect(res._status).toBe(400);
-    expect(res._json).toEqual({ error: 'Cannot propose overname to yourself' });
-  });
-
   // -- Direct type=0 flow --
 
   it('creates proposal when original dienst is type=0 directly', async () => {

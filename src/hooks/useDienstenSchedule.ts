@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { DienstenResponse, ShiftBlockView, Dienst, DoctorInfo } from '@/types/diensten';
+import type { DienstenResponse, ShiftBlockView, Dienst, DienstDeelnemer, DoctorInfo } from '@/types/diensten';
 import type { CalendarGridRow } from '@/components/CalandarGrid/CalendarGrid';
 
 function formatTwoDigits(n: number): string {
@@ -14,6 +14,10 @@ export function intervalsOverlap(aVan: number, aTot: number, bVan: number, bTot:
 export function toDoctorInfo(dienst: Dienst): DoctorInfo | null {
   const d = dienst.diensten_deelnemers;
   if (!d) return null;
+  return toDoctorInfoFromDeelnemer(d);
+}
+
+export function toDoctorInfoFromDeelnemer(d: DienstDeelnemer): DoctorInfo {
   const fullName = `${d.voornaam} ${d.achternaam}`.trim();
   const shortName =
     (d.voornaam?.[0] ?? '').toUpperCase() + (d.achternaam?.[0] ?? '').toUpperCase();
@@ -251,7 +255,12 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
     const nextDate = `${end.getFullYear()}-${formatTwoDigits(
       end.getMonth() + 1
     )}-${formatTwoDigits(end.getDate())} ${endTime}:00`;
-    const middle = toDoctorInfo(dienst);
+    const originalDoctor = toDoctorInfo(dienst);
+    const overnameType = getOvernameType(dienst);
+    // Declined proposals: gray block with no initials (middle = null)
+    // Pending/accepted: show the target doctor (iddeelnovern) instead of the original
+    const targetDoctor = dienst.target_deelnemers ? toDoctorInfoFromDeelnemer(dienst.target_deelnemers) : null;
+    const middle = overnameType === 'vraagtekenOvername' ? null : (targetDoctor ?? originalDoctor);
 
     blocks.push({
       id: dienst.id,
@@ -268,7 +277,10 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
       top: null,
       bottom: null,
       idwaarneemgroep: dienst.idwaarneemgroep,
-      overnameType: getOvernameType(dienst),
+      overnameType,
+      iddienstovern: dienst.iddienstovern,
+      senderId: dienst.senderId,
+      originalDoctor,
     });
   }
 

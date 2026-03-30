@@ -101,18 +101,6 @@ export default async function handler(
 
     const senderId = proposingDoctor[0].id;
 
-    // Prevent self-proposal
-    if (senderId === iddeelnovern) {
-      logger.warn({
-        msg: 'overname-propose:validation',
-        reason: 'self-proposal',
-        senderId,
-        iddeelnovern,
-        iddienstovern,
-      });
-      return res.status(400).json({ error: 'Cannot propose overname to yourself' });
-    }
-
     // Verify original dienst exists and is type=0 (assigned shift)
     const originalDienst = await db
       .select({

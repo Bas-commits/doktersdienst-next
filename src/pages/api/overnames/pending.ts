@@ -1,10 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { alias } from 'drizzle-orm/pg-core';
 
-const { diensten: dienstenTable, deelnemers } = schema;
+const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
+const GROEP_SECRETARIS = 2;
 
 function toHeaders(incoming: NextApiRequest['headers']): Headers {
   const h = new Headers();
@@ -18,8 +19,9 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
 /**
  * GET /api/overnames/pending
  *
- * Returns pending overname proposals for the logged-in doctor.
- * Used by the header popover to show notifications.
+ * Returns pending overname proposals visible to the logged-in doctor.
+ * - Regular doctors see proposals targeted at them (iddeelnovern = self).
+ * - Secretaris users also see all proposals in their waarneemgroepen.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -47,32 +49,52 @@ export default async function handler(
 
   const doctorId = currentDoctor[0].id;
 
-  // Aliases for joining sender and target doctor info
-  const senderDeelnemer = alias(deelnemers, 'senderDeelnemer');
+  // Find waarneemgroepen where this doctor is secretaris
+  const secretarisGroepen = await db
+    .select({ idwaarneemgroep: waarneemgroepdeelnemers.idwaarneemgroep })
+    .from(waarneemgroepdeelnemers)
+    .where(
+      and(
+        eq(waarneemgroepdeelnemers.iddeelnemer, doctorId),
+        eq(waarneemgroepdeelnemers.idgroep, GROEP_SECRETARIS)
+      )
+    );
+  const secretarisWgIds = secretarisGroepen
+    .map((r) => r.idwaarneemgroep)
+    .filter((id): id is number => id != null);
+
+  // Build filter: proposals targeting me OR proposals in my secretaris waarneemgroepen
+  const targetFilter = eq(dienstenTable.iddeelnovern, sql`${doctorId}::integer`);
+  const pendingFilter = and(
+    eq(dienstenTable.type, 4),
+    eq(dienstenTable.status, 'pending'),
+    secretarisWgIds.length > 0
+      ? or(targetFilter, inArray(dienstenTable.idwaarneemgroep, secretarisWgIds))
+      : targetFilter
+  );
+
+  // Aliases for joining original (van) and target (naar) doctor info
+  // "van arts" = the doctor whose shift is being taken over (iddeelnemer on the proposal)
+  // "naar arts" = the target doctor who would take over (iddeelnovern)
+  const originalDeelnemer = alias(deelnemers, 'originalDeelnemer');
   const targetDeelnemer = alias(deelnemers, 'targetDeelnemer');
 
   const rows = await db
     .select({
-      id: dienstenTable.id,
+      iddienstovern: dienstenTable.iddienstovern,
       van: dienstenTable.van,
       tot: dienstenTable.tot,
-      senderId: dienstenTable.senderId,
+      iddeelnemer: dienstenTable.iddeelnemer,
       iddeelnovern: dienstenTable.iddeelnovern,
-      senderVoornaam: senderDeelnemer.voornaam,
-      senderAchternaam: senderDeelnemer.achternaam,
+      originalVoornaam: originalDeelnemer.voornaam,
+      originalAchternaam: originalDeelnemer.achternaam,
       targetVoornaam: targetDeelnemer.voornaam,
       targetAchternaam: targetDeelnemer.achternaam,
     })
     .from(dienstenTable)
-    .leftJoin(senderDeelnemer, eq(dienstenTable.senderId, senderDeelnemer.id))
+    .leftJoin(originalDeelnemer, eq(dienstenTable.iddeelnemer, originalDeelnemer.id))
     .leftJoin(targetDeelnemer, eq(dienstenTable.iddeelnovern, targetDeelnemer.id))
-    .where(
-      and(
-        eq(dienstenTable.type, 4),
-        eq(dienstenTable.status, 'pending'),
-        eq(dienstenTable.iddeelnovern, sql`${doctorId}::integer`)
-      )
-    );
+    .where(pendingFilter);
 
   const verzoeken = rows.map((r) => {
     const vanDate = new Date(Number(r.van ?? 0) * 1000);
@@ -90,22 +112,22 @@ export default async function handler(
       (d.getTime() - new Date(d.getFullYear(), 0, 4).getTime()) / 86400000 / 7 + 1
     );
 
-    const senderInitialen =
-      ((r.senderVoornaam?.[0] ?? '') + (r.senderAchternaam?.[0] ?? '')).toUpperCase() || '??';
-    const senderNaam = `${r.senderVoornaam ?? ''} ${r.senderAchternaam ?? ''}`.trim() || 'Onbekend';
+    const originalInitialen =
+      ((r.originalVoornaam?.[0] ?? '') + (r.originalAchternaam?.[0] ?? '')).toUpperCase() || '??';
+    const originalNaam = `${r.originalVoornaam ?? ''} ${r.originalAchternaam ?? ''}`.trim() || 'Onbekend';
     const targetInitialen =
       ((r.targetVoornaam?.[0] ?? '') + (r.targetAchternaam?.[0] ?? '')).toUpperCase() || '??';
     const targetNaam = `${r.targetVoornaam ?? ''} ${r.targetAchternaam ?? ''}`.trim() || 'Onbekend';
 
     return {
-      id: r.id,
+      iddienstovern: r.iddienstovern,
       datum,
       van: `${String(vanDate.getHours()).padStart(2, '0')}:${String(vanDate.getMinutes()).padStart(2, '0')}`,
       tot: `${String(totDate.getHours()).padStart(2, '0')}:${String(totDate.getMinutes()).padStart(2, '0')}`,
       week,
       vanArts: {
-        initialen: senderInitialen,
-        naam: senderNaam,
+        initialen: originalInitialen,
+        naam: originalNaam,
         akkoord: true,
       },
       naarArts: {

@@ -27,8 +27,38 @@ export function makeDienst(overrides: Partial<Dienst> & { type: number }): Diens
     tot: overrides.tot ?? 1711951200, // 2024-04-01 16:00 UTC
     type: overrides.type,
     idwaarneemgroep: overrides.idwaarneemgroep ?? 9,
+    status: overrides.status,
+    iddienstovern: overrides.iddienstovern,
+    iddeelnovern: overrides.iddeelnovern,
+    senderId: overrides.senderId,
     diensten_deelnemers: overrides.diensten_deelnemers ?? null,
+    target_deelnemers: overrides.target_deelnemers ?? null,
   };
+}
+
+/** Type=4 overname proposal with target doctor info. */
+export function makeOvernameProposal(
+  van: number,
+  tot: number,
+  wg: number,
+  originalDeelnemer: DienstDeelnemer,
+  targetDeelnemer: DienstDeelnemer,
+  overrides: Partial<Dienst> = {}
+): Dienst {
+  return makeDienst({
+    van,
+    tot,
+    idwaarneemgroep: wg,
+    type: 4,
+    status: 'pending',
+    iddeelnemer: originalDeelnemer.id,
+    diensten_deelnemers: originalDeelnemer,
+    iddeelnovern: targetDeelnemer.id,
+    target_deelnemers: targetDeelnemer,
+    iddienstovern: overrides.iddienstovern ?? nextAutoId(),
+    senderId: overrides.senderId ?? originalDeelnemer.id,
+    ...overrides,
+  });
 }
 
 /** Type=1 base slot (unassigned, defines time boundaries). */

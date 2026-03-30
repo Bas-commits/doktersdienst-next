@@ -59,7 +59,7 @@ export function DoktersdienstHeader({
 
   // Overname verzoeken state
   interface OvernameVerzoek {
-    id: number;
+    iddienstovern: number;
     datum: string;
     van: string;
     tot: string;
@@ -83,6 +83,10 @@ export function DoktersdienstHeader({
 
   useEffect(() => {
     fetchVerzoeken();
+    // Re-fetch when an overname is created/accepted/declined/deleted on the overnames page
+    const onUpdate = () => fetchVerzoeken();
+    window.addEventListener('overname-updated', onUpdate);
+    return () => window.removeEventListener('overname-updated', onUpdate);
   }, [fetchVerzoeken]);
 
   const handleVerzoekRespond = useCallback(
@@ -93,7 +97,7 @@ export function DoktersdienstHeader({
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: v.id, action }),
+        body: JSON.stringify({ iddienstovern: v.iddienstovern, action }),
       });
       fetchVerzoeken();
       setVerzoekIndex(0);

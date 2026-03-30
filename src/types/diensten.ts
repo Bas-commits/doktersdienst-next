@@ -23,6 +23,8 @@ export interface Dienst {
   /** ID of the doctor who created the overname proposal. */
   senderId?: number;
   diensten_deelnemers: DienstDeelnemer | null;
+  /** Target doctor info for overname records (type=4/6). Joined via iddeelnovern. */
+  target_deelnemers?: DienstDeelnemer | null;
 }
 
 export interface DienstenResponse {
@@ -73,5 +75,11 @@ export interface ShiftBlockView {
   assignedPreferenceCode?: string;
   /** Optional: overname visual state. Set when this block represents an overname record. */
   overnameType?: 'overname' | 'voorstelOvername' | 'vraagtekenOvername';
+  /** ID of the original dienst being taken over (overname records only). */
+  iddienstovern?: number;
+  /** ID of the doctor who created the overname proposal. */
+  senderId?: number;
+  /** Original doctor info (for overname overlay blocks where middle shows the target doctor). */
+  originalDoctor?: DoctorInfo | null;
 }
 

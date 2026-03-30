@@ -1,9 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, gte, lte, inArray } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 
 const { diensten: dienstenTable, deelnemers } = schema;
+const targetDeelnemer = alias(deelnemers, 'targetDeelnemer');
 
 type Data =
   | { diensten: Array<{
@@ -118,9 +120,14 @@ export default async function handler(
         voornaam: deelnemers.voornaam,
         achternaam: deelnemers.achternaam,
         color: deelnemers.color,
+        targetDeelnemerId: targetDeelnemer.id,
+        targetVoornaam: targetDeelnemer.voornaam,
+        targetAchternaam: targetDeelnemer.achternaam,
+        targetColor: targetDeelnemer.color,
       })
       .from(dienstenTable)
       .leftJoin(deelnemers, eq(dienstenTable.iddeelnemer, deelnemers.id))
+      .leftJoin(targetDeelnemer, eq(dienstenTable.iddeelnovern, targetDeelnemer.id))
       .where(and(...whereConditions));
 
     const diensten = rows.map((r) => ({
@@ -141,6 +148,15 @@ export default async function handler(
               voornaam: r.voornaam,
               achternaam: r.achternaam,
               color: r.color,
+            }
+          : null,
+      target_deelnemers:
+        r.targetDeelnemerId != null
+          ? {
+              id: r.targetDeelnemerId,
+              voornaam: r.targetVoornaam,
+              achternaam: r.targetAchternaam,
+              color: r.targetColor,
             }
           : null,
     }));

@@ -10,6 +10,7 @@ import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
 import { OvernameModal } from '@/components/OvernameModal';
+import { OvernameDetailModal } from '@/components/OvernameDetailModal';
 import type { OvernameDoctor } from '@/components/OvernameModal';
 import type { ShiftBlockView } from '@/types/diensten';
 
@@ -68,11 +69,16 @@ export default function OvernamesPage() {
   const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
   const error = waarneemgroepenError ?? dienstenError;
 
-  // Modal state
+  // Propose modal state
   const [selectedShift, setSelectedShift] = useState<ShiftBlockView | null>(null);
   const [allDoctors, setAllDoctors] = useState<(OvernameDoctor & { waarneemgroepIds: number[] })[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Detail/management modal state (for existing overname blocks)
+  const [selectedOvernameBlock, setSelectedOvernameBlock] = useState<ShiftBlockView | null>(null);
+  const [detailSubmitting, setDetailSubmitting] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   // Fetch all accessible doctors once (same approach as rooster-maken-secretaris)
   useEffect(() => {
@@ -112,8 +118,14 @@ export default function OvernamesPage() {
   }, [allDoctors, activeWaarneemgroepId]);
 
   const handleShiftClick = useCallback((block: ShiftBlockView) => {
-    // Only open modal for assigned shifts (has a middle doctor), not for overlays or unassigned slots
-    if (!block.middle || block.overnameType) return;
+    // Overname overlay blocks → open detail/management modal
+    if (block.overnameType) {
+      setSelectedOvernameBlock(block);
+      setDetailError(null);
+      return;
+    }
+    // Assigned shifts (has a middle doctor) → open propose modal
+    if (!block.middle) return;
     setSelectedShift(block);
     setSubmitError(null);
   }, []);
@@ -161,6 +173,8 @@ export default function OvernamesPage() {
 
         setSelectedShift(null);
         setRefreshKey((k) => k + 1);
+        // Notify the header to refresh pending verzoeken
+        window.dispatchEvent(new Event('overname-updated'));
       } catch {
         setSubmitError('Er is een fout opgetreden');
       } finally {
@@ -168,6 +182,35 @@ export default function OvernamesPage() {
       }
     },
     [selectedShift, activeWaarneemgroepId]
+  );
+
+  const handleOvernameRespond = useCallback(
+    async (action: 'accept' | 'decline' | 'delete') => {
+      if (!selectedOvernameBlock?.iddienstovern) return;
+      setDetailSubmitting(true);
+      setDetailError(null);
+      try {
+        const res = await fetch('/api/overnames/respond', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ iddienstovern: selectedOvernameBlock.iddienstovern, action }),
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          setDetailError(result.error || 'Er is een fout opgetreden');
+          return;
+        }
+        setSelectedOvernameBlock(null);
+        setRefreshKey((k) => k + 1);
+        window.dispatchEvent(new Event('overname-updated'));
+      } catch {
+        setDetailError('Er is een fout opgetreden');
+      } finally {
+        setDetailSubmitting(false);
+      }
+    },
+    [selectedOvernameBlock]
   );
 
   return (
@@ -230,6 +273,16 @@ export default function OvernamesPage() {
           onClose={handleModalClose}
           submitting={submitting}
           error={submitError}
+        />
+      )}
+
+      {selectedOvernameBlock && (
+        <OvernameDetailModal
+          block={selectedOvernameBlock}
+          onRespond={handleOvernameRespond}
+          onClose={() => { setSelectedOvernameBlock(null); setDetailError(null); }}
+          submitting={detailSubmitting}
+          error={detailError}
         />
       )}
     </>

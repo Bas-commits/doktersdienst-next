@@ -140,6 +140,7 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
     )}-${formatTwoDigits(end.getDate())} ${endTime}:00`;
 
     let middle: DoctorInfo | null = null;
+    let assignedDienstId: number | undefined;
     let top: DoctorInfo | null = null;
     let bottom: DoctorInfo | null = null;
 
@@ -148,7 +149,12 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
         case 0:
         case 4:
         case 6: {
-          if (!middle) middle = toDoctorInfo(dienst);
+          if (!middle) {
+            middle = toDoctorInfo(dienst);
+            if (Number.isFinite(dienst.id) && dienst.id > 0) {
+              assignedDienstId = dienst.id;
+            }
+          }
           break;
         }
         case 5: {
@@ -178,6 +184,9 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
         const d = toDoctorInfo(dienst);
         if (d) {
           middle = d;
+          if (Number.isFinite(dienst.id) && dienst.id > 0) {
+            assignedDienstId = dienst.id;
+          }
           break;
         }
       }
@@ -210,6 +219,7 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
 
     blocks.push({
       id: base.id,
+      assignedDienstId,
       day,
       month: month0,
       year,

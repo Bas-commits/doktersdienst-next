@@ -38,9 +38,10 @@ export default function OvernamesPage() {
 
   const { waarneemgroepen, activeWaarneemgroepId, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
   const waarneemgroepIds = useMemo(() => {
-    if (!waarneemgroepen?.length) return [];
-    return waarneemgroepen.map((wg) => wg.ID).filter((id): id is number => id != null && !Number.isNaN(id));
-  }, [waarneemgroepen]);
+    if (!activeWaarneemgroepId) return [];
+    const id = Number(activeWaarneemgroepId);
+    return Number.isNaN(id) ? [] : [id];
+  }, [activeWaarneemgroepId]);
   /** Name source for calendar rows: context uses ID/naam, schedule helpers expect id/naam. */
   const waarneemgroepNameSource = useMemo(
     () => (waarneemgroepen?.length ? waarneemgroepen.map((w) => ({ id: w.ID, naam: w.naam })) : null),
@@ -69,29 +70,46 @@ export default function OvernamesPage() {
 
   // Modal state
   const [selectedShift, setSelectedShift] = useState<ShiftBlockView | null>(null);
-  const [doctors, setDoctors] = useState<OvernameDoctor[]>([]);
+  const [allDoctors, setAllDoctors] = useState<(OvernameDoctor & { waarneemgroepIds: number[] })[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Fetch doctors for the dropdown when the modal opens
+  // Fetch all accessible doctors once (same approach as rooster-maken-secretaris)
   useEffect(() => {
-    if (!selectedShift || !activeWaarneemgroepId) return;
-    fetch(`/api/deelnemers?idwaarneemgroep=${activeWaarneemgroepId}`, { credentials: 'include' })
+    if (!activeWaarneemgroepId) return;
+    fetch('/api/deelnemers', { credentials: 'include' })
       .then((res) => res.json())
-      .then((data) => {
-        if (data.deelnemers) {
-          setDoctors(
-            data.deelnemers.map((d: { id: number; voornaam: string | null; achternaam: string | null }) => ({
+      .then((data: {
+        deelnemers?: Array<{
+          id: number;
+          voornaam: string | null;
+          achternaam: string | null;
+          waarneemgroepen: { id: number; naam: string | null; aangemeld: boolean }[];
+        }>;
+      }) => {
+        if (data?.deelnemers) {
+          setAllDoctors(
+            data.deelnemers.map((d) => ({
               id: d.id,
               voornaam: d.voornaam ?? '',
               achternaam: d.achternaam ?? '',
               initialen: (d.voornaam?.[0] ?? '').toUpperCase() + (d.achternaam?.[0] ?? '').toUpperCase(),
+              waarneemgroepIds: d.waarneemgroepen
+                .filter((wg) => wg.aangemeld)
+                .map((wg) => wg.id),
             }))
           );
         }
       })
-      .catch(() => setDoctors([]));
-  }, [selectedShift, activeWaarneemgroepId]);
+      .catch(() => setAllDoctors([]));
+  }, [activeWaarneemgroepId]);
+
+  // Filter to only doctors aangemeld in the active waarneemgroep
+  const doctors = useMemo(() => {
+    const wgId = Number(activeWaarneemgroepId);
+    if (!wgId) return [];
+    return allDoctors.filter((d) => d.waarneemgroepIds.includes(wgId));
+  }, [allDoctors, activeWaarneemgroepId]);
 
   const handleShiftClick = useCallback((block: ShiftBlockView) => {
     // Only open modal for assigned shifts (has a middle doctor), not for overlays or unassigned slots
@@ -108,17 +126,25 @@ export default function OvernamesPage() {
   const handleModalSubmit = useCallback(
     async (data: { iddeelnovern: number; van: number; tot: number; isPartial: boolean }) => {
       if (!selectedShift || !activeWaarneemgroepId) return;
+      const resolvedDienstOvernId =
+        (selectedShift.assignedDienstId != null && selectedShift.assignedDienstId > 0)
+          ? selectedShift.assignedDienstId
+          : (selectedShift.id > 0 ? selectedShift.id : 0);
 
       setSubmitting(true);
       setSubmitError(null);
 
       try {
+        if (!resolvedDienstOvernId || resolvedDienstOvernId <= 0) {
+          setSubmitError('Kon de originele dienst niet bepalen');
+          return;
+        }
         const res = await fetch('/api/overnames/propose', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            iddienstovern: selectedShift.id,
+            iddienstovern: resolvedDienstOvernId,
             iddeelnovern: data.iddeelnovern,
             van: data.van,
             tot: data.tot,

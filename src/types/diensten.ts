@@ -41,6 +41,8 @@ export interface DoctorInfo {
 /** Fully resolved block used by CalendarGrid and ShiftBlock. */
 export interface ShiftBlockView {
   id: number;
+  /** Optional assigned dienst ID (type=0) backing this block for overname actions. */
+  assignedDienstId?: number;
   day: number;
   /** 0-based month (0 = January) */
   month: number;

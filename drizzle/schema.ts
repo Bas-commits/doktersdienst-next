@@ -447,6 +447,7 @@ export const diensten = pgTable(
 		nextDate: date("next_date"),
 		senderId: integer("sender_id"),
 		deleteRequest: integer("delete_request"),
+		status: varchar({ length: 20 }),
 	},
 	(table) => ({
 		// GET /api/diensten: filter by idwaarneemgroep and date range (van, tot)

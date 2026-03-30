@@ -5,6 +5,7 @@ import "dotenv/config";
 const config = new pulumi.Config();
 const databaseUrl = config.requireSecret("databaseUrl");
 const betterAuthSecret = config.requireSecret("betterAuthSecret");
+const betterAuthUrl = config.require("betterAuthUrl");
 
 // Container Namespace (groups your serverless containers)
 const namespace = new scaleway.ContainerNamespace("doktersdienst", {
@@ -35,7 +36,7 @@ const container = new scaleway.Container("doktersdienst", {
   httpOption: "redirected",
   deploy: true,
   environmentVariables: {
-    BETTER_AUTH_URL: "https://doktersdienst93b86644e5e3eab-doktersdienst-0a2e9ea.functions.fnc.nl-ams.scw.cloud",
+    BETTER_AUTH_URL: betterAuthUrl,
   },
   secretEnvironmentVariables: {
     DATABASE_URL: databaseUrl,

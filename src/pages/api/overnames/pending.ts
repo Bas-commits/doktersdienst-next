@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { alias } from 'drizzle-orm/pg-core';
@@ -70,7 +70,7 @@ export default async function handler(
       and(
         eq(dienstenTable.type, 4),
         eq(dienstenTable.status, 'pending'),
-        eq(dienstenTable.iddeelnovern, doctorId)
+        eq(dienstenTable.iddeelnovern, sql`${doctorId}::integer`)
       )
     );
 

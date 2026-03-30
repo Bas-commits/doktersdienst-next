@@ -1,5 +1,6 @@
 config:
-  scaleway:accessKey: "SCWV8WXEZKAHCB5ZH7R6"
+  scaleway:accessKey:
+    secure: AAABABuA9+oSWrijIufFI/gMZCKOPsfwp57kRtaE4InSefdmmmirzXKt0PCealTqOVc1lg==
   scaleway:secretKey:
     secure: AAABAAeJNL83UjxoKpqYiJVXL6TWockcu+aa9TkCQx864Km5EA93zEMQLM9+4TGSeNWfX+K/4TukCz3HF2UQWeneTRw=
   scaleway:projectId: "14f5ee41-85e0-4dea-87c8-e211e25cd0aa"
@@ -9,3 +10,4 @@ config:
     secure: AAABAJJu9yDX9g38c8QSJ6ClMocYDTgCR2dSK3orSArD51xM8xaOsZy/sd1xnrArDopafHMdBh55NRyRRSkL5aorv4LjGS0FoM+Fozh8ImivpvwGzBeuFy69lnL5GpXSTEq/0IArq03HIbUbZd4RAzJP2sdAbybBhhpPElSnRZF7CjUdQZz3hiHT8SdSEqgImltrSqSkbztB46di8TBcmmk7UwNrTx2F2d9YkAHqeAm5tudiruG3n60QOsDnHRzCRlKypfCq9/+uf4N/tHON0dsfGicnvxBNU4CXFqNLyNIyvJC+2fMDLA==
   doktersdienst-infra:betterAuthSecret:
     secure: AAABAFIklqDHo01OICmGVENkU3Cgs0bjL4OuSmMAlsvlfZid0aDfsiD4RVnaS/mhH3wWQ5QN/usIewBQGEOM1bJbHQ1BZbMoss57Cw==
+  doktersdienst-infra:betterAuthUrl: https://doktersdienst93b86644e5e3eab-doktersdienst-7b5eb98.functions.fnc.nl-ams.scw.cloud

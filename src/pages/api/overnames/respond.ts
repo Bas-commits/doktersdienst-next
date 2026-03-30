@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { logger } from '@/lib/logger';
@@ -54,17 +54,22 @@ export default async function handler(
       .where(eq(deelnemers.login, session.user.email))
       .limit(1);
 
-    if (!currentDoctor.length) {
+    const doctorId = currentDoctor[0]?.id;
+    if (!doctorId) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const doctorId = currentDoctor[0].id;
-
-    // Find the proposal by composite key (iddienstovern is unique per pending proposal)
-    const proposalCondition = and(
+    // Find the proposal by composite key.
+    // Delete can target pending, declined (type=4) and accepted (type=6) proposals.
+    // Accept/decline only targets pending (type=4).
+    const lookupCondition = and(
       eq(dienstenTable.iddienstovern, iddienstovern),
-      eq(dienstenTable.type, 4),
-      eq(dienstenTable.status, 'pending')
+      action === 'delete'
+        ? or(
+            and(eq(dienstenTable.type, 4), or(eq(dienstenTable.status, 'pending'), eq(dienstenTable.status, 'declined'))),
+            and(eq(dienstenTable.type, 6), eq(dienstenTable.status, 'accepted'))
+          )
+        : and(eq(dienstenTable.type, 4), eq(dienstenTable.status, 'pending'))
     );
 
     const proposal = await db
@@ -73,9 +78,10 @@ export default async function handler(
         iddeelnovern: dienstenTable.iddeelnovern,
         senderId: dienstenTable.senderId,
         idwaarneemgroep: dienstenTable.idwaarneemgroep,
+        status: dienstenTable.status,
       })
       .from(dienstenTable)
-      .where(proposalCondition)
+      .where(lookupCondition)
       .limit(1);
 
     if (!proposal.length) {
@@ -102,24 +108,30 @@ export default async function handler(
       if (senderId !== doctorId && !isSecretaris) {
         return res.status(403).json({ error: 'Not authorized' });
       }
-      await db.delete(dienstenTable).where(proposalCondition);
+      await db.delete(dienstenTable).where(lookupCondition);
       logger.info({ msg: 'overname-respond:deleted', iddienstovern, doctorId, isSecretaris });
     } else {
       // Target doctor or secretaris can accept/decline
       if (iddeelnovern !== doctorId && !isSecretaris) {
         return res.status(403).json({ error: 'Not authorized' });
       }
+      // Only pending proposals can be accepted/declined (already enforced by lookupCondition)
+      const pendingCondition = and(
+        eq(dienstenTable.iddienstovern, iddienstovern),
+        eq(dienstenTable.type, 4),
+        eq(dienstenTable.status, 'pending')
+      );
       if (action === 'accept') {
         await db
           .update(dienstenTable)
           .set({ type: 6, status: 'accepted' })
-          .where(proposalCondition);
+          .where(pendingCondition);
         logger.info({ msg: 'overname-respond:accepted', iddienstovern, doctorId, isSecretaris });
       } else {
         await db
           .update(dienstenTable)
           .set({ status: 'declined' })
-          .where(proposalCondition);
+          .where(pendingCondition);
         logger.info({ msg: 'overname-respond:declined', iddienstovern, doctorId, isSecretaris });
       }
     }

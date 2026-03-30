@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
-import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { getAuthenticatedUser, getUserWaarneemgroepIds } from '@/lib/api-auth';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers, taaktypen } = schema;
 
@@ -24,15 +24,6 @@ type Voorkeur = {
 
 type Data = { voorkeuren: Voorkeur[] } | { error: string };
 
-function toHeaders(incoming: NextApiRequest['headers']): Headers {
-  const h = new Headers();
-  for (const [k, v] of Object.entries(incoming)) {
-    if (v !== undefined && v !== null)
-      h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
-  }
-  return h;
-}
-
 /**
  * GET /api/diensten/voorkeuren
  *
@@ -52,8 +43,8 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const session = await auth.api.getSession({ headers: toHeaders(req.headers) });
-  if (!session?.user) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -70,6 +61,17 @@ export default async function handler(
     return res.status(400).json({
       error: 'Missing or invalid vanGte, totLte, or idwaarneemgroepIn',
     });
+  }
+
+  // Non-admin users: restrict to groups they belong to
+  if (!user.isAdmin) {
+    const allowedIds = new Set(await getUserWaarneemgroepIds(user.id));
+    const filtered = idwaarneemgroepIn.filter((id) => allowedIds.has(id));
+    if (filtered.length === 0) {
+      return res.status(200).json({ voorkeuren: [] });
+    }
+    idwaarneemgroepIn.length = 0;
+    idwaarneemgroepIn.push(...filtered);
   }
 
   try {

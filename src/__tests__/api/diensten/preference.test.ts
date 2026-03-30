@@ -84,7 +84,7 @@ function createMockRes() {
 // --- Tests ---
 
 describe('POST /api/diensten/preference', () => {
-  let handler: typeof import('./preference').default;
+  let handler: typeof import('@/pages/api/diensten/preference').default;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -92,7 +92,7 @@ describe('POST /api/diensten/preference', () => {
     mockTransaction.mockImplementation(async (cb) => {
       await cb({ delete: mockDelete, insert: mockInsert });
     });
-    handler = (await import('./preference')).default;
+    handler = (await import('@/pages/api/diensten/preference')).default;
   });
 
   // --- Validation ---

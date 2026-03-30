@@ -1,18 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { asc, eq, max } from 'drizzle-orm';
-import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { getAuthenticatedUser } from '@/lib/api-auth';
 
 const { waarneemgroepen, specialismen, regios, instellingen } = schema;
-
-function toHeaders(incoming: NextApiRequest['headers']): Headers {
-  const h = new Headers();
-  for (const [k, v] of Object.entries(incoming)) {
-    if (v !== undefined && v !== null)
-      h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
-  }
-  return h;
-}
 
 export type SpecialismeItem = { id: number; omschrijving: string };
 export type RegioItem = { id: number; naam: string };
@@ -47,9 +38,13 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const session = await auth.api.getSession({ headers: toHeaders(req.headers) });
-  if (!session?.user?.id) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (req.method === 'POST' && !user.isAdmin) {
+    return res.status(403).json({ error: 'Alleen administrators kunnen waarneemgroepen toevoegen.' });
   }
 
   if (req.method === 'GET') {

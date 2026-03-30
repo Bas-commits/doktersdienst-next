@@ -1,22 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq } from 'drizzle-orm';
-import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 
 const { waarneemgroepdeelnemers } = schema;
 
 type Actie = 'aanmelden' | 'afmelden' | 'groep';
 
 type Data = { ok: true } | { error: string };
-
-function toHeaders(incoming: NextApiRequest['headers']): Headers {
-  const h = new Headers();
-  for (const [k, v] of Object.entries(incoming)) {
-    if (v !== undefined && v !== null)
-      h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
-  }
-  return h;
-}
 
 /**
  * POST /api/deelnemers/registratie
@@ -36,8 +27,8 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const session = await auth.api.getSession({ headers: toHeaders(req.headers) });
-  if (!session?.user) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -56,6 +47,11 @@ export default async function handler(
       typeof IDwaarneemgroep !== 'number'
     ) {
       return res.status(400).json({ error: 'Invalid body' });
+    }
+
+    const hasAccess = await hasGroupManagementAccess(user, IDwaarneemgroep);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Geen toegang om registraties in deze waarneemgroep te beheren.' });
     }
 
     const typedActie = actie as Actie;

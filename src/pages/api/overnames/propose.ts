@@ -298,7 +298,7 @@ export default async function handler(
       logger.warn({
         msg: 'overname-propose:conflict',
         reason: 'pending-proposal-exists',
-        existingProposalId: existingProposal[0]?.id,
+        existingProposalId: existingProposal[0]?.iddienstovern,
         iddienstovernResolved: resolvedOriginalId,
         senderId,
       });

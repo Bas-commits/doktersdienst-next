@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, isNull, or } from 'drizzle-orm';
-import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { pool } from '@/lib/db';
+import { getAuthenticatedUser, isUserInWaarneemgroep } from '@/lib/api-auth';
 
 type Data =
   | {
@@ -10,15 +10,6 @@ type Data =
       tarieven: { id: number; omschrijving: string }[];
     }
   | { error: string };
-
-function toHeaders(incoming: NextApiRequest['headers']): Headers {
-  const h = new Headers();
-  for (const [k, v] of Object.entries(incoming)) {
-    if (v !== undefined && v !== null)
-      h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
-  }
-  return h;
-}
 
 /**
  * GET /api/diensten/options?idwaarneemgroep=<n>
@@ -34,14 +25,18 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const session = await auth.api.getSession({ headers: toHeaders(req.headers) });
-  if (!session?.user) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const idwaarneemgroep = Number(req.query.idwaarneemgroep);
   if (Number.isNaN(idwaarneemgroep) || idwaarneemgroep <= 0) {
     return res.status(400).json({ error: 'Missing or invalid idwaarneemgroep' });
+  }
+
+  if (!user.isAdmin && !(await isUserInWaarneemgroep(user.id, idwaarneemgroep))) {
+    return res.status(403).json({ error: 'Geen toegang tot deze waarneemgroep.' });
   }
 
   try {

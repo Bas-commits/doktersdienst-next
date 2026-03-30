@@ -1,18 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, asc, eq } from 'drizzle-orm';
-import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 
 const { waarneemgroepen, deelnemers, waarneemgroepdeelnemers } = schema;
-
-function toHeaders(incoming: NextApiRequest['headers']): Headers {
-  const h = new Headers();
-  for (const [k, v] of Object.entries(incoming)) {
-    if (v !== undefined && v !== null)
-      h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
-  }
-  return h;
-}
 
 export type WaarneemgroepDetail = {
   id: number;
@@ -58,14 +49,19 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const session = await auth.api.getSession({ headers: toHeaders(req.headers) });
-  if (!session?.user?.id) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const id = Number(req.query.id);
   if (Number.isNaN(id) || id <= 0) {
     return res.status(400).json({ error: 'Invalid id' });
+  }
+
+  const hasAccess = await hasGroupManagementAccess(user, id);
+  if (!hasAccess) {
+    return res.status(403).json({ error: 'Geen toegang tot deze waarneemgroep.' });
   }
 
   if (req.method === 'GET') {

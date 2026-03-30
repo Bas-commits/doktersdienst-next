@@ -1,20 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, gt, inArray, lt } from 'drizzle-orm';
-import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 
 const { diensten: dienstenTable } = schema;
 
 type Data = { success: true } | { error: string };
-
-function toHeaders(incoming: NextApiRequest['headers']): Headers {
-  const h = new Headers();
-  for (const [k, v] of Object.entries(incoming)) {
-    if (v !== undefined && v !== null)
-      h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
-  }
-  return h;
-}
 
 const SECTION_TYPE: Record<string, number> = {
   middle: 0,
@@ -62,8 +53,8 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const session = await auth.api.getSession({ headers: toHeaders(req.headers) });
-  if (!session?.user) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -76,6 +67,11 @@ export default async function handler(
     !['middle', 'top', 'bottom'].includes(section)
   ) {
     return res.status(400).json({ error: 'Missing or invalid fields' });
+  }
+
+  const hasAccess = await hasGroupManagementAccess(user, idwaarneemgroep);
+  if (!hasAccess) {
+    return res.status(403).json({ error: 'Geen toegang tot deze waarneemgroep.' });
   }
 
   const targetType = SECTION_TYPE[section as string];

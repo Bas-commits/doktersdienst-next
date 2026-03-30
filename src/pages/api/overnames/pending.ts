@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { alias } from 'drizzle-orm/pg-core';
 
-const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
+const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers, waarneemgroepen } = schema;
 const GROEP_SECRETARIS = 2;
 
 function toHeaders(incoming: NextApiRequest['headers']): Headers {
@@ -43,11 +43,10 @@ export default async function handler(
     .where(eq(deelnemers.login, session.user.email))
     .limit(1);
 
-  if (!currentDoctor.length) {
+  const doctorId = currentDoctor[0]?.id;
+  if (!doctorId) {
     return res.status(200).json({ verzoeken: [] });
   }
-
-  const doctorId = currentDoctor[0].id;
 
   // Find waarneemgroepen where this doctor is secretaris
   const secretarisGroepen = await db
@@ -86,14 +85,19 @@ export default async function handler(
       tot: dienstenTable.tot,
       iddeelnemer: dienstenTable.iddeelnemer,
       iddeelnovern: dienstenTable.iddeelnovern,
+      idwaarneemgroep: dienstenTable.idwaarneemgroep,
       originalVoornaam: originalDeelnemer.voornaam,
       originalAchternaam: originalDeelnemer.achternaam,
+      originalColor: originalDeelnemer.color,
       targetVoornaam: targetDeelnemer.voornaam,
       targetAchternaam: targetDeelnemer.achternaam,
+      targetColor: targetDeelnemer.color,
+      waarneemgroepNaam: waarneemgroepen.naam,
     })
     .from(dienstenTable)
     .leftJoin(originalDeelnemer, eq(dienstenTable.iddeelnemer, originalDeelnemer.id))
     .leftJoin(targetDeelnemer, eq(dienstenTable.iddeelnovern, targetDeelnemer.id))
+    .leftJoin(waarneemgroepen, eq(dienstenTable.idwaarneemgroep, waarneemgroepen.id))
     .where(pendingFilter);
 
   const verzoeken = rows.map((r) => {
@@ -125,14 +129,17 @@ export default async function handler(
       van: `${String(vanDate.getHours()).padStart(2, '0')}:${String(vanDate.getMinutes()).padStart(2, '0')}`,
       tot: `${String(totDate.getHours()).padStart(2, '0')}:${String(totDate.getMinutes()).padStart(2, '0')}`,
       week,
+      waarneemgroep: r.waarneemgroepNaam ?? `Groep ${r.idwaarneemgroep ?? '?'}`,
       vanArts: {
         initialen: originalInitialen,
         naam: originalNaam,
+        color: r.originalColor ?? '#7b2d8e',
         akkoord: true,
       },
       naarArts: {
         initialen: targetInitialen,
         naam: targetNaam,
+        color: r.targetColor ?? '#7b2d8e',
         akkoord: false,
       },
     };

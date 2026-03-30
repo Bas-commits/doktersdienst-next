@@ -47,14 +47,12 @@ function toDienstenResponse(diensten: Array<{
           color: d.diensten_deelnemers.color ?? '',
         }
       : null,
-    target_deelnemers: (d as { target_deelnemers?: typeof d.diensten_deelnemers }).target_deelnemers
-      ? {
-          id: (d as { target_deelnemers: NonNullable<typeof d.diensten_deelnemers> }).target_deelnemers.id ?? 0,
-          voornaam: (d as { target_deelnemers: NonNullable<typeof d.diensten_deelnemers> }).target_deelnemers.voornaam ?? '',
-          achternaam: (d as { target_deelnemers: NonNullable<typeof d.diensten_deelnemers> }).target_deelnemers.achternaam ?? '',
-          color: (d as { target_deelnemers: NonNullable<typeof d.diensten_deelnemers> }).target_deelnemers.color ?? '',
-        }
-      : null,
+    target_deelnemers: (() => {
+      const td = (d as unknown as { target_deelnemers?: typeof d.diensten_deelnemers }).target_deelnemers;
+      return td
+        ? { id: td.id ?? 0, voornaam: td.voornaam ?? '', achternaam: td.achternaam ?? '', color: td.color ?? '' }
+        : null;
+    })(),
   }));
   return { data: { diensten: list } };
 }

@@ -213,6 +213,43 @@ export default function OvernamesPage() {
     [selectedOvernameBlock]
   );
 
+  const handleOvernameRecreate = useCallback(async () => {
+    if (!selectedOvernameBlock?.iddienstovern) return;
+    setDetailSubmitting(true);
+    setDetailError(null);
+    try {
+      // Delete the old declined proposal first
+      const res = await fetch('/api/overnames/respond', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iddienstovern: selectedOvernameBlock.iddienstovern, action: 'delete' }),
+      });
+      if (!res.ok) {
+        const result = await res.json();
+        setDetailError(result.error || 'Er is een fout opgetreden');
+        return;
+      }
+      // Find the underlying assigned shift block by matching the iddienstovern
+      const allBlocks = rows.flatMap((r) => r.shiftBlocks);
+      const originalBlock = allBlocks.find(
+        (b) => !b.overnameType && b.id === selectedOvernameBlock.iddienstovern
+      );
+      setSelectedOvernameBlock(null);
+      setRefreshKey((k) => k + 1);
+      window.dispatchEvent(new Event('overname-updated'));
+      // Open the propose modal for the original shift
+      if (originalBlock) {
+        setSelectedShift(originalBlock);
+        setSubmitError(null);
+      }
+    } catch {
+      setDetailError('Er is een fout opgetreden');
+    } finally {
+      setDetailSubmitting(false);
+    }
+  }, [selectedOvernameBlock, rows]);
+
   return (
     <>
       <Head>
@@ -280,6 +317,7 @@ export default function OvernamesPage() {
         <OvernameDetailModal
           block={selectedOvernameBlock}
           onRespond={handleOvernameRespond}
+          onRecreate={handleOvernameRecreate}
           onClose={() => { setSelectedOvernameBlock(null); setDetailError(null); }}
           submitting={detailSubmitting}
           error={detailError}

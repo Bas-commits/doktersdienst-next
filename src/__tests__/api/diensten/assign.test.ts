@@ -110,6 +110,21 @@ vi.mock('@/lib/auth', () => ({
   },
 }));
 
+vi.mock('@/lib/api-auth', () => ({
+  getAuthenticatedUser: vi.fn().mockResolvedValue({
+    id: 1,
+    email: 'test@test.nl',
+    idgroep: 5,
+    isAdmin: true,
+  }),
+  hasGroupManagementAccess: vi.fn().mockResolvedValue(true),
+  isUserInWaarneemgroep: vi.fn().mockResolvedValue(true),
+  getUserWaarneemgroepIds: vi.fn().mockResolvedValue([9]),
+  toHeaders: vi.fn().mockReturnValue(new Headers()),
+  GROEP_ADMINISTRATOR: 5,
+  GROEP_SECRETARIS: 2,
+}));
+
 // ---- Test helpers ----
 
 function makeReq(overrides: Partial<NextApiRequest> = {}): NextApiRequest {
@@ -173,8 +188,8 @@ describe('POST /api/diensten/assign — validation (US1)', () => {
   });
 
   it('T017b: returns 401 when no session', async () => {
-    const { auth } = await import('@/lib/auth');
-    vi.mocked(auth.api.getSession).mockResolvedValueOnce(null as any);
+    const apiAuth = await import('@/lib/api-auth');
+    vi.mocked(apiAuth.getAuthenticatedUser).mockResolvedValueOnce(null);
 
     const req = makeReq();
     const res = makeRes();

@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, gte, lte, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { getAuthenticatedUser, getUserWaarneemgroepIds } from '@/lib/api-auth';
 
 const { diensten: dienstenTable, deelnemers } = schema;
 const targetDeelnemer = alias(deelnemers, 'targetDeelnemer');
@@ -24,16 +24,6 @@ type Data =
     }> }
   | { error: string };
 
-/** Convert Next API request headers to Headers for Better Auth */
-function toHeaders(incoming: NextApiRequest['headers']): Headers {
-  const h = new Headers();
-  for (const [k, v] of Object.entries(incoming)) {
-    if (v !== undefined && v !== null)
-      h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
-  }
-  return h;
-}
-
 /**
  * GET /api/diensten
  *
@@ -45,6 +35,7 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
  *   iddeelnemer (optional, number) - only return diensten where iddeelnemer = this (e.g. for "my" preferences)
  *
  * Returns diensten with joined deelnemer (voornaam, achternaam, color).
+ * Non-admin users can only query groups they belong to.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -54,8 +45,8 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const session = await auth.api.getSession({ headers: toHeaders(req.headers) });
-  if (!session?.user) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -89,6 +80,17 @@ export default async function handler(
     return res.status(400).json({
       error: 'Missing or invalid vanGte, totLte, or idwaarneemgroepIn',
     });
+  }
+
+  // Non-admin users: restrict to groups they belong to
+  if (!user.isAdmin) {
+    const allowedIds = new Set(await getUserWaarneemgroepIds(user.id));
+    const filtered = idwaarneemgroepIn.filter((id) => allowedIds.has(id));
+    if (filtered.length === 0) {
+      return res.status(200).json({ diensten: [] });
+    }
+    idwaarneemgroepIn.length = 0;
+    idwaarneemgroepIn.push(...filtered);
   }
 
   const whereConditions = [

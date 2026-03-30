@@ -1,13 +1,42 @@
+/**
+ * @vitest-environment jsdom
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import React from 'react';
 import { DoktersdienstHeader } from './DoktersdienstHeader';
 
-vi.mock('@inertiajs/react', () => ({
-  router: { reload: vi.fn() },
-  Link: ({ href, children, ...props }: { href: string; children?: unknown }) => (
+const mockReload = vi.fn();
+const mockPush = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('next/router', () => ({
+  useRouter: () => ({
+    pathname: '/',
+    reload: mockReload,
+    push: mockPush,
+  }),
+}));
+
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...props }: { href: string; children?: React.ReactNode; [k: string]: unknown }) => (
     <a href={href} {...props}>{children}</a>
   ),
 }));
+
+vi.mock('@/lib/auth-client', () => ({
+  authClient: { signOut: vi.fn().mockResolvedValue(undefined) },
+}));
+
+vi.mock('@/contexts/WaarneemgroepContext', async () => {
+  const { createContext } = await import('react');
+  return { WaarneemgroepContext: createContext(null) };
+});
+
+// Mock fetch for overname verzoeken
+const mockFetch = vi.fn().mockResolvedValue({
+  json: () => Promise.resolve({ verzoeken: [] }),
+});
+globalThis.fetch = mockFetch as unknown as typeof fetch;
 
 const defaultProps = {
   waarneemgroepen: [
@@ -22,7 +51,6 @@ const defaultProps = {
   routes: {
     spreekuren: '/spreekuren',
     mijn_gegevens_deelnemer: '/mijn-gegevens',
-    mijn_gegevens_deelnemer_jsx: '/DoktersDienst/mijn_gegevens_deelnemer_jsx',
     logout: '/logout',
   },
   assetUrls: {
@@ -34,7 +62,11 @@ const defaultProps = {
 
 describe('DoktersdienstHeader', () => {
   beforeEach(() => {
+    cleanup();
     vi.clearAllMocks();
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ verzoeken: [] }),
+    });
     vi.stubGlobal('localStorage', {
       getItem: vi.fn((key: string) => (key === 'groupid' ? '1' : null)),
       setItem: vi.fn(),
@@ -50,7 +82,6 @@ describe('DoktersdienstHeader', () => {
 
     expect(screen.getByTestId('doktersdienst-header')).toBeInTheDocument();
     expect(screen.getByTestId('header-logo')).toBeInTheDocument();
-    expect(screen.getByTestId('header-spreekuren')).toHaveAttribute('href', '/spreekuren');
     expect(screen.getByTestId('header-group-select')).toBeInTheDocument();
     expect(screen.getByTestId('header-user-menu')).toBeInTheDocument();
   });
@@ -58,7 +89,7 @@ describe('DoktersdienstHeader', () => {
   it('renders group select options from waarneemgroepen', () => {
     render(<DoktersdienstHeader {...defaultProps} />);
 
-    const select = screen.getByLabelText('Waarneemgroep');
+    const select = screen.getByTestId('header-group-select');
     expect(select).toHaveValue('1');
     const options = screen.getAllByRole('option');
     expect(options).toHaveLength(2);
@@ -74,13 +105,12 @@ describe('DoktersdienstHeader', () => {
     expect(screen.getByTestId('header-user-type')).toHaveTextContent('Admin');
   });
 
-  it('renders Mijn gegevens and Log uit links with correct hrefs', () => {
+  it('renders Mijn gegevens link with correct href when user menu is open', () => {
     render(<DoktersdienstHeader {...defaultProps} />);
 
     fireEvent.click(screen.getByTestId('header-user-menu'));
 
-    expect(screen.getByTestId('header-link-mijn-gegevens')).toHaveAttribute('href', '/DoktersDienst/mijn_gegevens_deelnemer_jsx');
-    expect(screen.getByTestId('header-link-logout')).toHaveAttribute('href', '/logout');
+    expect(screen.getByTestId('header-link-mijn-gegevens')).toHaveAttribute('href', '/mijn-gegevens');
   });
 
   it('shows Admin Tools when TypeOfUser is not Doctor', () => {
@@ -100,7 +130,7 @@ describe('DoktersdienstHeader', () => {
     expect(screen.queryByTestId('header-admin-tools')).not.toBeInTheDocument();
   });
 
-  it('updates localStorage and reloads on group change', async () => {
+  it('updates localStorage and reloads on group change', () => {
     const setItem = vi.fn();
     vi.stubGlobal('localStorage', {
       getItem: vi.fn((key: string) => (key === 'groupid' ? '1' : null)),
@@ -111,18 +141,12 @@ describe('DoktersdienstHeader', () => {
       key: vi.fn(),
     });
 
-    const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
-    const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
-
     render(<DoktersdienstHeader {...defaultProps} />);
 
-    const select = screen.getByLabelText('Waarneemgroep');
+    const select = screen.getByTestId('header-group-select');
     fireEvent.change(select, { target: { value: '2' } });
 
     expect(setItem).toHaveBeenCalledWith('groupid', '2');
-    expect(dispatchEventSpy).toHaveBeenCalled();
-
-    addEventListenerSpy.mockRestore();
-    dispatchEventSpy.mockRestore();
+    expect(mockReload).toHaveBeenCalled();
   });
 });

@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import type { ShiftBlockView, DoctorInfo } from '@/types/diensten';
 
 export interface OvernameDetailModalProps {
   block: ShiftBlockView;
   onRespond: (action: 'accept' | 'decline' | 'delete') => void;
+  /** Called when user wants to delete the declined proposal and create a new one. */
+  onRecreate?: () => void;
   onClose: () => void;
   submitting?: boolean;
   error?: string | null;
@@ -29,10 +32,21 @@ function DoctorBadge({ doctor, label }: { doctor: DoctorInfo | null | undefined;
 export function OvernameDetailModal({
   block,
   onRespond,
+  onRecreate,
   onClose,
   submitting,
   error,
 }: OvernameDetailModalProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const handleDelete = () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    onRespond('delete');
+  };
+
   const shiftDate = new Date(block.van * 1000);
   const dateStr = shiftDate.toLocaleDateString('nl-NL', {
     weekday: 'long',
@@ -83,6 +97,31 @@ export function OvernameDetailModal({
           <p className="text-red-600 text-sm mb-4">{error}</p>
         )}
 
+        {/* Delete confirmation */}
+        {confirmDelete && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+            <p className="text-sm text-red-800 font-medium">Weet je zeker dat je deze overname wilt verwijderen?</p>
+            <div className="flex gap-2 mt-2">
+              <button
+                type="button"
+                className="px-3 py-1.5 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
+                onClick={() => onRespond('delete')}
+                disabled={submitting}
+              >
+                {submitting ? 'Bezig...' : 'Ja, verwijderen'}
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                onClick={() => setConfirmDelete(false)}
+                disabled={submitting}
+              >
+                Annuleren
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex justify-end gap-3">
           <button
@@ -99,10 +138,10 @@ export function OvernameDetailModal({
               <button
                 type="button"
                 className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
-                onClick={() => onRespond('delete')}
+                onClick={handleDelete}
                 disabled={submitting}
               >
-                {submitting ? 'Bezig...' : 'Verwijderen'}
+                Verwijderen
               </button>
               <button
                 type="button"
@@ -124,13 +163,36 @@ export function OvernameDetailModal({
           )}
 
           {block.overnameType === 'vraagtekenOvername' && (
+            <>
+              <button
+                type="button"
+                className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
+                onClick={handleDelete}
+                disabled={submitting}
+              >
+                Verwijderen
+              </button>
+              {onRecreate && (
+                <button
+                  type="button"
+                  className="px-4 py-2 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  onClick={onRecreate}
+                  disabled={submitting}
+                >
+                  Opnieuw voorstellen
+                </button>
+              )}
+            </>
+          )}
+
+          {block.overnameType === 'overname' && (
             <button
               type="button"
               className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
-              onClick={() => onRespond('delete')}
+              onClick={handleDelete}
               disabled={submitting}
             >
-              {submitting ? 'Bezig...' : 'Verwijderen'}
+              Verwijderen
             </button>
           )}
         </div>

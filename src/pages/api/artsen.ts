@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '@/lib/db';
+import { auth } from '@/lib/auth';
+import { toHeaders } from '@/lib/api-auth';
 
 type Art = {
   id: number;
@@ -20,13 +22,16 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<Data>
 ) {
-  // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const session = await auth.api.getSession({ headers: toHeaders(req.headers) });
+  if (!session?.user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   try {
-    // Example: Get all doctors (artsen)
     const result = await query<Art>(
       'SELECT id, naam, voornaam, voorletters, titulatuur, email FROM artsen LIMIT 10'
     );

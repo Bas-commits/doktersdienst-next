@@ -64,8 +64,9 @@ export function DoktersdienstHeader({
     van: string;
     tot: string;
     week: number;
-    vanArts: { initialen: string; naam: string; akkoord: boolean };
-    naarArts: { initialen: string; naam: string; akkoord: boolean };
+    waarneemgroep: string;
+    vanArts: { initialen: string; naam: string; color: string; akkoord: boolean };
+    naarArts: { initialen: string; naam: string; color: string; akkoord: boolean };
   }
   const [verzoeken, setVerzoeken] = useState<OvernameVerzoek[]>([]);
   const [verzoekPopoverOpen, setVerzoekPopoverOpen] = useState(false);
@@ -335,11 +336,15 @@ export function DoktersdienstHeader({
                     <div className="text-sm mb-3">
                       <p className="font-semibold mb-1">{v.datum}</p>
                       <p className="text-gray-600">{v.van} – {v.tot} (week {v.week})</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{v.waarneemgroep}</p>
                     </div>
 
                     <div className="flex items-center justify-between mb-3 text-sm">
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded bg-[#7b2d8e] text-white text-xs font-bold">
+                        <span
+                          className="inline-flex h-8 w-8 items-center justify-center rounded text-white text-xs font-bold"
+                          style={{ backgroundColor: v.vanArts.color }}
+                        >
                           {v.vanArts.initialen}
                         </span>
                         <div>
@@ -356,7 +361,10 @@ export function DoktersdienstHeader({
 
                     <div className="flex items-center justify-between mb-4 text-sm">
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded bg-[#7b2d8e] text-white text-xs font-bold">
+                        <span
+                          className="inline-flex h-8 w-8 items-center justify-center rounded text-white text-xs font-bold"
+                          style={{ backgroundColor: v.naarArts.color }}
+                        >
                           {v.naarArts.initialen}
                         </span>
                         <div>

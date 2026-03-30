@@ -11,7 +11,8 @@ function createLogger() {
     // Under Next.js dev (Turbopack) that often fails silently — no output.
     // Piping through pino-pretty as the destination stream avoids workers.
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- optional dev-only dep, keeps prod from eagerly loading it
-    const pretty = require('pino-pretty') as typeof import('pino-pretty').default;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pretty = require('pino-pretty') as any;
     return pino(
       { level },
       pretty({

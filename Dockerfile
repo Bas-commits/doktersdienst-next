@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:24-alpine AS base
+FROM node:24-alpine AS base
 
 # --- Dependencies ---
 FROM base AS deps
@@ -20,10 +20,10 @@ ENV BETTER_AUTH_SECRET="placeholder"
 RUN npm run build
 
 # --- Production (distroless) ---
-FROM --platform=linux/amd64 gcr.io/distroless/nodejs24-debian12 AS runner
+FROM gcr.io/distroless/nodejs24-debian12 AS runner
 WORKDIR /app
 
-ENV NODE_ENV=development
+ENV NODE_ENV=production
 ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 

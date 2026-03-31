@@ -23,14 +23,14 @@ RUN npm run build
 FROM --platform=linux/amd64 gcr.io/distroless/nodejs24-debian12 AS runner
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV PORT=3000
+ENV NODE_ENV=development
+ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-EXPOSE 3000
+EXPOSE 3001
 
 CMD ["server.js"]

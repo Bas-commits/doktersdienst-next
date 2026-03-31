@@ -3,6 +3,9 @@ import { createAuthMiddleware } from 'better-auth/api';
 import { Pool } from 'pg';
 import { legacyMD5Verify } from '@/lib/legacy-password';
 import { pool as appPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
+
+const log = logger.child({ module: 'auth' });
 
 const rawPool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -114,7 +117,11 @@ export const auth = betterAuth({
     minPasswordLength: 8,
     maxPasswordLength: 128,
     password: {
-      verify: async ({ hash, password }) => legacyMD5Verify(hash, password),
+      verify: async ({ hash, password }) => {
+        const result = await legacyMD5Verify(hash, password);
+        log.info({ hashPrefix: hash?.slice(0, 6), result }, 'password verify');
+        return result;
+      },
     },
   },
   advanced: {
@@ -145,29 +152,53 @@ export const auth = betterAuth({
       // Ensure credential account exists for deelnemers so Better Auth finds the hash and calls our verify.
       // Use app pool to avoid connection contention with Better Auth's authDbPool.
       if (ctx.path === '/sign-in/email' && ctx.body?.email) {
+        log.info({ email: ctx.body.email }, 'sign-in attempt started');
         const client = await appPool.connect();
         try {
           await client.query('SET search_path TO public');
-          const deelnemerRes = await client.query<{ id: number; encrypted_password: string | null }>(
-            'SELECT id, encrypted_password FROM deelnemers WHERE login = $1 LIMIT 1',
+          // Debug: check which DB we're connected to
+          const dbCheck = await client.query('SELECT current_database(), current_schema(), inet_server_addr(), inet_server_port()');
+          log.info({ db: dbCheck.rows[0] }, 'hook connected to database');
+          const countRes = await client.query('SELECT COUNT(*) as cnt FROM deelnemers');
+          log.info({ deelnemersCount: countRes.rows[0]?.cnt }, 'total deelnemers in table');
+
+          const deelnemerRes = await client.query<{ id: number; encrypted_password: string | null; name: string | null; email_verified: boolean | null }>(
+            'SELECT id, encrypted_password, name, email_verified FROM deelnemers WHERE login = $1 LIMIT 1',
             [ctx.body.email]
           );
+          log.info({ rowCount: deelnemerRes.rowCount, rows: deelnemerRes.rows }, 'raw deelnemers query result');
           const row = deelnemerRes.rows?.[0];
+          log.info(
+            { email: ctx.body.email, found: !!row, id: row?.id, hasPassword: !!row?.encrypted_password, name: row?.name, emailVerified: row?.email_verified },
+            'deelnemers lookup result'
+          );
           if (row?.id != null && row?.encrypted_password) {
             const userId = String(row.id);
             const accountId = `credential-${userId}`;
+            // Debug: check constraints from app's perspective
+            const constraintCheck = await client.query(
+              `SELECT conname, contype FROM pg_constraint WHERE conrelid = 'public.account'::regclass`
+            );
+            log.info({ constraints: constraintCheck.rows }, 'account table constraints');
+
             await client.query(
-              `INSERT INTO account (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt")
+              `INSERT INTO public.account (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt")
                VALUES ($1, $2, $2, 'credential', $3, now(), now())
-               ON CONFLICT (id) DO UPDATE SET password = EXCLUDED.password, "updatedAt" = now()`,
+               ON CONFLICT ON CONSTRAINT account_pkey DO UPDATE SET password = EXCLUDED.password, "updatedAt" = now()`,
               [accountId, userId, row.encrypted_password]
             );
+            log.info({ userId, accountId }, 'account upserted');
+          } else {
+            log.warn({ email: ctx.body.email, id: row?.id, hasPassword: !!row?.encrypted_password }, 'skipped account upsert — missing id or password');
           }
         } catch (err) {
+          log.error({ err, email: ctx.body.email }, 'error in sign-in hook');
           throw err;
         } finally {
           client.release();
         }
+      } else {
+        log.debug({ path: ctx.path }, 'auth middleware passthrough');
       }
     }),
     after: createAuthMiddleware(async () => {}),

@@ -1,7 +1,8 @@
 'use client';
 
 import Head from 'next/head';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FaFilter } from 'react-icons/fa';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -33,6 +34,78 @@ function defaultSelectedIds(activeId: string | null, waarneemgroepIds: number[])
   // Fall back to first waarneemgroep when no active selection exists (e.g. fresh session)
   if (waarneemgroepIds.length > 0) return new Set([waarneemgroepIds[0]]);
   return new Set();
+}
+
+function FilterPopover({
+  waarneemgroepen,
+  loading,
+  idsToShow,
+  totalCount,
+  onToggle,
+}: {
+  waarneemgroepen: { ID: number; naam: string | null }[];
+  loading: boolean;
+  idsToShow: Set<number>;
+  totalCount: number;
+  onToggle: (id: number, checked: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  const hasFilter = idsToShow.size < totalCount;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`cursor-pointer rounded p-1 transition-colors hover:bg-gray-100 ${hasFilter ? 'text-blue-600' : 'text-gray-500'}`}
+        aria-label="Filter waarneemgroepen"
+      >
+        <FaFilter className="h-4 w-4" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 z-50 mt-1 w-64 rounded-md border bg-white p-3 shadow-lg">
+          <p className="mb-2 text-sm font-medium">Waarneemgroepen</p>
+          {loading && (
+            <p className="text-sm text-muted-foreground">Laden…</p>
+          )}
+          {!loading && waarneemgroepen.length === 0 && (
+            <p className="text-sm text-muted-foreground">Geen waarneemgroepen.</p>
+          )}
+          <div className="space-y-2">
+            {!loading &&
+              waarneemgroepen.map((wg) => {
+                const id = wg.ID != null && !Number.isNaN(wg.ID) ? wg.ID : 0;
+                const label = wg.naam ?? `Waarneemgroep ${id}`;
+                const checked = idsToShow.has(id);
+                return (
+                  <label key={id} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(value) => onToggle(id, !!value)}
+                      aria-label={label}
+                    />
+                    <Label className="cursor-pointer font-normal">{label}</Label>
+                  </label>
+                );
+              })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function RoosterInzienPage() {
@@ -123,42 +196,19 @@ export default function RoosterInzienPage() {
             </p>
           </CardContent>
         </Card>
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-          <Card className="sticky top-6 w-full shrink-0 self-start lg:w-56">
+        <div>
+          <Card>
             <CardHeader>
-              <CardTitle>Waarneemgroepen</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {waarneemgroepenLoading && (
-                <p className="text-sm text-muted-foreground">Laden…</p>
-              )}
-              {!waarneemgroepenLoading && waarneemgroepen?.length === 0 && (
-                <p className="text-sm text-muted-foreground">Geen waarneemgroepen.</p>
-              )}
-              {!waarneemgroepenLoading &&
-                waarneemgroepen?.map((wg) => {
-                  const id = wg.ID != null && !Number.isNaN(wg.ID) ? wg.ID : 0;
-                  const label = wg.naam ?? `Waarneemgroep ${id}`;
-                  const checked = idsToShow.has(id);
-                  return (
-                    <label
-                      key={id}
-                      className="flex cursor-pointer items-center gap-2 text-sm"
-                    >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(value) => toggleWaarneemgroep(id, !!value)}
-                        aria-label={label}
-                      />
-                      <Label className="cursor-pointer font-normal">{label}</Label>
-                    </label>
-                  );
-                })}
-            </CardContent>
-          </Card>
-          <Card className="min-w-0 flex-1">
-            <CardHeader>
-              <CardTitle>Rooster inzien</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <FilterPopover
+                  waarneemgroepen={waarneemgroepen ?? []}
+                  loading={waarneemgroepenLoading}
+                  idsToShow={idsToShow}
+                  totalCount={waarneemgroepIds.length}
+                  onToggle={toggleWaarneemgroep}
+                />
+                Rooster inzien
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {error && (

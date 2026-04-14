@@ -2,6 +2,7 @@
 
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,55 @@ const WEGHALEN_CODE = '1014';
 const TYPE_UNASSIGNED_SLOT = 1;
 /** Types for user preference rows (2, 3, 9, 10, 5001). */
 const USER_DIENST_TYPES = [2, 3, 9, 10, 5001] as const;
+
+function InfoPopover() {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative inline-flex">
+      <button
+        type="button"
+        aria-label="Toon informatie over voorkeuren"
+        onClick={() => setOpen((prev) => !prev)}
+        className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-gray-200"
+      >
+        <Info className="h-6 w-6 text-muted-foreground" />
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          className="absolute top-full left-1/2 z-100 mt-2 w-[700px] max-w-[calc(100vw-2rem)] -translate-x-1/4 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none "
+        >
+          <div className="absolute -top-1 left-1/4 h-2 w-2 -translate-x-1/2 rotate-45 border-t border-l bg-popover" />
+          <h2 className="mb-2 text-base font-semibold">Procedure:</h2>
+          <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            <li>Klik op een van de fiches, links in het scherm</li>
+            <li>De fiche kleeft aan de cursor.</li>
+            <li>Klik op de shifts/diensten waarvoor u een voorkeur wilt aangeven.</li>
+            <li>Herhaal dit voor andere voorkeuren voor shifts/diensten.</li>
+          </ul>
+          <p className="mb-3 text-sm text-muted-foreground">
+            <strong>NB: U kunt meerdere diensten in 1 keer markeren door na een eerste klik de knop ingedrukt te houden, terwijl u over de andere diensten heen beweegt.
+            </strong>
+            </p>
+          
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function VoorkeurenPage() {
   const { data: session } = authClient.useSession();
@@ -198,6 +248,10 @@ export default function VoorkeurenPage() {
           revertPending();
           const message = typeof data?.error === 'string' ? data.error : 'Voorkeur opslaan mislukt.';
           showFailure(message);
+        } else {
+          const chip = getChipByCode(selectedChipCode);
+          const label = chip?.label ?? 'Voorkeur';
+          toast.success(action === 'remove' ? 'Voorkeur verwijderd' : `${label} opgeslagen`);
         }
       } catch (err) {
         clearTimeout(timeoutId);
@@ -271,20 +325,17 @@ export default function VoorkeurenPage() {
         <title>Voorkeuren | Doktersdienst</title>
       </Head>
       <div className="mx-auto max-w-[2000px] space-y-6 px-4 py-8">
-        <Card>
-          <CardHeader>
+        <Card className="overflow-visible">
+          <CardHeader className="overflow-visible">
             <CardTitle>
-              <h1 id="voorkeuren-heading" className="text-2xl font-semibold tracking-tight">
+              <h1 id="voorkeuren-heading" className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
                 Voorkeuren
+                <InfoPopover />
               </h1>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">
-              Openstaande diensten (type 1) voor de geselecteerde waarneemgroep; uw toegewezen diensten worden bij het laden opgehaald.
-              {activeWaarneemgroep ? ` Huidige groep: ${activeWaarneemgroep.naam}.` : ' Selecteer een waarneemgroep in de header.'}
-              {' '}Welkom, {name}. Selecteer een voorkeur en klik op een dienst in de kalender om deze toe te wijzen.
-            </p>
+            
           </CardContent>
         </Card>
         <div className="flex flex-col gap-6 lg:flex-row">
@@ -301,9 +352,7 @@ export default function VoorkeurenPage() {
           </Card>
           <Card className="min-w-0 flex-1">
             <CardHeader>
-              <CardTitle>
-                {activeWaarneemgroep ? `Openstaande diensten – ${activeWaarneemgroep.naam}` : 'Openstaande diensten'}
-              </CardTitle>
+              
             </CardHeader>
             <CardContent>
               {error && (

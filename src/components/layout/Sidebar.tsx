@@ -7,7 +7,9 @@ import {
   Settings,
   ArrowLeftRight,
   PlusSquare,
+  Check 
 } from 'lucide-react';
+import { FaCalendarPlus } from "react-icons/fa";
 
 const SIDEBAR_NAV_ITEMS: {
   id: string;
@@ -16,8 +18,8 @@ const SIDEBAR_NAV_ITEMS: {
   icon: React.ReactNode;
 }[] = [
   { id: 'rooster_inzien', label: 'Rooster', href: '/rooster-inzien', icon: <Calendar className="size-4 shrink-0" /> },
-  { id: 'voorkeuren', label: 'Voorkeuren', href: '/voorkeuren', icon: <Settings className="size-4 shrink-0" /> },
-  { id: 'rooster-maken-secretaris', label: 'Rooster maken secretaris', href: '/rooster-maken-secretaris', icon: <Calendar className="size-4 shrink-0" /> },
+  { id: 'voorkeuren', label: 'Voorkeuren', href: '/voorkeuren', icon: <Check className="size-4 shrink-0" /> },
+  { id: 'rooster-maken-secretaris', label: 'Rooster maken secretaris', href: '/rooster-maken-secretaris', icon: <FaCalendarPlus className="size-4 shrink-0" /> },
   { id: 'overnames', label: 'Overnames', href: '/overnames', icon: <ArrowLeftRight className="size-4 shrink-0" /> },
   { id: 'diensten-toevoegen', label: 'Diensten toevoegen', href: '/diensten-toevoegen', icon: <PlusSquare className="size-4 shrink-0" /> },
 ];

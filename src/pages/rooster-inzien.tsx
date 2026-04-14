@@ -67,14 +67,14 @@ function FilterPopover({
 
   return (
     <div ref={ref} className="relative">
-      <button
+      {/* <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={`cursor-pointer rounded p-1 transition-colors hover:bg-gray-100 ${hasFilter ? 'text-blue-600' : 'text-gray-500'}`}
         aria-label="Filter waarneemgroepen"
       >
         <FaFilter className="h-4 w-4" />
-      </button>
+      </button> */}
       {open && (
         <div className="absolute top-full left-0 z-50 mt-1 w-64 rounded-md border bg-white p-3 shadow-lg">
           <p className="mb-2 text-sm font-medium">Waarneemgroepen</p>

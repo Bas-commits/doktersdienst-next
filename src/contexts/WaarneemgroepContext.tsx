@@ -20,12 +20,13 @@ function getStoredGroupId(): string | null {
   return id && id.trim() !== '' ? id : null;
 }
 
-type ApiWaarneemgroep = { id: number | null; naam: string | null; [key: string]: unknown };
+type ApiWaarneemgroep = { id: number | null; naam: string | null; idgroep?: number | null; [key: string]: unknown };
 
 function toWaarneemgroepItem(row: ApiWaarneemgroep): WaarneemgroepItem {
   return {
     ID: row.id ?? 0,
     naam: row.naam ?? '',
+    idgroep: row.idgroep ?? null,
   };
 }
 

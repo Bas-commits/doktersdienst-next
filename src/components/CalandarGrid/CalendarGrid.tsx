@@ -440,9 +440,9 @@ export function CalendarGrid({
               ? computeWeekVoorkeurLayout(voorkeuren, dates)
               : null;
           return (
-            <div key={`${weekNo}-${weekYear}`} className="flex w-full items-center justify-center">
+            <div key={`${weekNo}-${weekYear}`} className="flex w-full items-stretch justify-center">
               {/* Left week-number column (e.g. "Week 12"). */}
-              <div className="w-[60px] shrink-0">
+              <div className="w-[60px] shrink-0 self-center">
                 <div className="h-[30px] -rotate-90 text-base font-bold text-[#c1c1c1] whitespace-nowrap">
                   Week {weekInfo.week}
                 </div>
@@ -625,7 +625,7 @@ export function CalendarGrid({
               {/* Right column with row labels; mirrors the vertical shift lanes. */}
               {gridRows.length > 1 && (
                 <div
-                  className="shrink-0 pl-2 mb-2.5 flex flex-col"
+                  className="shrink-0 self-stretch pl-2 mb-2.5 flex flex-col"
                   style={{ width: ROW_LABEL_WIDTH }}
                 >
                   <div className="min-h-[36px]" aria-hidden />

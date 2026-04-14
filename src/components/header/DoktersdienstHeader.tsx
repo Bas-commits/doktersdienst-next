@@ -14,6 +14,7 @@ const STORAGE_GROUP_ID_KEY = 'groupid';
 export interface WaarneemgroepItem {
   ID: number;
   naam: string;
+  idgroep?: number | null;
 }
 
 export interface HeaderUser {

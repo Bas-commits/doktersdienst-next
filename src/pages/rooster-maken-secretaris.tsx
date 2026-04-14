@@ -3,8 +3,12 @@
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
+import { FaFilter } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Info } from 'lucide-react';
 
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
@@ -41,6 +45,138 @@ function toFullName(voornaam: string | null, achternaam: string | null): string 
   return [voornaam, achternaam].filter(Boolean).join(' ') || 'Onbekend';
 }
 
+function InfoPopover() {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative inline-flex">
+      <button
+        type="button"
+        aria-label="Toon informatie over voorkeuren"
+        onClick={() => setOpen((prev) => !prev)}
+        className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-gray-200"
+      >
+        <Info className="h-6 w-6 text-muted-foreground" />
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          className="absolute top-full left-1/2 z-9999 mt-2 w-[700px] max-w-[calc(100vw-2rem)] -translate-x-1/4 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none "
+        >
+          <div className="absolute -top-1 left-1/4 h-2 w-2 -translate-x-1/2 rotate-45 border-t border-l bg-popover" />
+          <h2 className="mb-2 text-base font-semibold">Procedure:</h2>
+          <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            <li>Klik op een van de fiches, links in het scherm</li>
+            <li>De fiche kleeft aan de cursor.</li>
+            <li>Klik op de shifts/diensten waarvoor u een voorkeur wilt aangeven.</li>
+            <li>Herhaal dit voor andere voorkeuren voor shifts/diensten.</li>
+          </ul>
+          <p className="mb-3 text-sm text-muted-foreground">
+            <strong>NB: U kunt meerdere diensten in 1 keer markeren door na een eerste klik de knop ingedrukt te houden, terwijl u over de andere diensten heen beweegt.
+            </strong>
+            </p>
+          
+        </div>
+      )}
+    </div>
+  );
+}
+
+function defaultSelectedIds(activeId: string | null, waarneemgroepIds: number[]): Set<number> {
+  if (activeId) {
+    const n = Number(activeId);
+    if (!Number.isNaN(n)) return new Set([n]);
+  }
+  if (waarneemgroepIds.length > 0) return new Set([waarneemgroepIds[0]]);
+  return new Set();
+}
+
+function FilterPopover({
+  waarneemgroepen,
+  loading,
+  idsToShow,
+  totalCount,
+  onToggle,
+}: {
+  waarneemgroepen: { ID: number; naam: string | null }[];
+  loading: boolean;
+  idsToShow: Set<number>;
+  totalCount: number;
+  onToggle: (id: number, checked: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  const hasFilter = idsToShow.size < totalCount;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`cursor-pointer rounded p-1 transition-colors hover:bg-gray-100 ${hasFilter ? 'text-blue-600' : 'text-gray-500'}`}
+        aria-label="Filter waarneemgroepen"
+      >
+        <FaFilter className="h-4 w-4" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 z-50 mt-1 w-64 rounded-md border bg-white p-3 shadow-lg">
+          <p className="mb-2 text-sm font-medium">Waarneemgroepen</p>
+          {loading && (
+            <p className="text-sm text-muted-foreground">Laden…</p>
+          )}
+          {!loading && waarneemgroepen.length === 0 && (
+            <p className="text-sm text-muted-foreground">Geen waarneemgroepen.</p>
+          )}
+          <div className="space-y-2">
+            {!loading &&
+              waarneemgroepen.map((wg) => {
+                const id = wg.ID != null && !Number.isNaN(wg.ID) ? wg.ID : 0;
+                const label = wg.naam ?? `Waarneemgroep ${id}`;
+                const checked = idsToShow.has(id);
+                return (
+                  <label key={id} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(value) => onToggle(id, !!value)}
+                      aria-label={label}
+                    />
+                    <Label className="cursor-pointer font-normal">{label}</Label>
+                  </label>
+                );
+              })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const GROEP_SECRETARIS = 2;
+
 /** Section label for toast messages. */
 const SECTION_LABEL: Record<string, string> = {
   middle: 'Standaard',
@@ -66,6 +202,25 @@ export default function RoosterMakenSecretarisPage() {
   // Prevent double-click during in-flight API call
   const [isAssigning, setIsAssigning] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  /** When null, effective selection is "only header-selected". When set, user has toggled checkboxes. */
+  const [selectedIds, setSelectedIds] = useState<Set<number> | null>(null);
+
+  /** Only groups where the current user is a secretaris. Used to filter the popover. */
+  const secretarisWaarneemgroepen = useMemo(
+    () => (waarneemgroepen ?? []).filter((wg) => wg.idgroep === GROEP_SECRETARIS),
+    [waarneemgroepen]
+  );
+
+  /** True when the active group exists but the user is not a secretaris for it. */
+  const isActiveGroupForbidden = useMemo(() => {
+    if (!activeWaarneemgroepId) return false;
+    const n = Number(activeWaarneemgroepId);
+    if (Number.isNaN(n)) return false;
+    const activeWg = (waarneemgroepen ?? []).find((wg) => wg.ID === n);
+    // Only show the banner once the groups have loaded (otherwise we'd flash it on every mount)
+    if (!activeWg && waarneemgroepenLoading) return false;
+    return activeWg ? activeWg.idgroep !== GROEP_SECRETARIS : false;
+  }, [activeWaarneemgroepId, waarneemgroepen, waarneemgroepenLoading]);
 
   const waarneemgroepIds = useMemo(() => {
     if (!waarneemgroepen?.length) return [];
@@ -98,15 +253,23 @@ export default function RoosterMakenSecretarisPage() {
     return groupShiftBlocksByWaarneemgroep(blocks);
   }, [dienstenResponse]);
 
-  // Use the active waarneemgroep as default; fall back to all groups
-  const idsToShow = useMemo(() => {
-    if (!waarneemgroepIds.length) return new Set<number>();
-    if (activeWaarneemgroepId) {
-      const n = Number(activeWaarneemgroepId);
-      if (!Number.isNaN(n)) return new Set([n]);
-    }
-    return new Set(waarneemgroepIds);
-  }, [waarneemgroepIds, activeWaarneemgroepId]);
+  const idsToShow = useMemo(
+    () => (selectedIds !== null ? selectedIds : defaultSelectedIds(activeWaarneemgroepId, waarneemgroepIds)),
+    [selectedIds, activeWaarneemgroepId, waarneemgroepIds]
+  );
+
+  const toggleWaarneemgroep = useCallback(
+    (wgId: number, checked: boolean) => {
+      setSelectedIds((prev) => {
+        const base = prev ?? defaultSelectedIds(activeWaarneemgroepId, waarneemgroepIds);
+        const next = new Set(base);
+        if (checked) next.add(wgId);
+        else next.delete(wgId);
+        return next;
+      });
+    },
+    [activeWaarneemgroepId, waarneemgroepIds]
+  );
 
   const rows = useMemo(
     () => withWaarneemgroepNames(
@@ -216,6 +379,19 @@ export default function RoosterMakenSecretarisPage() {
   const callAssign = useCallback(
     async (block: ShiftBlockView, section: 'top' | 'middle' | 'bottom', iddeelnemer: number | null) => {
       if (isAssigning) return;
+
+      let conflictWarning: string | null = null;
+      if (iddeelnemer !== null) {
+        const conflictingSections = (['top', 'middle', 'bottom'] as const)
+          .filter((s) => s !== section)
+          .filter((s) => block[s]?.id === iddeelnemer)
+          .map((s) => SECTION_LABEL[s]);
+
+        if (conflictingSections.length > 0) {
+          conflictWarning = `al toegewezen als ${conflictingSections.join(' en ')}`;
+        }
+      }
+
       setIsAssigning(true);
       try {
         const res = await fetch('/api/diensten/assign', {
@@ -240,7 +416,19 @@ export default function RoosterMakenSecretarisPage() {
           toast.success(`${SECTION_LABEL[section]} ontkoppeld`);
         } else {
           const doc = allDoctors.find((d) => d.id === iddeelnemer);
-          toast.success(`${doc?.fullName ?? 'Dokter'} toegewezen als ${SECTION_LABEL[section]}`);
+          const name = doc?.fullName ?? 'Dokter';
+          const isNonMember = doc && block.idwaarneemgroep != null && !doc.waarneemgroepIds.includes(block.idwaarneemgroep);
+          if (conflictWarning) {
+            toast(`${name} toegewezen als ${SECTION_LABEL[section]} (let op: ${conflictWarning})`, {
+              style: { background: '#f97316', color: '#fff', border: 'none' },
+            });
+          } else if (isNonMember) {
+            toast(`Let op: ${name} is geen lid van deze waarneemgroep`, {
+              style: { background: '#f97316', color: '#fff', border: 'none' },
+            });
+          } else {
+            toast.success(`${name} toegewezen als ${SECTION_LABEL[section]}`);
+          }
         }
       } catch {
         toast.error('Netwerkfout bij toewijzen');
@@ -330,18 +518,28 @@ export default function RoosterMakenSecretarisPage() {
       )}
 
       <div className="mx-auto max-w-[2000px] space-y-6 px-4 py-8">
-        <Card>
-          <CardHeader>
+        <Card className="overflow-visible">
+          <CardHeader className="overflow-visible">
             <CardTitle>
-              <h1 className="text-2xl font-semibold tracking-tight">Rooster maken</h1>
+              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+                <FilterPopover
+                  waarneemgroepen={secretarisWaarneemgroepen}
+                  loading={waarneemgroepenLoading}
+                  idsToShow={idsToShow}
+                  totalCount={secretarisWaarneemgroepen.length}
+                  onToggle={toggleWaarneemgroep}
+                />
+                Rooster maken <InfoPopover />
+              </h1>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground text-sm">
-              Selecteer een dokter en klik op een stripe om toe te wijzen. Klik op een bezette stripe zonder selectie om te verwijderen.{' '}
-              <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">Esc</kbd> annuleert de selectie.
-            </p>
-          </CardContent>
+          {isActiveGroupForbidden && (
+            <CardContent>
+              <p className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-800" role="alert">
+                U bent geen secretaris voor deze waarneemgroep, kies een andere waarneemgroep.
+              </p>
+            </CardContent>
+          )}
         </Card>
 
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -386,6 +584,11 @@ export default function RoosterMakenSecretarisPage() {
                 )}
                 {!doctorsLoading && doctors.map((doctor) => {
                   const isSelected = selectedDoctor?.id === doctor.id;
+                  const groupBadges = idsToShow.size > 1
+                    ? (waarneemgroepen ?? []).filter(
+                        (wg) => wg.ID != null && idsToShow.has(wg.ID) && doctor.waarneemgroepIds.includes(wg.ID)
+                      )
+                    : [];
                   return (
                     <button
                       key={doctor.id}
@@ -405,11 +608,25 @@ export default function RoosterMakenSecretarisPage() {
                       >
                         {doctor.initials}
                       </span>
-                      <span className={`truncate ${isSelected ? 'font-semibold' : ''}`}>
-                        {doctor.fullName}
+                      <span className="min-w-0 flex-1">
+                        <span className={`block truncate ${isSelected ? 'font-semibold' : ''}`}>
+                          {doctor.fullName}
+                        </span>
+                        {groupBadges.length > 0 && (
+                          <span className="mt-0.5 flex flex-wrap gap-1">
+                            {groupBadges.map((wg) => (
+                              <span
+                                key={wg.ID}
+                                className="rounded bg-muted px-1 py-0.5 text-[10px] leading-none text-muted-foreground"
+                              >
+                                {wg.naam ?? `#${wg.ID}`}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                       </span>
                       {isSelected && (
-                        <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-green-500" />
+                        <span className="mt-1 ml-auto h-2 w-2 shrink-0 self-start rounded-full bg-green-500" />
                       )}
                     </button>
                   );
@@ -455,7 +672,7 @@ export default function RoosterMakenSecretarisPage() {
           {/* Calendar */}
           <Card className="min-w-0 flex-1">
             <CardHeader>
-              <CardTitle>Kalenderoverzicht</CardTitle>
+              
             </CardHeader>
             <CardContent>
               {error && (

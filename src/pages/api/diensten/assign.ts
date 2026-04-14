@@ -71,7 +71,7 @@ export default async function handler(
 
   const hasAccess = await hasGroupManagementAccess(user, idwaarneemgroep);
   if (!hasAccess) {
-    return res.status(403).json({ error: 'Geen toegang tot deze waarneemgroep.' });
+    return res.status(403).json({ error: 'U kunt niet plannen in deze waarneemgroep. U bent geen secretaris.' });
   }
 
   const targetType = SECTION_TYPE[section as string];

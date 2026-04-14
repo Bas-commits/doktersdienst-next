@@ -6,8 +6,9 @@ import { db, schema } from '@/db';
 const { waarneemgroepen, waarneemgroepdeelnemers, deelnemers } = schema;
 
 type WaarneemgroepRow = typeof waarneemgroepen.$inferSelect;
+type WaarneemgroepRowWithRole = WaarneemgroepRow & { idgroep: number | null };
 type Data =
-  | { waarneemgroepen: WaarneemgroepRow[] }
+  | { waarneemgroepen: WaarneemgroepRowWithRole[] }
   | { error: string };
 
 /** Convert Next API request headers to Headers for Better Auth */
@@ -83,7 +84,11 @@ export default async function handler(
 
     const t2 = Date.now();
     const rows = await db
-      .select({ wg: waarneemgroepen })
+      .select({
+        wg: waarneemgroepen,
+        wgdIdgroep: waarneemgroepdeelnemers.idgroep,
+        wgdIddeelnemer: waarneemgroepdeelnemers.iddeelnemer,
+      })
       .from(waarneemgroepen)
       .leftJoin(
         waarneemgroepdeelnemers,
@@ -103,13 +108,17 @@ export default async function handler(
       });
     }
 
-    const unique = Array.from(
-      new Map(
-        rows.map((r, i) => [r.wg.id ?? `noid-${i}`, r.wg])
-      ).values()
-    );
+    // Dedup by wg.id; prefer the row belonging to the current user so idgroep is correct.
+    const wgMap = new Map<number | string, WaarneemgroepRowWithRole>();
+    rows.forEach((r, i) => {
+      const key = r.wg.id ?? `noid-${i}`;
+      const existing = wgMap.get(key);
+      if (!existing || r.wgdIddeelnemer === idDeelnemer) {
+        wgMap.set(key, { ...r.wg, idgroep: r.wgdIdgroep ?? null });
+      }
+    });
 
-    return res.status(200).json({ waarneemgroepen: unique });
+    return res.status(200).json({ waarneemgroepen: Array.from(wgMap.values()) });
   } catch (err) {
     console.error('waarneemgroepen API error', err);
     return res.status(500).json({

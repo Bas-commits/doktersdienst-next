@@ -22,6 +22,8 @@ export interface Dienst {
   iddeelnovern?: number;
   /** ID of the doctor who created the overname proposal. */
   senderId?: number;
+  /** Whether this overname row is a partial takeover compared to the original dienst. */
+  isPartial?: boolean;
   diensten_deelnemers: DienstDeelnemer | null;
   /** Target doctor info for overname records (type=4/6). Joined via iddeelnovern. */
   target_deelnemers?: DienstDeelnemer | null;
@@ -79,6 +81,8 @@ export interface ShiftBlockView {
   iddienstovern?: number;
   /** ID of the doctor who created the overname proposal. */
   senderId?: number;
+  /** Whether this overname block is partial compared to the original dienst. */
+  isPartial?: boolean;
   /** Original doctor info (for overname overlay blocks where middle shows the target doctor). */
   originalDoctor?: DoctorInfo | null;
 }

@@ -32,10 +32,10 @@ export function Sidebar() {
 
   return (
     <aside
-      className="sidebar group/sb w-14 shrink-0 overflow-hidden border-r border-border bg-muted/30 transition-[width] duration-200 ease-out hover:w-62"
+      className="sidebar group/sb sticky top-0 h-screen w-14 shrink-0 self-start overflow-hidden border-r border-border bg-muted/30 transition-[width] duration-200 ease-out hover:w-62"
       aria-label="Hoofdnavigatie"
     >
-      <nav className="px-2 py-4 transition-[padding] duration-200 group-hover/sb:px-4">
+      <nav className="h-full overflow-y-auto px-2 py-4 transition-[padding] duration-200 group-hover/sb:px-4">
         <ul className="sidebar-nav flex flex-col gap-1" role="navigation" aria-label="Hoofdnavigatie">
           {SIDEBAR_NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href;

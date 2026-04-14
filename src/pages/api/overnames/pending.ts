@@ -77,12 +77,15 @@ export default async function handler(
   // "naar arts" = the target doctor who would take over (iddeelnovern)
   const originalDeelnemer = alias(deelnemers, 'originalDeelnemer');
   const targetDeelnemer = alias(deelnemers, 'targetDeelnemer');
+  const originalDienst = alias(dienstenTable, 'originalDienst');
 
   const rows = await db
     .select({
       iddienstovern: dienstenTable.iddienstovern,
       van: dienstenTable.van,
       tot: dienstenTable.tot,
+      originalVan: originalDienst.van,
+      originalTot: originalDienst.tot,
       iddeelnemer: dienstenTable.iddeelnemer,
       iddeelnovern: dienstenTable.iddeelnovern,
       idwaarneemgroep: dienstenTable.idwaarneemgroep,
@@ -97,13 +100,19 @@ export default async function handler(
     .from(dienstenTable)
     .leftJoin(originalDeelnemer, eq(dienstenTable.iddeelnemer, originalDeelnemer.id))
     .leftJoin(targetDeelnemer, eq(dienstenTable.iddeelnovern, targetDeelnemer.id))
+    .leftJoin(originalDienst, eq(dienstenTable.iddienstovern, originalDienst.id))
     .leftJoin(waarneemgroepen, eq(dienstenTable.idwaarneemgroep, waarneemgroepen.id))
     .where(pendingFilter);
 
   const verzoeken = rows.map((r) => {
     const vanDate = new Date(Number(r.van ?? 0) * 1000);
     const totDate = new Date(Number(r.tot ?? 0) * 1000);
-    const datum = vanDate.toLocaleDateString('nl-NL', {
+    const datumVan = vanDate.toLocaleDateString('nl-NL', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+    const datumTot = totDate.toLocaleDateString('nl-NL', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
@@ -122,12 +131,19 @@ export default async function handler(
     const targetInitialen =
       ((r.targetVoornaam?.[0] ?? '') + (r.targetAchternaam?.[0] ?? '')).toUpperCase() || '??';
     const targetNaam = `${r.targetVoornaam ?? ''} ${r.targetAchternaam ?? ''}`.trim() || 'Onbekend';
+    const isPartial =
+      r.originalVan == null || r.originalTot == null
+        ? false
+        : Number(r.van) !== Number(r.originalVan) || Number(r.tot) !== Number(r.originalTot);
 
     return {
       iddienstovern: r.iddienstovern,
-      datum,
+      datum: datumVan,
+      datumVan,
+      datumTot,
       van: `${String(vanDate.getHours()).padStart(2, '0')}:${String(vanDate.getMinutes()).padStart(2, '0')}`,
       tot: `${String(totDate.getHours()).padStart(2, '0')}:${String(totDate.getMinutes()).padStart(2, '0')}`,
+      isPartial,
       week,
       waarneemgroep: r.waarneemgroepNaam ?? `Groep ${r.idwaarneemgroep ?? '?'}`,
       vanArts: {

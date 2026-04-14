@@ -256,6 +256,10 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
     )}-${formatTwoDigits(end.getDate())} ${endTime}:00`;
     const originalDoctor = toDoctorInfo(dienst);
     const overnameType = getOvernameType(dienst);
+    const originalDienst = response.data.diensten.find((candidate) => candidate.id === dienst.iddienstovern);
+    const isPartial = originalDienst
+      ? originalDienst.van !== dienst.van || originalDienst.tot !== dienst.tot
+      : dienst.isPartial;
     // Declined proposals: gray block with no initials (middle = null)
     // Pending/accepted: show the target doctor (iddeelnovern) instead of the original
     const targetDoctor = dienst.target_deelnemers ? toDoctorInfoFromDeelnemer(dienst.target_deelnemers) : null;
@@ -279,6 +283,7 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
       overnameType,
       iddienstovern: dienst.iddienstovern,
       senderId: dienst.senderId,
+      isPartial,
       originalDoctor,
     });
   }

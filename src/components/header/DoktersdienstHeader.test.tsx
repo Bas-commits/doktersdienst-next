@@ -149,4 +149,35 @@ describe('DoktersdienstHeader', () => {
     expect(setItem).toHaveBeenCalledWith('groupid', '2');
     expect(mockReload).toHaveBeenCalled();
   });
+
+  it('shows separate start and end dates in overname popover', async () => {
+    mockFetch.mockResolvedValue({
+      json: () =>
+        Promise.resolve({
+          verzoeken: [
+            {
+              iddienstovern: 10,
+              datum: 'maandag 1 januari',
+              datumVan: 'maandag 1 januari',
+              datumTot: 'dinsdag 2 januari',
+              van: '23:00',
+              tot: '07:00',
+              week: 1,
+              waarneemgroep: 'Groep A',
+              vanArts: { initialen: 'AB', naam: 'Arts Bron', color: '#123456', akkoord: true },
+              naarArts: { initialen: 'CD', naam: 'Arts Doel', color: '#654321', akkoord: false },
+            },
+          ],
+        }),
+    });
+
+    render(<DoktersdienstHeader {...defaultProps} />);
+
+    await screen.findByText('1');
+    fireEvent.click(screen.getByTestId('header-overname-btn'));
+
+    const popover = await screen.findByTestId('overname-popover');
+    expect(popover).toHaveTextContent('Van: maandag 1 januari');
+    expect(popover).toHaveTextContent('Tot: dinsdag 2 januari');
+  });
 });

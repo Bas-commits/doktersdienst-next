@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { TbSwitch3 } from 'react-icons/tb';
 import { authClient } from '@/lib/auth-client';
+import { Trash2 } from 'lucide-react';
 import {
   WaarneemgroepContext,
   type WaarneemgroepContextValue,
@@ -62,6 +63,9 @@ export function DoktersdienstHeader({
   interface OvernameVerzoek {
     iddienstovern: number;
     datum: string;
+    datumVan?: string;
+    datumTot?: string;
+    isPartial?: boolean;
     van: string;
     tot: string;
     week: number;
@@ -305,6 +309,9 @@ export function DoktersdienstHeader({
               {verzoekPopoverOpen && verzoeken.length > 0 && (() => {
                 const v = verzoeken[verzoekIndex];
                 if (!v) return null;
+                const vanDatum = v.datumVan ?? v.datum;
+                const totDatum = v.datumTot ?? v.datumVan ?? v.datum;
+                const overnameTypeLabel = v.isPartial ? 'Gedeeltelijke overname' : 'Volledige overname';
                 return (
                   <div
                     className="absolute top-full right-0 z-1000 w-[320px] bg-white border border-gray-300 rounded-lg shadow-lg p-4 mt-1"
@@ -333,15 +340,25 @@ export function DoktersdienstHeader({
                         <ChevronRight className="w-4 h-4" />
                       </button>
                     </div>
+                    <div className="bg-gray-200 rounded-md p-5 ">
+                    <div className="w-full flex justify-around mb-3">
+                      <Trash2 className="w-8 h-8 text-red-500" />
+                    </div>
 
-                    <div className="text-sm mb-3">
-                      <p className="font-semibold mb-1">{v.datum}</p>
-                      <p className="text-gray-600">{v.van} – {v.tot} (week {v.week})</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{v.waarneemgroep}</p>
+                    <div className="mb-3">
+                      <p className="text-s font-bold ">{overnameTypeLabel}</p>
+                    </div>
+               
+                    <div className="flex text-sm mb-3">
+                      
+                      <p className="mb-1">Van: <br /> Tot:</p>
+                      <p className="mb-1 ml-2">{vanDatum} <strong>{v.van}</strong> <br /> {totDatum} <strong>{v.tot}</strong></p>
+
                     </div>
 
                     <div className="flex items-center justify-between mb-3 text-sm">
                       <div className="flex items-center gap-2">
+                      <p className="text-s font-bold ">Van:</p>
                         <span
                           className="inline-flex h-8 w-8 items-center justify-center rounded text-white text-xs font-bold"
                           style={{ backgroundColor: v.vanArts.color }}
@@ -350,18 +367,15 @@ export function DoktersdienstHeader({
                         </span>
                         <div>
                           <p className="font-medium leading-tight">{v.vanArts.naam}</p>
-                          <p className="text-xs text-gray-500">van</p>
+                          
                         </div>
-                        {v.vanArts.akkoord ? (
-                          <Check className="w-4 h-4 text-green-600" />
-                        ) : (
-                          <span className="text-orange-500 font-bold text-sm">?</span>
-                        )}
+                        
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between mb-4 text-sm">
                       <div className="flex items-center gap-2">
+                      <p className="text-s font-bold ">Naar:</p>
                         <span
                           className="inline-flex h-8 w-8 items-center justify-center rounded text-white text-xs font-bold"
                           style={{ backgroundColor: v.naarArts.color }}
@@ -370,20 +384,16 @@ export function DoktersdienstHeader({
                         </span>
                         <div>
                           <p className="font-medium leading-tight">{v.naarArts.naam}</p>
-                          <p className="text-xs text-gray-500">naar</p>
+                          
                         </div>
-                        {v.naarArts.akkoord ? (
-                          <Check className="w-4 h-4 text-green-600" />
-                        ) : (
-                          <span className="text-orange-500 font-bold text-sm">?</span>
-                        )}
+                        
                       </div>
                     </div>
 
                     <div className="flex justify-center gap-4">
                       <button
                         type="button"
-                        className="flex items-center justify-center h-10 w-10 rounded-full border border-gray-300 bg-white hover:bg-gray-50"
+                        className="flex items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-green-500"
                         onClick={() => handleVerzoekRespond('accept')}
                         aria-label="Verzoek accepteren"
                         data-testid="overname-accept"
@@ -392,13 +402,14 @@ export function DoktersdienstHeader({
                       </button>
                       <button
                         type="button"
-                        className="flex items-center justify-center h-10 w-10 rounded-full border border-gray-300 bg-white hover:bg-gray-50"
+                        className="flex items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-red-500"
                         onClick={() => handleVerzoekRespond('decline')}
                         aria-label="Verzoek afwijzen"
                         data-testid="overname-decline"
                       >
                         <X className="w-6 h-6 text-[#333]" />
                       </button>
+                    </div>
                     </div>
                   </div>
                 );

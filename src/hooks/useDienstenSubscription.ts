@@ -39,6 +39,7 @@ function toDienstenResponse(diensten: Array<{
     iddienstovern: (d as { iddienstovern?: number }).iddienstovern ?? undefined,
     iddeelnovern: (d as { iddeelnovern?: number }).iddeelnovern ?? undefined,
     senderId: (d as { senderId?: number }).senderId ?? undefined,
+    isPartial: (d as { isPartial?: boolean }).isPartial ?? undefined,
     diensten_deelnemers: d.diensten_deelnemers
       ? {
           id: d.diensten_deelnemers.id ?? 0,

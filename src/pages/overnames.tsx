@@ -2,6 +2,7 @@
 
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -90,6 +91,7 @@ export default function OvernamesPage() {
           id: number;
           voornaam: string | null;
           achternaam: string | null;
+          color?: string | null;
           waarneemgroepen: { id: number; naam: string | null; aangemeld: boolean }[];
         }>;
       }) => {
@@ -100,6 +102,7 @@ export default function OvernamesPage() {
               voornaam: d.voornaam ?? '',
               achternaam: d.achternaam ?? '',
               initialen: (d.voornaam?.[0] ?? '').toUpperCase() + (d.achternaam?.[0] ?? '').toUpperCase(),
+              color: d.color ?? undefined,
               waarneemgroepIds: d.waarneemgroepen
                 .filter((wg) => wg.aangemeld)
                 .map((wg) => wg.id),
@@ -126,6 +129,12 @@ export default function OvernamesPage() {
     }
     // Assigned shifts (has a middle doctor) → open propose modal
     if (!block.middle) return;
+    // Block overnames for shifts in the past
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    if (block.van < nowSeconds) {
+      toast.error('Het is niet mogelijk om een overname aan te maken voor een dienst in het verleden.');
+      return;
+    }
     setSelectedShift(block);
     setSubmitError(null);
   }, []);
@@ -265,14 +274,12 @@ export default function OvernamesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">
-              Overzicht van openstaande diensten (nog niet toegewezen). Welkom, {name}.
-            </p>
+            
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Voorkeuren kiezen</CardTitle>
+            
           </CardHeader>
           <CardContent>
             {error && (

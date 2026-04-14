@@ -544,12 +544,12 @@ export default function RoosterMakenSecretarisPage() {
 
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
           {/* Doctor sidebar */}
-          <div ref={sidebarRef} className="sticky top-6 w-full shrink-0 self-start lg:w-56">
-            <Card>
+          <div ref={sidebarRef} className="sticky top-2 w-full shrink-0 self-start lg:top-4 lg:h-[calc(100vh-1rem)] lg:w-56 lg:flex lg:flex-col">
+            <Card className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Dokters</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-1 p-3 pt-0">
+              <CardContent className="space-y-1 p-3 pt-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 {/* Trash / delete mode button */}
                 <button
                   type="button"

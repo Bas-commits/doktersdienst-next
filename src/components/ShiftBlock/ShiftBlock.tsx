@@ -341,6 +341,29 @@ export function ShiftBlock({
 
   const showPreferenceFill = preferenceFill != null;
   const showPreferenceBadge = preferenceChip != null && !showPreferenceFill;
+  const overnameTypeLabel = block.isPartial ? 'Gedeeltelijke overname' : 'Volledige overname';
+  const overnameStatusLabel =
+    overnameType === 'voorstelOvername' ? 'In afwachting' :
+    overnameType === 'overname' ? 'Goedgekeurd' :
+    null;
+  const overnameStatusClass =
+    overnameType === 'voorstelOvername'
+      ? 'bg-orange-100 text-orange-800'
+      : overnameType === 'overname'
+        ? 'bg-green-100 text-green-800'
+        : '';
+  const vanDateLabel = new Date(block.van * 1000).toLocaleDateString('nl-NL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  const totDateLabel = new Date(block.tot * 1000).toLocaleDateString('nl-NL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  const vanArts = block.originalDoctor;
+  const naarArts = block.middle;
 
   return (
     <div
@@ -415,7 +438,7 @@ export function ShiftBlock({
         ))}
       <div className="group">
         <div
-          className={`flex mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] ${middleRoundedClass} ${doctorId ? 'active-day' : ''} ${showPreferenceFill ? 'justify-center' : ''}`}
+          className={`@container flex mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] ${middleRoundedClass} ${doctorId ? 'active-day' : ''} ${showPreferenceFill ? 'justify-center' : ''}`}
           data-testid="shift-block-middle"
           data-doctor={doctorId}
           data-current-date={block.currentDate}
@@ -456,7 +479,7 @@ export function ShiftBlock({
             const { Icon } = preferenceFill!;
             return displayShortName ? (
               <>
-                <span className="text-white text-[8px] font-bold leading-none pl-0.5">{displayShortName}</span>
+                <span className="hidden @[36px]:inline text-white text-[8px] font-bold leading-none pl-0.5">{displayShortName}</span>
                 <Icon className="h-3 w-3 shrink-0 text-white pr-0.5" aria-hidden />
               </>
             ) : (
@@ -468,7 +491,7 @@ export function ShiftBlock({
                 className={`rotate-180 whitespace-nowrap text-sm font-mono ${doctorId ? 'text-white' : 'text-[#a0a0a0]'}`}
                 style={{ writingMode: 'vertical-rl' }}
               />
-              <span className="text-white text-[10px] font-semibold tracking-[0.5px] break-words leading-[15px]">
+              <span className="hidden @[36px]:inline text-white text-[10px] font-semibold tracking-[0.5px] wrap-break-word leading-[15px]">
                 {showPendingDoctor ? pendingDoctor!.shortName : displayShortName}
               </span>
               <span
@@ -496,23 +519,104 @@ export function ShiftBlock({
           )}
           {overnameType === 'overname' && (
             <span
-              className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40 pointer-events-none"
+              className="group/overname absolute top-0.5 right-0.5 hidden @[36px]:flex h-5 w-5 items-center justify-center rounded bg-black/40"
               title="Overname"
               aria-hidden
               data-testid="overname-badge"
             >
               <TbSwitch3 className="h-3.5 w-3.5 text-white" />
+              <div
+                className="hidden group-hover/overname:block absolute top-full right-0 z-101 mt-2 w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
+                data-testid="overname-hover-popover"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-sm font-bold">{overnameTypeLabel}</p>
+                  {overnameStatusLabel && (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${overnameStatusClass}`}>
+                      {overnameStatusLabel}
+                    </span>
+                  )}
+                </div>
+                <div className="mb-2 flex text-sm">
+                  <p className="mb-0">Van: <br /> Tot:</p>
+                  <p className="mb-0 ml-2">
+                    {vanDateLabel} <strong>{block.startTime}</strong>
+                    <br />
+                    {totDateLabel} <strong>{block.endTime}</strong>
+                  </p>
+                </div>
+                <div className="mb-2 flex items-center gap-2 text-sm">
+                  <p className="font-bold">Van:</p>
+                  <span
+                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold text-white"
+                    style={{ backgroundColor: vanArts?.color ?? '#7b2d8e' }}
+                  >
+                    {vanArts?.shortName ?? '??'}
+                  </span>
+                  <p className="font-medium leading-tight">{vanArts?.name ?? 'Onbekend'}</p>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <p className="font-bold">Naar:</p>
+                  <span
+                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold text-white"
+                    style={{ backgroundColor: naarArts?.color ?? '#7b2d8e' }}
+                  >
+                    {naarArts?.shortName ?? '??'}
+                  </span>
+                  <p className="font-medium leading-tight">{naarArts?.name ?? 'Onbekend'}</p>
+                </div>
+              </div>
             </span>
           )}
           {overnameType === 'voorstelOvername' && (
             <span
-              className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40 pointer-events-none"
+              className="group/voorstel-overname absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40"
               title="Voorstel overname"
               aria-hidden
               data-testid="voorstel-overname-badge"
             >
-              <TbSwitch3 className="h-3.5 w-3.5 text-white" />
-              <TbQuestionMark className="absolute h-3 w-3 text-orange-400" />
+              <img src="request.svg" alt="Voorstel overname" className="h-3.5 w-3.5" style={{ filter: 'invert(47%) sepia(97%) saturate(2098%) hue-rotate(2deg) brightness(106%) contrast(101%)' }} />
+              <div
+                className="hidden group-hover/voorstel-overname:block absolute top-full right-0 z-101 mt-2 w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
+                data-testid="voorstel-overname-hover-popover"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-sm font-bold">{overnameTypeLabel}</p>
+                  {overnameStatusLabel && (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${overnameStatusClass}`}>
+                      {overnameStatusLabel}
+                    </span>
+                  )}
+                </div>
+                <div className="mb-2 flex text-sm">
+                  <p className="mb-0">Van: <br /> Tot:</p>
+                  <p className="mb-0 ml-2">
+                    {vanDateLabel} <strong>{block.startTime}</strong>
+                    <br />
+                    {totDateLabel} <strong>{block.endTime}</strong>
+                  </p>
+                </div>
+                <div className="mb-2 flex items-center gap-2 text-sm">
+                  <p className="font-bold">Van:</p>
+                  <span
+                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold text-white"
+                    style={{ backgroundColor: vanArts?.color ?? '#7b2d8e' }}
+                  >
+                    {vanArts?.shortName ?? '??'}
+                  </span>
+                  <p className="font-medium leading-tight">{vanArts?.name ?? 'Onbekend'}</p>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <p className="font-bold">Naar:</p>
+                  <span
+                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold text-white"
+                    style={{ backgroundColor: naarArts?.color ?? '#7b2d8e' }}
+                  >
+                    {naarArts?.shortName ?? '??'}
+                  </span>
+                  <p className="font-medium leading-tight">{naarArts?.name ?? 'Onbekend'}</p>
+                </div>
+              </div>
             </span>
           )}
           {overnameType === 'vraagtekenOvername' && (

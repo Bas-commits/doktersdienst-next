@@ -34,7 +34,7 @@ reads or writes diensten MUST respect the type system exactly:
   MUST be treated identically to type 0 when reading.
 - **Type 5** — Achterwacht (on-call/backup doctor). Rendered in the
   top stripe. At most one per time slot.
-- **Type 9 (assignment context)** — Extra Dokter. Rendered in the
+- **Type 11 (assignment context)** — Extra Dokter. Rendered in the
   bottom stripe. At most one per time slot.
 - **Types 2, 3, 9, 10, 5001** — Voorkeuren (preferences). These
   are doctor availability preferences, NOT assignments:
@@ -51,11 +51,8 @@ reads or writes diensten MUST respect the type system exactly:
   from legacy type=6 by `status = 'accepted'`. Same column usage
   as type=4 overname.
 
-Context determines whether type 9 is "Extra Dokter" (assignment)
-or "Vakantie" (preference). Assignment rows have a nonzero
-`iddeelnemer`; preference rows are constrained by the unique index
-on (van, tot, idwaarneemgroep, iddeelnemer) for types 2, 3, 9,
-10, 5001.
+Type 9 is reserved for "Vakantie" preference rows. Extra Dokter
+assignments use type 11.
 
 **Rationale**: Misinterpreting a dienst type leads to doctors being
 double-booked, preferences being silently dropped, or UI rendering
@@ -128,8 +125,7 @@ this table:
 | 4 | Standaard (legacy) / Overname Voorstel | Assignment / Overname | Middle / Overlay | Legacy PHP (status=NULL) or overname voorstel (status=pending/declined) |
 | 6 | Standaard (legacy) / Overname Bevestigd | Assignment / Overname | Middle / Overlay | Legacy PHP (status=NULL) or confirmed overname (status=accepted) |
 | 5 | Achterwacht | Assignment | Top | On-call doctor |
-| 9 | Extra Dokter | Assignment | Bottom | Additional doctor |
-| 11 | Deprecated | Assignment | Bottom | Old Next.js version |
+| 11 | Extra Dokter | Assignment | Bottom | Additional doctor |
 | 2 | Liever niet | Preference | Chip | Would rather not |
 | 3 | Liever wel | Preference | Chip | Prefer to work |
 | 9 | Vakantie | Preference | Chip | Vacation |
@@ -138,10 +134,9 @@ this table:
 | 4 | Overname Voorstel | Overname | Overlay | status=pending or declined; uses iddienstovern + iddeelnovern |
 | 8 | Taak | Task | N/A | Legacy task type |
 
-**Note on type 9 and type 4 dual meaning**: Context (assignment vs
-preference, regular vs overname) determines interpretation. Code
-MUST use the query context (e.g., preference-specific queries
-filter by types 2, 3, 9, 10, 5001) to disambiguate.
+**Note on type 4 dual meaning**: Context (regular assignment vs
+overname) determines interpretation. Code MUST use `status` and
+query context to disambiguate.
 
 ## Development Workflow
 

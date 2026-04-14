@@ -117,7 +117,7 @@ export function makeAchterwachtAssignment(
   });
 }
 
-/** Type=9 Extra Dokter assignment (bottom stripe). */
+/** Type=11 Extra Dokter assignment (bottom stripe). */
 export function makeExtraDokterAssignment(
   van: number,
   tot: number,
@@ -129,7 +129,7 @@ export function makeExtraDokterAssignment(
     van,
     tot,
     idwaarneemgroep: wg,
-    type: 9,
+    type: 11,
     iddeelnemer: deelnemer.id,
     diensten_deelnemers: deelnemer,
     ...overrides,

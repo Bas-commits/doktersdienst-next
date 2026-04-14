@@ -16,7 +16,7 @@ The shift block doctor assignment on `/rooster-maken-secretaris` is not working 
 **Target Platform**: Web application (localhost:3005)
 **Project Type**: Web service (Next.js Pages Router)
 **Performance Goals**: N/A (correctness fix, not performance)
-**Constraints**: Must preserve legacy type codes (0/4/5/6/9/11), no schema migrations
+**Constraints**: Must preserve legacy type codes (0/4/5/6/11), with type 9 reserved for preferences; no schema migrations
 **Scale/Scope**: Single page + 1 API endpoint + 1 data transformation hook
 
 ## Constitution Check
@@ -27,7 +27,7 @@ The shift block doctor assignment on `/rooster-maken-secretaris` is not working 
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
-| I. Diensten Type System Integrity | PASS | Tests will validate correct type usage (0/4/6→middle, 5→top, 9→bottom). No new types introduced. |
+| I. Diensten Type System Integrity | PASS | Tests will validate correct type usage (0/4/6→middle, 5→top, 11→bottom). No new types introduced. |
 | II. Legacy Compatibility | PASS | Tests will verify legacy types 4, 6, 11 are handled correctly. Overlap matching preserved. |
 | III. Three-Stripe Shift Block Model | PASS | Tests validate all three stripes independently. |
 | IV. Preference-Assignment Separation | PASS | Feature only touches assignments, not preferences. |
@@ -94,11 +94,11 @@ vitest.config.ts                         # NEW: Vitest configuration
 
 These are the suspected issues based on code analysis. Tests will confirm which are actual bugs:
 
-1. **Type 11 not writable**: The assign API only handles type=9 for bottom unassign. If a type=11 record exists (from older app version), clicking delete on the bottom stripe won't remove it.
+1. **Bottom type mismatch**: The assign API and schedule layer must consistently use type=11 for bottom assignments so type=9 remains preference-only.
 
 2. **Missing base record**: If no type=1 record exists for a time window, the assign API inserts with null values for `idpraktijk`, `idshift`, `currentDate`, `nextDate`. The `dienstenToShiftBlocks` function skips groups without a base record entirely.
 
-3. **Grouping key mismatch**: `dienstenToShiftBlocks` groups by exact `van-tot-wg` key. Type=5 and type=9 records must have exactly the same van/tot as the type=1 base to be grouped together. Any timestamp discrepancy (even 1 second) causes them to be in a separate group with no base, and they get skipped.
+3. **Grouping key mismatch**: `dienstenToShiftBlocks` groups by exact `van-tot-wg` key. Type=5 and type=11 records must have exactly the same van/tot as the type=1 base to be grouped together. Any timestamp discrepancy (even 1 second) causes them to be in a separate group with no base, and they get skipped.
 
 4. **Middle overlap fallback scope**: The fallback scan for middle stripe (lines 156-169 of useDienstenSchedule.ts) scans the entire response for overlapping type 0/4/6 records, but only the first match is used. If multiple overlapping records exist, only one doctor is shown.
 
@@ -118,7 +118,7 @@ Create `src/hooks/__tests__/useDienstenSchedule.test.ts`:
   - Single base slot (type=1) only → empty stripes
   - Base + type=0 → middle populated
   - Base + type=5 → top populated
-  - Base + type=9 → bottom populated
+  - Base + type=11 → bottom populated
   - Base + all three types → all stripes populated
   - Legacy types: type=4 → middle, type=6 → middle, type=11 → bottom
   - Wide Standaard row (type=0 with different van/tot) → middle via overlap
@@ -141,9 +141,9 @@ Create `src/pages/api/diensten/__tests__/assign.test.ts`:
   - top assign (new) → INSERT type=5
   - top assign (existing) → UPDATE
   - top unassign → DELETE type=5
-  - bottom assign (new) → INSERT type=9
+  - bottom assign (new) → INSERT type=11
   - bottom assign (existing) → UPDATE
-  - bottom unassign → DELETE type=9
+  - bottom unassign → DELETE type=11
 - Test validation: missing fields → 400
 - Test auth: no session → 401
 - Test method: GET → 405
@@ -172,7 +172,7 @@ Create `e2e/rooster-maken-secretaris.spec.ts`:
 
 Based on test failures, fix the identified issues:
 
-1. **If type=11 unassign fails**: Add type=11 to the bottom unassign query in assign.ts
+1. **If bottom assignment type mismatch exists**: Ensure assign.ts stores/deletes bottom assignments as type=11 only
 2. **If grouping mismatches occur**: Use overlap matching in `dienstenToShiftBlocks` for top/bottom stripes (not just middle)
 3. **If base record is missing**: Add error handling or graceful degradation in assign.ts
 4. **Any other issues revealed by tests**

@@ -66,7 +66,7 @@
 | middle | unassign | Find all overlapping type 0/4/6 → DELETE each |
 | top | assign | Exact match type=5 → UPDATE; else INSERT type=5 |
 | top | unassign | Exact match type=5 → DELETE |
-| bottom | assign | Exact match type=9 → UPDATE; else INSERT type=9 |
-| bottom | unassign | Exact match type=9 → DELETE |
+| bottom | assign | Exact match type=11 → UPDATE; else INSERT type=11 |
+| bottom | unassign | Exact match type=11 → DELETE |
 
 All operations run within a database transaction.

@@ -32,8 +32,7 @@ The central entity. Each row in the `diensten` table represents either a time sl
 | 4 | Standaard (legacy) | Middle stripe | Same as type 0 |
 | 6 | Standaard (legacy) | Middle stripe | Same as type 0 |
 | 5 | Achterwacht | Top stripe | Exact match on (van, tot, idwaarneemgroep) |
-| 9 | Extra Dokter | Bottom stripe | Exact match on (van, tot, idwaarneemgroep) |
-| 11 | Deprecated | Bottom stripe | Read-only in current code (bug: not writable) |
+| 11 | Extra Dokter | Bottom stripe | Exact match on (van, tot, idwaarneemgroep) |
 
 ### ShiftBlockView (UI Model)
 
@@ -43,7 +42,7 @@ Derived from diensten records. One ShiftBlockView per type=1 base slot, with thr
 |-------|--------|
 | middle: DoctorInfo | null | From type 0/4/6 records (same group, exact or overlapping time) |
 | top: DoctorInfo | null | From type 5 record (same group, exact time) |
-| bottom: DoctorInfo | null | From type 9/11 record (same group, exact time) |
+| bottom: DoctorInfo | null | From type 11 record (same group, exact time) |
 
 ### DoctorInfo (Display Model)
 
@@ -61,7 +60,7 @@ Derived from diensten records. One ShiftBlockView per type=1 base slot, with thr
 ```
 Empty Slot (type=1 only)
   │
-  ├─ Assign doctor → INSERT new record (type=0/5/9)
+  ├─ Assign doctor → INSERT new record (type=0/5/11)
   │                   Copy idpraktijk, idshift, dates from type=1
   │
   ├─ Reassign doctor → UPDATE existing record's iddeelnemer
@@ -74,7 +73,7 @@ Empty Slot (type=1 only)
 
 - **Middle (Standaard)**: Assign uses exact match first, falls back to interval overlap. Unassign uses overlap to find all matching type 0/4/6 records.
 - **Top (Achterwacht)**: Exact match on (van, tot, idwaarneemgroep, type=5).
-- **Bottom (Extra Dokter)**: Exact match on (van, tot, idwaarneemgroep, type=9).
+- **Bottom (Extra Dokter)**: Exact match on (van, tot, idwaarneemgroep, type=11).
 
 ## Relationships
 
@@ -86,7 +85,7 @@ diensten.idpraktijk → praktijken.id (practice)
 
 ## Validation Rules
 
-- A shift block can have at most one doctor per stripe (one type=0/4/6, one type=5, one type=9).
+- A shift block can have at most one doctor per stripe (one type=0/4/6, one type=5, one type=11).
 - The type=1 base slot must exist before assignment records can be created (provides idpraktijk, idshift, dates).
 - van < tot (shift start must be before shift end).
 - iddeelnemer must reference a valid deelnemers record.

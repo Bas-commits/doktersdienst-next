@@ -220,7 +220,7 @@ describe('dienstenToShiftBlocks — top stripe (US2)', () => {
 // US3: dienstenToShiftBlocks — Bottom (Extra Dokter) stripe
 // ---------------------------------------------------------------------------
 describe('dienstenToShiftBlocks — bottom stripe (US3)', () => {
-  it('T033: base + type=9 → bottom populated', () => {
+  it('T033: base + type=11 → bottom populated', () => {
     const deelnemer = makeDeelnemer({ id: 60, voornaam: 'Lisa', achternaam: 'Extra' });
     const base = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID);
     const extra = makeExtraDokterAssignment(SHIFT_VAN, SHIFT_TOT, WG_ID, deelnemer);
@@ -233,10 +233,10 @@ describe('dienstenToShiftBlocks — bottom stripe (US3)', () => {
     expect(blocks[0].bottom!.name).toBe('Lisa Extra');
   });
 
-  it('T034: base + type=11 (deprecated) → bottom populated', () => {
+  it('T034: duplicate type=11 rows still resolve to one bottom doctor', () => {
     const deelnemer = makeDeelnemer({ id: 61 });
     const base = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID);
-    const deprecated11 = makeDienst({
+    const extra11a = makeDienst({
       type: 11,
       van: SHIFT_VAN,
       tot: SHIFT_TOT,
@@ -244,7 +244,15 @@ describe('dienstenToShiftBlocks — bottom stripe (US3)', () => {
       iddeelnemer: 61,
       diensten_deelnemers: deelnemer,
     });
-    const response = makeDienstenResponse([base, deprecated11]);
+    const extra11b = makeDienst({
+      type: 11,
+      van: SHIFT_VAN,
+      tot: SHIFT_TOT,
+      idwaarneemgroep: WG_ID,
+      iddeelnemer: 61,
+      diensten_deelnemers: deelnemer,
+    });
+    const response = makeDienstenResponse([base, extra11a, extra11b]);
     const blocks = dienstenToShiftBlocks(response);
 
     expect(blocks).toHaveLength(1);
@@ -255,7 +263,7 @@ describe('dienstenToShiftBlocks — bottom stripe (US3)', () => {
   it('split Extra Dokter (partial van/tot) populates bottom via overlap fallback', () => {
     const deelnemer = makeDeelnemer({ id: 62, voornaam: 'Split', achternaam: 'Extra' });
     const base = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID); // 07:00 - 16:00
-    // Type=9 record covers only the second half of the base slot
+    // Type=11 record covers only the second half of the base slot
     const splitExtra = makeExtraDokterAssignment(
       SHIFT_VAN + 4 * 3600, // 11:00
       SHIFT_TOT,            // 16:00 (partial)
@@ -275,7 +283,7 @@ describe('dienstenToShiftBlocks — bottom stripe (US3)', () => {
 // US4: All three stripes simultaneously
 // ---------------------------------------------------------------------------
 describe('dienstenToShiftBlocks — all stripes combined (US4)', () => {
-  it('T044: base + type=0 + type=5 + type=9 → all three stripes populated', () => {
+  it('T044: base + type=0 + type=5 + type=11 → all three stripes populated', () => {
     const middleDoc = makeDeelnemer({ id: 70, voornaam: 'A', achternaam: 'Mid' });
     const topDoc = makeDeelnemer({ id: 71, voornaam: 'B', achternaam: 'Top' });
     const bottomDoc = makeDeelnemer({ id: 72, voornaam: 'C', achternaam: 'Bot' });
@@ -341,11 +349,7 @@ describe('dienstenToShiftBlocks — persistence & grouping (US5)', () => {
 // Preference types must NOT leak into shift blocks
 // ---------------------------------------------------------------------------
 describe('dienstenToShiftBlocks — preference types must not leak', () => {
-  it('type=9 preference (Vakantie) leaks into bottom stripe when unfiltered — proves the bug', () => {
-    // This test documents the type=9 dual-meaning problem:
-    // If the API returns unfiltered diensten, type=9 preferences get treated as
-    // Extra Dokter assignments. The fix is at the data-fetching layer:
-    // rooster-maken-secretaris and rooster-inzien must request only assignment types.
+  it('type=9 preference (Vakantie) is ignored by shift block transformer', () => {
     const vacationDoctor = makeDeelnemer({ id: 100, voornaam: 'Vakantie', achternaam: 'Dokter' });
     const base = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID);
     const vakantiePreference = makeDienst({
@@ -359,11 +363,8 @@ describe('dienstenToShiftBlocks — preference types must not leak', () => {
     const response = makeDienstenResponse([base, vakantiePreference]);
     const blocks = dienstenToShiftBlocks(response);
 
-    // Without upstream filtering, type=9 DOES leak into bottom stripe.
-    // dienstenToShiftBlocks cannot distinguish the dual meaning — the fix
-    // must be at the subscription call site (pass typeIn=[0,1,4,5,6,9,11]).
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].bottom).not.toBeNull(); // This IS the bug: preference leaks as assignment
+    expect(blocks[0].bottom).toBeNull();
   });
 
   it('type=2 (Liever niet) and type=3 (Liever wel) must be ignored entirely', () => {
@@ -422,11 +423,7 @@ describe('dienstenToShiftBlocks — preference types must not leak', () => {
     expect(blocks[0].bottom).toBeNull();
   });
 
-  it('real type=9 Extra Dokter assignment must still appear in bottom stripe', () => {
-    // A real Extra Dokter assignment also has type=9, but is a proper assignment
-    // The distinction is context: when fetched with assignment-type filters,
-    // type=9 records are assignments. When fetched with preference-type filters, they're preferences.
-    // dienstenToShiftBlocks should handle both since it receives already-filtered data.
+  it('real type=11 Extra Dokter assignment appears in bottom stripe', () => {
     const doc = makeDeelnemer({ id: 103, voornaam: 'Extra', achternaam: 'Dokter' });
     const base = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID);
     const extraDokter = makeExtraDokterAssignment(SHIFT_VAN, SHIFT_TOT, WG_ID, doc);

@@ -41,17 +41,17 @@ A secretary selects a doctor from the sidebar and clicks the top stripe of a shi
 
 ### User Story 3 - Assign Doctor to Bottom (Extra Dokter) Stripe (Priority: P1)
 
-A secretary selects a doctor from the sidebar and clicks the bottom stripe of a shift block. The doctor is assigned as the extra doctor for that shift. The assignment is persisted with type=9 and the UI shows the doctor's initials in the bottom stripe.
+A secretary selects a doctor from the sidebar and clicks the bottom stripe of a shift block. The doctor is assigned as the extra doctor for that shift. The assignment is persisted with type=11 and the UI shows the doctor's initials in the bottom stripe.
 
 **Why this priority**: Extra doctor assignment is equally critical for proper shift coverage and must work reliably.
 
-**Independent Test**: Can be tested by selecting a doctor, clicking the bottom stripe, and verifying the database record has type=9 with the correct doctor and time window.
+**Independent Test**: Can be tested by selecting a doctor, clicking the bottom stripe, and verifying the database record has type=11 with the correct doctor and time window.
 
 **Acceptance Scenarios**:
 
-1. **Given** a shift block with no bottom assignment and a doctor selected, **When** the secretary clicks the bottom stripe, **Then** a database record is created with type=9, the doctor's ID, and matching van/tot/idwaarneemgroep, and the UI shows the doctor's initials in the bottom stripe.
-2. **Given** a shift block with an existing bottom assignment and a different doctor selected, **When** the secretary clicks the bottom stripe, **Then** the existing type=9 record is updated to the new doctor, and the UI reflects the change.
-3. **Given** a shift block with a bottom assignment and delete mode is active, **When** the secretary clicks the bottom stripe, **Then** the type=9 record is removed and the bottom stripe appears empty.
+1. **Given** a shift block with no bottom assignment and a doctor selected, **When** the secretary clicks the bottom stripe, **Then** a database record is created with type=11, the doctor's ID, and matching van/tot/idwaarneemgroep, and the UI shows the doctor's initials in the bottom stripe.
+2. **Given** a shift block with an existing bottom assignment and a different doctor selected, **When** the secretary clicks the bottom stripe, **Then** the existing type=11 record is updated to the new doctor, and the UI reflects the change.
+3. **Given** a shift block with a bottom assignment and delete mode is active, **When** the secretary clicks the bottom stripe, **Then** the type=11 record is removed and the bottom stripe appears empty.
 
 ---
 
@@ -65,7 +65,7 @@ A secretary assigns different doctors to all three stripes of the same shift blo
 
 **Acceptance Scenarios**:
 
-1. **Given** an empty shift block, **When** the secretary assigns Doctor A to middle, Doctor B to top, and Doctor C to bottom, **Then** three separate database records exist (one for middle, one with type=5 for top, one with type=9 for bottom) with correct doctor IDs, and the UI shows all three doctors simultaneously.
+1. **Given** an empty shift block, **When** the secretary assigns Doctor A to middle, Doctor B to top, and Doctor C to bottom, **Then** three separate database records exist (one for middle, one with type=5 for top, one with type=11 for bottom) with correct doctor IDs, and the UI shows all three doctors simultaneously.
 2. **Given** a fully assigned shift block, **When** the secretary deletes only the top assignment, **Then** only the top record is removed, the middle and bottom assignments remain intact in both the database and UI.
 
 ---
@@ -98,7 +98,7 @@ After making assignments, when the secretary reloads the page or navigates away 
 
 - **FR-001**: System MUST allow assigning a doctor to the middle (Standaard) stripe of a shift block, persisting the assignment with the correct type code and time window.
 - **FR-002**: System MUST allow assigning a doctor to the top (Achterwacht) stripe of a shift block, persisting the assignment with type=5.
-- **FR-003**: System MUST allow assigning a doctor to the bottom (Extra Dokter) stripe of a shift block, persisting the assignment with type=9.
+- **FR-003**: System MUST allow assigning a doctor to the bottom (Extra Dokter) stripe of a shift block, persisting the assignment with type=11.
 - **FR-004**: System MUST allow removing (unassigning) a doctor from any stripe when delete mode is active.
 - **FR-005**: System MUST allow reassigning a different doctor to an already-assigned stripe by updating the existing record.
 - **FR-006**: System MUST correctly load and display all three stripe assignments from the database when the page loads.

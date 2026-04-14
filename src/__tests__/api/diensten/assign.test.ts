@@ -255,7 +255,7 @@ describe('POST /api/diensten/assign — validation (US1)', () => {
   it('T035: returns 200 for valid bottom assign request', async () => {
     selectResults = [
       [{ id: 1, idpraktijk: 100, idshift: 10, currentDate: '2024-04-01', nextDate: '2024-04-02' }],
-      [], // no existing type=9
+      [], // no existing type=11
     ];
 
     const req = makeReq({
@@ -295,7 +295,7 @@ describe('POST /api/diensten/assign — validation (US1)', () => {
 
   it('T037: returns 200 for bottom unassign request', async () => {
     selectResults = [
-      [], // no existing type=9 to delete
+      [], // no existing type=11 to delete
     ];
 
     const req = makeReq({

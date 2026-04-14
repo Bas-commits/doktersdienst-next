@@ -41,7 +41,7 @@ For e2e tests:
 Key test scenarios:
 - Type 0/4/6 → middle stripe
 - Type 5 → top stripe
-- Type 9/11 → bottom stripe
+- Type 11 → bottom stripe
 - Overlap matching for legacy wide Standaard rows
 - Missing base (type=1) record → block skipped
 - All three stripes populated simultaneously
@@ -78,6 +78,6 @@ Based on code analysis, these areas are likely sources of the reported issues:
 
 2. **Missing base record handling**: If no type=1 base record exists, the `base` variable is undefined. The insert still proceeds but with null values for `idpraktijk`, `idshift`, `currentDate`, `nextDate`. This may cause issues downstream.
 
-3. **Type 11 not handled in assign API**: The bottom section only matches type=9 for unassign, but `dienstenToShiftBlocks` also shows type=11 in the bottom stripe. If a user tries to unassign a type=11 bottom entry via the UI, it won't find the record.
+3. **Bottom type mismatch risk**: Bottom assignments must be type=11 only. If code paths treat type=9 as bottom assignment, vakantie preference rows can be misinterpreted.
 
-4. **Data transformation grouping**: `dienstenToShiftBlocks` groups by exact `van-tot` key. If a type=5 or type=9 record has slightly different van/tot from the type=1 base (e.g., off by a second), it won't be grouped together and will be lost.
+4. **Data transformation grouping**: `dienstenToShiftBlocks` groups by exact `van-tot` key. If a type=5 or type=11 record has slightly different van/tot from the type=1 base (e.g., off by a second), it won't be grouped together and will be lost.

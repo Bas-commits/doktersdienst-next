@@ -10,14 +10,14 @@ type Data = { success: true } | { error: string };
 const SECTION_TYPE: Record<string, number> = {
   middle: 0,
   top: 5,
-  bottom: 9, // Extra Dokter (legacy PHP type)
+  bottom: 11, // Extra Dokter assignment
 };
 
 /** Legacy DB: Standaard rows may be type 0, 4, or 6 (see PHP diensten.verwijderen / shift.persoon2). */
 const MIDDLE_ASSIGNMENT_TYPES = [0, 4, 6] as const;
 
-/** Extra Dokter: legacy PHP uses 9; older Next rows may still be type 11 (see useDienstenSchedule). */
-const BOTTOM_ASSIGNMENT_TYPES = [9, 11] as const;
+/** Extra Dokter assignment rows are stored as type 11. */
+const BOTTOM_ASSIGNMENT_TYPES = [11] as const;
 
 /**
  * POST /api/diensten/assign
@@ -35,7 +35,7 @@ const BOTTOM_ASSIGNMENT_TYPES = [9, 11] as const;
  *   - type=1 record: always present, defines the unassigned slot (never modified here)
  *   - type=0, 4, or 6: regular (Standaard) assignment  → section=middle (legacy uses 4 and 6 too)
  *   - type=5: Achterwacht assignment           → section=top
- *   - type=9 or 11: Extra Dokter               → section=bottom (11 deprecated; still cleared on assign/unassign)
+ *   - type=11: Extra Dokter                    → section=bottom
  *
  * Behaviour:
  *   - If an assignment record of the target type already exists → update iddeelnemer

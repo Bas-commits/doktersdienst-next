@@ -80,9 +80,9 @@ export default function RoosterMakenSecretarisPage() {
   const vanGte = useMemo(() => vanGteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
   const totLte = useMemo(() => totLteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
 
-  // Only fetch assignment types — exclude preference types (2, 3, 9-as-vakantie, 10, 5001)
-  // to prevent preferences from leaking into the shift block stripes.
-  const ASSIGNMENT_TYPES = useMemo(() => [0, 1, 4, 5, 6, 9, 11], []);
+  // Only fetch assignment types — exclude preference types (2, 3, 9, 10, 5001)
+  // so vakantie preferences never leak into the shift block stripes.
+  const ASSIGNMENT_TYPES = useMemo(() => [0, 1, 4, 5, 6, 11], []);
 
   const { data: dienstenResponse, loading: dienstenLoading, error: dienstenError } = useDienstenSubscription(
     vanGte,
@@ -361,7 +361,7 @@ export default function RoosterMakenSecretarisPage() {
                   }}
                   className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
                     deleteMode
-                      ? 'bg-destructive/10 text-destructive outline outline-2 outline-destructive'
+                      ? 'bg-destructive/10 text-destructive outline-2 outline-destructive'
                       : 'hover:bg-accent text-muted-foreground'
                   }`}
                 >

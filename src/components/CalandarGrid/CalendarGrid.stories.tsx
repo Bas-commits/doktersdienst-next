@@ -93,7 +93,7 @@ const dummyDienstenResponse: DienstenResponse = {
         iddeelnemer: 3,
         van: 1741455600,
         tot: 1741488000,
-        type: 9,
+        type: 11,
         diensten_deelnemers: {
           id: 3,
           voornaam: 'Pieter',

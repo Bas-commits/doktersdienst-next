@@ -105,23 +105,23 @@
 
 **Goal**: Verify and fix bottom (Extra Dokter) stripe assignment — assign, reassign, unassign
 
-**Independent Test**: Select a doctor, click bottom stripe, verify database record with type=9
+**Independent Test**: Select a doctor, click bottom stripe, verify database record with type=11
 
 ### Tests for User Story 3
 
-- [x] T033 [P] [US3] Unit test `dienstenToShiftBlocks` — base + type=9 record populates bottom stripe in `src/hooks/__tests__/useDienstenSchedule.test.ts`
-- [x] T034 [P] [US3] Unit test `dienstenToShiftBlocks` — base + type=11 (deprecated) populates bottom stripe in `src/hooks/__tests__/useDienstenSchedule.test.ts`
-- [x] T035 [P] [US3] Unit test assign API — bottom assign new inserts type=9 in `src/pages/api/diensten/__tests__/assign.test.ts`
+- [x] T033 [P] [US3] Unit test `dienstenToShiftBlocks` — base + type=11 record populates bottom stripe in `src/hooks/__tests__/useDienstenSchedule.test.ts`
+- [x] T034 [P] [US3] Unit test `dienstenToShiftBlocks` — duplicate type=11 rows still resolve correctly in `src/hooks/__tests__/useDienstenSchedule.test.ts`
+- [x] T035 [P] [US3] Unit test assign API — bottom assign new inserts type=11 in `src/pages/api/diensten/__tests__/assign.test.ts`
 - [x] T036 [P] [US3] Unit test assign API — bottom assign existing updates iddeelnemer in `src/pages/api/diensten/__tests__/assign.test.ts`
-- [x] T037 [P] [US3] Unit test assign API — bottom unassign deletes type=9 record in `src/pages/api/diensten/__tests__/assign.test.ts`
-- [x] T038 [P] [US3] Unit test assign API — bottom unassign with type=11 record also deletes it (suspected bug: currently only matches type=9) in `src/pages/api/diensten/__tests__/assign.test.ts`
+- [x] T037 [P] [US3] Unit test assign API — bottom unassign deletes type=11 record in `src/pages/api/diensten/__tests__/assign.test.ts`
+- [x] T038 [P] [US3] Unit test assign API — bottom unassign remains type=11-only and does not touch preference type=9 in `src/pages/api/diensten/__tests__/assign.test.ts`
 - [x] T039 [US3] E2E test — select doctor, click bottom stripe of shift block, verify API call and UI shows doctor initials in bottom stripe in `e2e/rooster-maken-secretaris.spec.ts`
 - [x] T040 [US3] E2E test — bottom stripe delete: assign doctor to bottom, enable delete mode, click bottom stripe, verify removal in `e2e/rooster-maken-secretaris.spec.ts`
 
 ### Bug Fixes for User Story 3
 
-- [ ] T041 [US3] DEFERRED: type=11 unassign bug not testable via mock — needs integration test with real DB. The assign API only matches type=9 for bottom unassign; type=11 records won't be deleted.
-- [x] T042 [US3] No fixes needed — bottom stripe read/display logic is correct (type=9 and type=11 both render)
+- [x] T041 [US3] Fixed: assign API now uses type=11 for bottom assign/unassign consistently
+- [x] T042 [US3] Updated: bottom stripe read/display logic is type=11-only to avoid voorkeur type=9 leakage
 - [x] T043 [US3] No fixes needed — e2e bottom stripe tests pass
 
 **Checkpoint**: All bottom stripe unit tests and e2e tests pass. Extra Dokter assignment works end-to-end.
@@ -136,7 +136,7 @@
 
 ### Tests for User Story 4
 
-- [x] T044 [P] [US4] Unit test `dienstenToShiftBlocks` — base + type=0 + type=5 + type=9 all populate their respective stripes simultaneously in `src/hooks/__tests__/useDienstenSchedule.test.ts`
+- [x] T044 [P] [US4] Unit test `dienstenToShiftBlocks` — base + type=0 + type=5 + type=11 all populate their respective stripes simultaneously in `src/hooks/__tests__/useDienstenSchedule.test.ts`
 - [x] T045 [P] [US4] Unit test `groupShiftBlocksByWaarneemgroep` — blocks grouped correctly by idwaarneemgroep in `src/hooks/__tests__/useDienstenSchedule.test.ts`
 - [x] T046 [US4] E2E test — assign Doctor A to middle, Doctor B to top, Doctor C to bottom of same block, verify all three visible simultaneously in `e2e/rooster-maken-secretaris.spec.ts`
 - [x] T047 [US4] E2E test — with all three stripes assigned, delete only top stripe, verify middle and bottom remain in `e2e/rooster-maken-secretaris.spec.ts`

@@ -87,8 +87,8 @@ function getOvernameType(dienst: Dienst): ShiftBlockView['overnameType'] {
 export function dienstenToShiftBlocks(response: DienstenResponse | null | undefined): ShiftBlockView[] {
   if (!response?.data?.diensten?.length) return [];
 
-  // 0/4/6=Standaard (legacy PHP uses 4 and 6 alongside 0), 1=slot, 5=Achterwacht, 9=Extra Dokter, 11=deprecated (old Next) still merged into bottom
-  const relevantTypes = new Set<number>([0, 1, 4, 5, 6, 9, 11]);
+  // 0/4/6=Standaard (legacy PHP uses 4 and 6 alongside 0), 1=slot, 5=Achterwacht, 11=Extra Dokter
+  const relevantTypes = new Set<number>([0, 1, 4, 5, 6, 11]);
   const byKey = new Map<string, { base: Dienst | null; items: Dienst[] }>();
   const overnameRecords: Dienst[] = [];
 
@@ -165,9 +165,8 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
           if (!top) top = toDoctorInfo(dienst);
           break;
         }
-        case 9:
         case 11: {
-          // 9 = Extra Dokter (legacy PHP); 11 kept only so older rows from this app still render
+          // 11 = Extra Dokter
           if (!bottom) bottom = toDoctorInfo(dienst);
           break;
         }
@@ -210,7 +209,7 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
     if (!bottom) {
       for (const dienst of response.data.diensten) {
         const t = dienst.type;
-        if (t !== 9 && t !== 11) continue;
+        if (t !== 11) continue;
         if ((dienst.idwaarneemgroep ?? 0) !== wg) continue;
         if (!intervalsOverlap(dienst.van, dienst.tot, base.van, base.tot)) continue;
         const d = toDoctorInfo(dienst);

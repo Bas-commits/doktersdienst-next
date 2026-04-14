@@ -1,7 +1,9 @@
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Briefcase, Check, GraduationCap, Trash2, TreePalm, X } from 'lucide-react';
-import { TbQuestionMark, TbSwitch3 } from 'react-icons/tb';
+import { FaQuestion } from "react-icons/fa6";
+import { BsFillQuestionSquareFill } from "react-icons/bs";
+import { TbSwitch3 } from 'react-icons/tb';
 import type { ShiftBlockView } from '@/types/diensten';
 
 /** Returns whether the given date lies within the shift's start and end (inclusive). Exported for testing. */
@@ -125,7 +127,7 @@ export interface ShiftBlockProps {
    * When set, shows an overname (shift takeover) indicator on the block.
    * - 'overname': confirmed takeover — small TbSwitch3 badge top-right
    * - 'voorstelOvername': pending confirmation — TbSwitch3 + orange TbQuestionMark badge
-   * - 'vraagtekenOvername': declined, no replacement — large red question mark overlay
+   * - 'vraagtekenOvername': declined, no replacement — red question badge top-right
    */
   overnameType?: 'overname' | 'voorstelOvername' | 'vraagtekenOvername';
 }
@@ -621,12 +623,12 @@ export function ShiftBlock({
           )}
           {overnameType === 'vraagtekenOvername' && (
             <span
-              className="absolute inset-0 flex items-center justify-center pointer-events-none"
+              className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40 pointer-events-none"
               title="Overname geweigerd — geen arts toegewezen"
               aria-hidden
               data-testid="vraagteken-overname-badge"
             >
-              <TbQuestionMark className="h-7 w-7 text-red-600 drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]" />
+              <FaQuestion className="h-3.5 w-3.5 text-white" />
             </span>
           )}
         </div>

@@ -421,45 +421,7 @@ export default function WaarneemgroepWijzigenPage() {
                       ))}
                     </div>
 
-                    <div className="border-t pt-4 flex flex-col gap-4">
-                      <h3 className="text-base font-semibold">Crisis management</h3>
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="wg-coordinator">Crisis coordinator groep</Label>
-                        <select
-                          id="wg-coordinator"
-                          className={selectClass}
-                          value={formData.idcoordinatorwaarneemgroep}
-                          onChange={(e) => set('idcoordinatorwaarneemgroep', e.target.value)}
-                          disabled={submitting}
-                        >
-                          <option value="">— Kies waarneemgroep —</option>
-                          {options.waarneemgroepen.map((w) => (
-                            <option key={w.id} value={String(w.id)}>{w.naam}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {([1, 2, 3, 4] as const).map((n) => (
-                          <div key={n} className="flex flex-col gap-1">
-                            <Label htmlFor={`wg-liason${n}`}>Liason officer {n}</Label>
-                            <select
-                              id={`wg-liason${n}`}
-                              className={selectClass}
-                              value={formData[`idliason${n}` as keyof FormData] as string}
-                              onChange={(e) => set(`idliason${n}` as keyof FormData, e.target.value)}
-                              disabled={submitting}
-                            >
-                              <option value="0">Geen</option>
-                              {selectedDeelnemers.map((d) => (
-                                <option key={d.id} value={String(d.id)}>
-                                  {deelnemerLabel(d)}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    
 
                     <div>
                       <Button type="submit" disabled={submitting}>

@@ -107,6 +107,7 @@ export function DoktersdienstHeader({
       });
       fetchVerzoeken();
       setVerzoekIndex(0);
+      window.dispatchEvent(new Event('overname-updated'));
     },
     [verzoeken, verzoekIndex, fetchVerzoeken]
   );

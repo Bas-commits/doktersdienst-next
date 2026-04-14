@@ -81,6 +81,13 @@ export default function OvernamesPage() {
   const [detailSubmitting, setDetailSubmitting] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
+  // Re-fetch calendar data when any source (header, this page) signals an overname change
+  useEffect(() => {
+    const onUpdate = () => setRefreshKey((k) => k + 1);
+    window.addEventListener('overname-updated', onUpdate);
+    return () => window.removeEventListener('overname-updated', onUpdate);
+  }, []);
+
   // Fetch all accessible doctors once (same approach as rooster-maken-secretaris)
   useEffect(() => {
     if (!activeWaarneemgroepId) return;
@@ -181,8 +188,7 @@ export default function OvernamesPage() {
         }
 
         setSelectedShift(null);
-        setRefreshKey((k) => k + 1);
-        // Notify the header to refresh pending verzoeken
+        // Notify all listeners (header + this page's calendar) to refresh
         window.dispatchEvent(new Event('overname-updated'));
       } catch {
         setSubmitError('Er is een fout opgetreden');
@@ -211,7 +217,6 @@ export default function OvernamesPage() {
           return;
         }
         setSelectedOvernameBlock(null);
-        setRefreshKey((k) => k + 1);
         window.dispatchEvent(new Event('overname-updated'));
       } catch {
         setDetailError('Er is een fout opgetreden');
@@ -239,13 +244,13 @@ export default function OvernamesPage() {
         setDetailError(result.error || 'Er is een fout opgetreden');
         return;
       }
-      // Find the underlying assigned shift block by matching the iddienstovern
+      // Find the underlying assigned shift block by matching the iddienstovern.
+      // b.id is the type=1 slot id; the assigned dienst id is stored in b.assignedDienstId.
       const allBlocks = rows.flatMap((r) => r.shiftBlocks);
       const originalBlock = allBlocks.find(
-        (b) => !b.overnameType && b.id === selectedOvernameBlock.iddienstovern
+        (b) => !b.overnameType && b.assignedDienstId === selectedOvernameBlock.iddienstovern
       );
       setSelectedOvernameBlock(null);
-      setRefreshKey((k) => k + 1);
       window.dispatchEvent(new Event('overname-updated'));
       // Open the propose modal for the original shift
       if (originalBlock) {

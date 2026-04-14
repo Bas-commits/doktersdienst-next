@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { eq, and, asc } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { pool } from '@/lib/db';
 import type { MijnGegevensLookup } from '@/types/mijn-gegevens';
 
 const { deelnemers, waarneemgroepen, instellingtype, locaties } = schema;
@@ -99,10 +100,18 @@ export default async function handler(
       locatiesPerTypeBuiten[tid] = buitenOptions;
     }
 
+    const omschrijvingRows = await pool
+      .query<{ id: number; omschrijving: string }>(
+        'SELECT id, omschrijving FROM omschrijvingtelnrs ORDER BY omschrijving'
+      )
+      .then((r) => r.rows)
+      .catch(() => [] as { id: number; omschrijving: string }[]);
+
     const result: MijnGegevensLookup = {
       instellingtypen: types.map((t) => ({ id: t.id ?? -1, naam: t.naam })),
       locatiesPerTypeBinnen,
       locatiesPerTypeBuiten,
+      omschrijvingtelnrs: omschrijvingRows,
     };
 
     return res.status(200).json(result);

@@ -7,6 +7,13 @@ import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { DeelnemerWithGroepen } from './api/deelnemers/index';
 
+const ROL_LABELS: Record<number, string> = {
+  1: 'Deelnemer',
+  2: 'Secretaris',
+  3: 'Receptionist',
+  4: 'Kijker',
+};
+
 function formatNaam(d: DeelnemerWithGroepen): string {
   return [d.voornaam, d.voorletterstussenvoegsel, d.achternaam]
     .filter(Boolean)
@@ -92,7 +99,7 @@ export default function LijstDeelnemersPage() {
   return (
     <>
       <Head><title>Lijst deelnemers</title></Head>
-      <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
         <Card>
           <CardHeader>
             <div className="flex flex-col gap-3">
@@ -150,7 +157,8 @@ export default function LijstDeelnemersPage() {
                         <th className="pb-2 pr-4 font-medium">Naam</th>
                         <th className="pb-2 pr-4 font-medium">Login</th>
                         <th className="pb-2 pr-4 font-medium">Kleur</th>
-                        {showWaarneemgroepColumn && <th className="pb-2 font-medium">Waarneemgroepen</th>}
+                        {showWaarneemgroepColumn && <th className="pb-2 pr-4 font-medium">Waarneemgroepen</th>}
+                        {showWaarneemgroepColumn && <th className="pb-2 font-medium">Rol</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -187,10 +195,31 @@ export default function LijstDeelnemersPage() {
                             </div>
                           </td>
                           {showWaarneemgroepColumn && (
+                            <td className="py-2.5 pr-4">
+                              {d.waarneemgroepen.length > 0 ? (
+                                <span className="text-muted-foreground">
+                                  {d.waarneemgroepen.map((wg, i, arr) => (
+                                    <span key={wg.id}>
+                                      {wg.naam}
+                                      {i < arr.length - 1 && <br />}
+                                    </span>
+                                  ))}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                          )}
+                          {showWaarneemgroepColumn && (
                             <td className="py-2.5">
                               {d.waarneemgroepen.length > 0 ? (
                                 <span className="text-muted-foreground">
-                                  {d.waarneemgroepen.map((wg) => wg.naam).join(', ')}
+                                  {d.waarneemgroepen.map((wg, i, arr) => (
+                                    <span key={wg.id}>
+                                      {wg.idgroep != null ? (ROL_LABELS[wg.idgroep] ?? '—') : '—'}
+                                      {i < arr.length - 1 && <br />}
+                                    </span>
+                                  ))}
                                 </span>
                               ) : (
                                 <span className="text-muted-foreground">—</span>

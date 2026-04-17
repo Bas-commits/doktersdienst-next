@@ -820,7 +820,7 @@ export function ShiftBlock({
           createPortal(
             <div
               data-shift-block-tooltip
-              className="relative flex min-w-[90px] w-max h-[45px] border-2 rounded-md list-none items-center pointer-events-none after:content-[''] after:absolute after:left-1/2 after:top-[-8px] after:-translate-x-1/2 after:rotate-45 after:w-3 after:h-3 after:border-t-2 after:border-l-2 after:[border-top-color:var(--afterBorder)] after:[border-left-color:var(--afterBorder)]"
+              className="relative flex min-w-[90px] w-max min-h-[45px] border-2 rounded-md list-none items-center pointer-events-none px-2 py-1 after:content-[''] after:absolute after:left-1/2 after:top-[-8px] after:-translate-x-1/2 after:rotate-45 after:w-3 after:h-3 after:border-t-2 after:border-l-2 after:[border-top-color:var(--afterBorder)] after:[border-left-color:var(--afterBorder)]"
               style={{
                 position: 'fixed',
                 left: shiftTooltipCoords.left,
@@ -831,7 +831,7 @@ export function ShiftBlock({
                 borderColor: mainColor,
               }}
             >
-              <div className="flex items-center justify-between w-full px-2">
+              <div className="flex items-center justify-between w-full gap-2">
                 <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>
                   {block.startTime}
                 </p>

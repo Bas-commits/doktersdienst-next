@@ -15,6 +15,7 @@ import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription, clearCacheByPrefix } from '@/hooks/useDienstenSubscription';
 import { useVoorkeurenSubscription } from '@/hooks/useVoorkeurenSubscription';
+import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
 import type { ShiftBlockView } from '@/types/diensten';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
@@ -190,6 +191,7 @@ export default function RoosterMakenSecretarisPage() {
   const now = useMemo(() => new Date(), []);
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
+  const calendarVakanties = useCalendarVakanties(viewYear);
 
   // All doctors fetched from API
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
@@ -694,6 +696,7 @@ export default function RoosterMakenSecretarisPage() {
                   }}
                   voorkeuren={voorkeuren ?? undefined}
                   onSectionShiftClick={handleSectionShiftClick}
+                  vakanties={calendarVakanties}
                 />
               </div>
             </CardContent>

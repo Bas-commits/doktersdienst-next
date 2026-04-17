@@ -10,6 +10,7 @@ import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGrid
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
+import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
 import { OvernameModal } from '@/components/OvernameModal';
 import { OvernameDetailModal } from '@/components/OvernameDetailModal';
 import type { OvernameDoctor } from '@/components/OvernameModal';
@@ -37,6 +38,7 @@ export default function OvernamesPage() {
   const now = useMemo(() => new Date(), []);
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
+  const calendarVakanties = useCalendarVakanties(viewYear);
 
   const { waarneemgroepen, activeWaarneemgroepId, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
   const waarneemgroepIds = useMemo(() => {
@@ -309,6 +311,7 @@ export default function OvernamesPage() {
               hideBottomStrip
               showPreferences={false}
               onShiftClick={handleShiftClick}
+              vakanties={calendarVakanties}
             />
           </CardContent>
         </Card>

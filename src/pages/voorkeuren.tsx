@@ -11,6 +11,7 @@ import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGrid
 import { ChipSelector, CHIP_STYLE } from '@/components/voorkeuren/ChipSelector';
 import { dienstenToShiftBlocks, dienstenToShiftBlocksFromParticipant, groupShiftBlocksByWaarneemgroep } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
+import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { shiftKeyFromBlock, getChipByCode } from '@/types/voorkeuren';
 import type { ShiftBlockView } from '@/types/diensten';
@@ -92,6 +93,7 @@ export default function VoorkeurenPage() {
   const now = useMemo(() => new Date(), []);
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
+  const calendarVakanties = useCalendarVakanties(viewYear);
 
   const [selectedChipCode, setSelectedChipCode] = useState<string | null>(null);
   const [pendingInsert, setPendingInsert] = useState<Map<string, string>>(new Map());
@@ -401,6 +403,7 @@ export default function VoorkeurenPage() {
                     pendingDelete={pendingDelete}
                     getChipByCode={getChipByCode}
                     showPreferences={false}
+                    vakanties={calendarVakanties}
                   />
                 </div>
               )}

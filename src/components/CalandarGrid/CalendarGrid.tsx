@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
-import type { VakantieItem, WeekDateRangeItem } from '@/types/rooster';
+import type { WeekDateRangeItem } from '@/types/rooster';
+import type { CalendarVakantieItem } from '@/types/calendar-vakanties';
+import { isApiVakantiePeriod, isRoosterVakantieItem } from '@/types/calendar-vakanties';
 import type { ShiftBlockSection } from '@/types/rooster-maken';
 import type { ShiftBlockView } from '@/types/diensten';
 import type { ChipDefinition, VoorkeurItem } from '@/types/voorkeuren';
@@ -43,8 +45,8 @@ export interface CalendarGridProps {
   hideBottomStrip?: boolean;
   /** Optional: when set, each shift block shows a delete button that calls this with the block. */
   onShiftDelete?: (block: ShiftBlockView) => void;
-  /** Optional: vacation labels per day. */
-  vakanties?: VakantieItem[];
+  /** Optional: vacation names per day (rooster shape and/or GET /api/vakanties rows). */
+  vakanties?: CalendarVakantieItem[];
   /** Optional: when set, month navigation is shown above the calendar and this is called when the user selects a month/year. */
   onViewMonthChange?: (month: number, year: number) => void;
   /** Optional: shiftKey -> chip code for pending preference inserts (voorkeuren). */
@@ -61,6 +63,24 @@ export interface CalendarGridProps {
 
 /** Width of the right-hand column that shows waarneemgroep names per row (when multiple rows). */
 const ROW_LABEL_WIDTH = 140;
+
+function pushVakantieNaamForCalendarDay(map: Map<string, string[]>, naam: string, d: Date) {
+  const key = `${d.getDate()}-${d.getMonth() + 1}-${d.getFullYear()}`;
+  if (!map.has(key)) map.set(key, []);
+  const arr = map.get(key)!;
+  if (!arr.includes(naam)) arr.push(naam);
+}
+
+function addVakantieDateRangeToMap(map: Map<string, string[]>, naam: string, start: Date, end: Date) {
+  const d1 = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const d2 = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  const diff = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+  for (let i = 0; i <= diff; i++) {
+    const d = new Date(d1);
+    d.setDate(d.getDate() + i);
+    pushVakantieNaamForCalendarDay(map, naam, d);
+  }
+}
 
 /** Pad number to two digits for HH:MM. */
 function pad2(n: number): string {
@@ -360,8 +380,6 @@ export function CalendarGrid({
   showPreferences = true,
   voorkeuren,
 }: CalendarGridProps) {
-  const vakantieList: VakantieItem[] = vakanties ?? [];
-
   /** Normalize to rows: use rows when provided, else single row from shiftBlocks. */
   const gridRows: CalendarGridRow[] = useMemo(() => {
     if (rows?.length) return rows;
@@ -392,26 +410,25 @@ export function CalendarGrid({
 
   const vakantieByDate = useMemo(() => {
     const map = new Map<string, string[]>();
+    const vakantieList = vakanties ?? [];
     for (const v of vakantieList) {
-      const parts1 = v.current_date.split(/[-/]/);
-      const parts2 = v.next_date.split(/[-/]/);
-      const d1 = parts1.length >= 3
-        ? new Date(Number(parts1[0]), Number(parts1[1]) - 1, Number(parts1[2]))
-        : new Date(v.current_date);
-      const d2 = parts2.length >= 3
-        ? new Date(Number(parts2[0]), Number(parts2[1]) - 1, Number(parts2[2]))
-        : new Date(v.next_date);
-      const diff = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-      for (let i = 0; i <= diff; i++) {
-        const d = new Date(d1);
-        d.setDate(d.getDate() + i);
-        const key = `${d.getDate()}-${d.getMonth() + 1}-${d.getFullYear()}`;
-        if (!map.has(key)) map.set(key, []);
-        map.get(key)!.push(v.naam);
+      if (isApiVakantiePeriod(v)) {
+        addVakantieDateRangeToMap(map, v.naam, new Date(v.van * 1000), new Date(v.tot * 1000));
+      } else if (isRoosterVakantieItem(v)) {
+        const parts1 = v.current_date.split(/[-/]/);
+        const parts2 = v.next_date.split(/[-/]/);
+        const d1 = parts1.length >= 3
+          ? new Date(Number(parts1[0]), Number(parts1[1]) - 1, Number(parts1[2]))
+          : new Date(v.current_date);
+        const d2 = parts2.length >= 3
+          ? new Date(Number(parts2[0]), Number(parts2[1]) - 1, Number(parts2[2]))
+          : new Date(v.next_date);
+        if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime())) continue;
+        addVakantieDateRangeToMap(map, v.naam, d1, d2);
       }
     }
     return map;
-  }, [vakantieList]);
+  }, [vakanties]);
 
   const weekdays = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 
@@ -467,25 +484,32 @@ export function CalendarGrid({
                       key={dateKey}
                       className="min-w-[100px] flex-1 min-h-[110px] p-0 border-r border-[#c4c4c4] first:rounded-l-[13px] last:rounded-r-[13px] last:border-r-0 last:border-0 overflow-visible flex flex-col"
                     >
-                      {/* Day header in this cell: date number + optional vacation labels. */}
+                      {/* Day header: day number (today = green badge) + vakantie name(s) on the right. */}
                       <div
-                        className="text-[#a0a0a0] text-[25px] my-0 mx-[5px] ml-2.5 flex items-center justify-between leading-none [&>span]:text-sm [&>span]:font-semibold [&>span]:tracking-[0.5px] [&>span]:text-[#c5c5c5]"
+                        className="text-[#a0a0a0] text-[25px] my-0 mx-[5px] ml-2.5 flex min-h-[28px] items-center justify-between gap-1 leading-none"
                         data-day-month-year={dateKey}
-                        style={
-                          isToday
-                            ? {
-                                color: 'white',
-                                backgroundColor: 'green',
-                                fontWeight: 'bold',
-                                width: '30px',
-                                borderRadius: '6px',
-                              }
-                            : undefined
-                        }
                       >
-                        {rangeDay}
+                        <span
+                          className="inline-flex shrink-0 items-center justify-center leading-none"
+                          style={
+                            isToday
+                              ? {
+                                  color: 'white',
+                                  backgroundColor: 'green',
+                                  fontWeight: 'bold',
+                                  minWidth: '30px',
+                                  borderRadius: '6px',
+                                }
+                              : undefined
+                          }
+                        >
+                          {rangeDay}
+                        </span>
                         {vacationLabels.length > 0 && (
-                          <span className="text-[10px] text-green-600">
+                          <span
+                            className="min-w-0 flex-1 truncate text-right text-[10px] font-semibold tracking-[0.5px] text-green-600"
+                            title={vacationLabels.join(', ')}
+                          >
                             {vacationLabels.join(', ')}
                           </span>
                         )}

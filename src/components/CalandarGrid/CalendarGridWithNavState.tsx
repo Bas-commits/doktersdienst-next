@@ -5,6 +5,7 @@ import { CalendarGrid, type CalendarGridRow } from './CalendarGrid';
 import type { ShiftBlockView } from '@/types/diensten';
 import type { ChipDefinition, VoorkeurItem } from '@/types/voorkeuren';
 import type { ShiftBlockSection } from '@/types/rooster-maken';
+import type { CalendarVakantieItem } from '@/types/calendar-vakanties';
 
 export interface CalendarGridWithNavStateProps {
   /** Rows per waarneemgroep (when set, shiftBlocks is ignored). */
@@ -48,6 +49,8 @@ export interface CalendarGridWithNavStateProps {
   plannerDoctorPreferenceMap?: Map<string, ChipDefinition>;
   /** Optional: when set, each shift block shows a delete button that calls this with the block. */
   onShiftDelete?: (block: ShiftBlockView) => void;
+  /** Optional: public holidays / vakanties (e.g. from useCalendarVakanties). */
+  vakanties?: CalendarVakantieItem[];
 }
 
 /**
@@ -74,6 +77,7 @@ export function CalendarGridWithNavState({
   onSectionShiftClick,
   plannerDoctorPreferenceMap,
   onShiftDelete,
+  vakanties,
 }: CalendarGridWithNavStateProps) {
   const [internalViewMonth, setInternalViewMonth] = useState(initialViewMonth);
   const [internalViewYear, setInternalViewYear] = useState(initialViewYear);
@@ -113,6 +117,7 @@ export function CalendarGridWithNavState({
       onSectionShiftClick={onSectionShiftClick}
       plannerDoctorPreferenceMap={plannerDoctorPreferenceMap}
       onShiftDelete={onShiftDelete}
+      vakanties={vakanties}
     />
   );
 }

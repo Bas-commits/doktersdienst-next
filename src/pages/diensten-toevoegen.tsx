@@ -12,6 +12,7 @@ import { DateTimePicker } from '@/components/ui/datetime-picker';
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription, clearCacheByPrefix } from '@/hooks/useDienstenSubscription';
+import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import type { ShiftBlockView } from '@/types/diensten';
 
@@ -70,6 +71,7 @@ export default function DienstenToevoegenPage() {
   const now = useMemo(() => new Date(), []);
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
+  const calendarVakanties = useCalendarVakanties(viewYear);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Form state
@@ -612,6 +614,7 @@ export default function DienstenToevoegenPage() {
                   hideBottomStrip
                   onShiftDelete={handleShiftDelete}
                   showPreferences={false}
+                  vakanties={calendarVakanties}
                 />
               )}
             </CardContent>

@@ -186,7 +186,7 @@ export function DoktersdienstHeader({
             href="#"
             data-testid="header-logo"
           >
-            <img src={assetUrls.logo} alt="Logo" className="ml-[60px]" />
+            <img src={assetUrls.logo} alt="DoktersDienst" className="ml-[10px]" />
           </a>
 
           {false && (

@@ -12,6 +12,7 @@ import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGrid
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
+import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -116,6 +117,7 @@ export default function RoosterInzienPage() {
   const now = useMemo(() => new Date(), []);
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
+  const calendarVakanties = useCalendarVakanties(viewYear);
   /** When null, effective selection is "only header-selected". When set, user has toggled checkboxes. */
   const [selectedIds, setSelectedIds] = useState<Set<number> | null>(null);
 
@@ -230,6 +232,7 @@ export default function RoosterInzienPage() {
                   setViewYear(year);
                 }}
                 showPreferences={false}
+                vakanties={calendarVakanties}
               />
             </CardContent>
           </Card>

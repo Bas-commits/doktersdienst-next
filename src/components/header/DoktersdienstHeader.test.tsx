@@ -54,9 +54,9 @@ const defaultProps = {
     logout: '/logout',
   },
   assetUrls: {
-    logo: '/assets/logo.png',
-    ppLogo: '/assets/pp-logo.png',
-    requestIcon: '/assets/request.svg',
+    logo: '/logo.png',
+    ppLogo: '/logo.png',
+    requestIcon: '/request.svg',
   },
 };
 

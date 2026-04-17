@@ -63,7 +63,7 @@ export default async function handler(
           })
           .from(vakanties)
           .leftJoin(vakantieregios, eq(vakanties.idvakantieregio, vakantieregios.id))
-          .where(and(gte(vakanties.van, yearStart), lt(vakanties.van, yearEnd)))
+          .where(and(lt(vakanties.van, yearEnd), gte(vakanties.tot, yearStart)))
           .orderBy(asc(vakanties.van)),
       ]);
 

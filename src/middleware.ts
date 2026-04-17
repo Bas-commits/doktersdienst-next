@@ -5,10 +5,18 @@ import { NextRequest, NextResponse } from 'next/server';
  * protected pages. API routes handle their own auth (returning 401),
  * but this catches routes that might forget.
  *
- * Public paths: /login, /api/auth/*, /api/health, /_next/*, /favicon.ico, static assets.
+ * Public paths: /login, /api/auth/*, /api/health, /_next/*, /favicon.ico,
+ * extension-based static files from /public (e.g. .png, .svg), /static/*.
  */
+/** Files in /public served at the root (avoid auth redirect breaking img/font requests). */
+const PUBLIC_STATIC_EXT = /\.(ico|png|jpg|jpeg|svg|webp|gif|woff2?|ttf|eot)$/i;
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (PUBLIC_STATIC_EXT.test(pathname)) {
+    return NextResponse.next();
+  }
 
   // Allow public paths
   if (

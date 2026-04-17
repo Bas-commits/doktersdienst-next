@@ -1,9 +1,10 @@
 import type { WaarneemgroepItem, HeaderUser, AssetUrls } from '@/components/header/DoktersdienstHeader';
 
+/** Root-relative paths (`/…`) so assets resolve from the site origin on every route. */
 export const DEFAULT_ASSET_URLS: AssetUrls = {
-  logo: 'images/logo.png',
-  ppLogo: 'images/pp-logo.png',
-  requestIcon: 'images/request.svg',
+  logo: '/logo.png',
+  ppLogo: '/logo.png',
+  requestIcon: '/request.svg',
 };
 
 export const DEFAULT_ROUTES: Record<string, string> = {

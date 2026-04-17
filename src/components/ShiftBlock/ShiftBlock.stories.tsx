@@ -148,6 +148,17 @@ export const roosterInzienShiftBlock: Story = {
   },
 };
 
+/** Bright user color: initials should use dark text for contrast (luminance-based). */
+export const BrightYellowDoctorColor: Story = {
+  args: {
+    block: {
+      ...baseBlock,
+      middle: { ...doctor1, color: '#ffeb3b' },
+    },
+    ...cellDate,
+  },
+};
+
 export const UnassignedSlot: Story = {
   args: {
     block: unassignedBlock,

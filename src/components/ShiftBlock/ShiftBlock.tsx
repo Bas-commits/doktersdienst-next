@@ -5,6 +5,7 @@ import { FaQuestion } from "react-icons/fa6";
 import { BsFillQuestionSquareFill } from "react-icons/bs";
 import { TbSwitch3 } from 'react-icons/tb';
 import type { ShiftBlockView } from '@/types/diensten';
+import { getContrastTextColor } from '@/utils/contrastTextColor';
 
 /** Returns whether the given date lies within the shift's start and end (inclusive). Exported for testing. */
 export function isShiftActiveAt(block: ShiftBlockView, when: Date): boolean {
@@ -283,7 +284,7 @@ export function ShiftBlock({
 
   const aantekeningLabel = (block.aantekeningTekst ?? '').trim();
   const aantekeningTextClass =
-    doctorId || showPendingDoctor ? 'text-white/90' : 'text-[#4b5563]';
+    doctorId || showPendingDoctor ? '' : 'text-[#4b5563]';
 
   if (isUnassignedSlot) {
     // Type 1 = shift slot: gray outline, or pending doctor color/initials when assigned in planner
@@ -353,17 +354,62 @@ export function ShiftBlock({
   /** Filled preference styles: block background + Lucide icon (Liever wel, Liever niet, Vakantie, Nascholing). */
   const preferenceFill = useMemo(() => {
     if (!preferenceChip) return null;
-    const map: Record<string, { backgroundColor: string; Icon: typeof Check; iconColor: string }> = {
-      '3': { backgroundColor: '#22c55e', Icon: Check, iconColor: 'white' },
-      '2': { backgroundColor: '#eab308', Icon: X, iconColor: 'white' },
-      '9': { backgroundColor: '#ef4444', Icon: TreePalm, iconColor: 'white' },
-      '10': { backgroundColor: '#a855f7', Icon: GraduationCap, iconColor: 'white' },
-      '5001': { backgroundColor: '#64748b', Icon: Briefcase, iconColor: 'white' },
+    const map: Record<string, { backgroundColor: string; Icon: typeof Check }> = {
+      '3': { backgroundColor: '#22c55e', Icon: Check },
+      '2': { backgroundColor: '#eab308', Icon: X },
+      '9': { backgroundColor: '#ef4444', Icon: TreePalm },
+      '10': { backgroundColor: '#a855f7', Icon: GraduationCap },
+      '5001': { backgroundColor: '#64748b', Icon: Briefcase },
     };
     return map[preferenceChip.code] ?? null;
   }, [preferenceChip]);
 
   const showPreferenceFill = preferenceFill != null;
+
+  const preferenceTextColor = useMemo(
+    () => (preferenceFill ? getContrastTextColor(preferenceFill.backgroundColor) : null),
+    [preferenceFill],
+  );
+
+  const middleStripTextColor = useMemo(() => {
+    if (showPreferenceFill && preferenceFill) {
+      return getContrastTextColor(preferenceFill.backgroundColor);
+    }
+    if (showPendingDoctor && pendingDoctor) {
+      return getContrastTextColor(pendingDoctor.color);
+    }
+    if (doctorId && mainColor && mainColor !== 'transparent') {
+      return getContrastTextColor(mainColor);
+    }
+    return null;
+  }, [
+    showPreferenceFill,
+    preferenceFill,
+    showPendingDoctor,
+    pendingDoctor,
+    doctorId,
+    mainColor,
+  ]);
+
+  const topStripTextColor = useMemo(() => {
+    if (topPending && pendingDoctorTop) {
+      return getContrastTextColor(pendingDoctorTop.color);
+    }
+    if (achterwDoc?.color) {
+      return getContrastTextColor(achterwDoc.color);
+    }
+    return null;
+  }, [topPending, pendingDoctorTop, achterwDoc]);
+
+  const bottomStripTextColor = useMemo(() => {
+    if (bottomPending && pendingDoctorBottom) {
+      return getContrastTextColor(pendingDoctorBottom.color);
+    }
+    if (extraDoc?.color) {
+      return getContrastTextColor(extraDoc.color);
+    }
+    return null;
+  }, [bottomPending, pendingDoctorBottom, extraDoc]);
   const showPreferenceBadge = preferenceChip != null && !showPreferenceFill;
   const overnameTypeLabel = block.isPartial ? 'Gedeeltelijke overname' : 'Volledige overname';
   const overnameStatusLabel =
@@ -430,7 +476,7 @@ export function ShiftBlock({
       {!hideTopStrip &&
         (achterw === 0 ? (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
+            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor="111"
             data-testid="shift-block-top"
             style={{
@@ -438,6 +484,7 @@ export function ShiftBlock({
               border: achterwDoc ? undefined : 'solid 1px #dcdcdc',
               cursor: topHasClick ? 'pointer' : undefined,
               opacity: dimTop ? 0.35 : undefined,
+              color: topStripTextColor ?? '#ffffff',
             }}
             onClick={topHasClick ? (e) => useSectionClick ? onSectionClick!('top', e) : onClick!(e) : undefined}
           >
@@ -445,13 +492,14 @@ export function ShiftBlock({
           </div>
         ) : (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
+            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={achterw}
             data-testid="shift-block-top"
             style={{
               background: achterwDoc?.color ?? 'transparent',
               cursor: topHasClick ? 'pointer' : undefined,
               opacity: dimTop ? 0.35 : undefined,
+              color: topStripTextColor ?? '#ffffff',
             }}
             onClick={topHasClick ? (e) => useSectionClick ? onSectionClick!('top', e) : onClick!(e) : undefined}
           >
@@ -515,16 +563,26 @@ export function ShiftBlock({
               <div className="flex flex-col items-center justify-center min-w-0 max-w-full gap-0.5">
                 {showInitialsWithPreferenceFill ? (
                   <span className="flex items-center">
-                    <span className="hidden @[36px]:inline text-white text-[8px] font-bold leading-none pl-0.5">
+                    <span
+                      className="hidden @[36px]:inline text-[8px] font-bold leading-none pl-0.5"
+                      style={{ color: preferenceTextColor! }}
+                    >
                       {displayShortName}
                     </span>
-                    <Icon className="h-3 w-3 shrink-0 text-white pr-0.5" aria-hidden />
+                    <Icon
+                      className="h-3 w-3 shrink-0 pr-0.5"
+                      style={{ color: preferenceTextColor! }}
+                      aria-hidden
+                    />
                   </span>
                 ) : (
-                  <Icon className="h-5 w-5 shrink-0 text-white" aria-hidden />
+                  <Icon className="h-5 w-5 shrink-0" style={{ color: preferenceTextColor! }} aria-hidden />
                 )}
                 {aantekeningLabel ? (
-                  <span className="hidden @[36px]:inline text-[7px] font-semibold text-white/95 text-center leading-tight truncate max-w-full px-0.5">
+                  <span
+                    className="hidden @[36px]:inline text-[7px] font-semibold text-center leading-tight truncate max-w-full px-0.5"
+                    style={{ color: preferenceTextColor!, opacity: 0.95 }}
+                  >
                     {aantekeningLabel}
                   </span>
                 ) : null}
@@ -533,8 +591,11 @@ export function ShiftBlock({
           })() : (
             <>
               <span
-                className={`rotate-180 whitespace-nowrap text-sm font-mono ${doctorId ? 'text-white' : 'text-[#a0a0a0]'}`}
-                style={{ writingMode: 'vertical-rl' }}
+                className={`rotate-180 whitespace-nowrap text-sm font-mono ${middleStripTextColor ? '' : 'text-[#a0a0a0]'}`}
+                style={{
+                  writingMode: 'vertical-rl',
+                  ...(middleStripTextColor ? { color: middleStripTextColor } : {}),
+                }}
               />
               <div className="hidden @[36px]:flex flex-col items-center justify-center min-w-0 max-w-full gap-0 px-0.5">
                 {(() => {
@@ -542,8 +603,9 @@ export function ShiftBlock({
                   return primaryLabel ? (
                     <span
                       className={`text-[10px] font-semibold tracking-[0.5px] wrap-break-word leading-[12px] text-center truncate max-w-full ${
-                        doctorId || showPendingDoctor ? 'text-white' : 'text-[#a0a0a0]'
+                        middleStripTextColor ? '' : 'text-[#a0a0a0]'
                       }`}
+                      style={middleStripTextColor ? { color: middleStripTextColor } : undefined}
                     >
                       {primaryLabel}
                     </span>
@@ -552,14 +614,22 @@ export function ShiftBlock({
                 {aantekeningLabel ? (
                   <span
                     className={`text-[8px] font-medium leading-tight text-center truncate max-w-full ${aantekeningTextClass}`}
+                    style={
+                      middleStripTextColor
+                        ? { color: middleStripTextColor, opacity: 0.9 }
+                        : undefined
+                    }
                   >
                     {aantekeningLabel}
                   </span>
                 ) : null}
               </div>
               <span
-                className={`rotate-180 whitespace-nowrap text-sm font-mono ${doctorId ? 'text-white' : 'text-[#a0a0a0]'}`}
-                style={{ writingMode: 'vertical-rl' }}
+                className={`rotate-180 whitespace-nowrap text-sm font-mono ${middleStripTextColor ? '' : 'text-[#a0a0a0]'}`}
+                style={{
+                  writingMode: 'vertical-rl',
+                  ...(middleStripTextColor ? { color: middleStripTextColor } : {}),
+                }}
               />
             </>
           )}
@@ -611,8 +681,11 @@ export function ShiftBlock({
                 <div className="mb-2 flex items-center gap-2 text-sm">
                   <p className="font-bold">Van:</p>
                   <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold text-white"
-                    style={{ backgroundColor: vanArts?.color ?? '#7b2d8e' }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
+                    style={{
+                      backgroundColor: vanArts?.color ?? '#7b2d8e',
+                      color: getContrastTextColor(vanArts?.color ?? '#7b2d8e'),
+                    }}
                   >
                     {vanArts?.shortName ?? '??'}
                   </span>
@@ -621,8 +694,11 @@ export function ShiftBlock({
                 <div className="flex items-center gap-2 text-sm">
                   <p className="font-bold">Naar:</p>
                   <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold text-white"
-                    style={{ backgroundColor: naarArts?.color ?? '#7b2d8e' }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
+                    style={{
+                      backgroundColor: naarArts?.color ?? '#7b2d8e',
+                      color: getContrastTextColor(naarArts?.color ?? '#7b2d8e'),
+                    }}
                   >
                     {naarArts?.shortName ?? '??'}
                   </span>
@@ -662,8 +738,11 @@ export function ShiftBlock({
                 <div className="mb-2 flex items-center gap-2 text-sm">
                   <p className="font-bold">Van:</p>
                   <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold text-white"
-                    style={{ backgroundColor: vanArts?.color ?? '#7b2d8e' }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
+                    style={{
+                      backgroundColor: vanArts?.color ?? '#7b2d8e',
+                      color: getContrastTextColor(vanArts?.color ?? '#7b2d8e'),
+                    }}
                   >
                     {vanArts?.shortName ?? '??'}
                   </span>
@@ -672,8 +751,11 @@ export function ShiftBlock({
                 <div className="flex items-center gap-2 text-sm">
                   <p className="font-bold">Naar:</p>
                   <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold text-white"
-                    style={{ backgroundColor: naarArts?.color ?? '#7b2d8e' }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
+                    style={{
+                      backgroundColor: naarArts?.color ?? '#7b2d8e',
+                      color: getContrastTextColor(naarArts?.color ?? '#7b2d8e'),
+                    }}
                   >
                     {naarArts?.shortName ?? '??'}
                   </span>
@@ -723,7 +805,7 @@ export function ShiftBlock({
       {!hideBottomStrip &&
         (extra === 0 ? (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
+            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor="111"
             data-testid="shift-block-bottom"
             style={{
@@ -731,6 +813,7 @@ export function ShiftBlock({
               border: extraDoc ? undefined : 'solid 1px #dcdcdc',
               cursor: bottomHasClick ? 'pointer' : undefined,
               opacity: dimBottom ? 0.35 : undefined,
+              color: bottomStripTextColor ?? '#ffffff',
             }}
             onClick={bottomHasClick ? (e) => useSectionClick ? onSectionClick!('bottom', e) : onClick!(e) : undefined}
           >
@@ -738,13 +821,14 @@ export function ShiftBlock({
           </div>
         ) : (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 text-white font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
+            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={extra}
             data-testid="shift-block-bottom"
             style={{
               background: extraDoc?.color ?? 'transparent',
               cursor: bottomHasClick ? 'pointer' : undefined,
               opacity: dimBottom ? 0.35 : undefined,
+              color: bottomStripTextColor ?? '#ffffff',
             }}
             onClick={bottomHasClick ? (e) => useSectionClick ? onSectionClick!('bottom', e) : onClick!(e) : undefined}
           >

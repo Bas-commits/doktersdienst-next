@@ -269,8 +269,8 @@ export default function LoginPage() {
               )}
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="email" className="text-foreground">
-                  Email
+                <Label htmlFor="email" className="text-foreground text-m font-bold">
+                  Email:
                 </Label>
                 <Input
                   id="email"
@@ -286,8 +286,8 @@ export default function LoginPage() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="password" className="text-foreground">
-                  Wachtwoord
+                <Label htmlFor="password" className="text-foreground text-m font-bold">
+                  Wachtwoord:
                 </Label>
                 <Input
                   id="password"
@@ -306,7 +306,7 @@ export default function LoginPage() {
                 type="submit"
                 disabled={isLoading || magicLinkLoading}
                 data-testid="login-submit"
-                className="mx-auto h-11 min-w-[200px] rounded-xl bg-linear-to-b from-[#d1262c] to-[#a81f24] px-8 text-white shadow-md hover:from-[#b92228] hover:to-[#951b20]"
+                className="mx-auto h-11 min-w-[200px text-m font-bold rounded-xl bg-linear-to-b from-[#d1262c] to-[#a81f24] px-8 text-white shadow-md hover:from-[#b92228] hover:to-[#951b20]"
               >
                 {isLoading ? 'Bezig met inloggen…' : 'Inloggen'}
               </Button>

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DateTimePicker } from '@/components/ui/datetime-picker';
 import type { VakantiesResponse, VakantieItem } from './api/vakanties/index';
 
 const TYPE_FEESTDAG = 0;
@@ -277,28 +278,26 @@ export default function VakantiePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="vak-van">
                     Van <span className="text-destructive">*</span>
                   </Label>
-                  <Input
+                  <DateTimePicker
                     id="vak-van"
-                    type="datetime-local"
                     value={van}
-                    onChange={(e) => setVan(e.target.value)}
+                    onChange={setVan}
                     disabled={submitting}
                   />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="space-y-1.5">
                   <Label htmlFor="vak-tot">
                     Tot <span className="text-destructive">*</span>
                   </Label>
-                  <Input
+                  <DateTimePicker
                     id="vak-tot"
-                    type="datetime-local"
                     value={tot}
-                    onChange={(e) => setTot(e.target.value)}
+                    onChange={setTot}
                     disabled={submitting}
                   />
                 </div>

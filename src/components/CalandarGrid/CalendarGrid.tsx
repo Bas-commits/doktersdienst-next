@@ -478,6 +478,7 @@ export function CalendarGrid({
                                 backgroundColor: 'green',
                                 fontWeight: 'bold',
                                 width: '30px',
+                                borderRadius: '6px',
                               }
                             : undefined
                         }

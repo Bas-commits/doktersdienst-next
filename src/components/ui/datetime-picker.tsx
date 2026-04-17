@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -77,8 +78,11 @@ export function DateTimePicker({ value, onChange, disabled, id }: DateTimePicker
   const [navYear, setNavYear] = useState(parsed?.year ?? new Date().getFullYear());
   const [navMonth, setNavMonth] = useState(parsed?.month ?? new Date().getMonth());
   const [rawTime, setRawTime] = useState<string | null>(null);
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Sync calendar nav when value changes externally
   useEffect(() => {
@@ -89,13 +93,37 @@ export function DateTimePicker({ value, onChange, disabled, id }: DateTimePicker
     }
   }, [value]);
 
-  // Close on outside click
+  // Position popover in viewport (portal avoids parent overflow:hidden clipping)
+  useLayoutEffect(() => {
+    if (!open || typeof document === 'undefined') return;
+    const update = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const panelW = 256; // w-64
+      let left = r.left;
+      if (left + panelW > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - panelW - 8);
+      }
+      setPanelPos({ top: r.bottom + 4, left });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open]);
+
+  // Close on outside click (trigger + portaled panel)
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const t = e.target as Node;
+      if (wrapRef.current?.contains(t)) return;
+      if (panelRef.current?.contains(t)) return;
+      setOpen(false);
     }
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
@@ -156,9 +184,98 @@ export function DateTimePicker({ value, onChange, disabled, id }: DateTimePicker
 
   const timeValue = rawTime ?? (parsed ? `${pad(parsed.hours)}:${pad(parsed.minutes)}` : '');
 
+  const panel = open && (
+    <div
+      ref={panelRef}
+      style={{ top: panelPos.top, left: panelPos.left }}
+      className="fixed z-200 w-64 rounded-lg border border-border bg-background p-3 shadow-md"
+    >
+      {/* Month navigation */}
+      <div className="mb-2 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={prevMonth}
+          className="flex h-6 w-6 items-center justify-center rounded hover:bg-muted"
+          aria-label="Vorige maand"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+        <span className="text-sm font-medium capitalize">
+          {MONTHS_NL[navMonth]} {navYear}
+        </span>
+        <button
+          type="button"
+          onClick={nextMonth}
+          className="flex h-6 w-6 items-center justify-center rounded hover:bg-muted"
+          aria-label="Volgende maand"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Weekday headers */}
+      <div className="mb-1 grid grid-cols-7 text-center">
+        {WEEKDAYS.map((d) => (
+          <div key={d} className="py-0.5 text-[11px] font-medium text-muted-foreground">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Day grid */}
+      <div className="grid grid-cols-7">
+        {grid.flat().map((cell, i) => {
+          const isCurrentMonth = cell.month === navMonth && cell.year === navYear;
+          const isSelected =
+            parsed &&
+            cell.day === parsed.day &&
+            cell.month === parsed.month &&
+            cell.year === parsed.year;
+          const isToday =
+            cell.day === today.getDate() &&
+            cell.month === today.getMonth() &&
+            cell.year === today.getFullYear();
+
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => handleDayClick(cell.day, cell.month, cell.year)}
+              className={cn(
+                'rounded py-1 text-center text-xs transition-colors hover:bg-muted',
+                !isCurrentMonth && 'text-muted-foreground/50',
+                isSelected && 'bg-primary text-primary-foreground hover:bg-primary/90',
+                isToday && !isSelected && 'font-semibold text-primary'
+              )}
+            >
+              {cell.day}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Time input */}
+      <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
+        <span className="shrink-0 text-xs text-muted-foreground">Tijd (UU:MM)</span>
+        <input
+          type="text"
+          value={timeValue}
+          onChange={handleTimeChange}
+          placeholder="08:00"
+          maxLength={5}
+          className={cn(
+            'w-16 rounded-md border border-input bg-transparent px-2 py-0.5 text-sm tabular-nums outline-none',
+            'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50'
+          )}
+        />
+      </div>
+    </div>
+  );
+
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={wrapRef} className="relative">
       <button
+        ref={triggerRef}
         id={id}
         type="button"
         disabled={disabled}
@@ -174,89 +291,7 @@ export function DateTimePicker({ value, onChange, disabled, id }: DateTimePicker
         <span className="flex-1 text-left tabular-nums">{displayDate}</span>
       </button>
 
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-lg border border-border bg-background p-3 shadow-md">
-          {/* Month navigation */}
-          <div className="mb-2 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={prevMonth}
-              className="flex h-6 w-6 items-center justify-center rounded hover:bg-muted"
-              aria-label="Vorige maand"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            <span className="text-sm font-medium capitalize">
-              {MONTHS_NL[navMonth]} {navYear}
-            </span>
-            <button
-              type="button"
-              onClick={nextMonth}
-              className="flex h-6 w-6 items-center justify-center rounded hover:bg-muted"
-              aria-label="Volgende maand"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          {/* Weekday headers */}
-          <div className="mb-1 grid grid-cols-7 text-center">
-            {WEEKDAYS.map((d) => (
-              <div key={d} className="py-0.5 text-[11px] font-medium text-muted-foreground">
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {/* Day grid */}
-          <div className="grid grid-cols-7">
-            {grid.flat().map((cell, i) => {
-              const isCurrentMonth = cell.month === navMonth && cell.year === navYear;
-              const isSelected =
-                parsed &&
-                cell.day === parsed.day &&
-                cell.month === parsed.month &&
-                cell.year === parsed.year;
-              const isToday =
-                cell.day === today.getDate() &&
-                cell.month === today.getMonth() &&
-                cell.year === today.getFullYear();
-
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => handleDayClick(cell.day, cell.month, cell.year)}
-                  className={cn(
-                    'rounded py-1 text-center text-xs transition-colors hover:bg-muted',
-                    !isCurrentMonth && 'text-muted-foreground/50',
-                    isSelected && 'bg-primary text-primary-foreground hover:bg-primary/90',
-                    isToday && !isSelected && 'font-semibold text-primary'
-                  )}
-                >
-                  {cell.day}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Time input */}
-          <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-            <span className="shrink-0 text-xs text-muted-foreground">Tijd (UU:MM)</span>
-            <input
-              type="text"
-              value={timeValue}
-              onChange={handleTimeChange}
-              placeholder="08:00"
-              maxLength={5}
-              className={cn(
-                'w-16 rounded-md border border-input bg-transparent px-2 py-0.5 text-sm tabular-nums outline-none',
-                'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50'
-              )}
-            />
-          </div>
-        </div>
-      )}
+      {typeof document !== 'undefined' && panel ? createPortal(panel, document.body) : null}
     </div>
   );
 }

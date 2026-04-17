@@ -112,6 +112,17 @@ export function shiftKeyFromBlock(block: ShiftBlockView): string {
   return `${block.currentDate}_${block.van}_${block.tot}_${block.id}`;
 }
 
+/** Whether pointerenter should apply a preference while painting (click-drag). Exported for tests. */
+export function shouldApplyPreferencePaintEnter(
+  sessionActive: boolean,
+  pointerButtons: number,
+  blockKey: string,
+  keysTouched: Set<string>,
+): boolean {
+  if (!sessionActive || (pointerButtons & 1) === 0) return false;
+  return !keysTouched.has(blockKey);
+}
+
 /** A voorkeur entry for rendering in the calendar (used by CalendarGrid). */
 export interface VoorkeurItem {
   id: number | null;

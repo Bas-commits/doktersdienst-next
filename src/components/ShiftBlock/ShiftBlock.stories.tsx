@@ -227,6 +227,16 @@ export const VoorkeurenPreferenceFilled: Story = {
   },
 };
 
+/** /voorkeuren main grid: filled preference with middle populated (e.g. after reload) — icon only, no initials. */
+export const VoorkeurenPreferenceFilledIconOnly: Story = {
+  args: {
+    block: baseBlock,
+    ...cellDate,
+    preferenceChip: getChipByCode('3'),
+    hideInitialsInPreferenceFill: true,
+  },
+};
+
 /** Voorkeuren: Vakantie preference (yellow + palm icon). */
 export const VoorkeurenPreferenceVakantie: Story = {
   args: {

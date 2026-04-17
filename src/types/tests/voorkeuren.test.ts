@@ -3,6 +3,7 @@ import {
   buildPreferencePayload,
   shiftKey,
   shiftKeyFromBlock,
+  shouldApplyPreferencePaintEnter,
 } from '../voorkeuren';
 import type { RoosterChip } from '../rooster';
 import type { ShiftBlockView } from '../diensten';
@@ -72,6 +73,24 @@ describe('buildPreferencePayload', () => {
     expect(deleteItems).toHaveLength(1);
     expect(deleteItems[0].doctorid).toBe(200);
     expect(deleteItems[0].code).toBe('1014');
+  });
+});
+
+describe('shouldApplyPreferencePaintEnter', () => {
+  it('returns false when session is not active or primary button not held', () => {
+    const touched = new Set<string>();
+    expect(shouldApplyPreferencePaintEnter(false, 1, 'a', touched)).toBe(false);
+    expect(shouldApplyPreferencePaintEnter(true, 0, 'a', touched)).toBe(false);
+  });
+
+  it('returns false when key was already touched in this stroke', () => {
+    const touched = new Set<string>(['a']);
+    expect(shouldApplyPreferencePaintEnter(true, 1, 'a', touched)).toBe(false);
+  });
+
+  it('returns true when active, primary down, and key not yet touched', () => {
+    const touched = new Set<string>();
+    expect(shouldApplyPreferencePaintEnter(true, 1, 'b', touched)).toBe(true);
   });
 });
 

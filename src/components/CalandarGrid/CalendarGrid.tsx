@@ -1,11 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import type { WeekDateRangeItem } from '@/types/rooster';
 import type { CalendarVakantieItem } from '@/types/calendar-vakanties';
 import { isApiVakantiePeriod, isRoosterVakantieItem } from '@/types/calendar-vakanties';
 import type { ShiftBlockSection } from '@/types/rooster-maken';
 import type { ShiftBlockView } from '@/types/diensten';
 import type { ChipDefinition, VoorkeurItem } from '@/types/voorkeuren';
-import { CHIP_DEFINITIONS, shiftKeyFromBlock, getChipByCode as getChipByCodeFromTypes } from '@/types/voorkeuren';
+import {
+  CHIP_DEFINITIONS,
+  shiftKeyFromBlock,
+  getChipByCode as getChipByCodeFromTypes,
+  shouldApplyPreferencePaintEnter,
+} from '@/types/voorkeuren';
 import { getWeek, monthWeekCount, getDateRangeOfWeek, getWeekNumber } from '@/utils/calendarUtils';
 import { ShiftBlock } from '@/components/ShiftBlock/ShiftBlock';
 import { MonthNavigation } from './MonthNavigation';
@@ -59,6 +64,19 @@ export interface CalendarGridProps {
   showPreferences?: boolean;
   /** When set, renders voorkeur blocks per user below the shift lane (secretaris view). */
   voorkeuren?: VoorkeurItem[];
+  /**
+   * When true, main shift blocks hide doctor initials inside filled preference styling
+   * (icon-only middle). Does not affect the secretaris voorkeuren band below the grid.
+   */
+  hidePreferenceFillInitialsOnShiftBlocks?: boolean;
+  /**
+   * When true with onShiftClick, middle strips use pointerdown + pointerenter (button held)
+   * to assign preferences across multiple blocks in one stroke (/voorkeuren).
+   */
+  enablePreferencePaintAssign?: boolean;
+  /** Called when a paint stroke ends (pointerup / cancel / blur). */
+  onPreferencePaintSessionStart?: () => void;
+  onPreferencePaintSessionEnd?: () => void;
 }
 
 /** Width of the right-hand column that shows waarneemgroep names per row (when multiple rows). */
@@ -379,7 +397,42 @@ export function CalendarGrid({
   getChipByCode = getChipByCodeFromTypes,
   showPreferences = true,
   voorkeuren,
+  hidePreferenceFillInitialsOnShiftBlocks = false,
+  enablePreferencePaintAssign = false,
+  onPreferencePaintSessionStart,
+  onPreferencePaintSessionEnd,
 }: CalendarGridProps) {
+  const paintSessionRef = useRef<{ active: boolean; keysTouched: Set<string> }>({
+    active: false,
+    keysTouched: new Set(),
+  });
+
+  useEffect(() => {
+    if (!enablePreferencePaintAssign || !onShiftClick) return;
+    const endSession = () => {
+      const s = paintSessionRef.current;
+      if (!s.active) return;
+      s.active = false;
+      s.keysTouched.clear();
+      onPreferencePaintSessionEnd?.();
+    };
+    window.addEventListener('pointerup', endSession);
+    window.addEventListener('pointercancel', endSession);
+    window.addEventListener('blur', endSession);
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') endSession();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pointerup', endSession);
+      window.removeEventListener('pointercancel', endSession);
+      window.removeEventListener('blur', endSession);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [enablePreferencePaintAssign, onShiftClick, onPreferencePaintSessionEnd]);
+
+  const preferencePaintActive = Boolean(enablePreferencePaintAssign && onShiftClick);
+
   /** Normalize to rows: use rows when provided, else single row from shiftBlocks. */
   const gridRows: CalendarGridRow[] = useMemo(() => {
     if (rows?.length) return rows;
@@ -547,9 +600,18 @@ export function CalendarGrid({
                                     ? undefined
                                     : pendingCode
                                       ? getChipByCode(pendingCode)
-                                      : block.assignedPreferenceCode
+                                        : block.assignedPreferenceCode
                                         ? getChipByCode(block.assignedPreferenceCode)
                                         : undefined);
+                                const invokeShiftClick =
+                                  onShiftClick &&
+                                  ((el: HTMLDivElement) => {
+                                    const rect = el.getBoundingClientRect();
+                                    onShiftClick(block, {
+                                      top: rect.top + window.scrollY,
+                                      left: rect.left + window.scrollX,
+                                    });
+                                  });
                                 return (
                                   <ShiftBlock
                                     key={`${block.id}-${block.van}-${block.tot}-${dateKey}-${blockIndex}`}
@@ -571,13 +633,44 @@ export function CalendarGrid({
                                         : undefined
                                     }
                                     onClick={
-                                      onShiftClick
+                                      invokeShiftClick && !preferencePaintActive
                                         ? (e) => {
-                                            const rect = e.currentTarget.getBoundingClientRect();
-                                            onShiftClick(block, {
-                                              top: rect.top + window.scrollY,
-                                              left: rect.left + window.scrollX,
-                                            });
+                                            invokeShiftClick(e.currentTarget);
+                                          }
+                                        : undefined
+                                    }
+                                    onMiddlePointerDown={
+                                      invokeShiftClick && preferencePaintActive
+                                        ? (e) => {
+                                            if (e.button !== 0) return;
+                                            e.preventDefault();
+                                            onPreferencePaintSessionStart?.();
+                                            const s = paintSessionRef.current;
+                                            s.active = true;
+                                            s.keysTouched = new Set<string>();
+                                            const key = shiftKeyFromBlock(block);
+                                            s.keysTouched.add(key);
+                                            invokeShiftClick(e.currentTarget);
+                                          }
+                                        : undefined
+                                    }
+                                    onMiddlePointerEnter={
+                                      invokeShiftClick && preferencePaintActive
+                                        ? (e) => {
+                                            const s = paintSessionRef.current;
+                                            const key = shiftKeyFromBlock(block);
+                                            if (
+                                              !shouldApplyPreferencePaintEnter(
+                                                s.active,
+                                                e.buttons,
+                                                key,
+                                                s.keysTouched,
+                                              )
+                                            ) {
+                                              return;
+                                            }
+                                            s.keysTouched.add(key);
+                                            invokeShiftClick(e.currentTarget);
                                           }
                                         : undefined
                                     }
@@ -587,6 +680,7 @@ export function CalendarGrid({
                                         : undefined
                                     }
                                     preferenceChip={preferenceChip ?? null}
+                                    hideInitialsInPreferenceFill={hidePreferenceFillInitialsOnShiftBlocks}
                                     overnameType={block.overnameType}
                                   />
                                 );

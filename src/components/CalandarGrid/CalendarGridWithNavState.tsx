@@ -38,6 +38,12 @@ export interface CalendarGridWithNavStateProps {
   showPreferences?: boolean;
   /** When set, renders voorkeur blocks per user below the shift lane (secretaris view). */
   voorkeuren?: VoorkeurItem[];
+  /** When true, main shift blocks use icon-only filled preference styling (see CalendarGrid). */
+  hidePreferenceFillInitialsOnShiftBlocks?: boolean;
+  /** Click-and-drag preference assign on middle strips (see CalendarGrid). */
+  enablePreferencePaintAssign?: boolean;
+  onPreferencePaintSessionStart?: () => void;
+  onPreferencePaintSessionEnd?: () => void;
   /**
    * When set, each stripe (top/middle/bottom) is individually clickable for the planning view.
    */
@@ -74,6 +80,10 @@ export function CalendarGridWithNavState({
   getChipByCode,
   showPreferences,
   voorkeuren,
+  hidePreferenceFillInitialsOnShiftBlocks,
+  enablePreferencePaintAssign,
+  onPreferencePaintSessionStart,
+  onPreferencePaintSessionEnd,
   onSectionShiftClick,
   plannerDoctorPreferenceMap,
   onShiftDelete,
@@ -114,6 +124,10 @@ export function CalendarGridWithNavState({
       getChipByCode={getChipByCode}
       showPreferences={showPreferences}
       voorkeuren={voorkeuren}
+      hidePreferenceFillInitialsOnShiftBlocks={hidePreferenceFillInitialsOnShiftBlocks}
+      enablePreferencePaintAssign={enablePreferencePaintAssign}
+      onPreferencePaintSessionStart={onPreferencePaintSessionStart}
+      onPreferencePaintSessionEnd={onPreferencePaintSessionEnd}
       onSectionShiftClick={onSectionShiftClick}
       plannerDoctorPreferenceMap={plannerDoctorPreferenceMap}
       onShiftDelete={onShiftDelete}

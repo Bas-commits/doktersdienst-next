@@ -101,6 +101,22 @@ export default function VoorkeurenPage() {
   const [preferenceApiError, setPreferenceApiError] = useState<string | null>(null);
   /** Block duplicate API calls: keys of slots that have a request in flight. */
   const inFlightKeysRef = useRef<Set<string>>(new Set());
+  /** Active paint-drag stroke id (preference batching). */
+  const currentPaintStrokeIdRef = useRef(0);
+  const paintStrokesRef = useRef(
+    new Map<
+      number,
+      {
+        pending: number;
+        okAdds: number;
+        okRemoves: number;
+        fails: number;
+        firstError: string | null;
+        ended: boolean;
+      }
+    >(),
+  );
+  const paintStrokeSeqRef = useRef(0);
   /** Cursor position for chip preview (only used when selectedChipCode is set). */
   const [cursorPreview, setCursorPreview] = useState<{ x: number; y: number } | null>(null);
 
@@ -171,6 +187,65 @@ export default function VoorkeurenPage() {
   const loading = waarneemgroepContextLoading || (waarneemgroepIds.length > 0 && (type1Loading || userDienstenLoading));
   const error = waarneemgroepContextError ?? type1Error ?? userDienstenError;
 
+  const tryFlushPaintStroke = useCallback(
+    (strokeId: number) => {
+      const bag = paintStrokesRef.current.get(strokeId);
+      if (!bag || !bag.ended || bag.pending > 0) return;
+
+      const ok = bag.okAdds + bag.okRemoves;
+      if (ok === 0 && bag.fails === 0) {
+        paintStrokesRef.current.delete(strokeId);
+        return;
+      }
+
+      if (bag.fails > 0 && ok === 0) {
+        toast.error('Voorkeur niet opgeslagen', { description: bag.firstError ?? 'Actie mislukt.' });
+      } else if (ok === 1 && bag.fails === 0) {
+        const chip = getChipByCode(selectedChipCode ?? '');
+        const label = chip?.label ?? 'Voorkeur';
+        toast.success(bag.okRemoves > 0 ? 'Voorkeur verwijderd' : `${label} opgeslagen`);
+      } else if (ok > 1) {
+        if (bag.okRemoves > 0 && bag.okAdds === 0) {
+          toast.success(`${bag.okRemoves} voorkeuren verwijderd`);
+        } else if (bag.okAdds > 0 && bag.okRemoves === 0) {
+          toast.success(`${bag.okAdds} voorkeuren opgeslagen`);
+        } else {
+          toast.success(`${ok} wijzigingen opgeslagen`);
+        }
+        if (bag.fails > 0) {
+          toast.error('Deels mislukt', {
+            description: `${bag.fails} van ${ok + bag.fails} acties konden niet worden opgeslagen.`,
+          });
+        }
+      } else if (ok > 0 && bag.fails > 0) {
+        toast.warning('Deels voltooid', { description: `${ok} gelukt, ${bag.fails} mislukt.` });
+      }
+
+      paintStrokesRef.current.delete(strokeId);
+    },
+    [selectedChipCode]
+  );
+
+  const onPreferencePaintSessionStart = useCallback(() => {
+    const id = ++paintStrokeSeqRef.current;
+    currentPaintStrokeIdRef.current = id;
+    paintStrokesRef.current.set(id, {
+      pending: 0,
+      okAdds: 0,
+      okRemoves: 0,
+      fails: 0,
+      firstError: null,
+      ended: false,
+    });
+  }, []);
+
+  const onPreferencePaintSessionEnd = useCallback(() => {
+    const id = currentPaintStrokeIdRef.current;
+    const bag = paintStrokesRef.current.get(id);
+    if (bag) bag.ended = true;
+    tryFlushPaintStroke(id);
+  }, [tryFlushPaintStroke]);
+
   const handleShiftClick = useCallback(
     async (block: ShiftBlockView) => {
       if (selectedChipCode === null) return;
@@ -178,6 +253,10 @@ export default function VoorkeurenPage() {
       const key = shiftKeyFromBlock(block);
       if (inFlightKeysRef.current.has(key)) return;
       inFlightKeysRef.current.add(key);
+
+      const strokeId = currentPaintStrokeIdRef.current;
+      const strokeBag = paintStrokesRef.current.get(strokeId);
+      if (strokeBag) strokeBag.pending += 1;
 
       const idwaarneemgroep = block.idwaarneemgroep;
       const action = selectedChipCode === WEGHALEN_CODE ? 'remove' : 'add';
@@ -234,6 +313,16 @@ export default function VoorkeurenPage() {
         toast.error('Voorkeur niet opgeslagen', { description: reason });
       }
 
+      function recordHttpFailure(message: string) {
+        const bag = paintStrokesRef.current.get(strokeId);
+        if (bag) {
+          bag.fails += 1;
+          if (!bag.firstError) bag.firstError = message;
+        } else {
+          showFailure(message);
+        }
+      }
+
       try {
         const res = await fetch('/api/diensten/preference', {
           method: 'POST',
@@ -249,11 +338,17 @@ export default function VoorkeurenPage() {
         if (!res.ok) {
           revertPending();
           const message = typeof data?.error === 'string' ? data.error : 'Voorkeur opslaan mislukt.';
-          showFailure(message);
+          recordHttpFailure(message);
         } else {
-          const chip = getChipByCode(selectedChipCode);
-          const label = chip?.label ?? 'Voorkeur';
-          toast.success(action === 'remove' ? 'Voorkeur verwijderd' : `${label} opgeslagen`);
+          const bag = paintStrokesRef.current.get(strokeId);
+          if (bag) {
+            if (action === 'remove') bag.okRemoves += 1;
+            else bag.okAdds += 1;
+          } else {
+            const chip = getChipByCode(selectedChipCode);
+            const label = chip?.label ?? 'Voorkeur';
+            toast.success(action === 'remove' ? 'Voorkeur verwijderd' : `${label} opgeslagen`);
+          }
         }
       } catch (err) {
         clearTimeout(timeoutId);
@@ -264,12 +359,17 @@ export default function VoorkeurenPage() {
             : err instanceof Error
               ? err.message
               : 'Voorkeur opslaan mislukt.';
-        showFailure(reason);
+        recordHttpFailure(reason);
       } finally {
         inFlightKeysRef.current.delete(key);
+        const bag = paintStrokesRef.current.get(strokeId);
+        if (bag) {
+          bag.pending -= 1;
+          tryFlushPaintStroke(strokeId);
+        }
       }
     },
-    [selectedChipCode]
+    [selectedChipCode, tryFlushPaintStroke]
   );
 
   const calendarGridRef = useRef<HTMLDivElement | null>(null);
@@ -381,7 +481,10 @@ export default function VoorkeurenPage() {
                 </p>
               )}
               {waarneemgroepIds.length > 0 && (
-                <div ref={calendarGridRef}>
+                <div
+                  ref={calendarGridRef}
+                  className={selectedChipCode ? 'select-none' : undefined}
+                >
                   <CalendarGridWithNavState
                     rows={rows}
                     initialViewMonth={now.getMonth()}
@@ -403,6 +506,10 @@ export default function VoorkeurenPage() {
                     pendingDelete={pendingDelete}
                     getChipByCode={getChipByCode}
                     showPreferences={false}
+                    hidePreferenceFillInitialsOnShiftBlocks
+                    enablePreferencePaintAssign={Boolean(selectedChipCode)}
+                    onPreferencePaintSessionStart={onPreferencePaintSessionStart}
+                    onPreferencePaintSessionEnd={onPreferencePaintSessionEnd}
                     vakanties={calendarVakanties}
                   />
                 </div>

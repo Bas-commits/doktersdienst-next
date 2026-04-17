@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, PointerEventHandler } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Briefcase, Check, GraduationCap, Trash2, TreePalm, X } from 'lucide-react';
 import { FaQuestion } from "react-icons/fa6";
@@ -114,6 +114,12 @@ export interface ShiftBlockProps {
    */
   preferenceChip?: { code: string; label: string; chipIconPath: string } | null;
   /**
+   * When true and the middle strip uses filled preference styling (icon + solid color),
+   * initials from block.middle are hidden so only the icon shows. Use on /voorkeuren
+   * where the viewer is always the current user; secretaris multi-user band keeps initials.
+   */
+  hideInitialsInPreferenceFill?: boolean;
+  /**
    * When set, overrides the default 42px middle strip height.
    * Use 20 for compact preference-only blocks in the secretaris rooster view.
    */
@@ -130,6 +136,12 @@ export interface ShiftBlockProps {
    * - 'vraagtekenOvername': declined, no replacement — red question badge top-right
    */
   overnameType?: 'overname' | 'voorstelOvername' | 'vraagtekenOvername';
+  /**
+   * When set (e.g. voorkeuren paint-drag), middle strip uses pointer events instead of onClick
+   * so click-and-drag across blocks does not double-fire on tap.
+   */
+  onMiddlePointerDown?: PointerEventHandler<HTMLDivElement>;
+  onMiddlePointerEnter?: PointerEventHandler<HTMLDivElement>;
 }
 
 export function ShiftBlock({
@@ -155,9 +167,12 @@ export function ShiftBlock({
   continuesFromPrev,
   continuesToNext,
   preferenceChip,
+  hideInitialsInPreferenceFill = false,
   middleHeight,
   disableActiveHighlight,
   overnameType,
+  onMiddlePointerDown,
+  onMiddlePointerEnter,
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
   const [isHovered, setIsHovered] = useState(false);
@@ -323,7 +338,10 @@ export function ShiftBlock({
   const middleStripClickable = useSectionClick ? true : (activeSection === undefined || activeSection === 'middle');
   const bottomStripClickable = useSectionClick ? !!showEmptyBottomStripBorder : activeSection === 'bottom';
   const topHasClick = topStripClickable && (useSectionClick ? onSectionClick : onClick);
-  const middleHasClick = middleStripClickable && (useSectionClick ? onSectionClick : onClick);
+  const middleUsesPointerPaint = !useSectionClick && onMiddlePointerDown != null;
+  const middleHasClick =
+    middleStripClickable &&
+    (useSectionClick ? onSectionClick : onClick || onMiddlePointerDown);
   const bottomHasClick = bottomStripClickable && (useSectionClick ? onSectionClick : onClick);
 
   const topPending = achterw === 0 && pendingDoctorTop;
@@ -478,16 +496,24 @@ export function ShiftBlock({
               zIndex: 1,
             } : {}),
           }}
-          onClick={middleHasClick ? (e) => useSectionClick ? onSectionClick!('middle', e) : onClick!(e) : undefined}
+          onClick={
+            middleHasClick && !middleUsesPointerPaint
+              ? (e) => (useSectionClick ? onSectionClick!('middle', e) : onClick!(e))
+              : undefined
+          }
+          onPointerDown={middleUsesPointerPaint ? onMiddlePointerDown : undefined}
+          onPointerEnter={middleUsesPointerPaint ? onMiddlePointerEnter : undefined}
           title={
             [preferenceChip?.label, aantekeningLabel || undefined].filter(Boolean).join(' — ') || undefined
           }
         >
           {showPreferenceFill ? (() => {
             const { Icon } = preferenceFill!;
+            const showInitialsWithPreferenceFill =
+              !hideInitialsInPreferenceFill && Boolean(displayShortName);
             return (
               <div className="flex flex-col items-center justify-center min-w-0 max-w-full gap-0.5">
-                {displayShortName ? (
+                {showInitialsWithPreferenceFill ? (
                   <span className="flex items-center">
                     <span className="hidden @[36px]:inline text-white text-[8px] font-bold leading-none pl-0.5">
                       {displayShortName}

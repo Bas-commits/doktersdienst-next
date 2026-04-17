@@ -4,7 +4,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, getUserWaarneemgroepIds } from '@/lib/api-auth';
 
-const { diensten: dienstenTable, deelnemers } = schema;
+const { diensten: dienstenTable, deelnemers, dienstaantekening } = schema;
 const targetDeelnemer = alias(deelnemers, 'targetDeelnemer');
 
 type Data =
@@ -15,6 +15,8 @@ type Data =
       tot: number;
       type: number | null;
       idwaarneemgroep: number | null;
+      idaantekening: number | null;
+      aantekeningTekst: string | null;
       diensten_deelnemers: {
         id: number | null;
         voornaam: string | null;
@@ -114,6 +116,8 @@ export default async function handler(
         tot: dienstenTable.tot,
         type: dienstenTable.type,
         idwaarneemgroep: dienstenTable.idwaarneemgroep,
+        idaantekening: dienstenTable.idaantekening,
+        aantekeningTekst: dienstaantekening.tekst,
         status: dienstenTable.status,
         iddienstovern: dienstenTable.iddienstovern,
         iddeelnovern: dienstenTable.iddeelnovern,
@@ -130,6 +134,7 @@ export default async function handler(
       .from(dienstenTable)
       .leftJoin(deelnemers, eq(dienstenTable.iddeelnemer, deelnemers.id))
       .leftJoin(targetDeelnemer, eq(dienstenTable.iddeelnovern, targetDeelnemer.id))
+      .leftJoin(dienstaantekening, eq(dienstenTable.idaantekening, dienstaantekening.id))
       .where(and(...whereConditions));
 
     const diensten = rows.map((r) => ({
@@ -139,6 +144,8 @@ export default async function handler(
       tot: Number(r.tot ?? 0),
       type: r.type,
       idwaarneemgroep: r.idwaarneemgroep,
+      idaantekening: r.idaantekening,
+      aantekeningTekst: r.aantekeningTekst,
       status: r.status,
       iddienstovern: r.iddienstovern,
       iddeelnovern: r.iddeelnovern,

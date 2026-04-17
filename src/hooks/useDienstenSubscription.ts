@@ -38,8 +38,10 @@ function toDienstenResponse(diensten: Array<{
     status: (d as { status?: string | null }).status ?? undefined,
     iddienstovern: (d as { iddienstovern?: number }).iddienstovern ?? undefined,
     iddeelnovern: (d as { iddeelnovern?: number }).iddeelnovern ?? undefined,
-    senderId: (d as { senderId?: number }).senderId ?? undefined,
+       senderId: (d as { senderId?: number }).senderId ?? undefined,
     isPartial: (d as { isPartial?: boolean }).isPartial ?? undefined,
+    idaantekening: (d as { idaantekening?: number | null }).idaantekening ?? undefined,
+    aantekeningTekst: (d as { aantekeningTekst?: string | null }).aantekeningTekst ?? undefined,
     diensten_deelnemers: d.diensten_deelnemers
       ? {
           id: d.diensten_deelnemers.id ?? 0,

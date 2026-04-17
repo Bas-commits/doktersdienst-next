@@ -6,7 +6,7 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { ChevronRight, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,11 +37,14 @@ const ROL_LABELS: Record<number, string> = {
 };
 
 const ROL_BADGE_CLASSES: Record<number, string> = {
-  1: 'bg-blue-100 text-blue-800',
-  2: 'bg-purple-100 text-purple-800',
-  3: 'bg-emerald-100 text-emerald-800',
-  4: 'bg-gray-200 text-gray-800',
+  1: 'bg-primary/10 text-primary',
+  2: 'bg-violet-100 text-violet-900 dark:bg-violet-950/50 dark:text-violet-200',
+  3: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200',
+  4: 'bg-muted text-muted-foreground',
 };
+
+const formSectionClass =
+  'rounded-xl border border-border bg-muted/30 p-4 space-y-4 shadow-sm dark:bg-muted/20';
 
 type FormSnapshot = {
   color: string;
@@ -83,6 +86,7 @@ export default function MijnGegevensPage() {
   const [login, setLogin] = useState('');
   const [color, setColor] = useState('#cccccc');
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [waarneemgroepenOpen, setWaarneemgroepenOpen] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
   const [achternaam, setAchternaam] = useState('');
   const [voorletterstussenvoegsel, setVoorletterstussenvoegsel] = useState('');
@@ -376,13 +380,13 @@ export default function MijnGegevensPage() {
         onClose={() => setPasswordModalOpen(false)}
       />
       {pendingNavUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h2 className="text-lg font-semibold mb-2">Niet-opgeslagen wijzigingen</h2>
-            <p className="text-sm text-muted-foreground mb-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
+            <h2 className="mb-2 text-lg font-semibold tracking-tight">Niet-opgeslagen wijzigingen</h2>
+            <p className="mb-6 text-sm text-muted-foreground">
               U heeft niet-opgeslagen wijzigingen. Wilt u deze opslaan voordat u verder gaat?
             </p>
-            <div className="flex flex-col sm:flex-row gap-2 justify-end">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
@@ -403,7 +407,19 @@ export default function MijnGegevensPage() {
                 type="button"
                 onClick={handleSaveAndLeave}
                 disabled={isSubmitting}
-                style={{ background: 'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)', color: 'white' }}
+                className="font-bold text-white"
+                style={{
+                  background: 'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)',
+                  transition: 'background 0.2s',
+                }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background =
+                    'linear-gradient(90deg, rgb(56, 19, 108) 0%, rgb(45, 34, 69) 100%)';
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background =
+                    'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)';
+                }}
               >
                 {isSubmitting ? 'Opslaan…' : 'Opslaan en verlaten'}
               </Button>
@@ -413,44 +429,38 @@ export default function MijnGegevensPage() {
       )}
       <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
         <Card>
-          <CardHeader>
-            <CardTitle className="flex flex-col sm:flex-row justify-between">
-              <h1 className="text-2xl font-semibold tracking-tight">
-              Gegevens deelnemer: 
-                <span style={{ color: '#6b7280' }}>
-                  {" "}{profile?.deelnemer.voornaam} {profile?.deelnemer.achternaam}
-                </span>
-           
-              </h1>
-              <Button
-                className="w-full sm:w-auto p-4 text-lg font-bold cursor-pointer"
-                style={{
-                  background: 'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)',
-                  color: 'white',
-                  transition: 'background 0.2s',
-                  cursor: 'pointer',
-                }}
-                type="submit"
-                form="mijn-gegevens-form"
-                disabled={isSubmitting || !isDirty}
-                onMouseOver={e => {
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    'linear-gradient(90deg, rgb(56, 19, 108) 0%, rgb(45, 34, 69) 100%)';
-                  (e.currentTarget as HTMLButtonElement).style.cursor = 'pointer';
-                }}
-                onMouseOut={e => {
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)';
-                  (e.currentTarget as HTMLButtonElement).style.cursor = 'pointer';
-                }}
-              >
-                {isSubmitting ? 'Opslaan…' : 'Opslaan'}
-              </Button>
-         
-         
-            </CardTitle>
+          <CardHeader className="flex flex-col gap-4 border-b border-border/80 pb-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1">
+              <CardTitle>
+                <h1 className="text-2xl font-semibold tracking-tight">Gegevens deelnemer</h1>
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {profile?.deelnemer.voornaam} {profile?.deelnemer.achternaam}
+              </p>
+            </div>
+            <Button
+              className="w-full cursor-pointer p-4 text-lg font-bold text-white sm:w-auto sm:shrink-0"
+              type="submit"
+              form="mijn-gegevens-form"
+              disabled={isSubmitting || !isDirty}
+              style={{
+                background: 'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)',
+                transition: 'background 0.2s',
+              }}
+              onMouseOver={(e) => {
+                if (isSubmitting || !isDirty) return;
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  'linear-gradient(90deg, rgb(56, 19, 108) 0%, rgb(45, 34, 69) 100%)';
+              }}
+              onMouseOut={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)';
+              }}
+            >
+              {isSubmitting ? 'Opslaan…' : 'Opslaan'}
+            </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             {loading && !profile && (
               <p className="text-muted-foreground">Gegevens laden…</p>
             )}
@@ -460,36 +470,53 @@ export default function MijnGegevensPage() {
               </p>
             )}
             {profile && lookup && (
-              <form
-                id="mijn-gegevens-form"
-                onSubmit={handleSubmit}
-                className="flex flex-col gap-2 [&_input:not([type='checkbox']):not([type='radio'])]:bg-white"
-              >
-                <div className="flex flex-col gap-1 m-2">
-                  <Label>Waarneemgroepen</Label>
-                  {profile.waarneemgroepen.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">—</p>
-                  ) : (
-                    <div className="flex flex-col gap-0.5">
-                      {profile.waarneemgroepen.map((wg) => (
-                        <div key={wg.id} className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className="w-[300px]">{wg.naam ?? `Groep ${wg.id}`}</span>
-                          {wg.idgroep != null && (
-                            <span
-                              className={`rounded px-1.5 py-0.5 text-xs font-medium ${ROL_BADGE_CLASSES[wg.idgroep] ?? 'bg-muted text-foreground'}`}
+              <form id="mijn-gegevens-form" onSubmit={handleSubmit} className="flex flex-col gap-6">
+                <div className="overflow-hidden rounded-xl border border-border bg-muted/30 shadow-sm dark:bg-muted/20">
+                  <button
+                    type="button"
+                    onClick={() => setWaarneemgroepenOpen((o) => !o)}
+                    className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium hover:bg-muted/40 aria-expanded:rounded-b-none"
+                    aria-expanded={waarneemgroepenOpen}
+                  >
+                    {waarneemgroepenOpen ? (
+                      <ChevronDown className="size-4 shrink-0" />
+                    ) : (
+                      <ChevronRight className="size-4 shrink-0" />
+                    )}
+                    Waarneemgroepen
+                  </button>
+                  {waarneemgroepenOpen && (
+                    <div className="space-y-2 border-t border-border/60 px-4 py-3">
+                      {profile.waarneemgroepen.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">—</p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {profile.waarneemgroepen.map((wg) => (
+                            <div
+                              key={wg.id}
+                              className="flex flex-col gap-1 border-b border-border/60 py-2 last:border-0 last:pb-0 first:pt-0 sm:flex-row sm:items-center sm:gap-3"
                             >
-                              {ROL_LABELS[wg.idgroep] ?? `Rol ${wg.idgroep}`}
-                            </span>
-                          )}
+                              <span className="min-w-0 flex-1 text-sm text-foreground">
+                                {wg.naam ?? `Groep ${wg.id}`}
+                              </span>
+                              {wg.idgroep != null && (
+                                <span
+                                  className={`rounded px-1.5 py-0.5 text-xs font-medium ${ROL_BADGE_CLASSES[wg.idgroep] ?? 'bg-muted text-foreground'}`}
+                                >
+                                  {ROL_LABELS[wg.idgroep] ?? `Rol ${wg.idgroep}`}
+                                </span>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )}
                 </div>
 
-                <div className="bg-gray-100 p-2 rounded-lg border-2">
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 m-1">
+                <div className={formSectionClass}>
+                  <div className="flex flex-col gap-4 sm:flex-row">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <Label htmlFor="huisemail">E-mail <RequiredAsterisk /></Label>
                       <Input
                         id="huisemail"
@@ -500,8 +527,10 @@ export default function MijnGegevensPage() {
                         disabled={isSubmitting}
                       />
                     </div>
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 m-2">
-                      <Label htmlFor="login" className="text-muted-foreground">Loginnaam</Label>
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <Label htmlFor="login" className="text-muted-foreground">
+                        Loginnaam
+                      </Label>
                       <Input
                         id="login"
                         type="text"
@@ -517,12 +546,13 @@ export default function MijnGegevensPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1.5 border-t border-border/60 pt-4">
                     <Label>Wachtwoord</Label>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
+                      className="w-fit"
                       onClick={() => setPasswordModalOpen(true)}
                       disabled={isSubmitting}
                     >
@@ -531,45 +561,47 @@ export default function MijnGegevensPage() {
                   </div>
                 </div>
 
-
-                <div className="bg-gray-100 p-2 rounded-lg border-2">
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 m-1">
+                <div className={formSectionClass}>
+                  <div className="flex flex-col gap-4 sm:flex-row">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <Label>Geslacht</Label>
                       <div className="flex gap-4">
-                        <label className="flex items-center gap-2">
+                        <label className="flex cursor-pointer items-center gap-2 text-sm">
                           <input
                             type="radio"
                             name="geslacht"
                             checked={geslacht === 0}
                             onChange={() => setGeslacht(0)}
                             disabled={isSubmitting}
+                            className="accent-primary"
                           />
                           man
                         </label>
-                        <label className="flex items-center gap-2">
+                        <label className="flex cursor-pointer items-center gap-2 text-sm">
                           <input
                             type="radio"
                             name="geslacht"
                             checked={geslacht === 1}
                             onChange={() => setGeslacht(1)}
                             disabled={isSubmitting}
+                            className="accent-primary"
                           />
                           vrouw
                         </label>
-                        <label className="flex items-center gap-2">
+                        <label className="flex cursor-pointer items-center gap-2 text-sm">
                           <input
                             type="radio"
                             name="geslacht"
                             checked={geslacht === null}
                             onChange={() => setGeslacht(null)}
                             disabled={isSubmitting}
+                            className="accent-primary"
                           />
                           X
                         </label>
                       </div>
                     </div>
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 m-1">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <Label>Kleur</Label>
                       <div className="flex items-center gap-2">
                         <button
@@ -599,8 +631,8 @@ export default function MijnGegevensPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 m-1">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:min-w-[140px]">
                       <Label htmlFor="voornaam">Voornaam <RequiredAsterisk /></Label>
                       <Input
                         id="voornaam"
@@ -611,7 +643,7 @@ export default function MijnGegevensPage() {
                         disabled={isSubmitting}
                       />
                     </div>
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 m-1">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:min-w-[140px]">
                       <Label htmlFor="voorletterstussenvoegsel">Tussenvoegsel <RequiredAsterisk /></Label>
                       <Input
                         id="voorletterstussenvoegsel"
@@ -622,7 +654,7 @@ export default function MijnGegevensPage() {
                         disabled={isSubmitting}
                       />
                     </div>
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 m-1">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:min-w-[140px]">
                       <Label htmlFor="achternaam">Achternaam <RequiredAsterisk /></Label>
                       <Input
                         id="achternaam"
@@ -633,7 +665,7 @@ export default function MijnGegevensPage() {
                         disabled={isSubmitting}
                       />
                     </div>
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 m-1">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:min-w-[100px]">
                       <Label htmlFor="initialen">Initialen <RequiredAsterisk /></Label>
                       <Input
                         id="initialen"
@@ -684,7 +716,7 @@ export default function MijnGegevensPage() {
                       )}
                     </div>
                   </div> */}
-                  <div className="border border-border rounded-lg m-1">
+                  <div className="overflow-hidden rounded-lg border border-border bg-background/80">
                     <button
                       type="button"
                       onClick={() => setAddressOpen((o) => !o)}
@@ -754,7 +786,7 @@ export default function MijnGegevensPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6 m-1 mt-2">
+                  <div className="mt-2 flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:gap-6">
                     {showEchtedeelnemer && (
                       <div className="flex min-w-0 flex-1 items-center gap-2 pt-0.5">
                         <Checkbox
@@ -794,9 +826,9 @@ export default function MijnGegevensPage() {
                 </div>
 
 
-                <div className="bg-gray-100 p-2 rounded-lg border-2">
-                  <div className="flex flex-col gap-1 m-1 mb-2">
-                    <Label className="text-sm font-semibold">Telefoonnummers</Label>
+                <div className={formSectionClass}>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-sm font-medium">Telefoonnummers</Label>
                     <p className="text-xs text-muted-foreground">
                       Minimaal 1, maximaal 5 nummers. Het laatste nummer is bij voorkeur een portier. Telefoonnummers worden gebeld in volgorde zoals hier opgegeven.
                     </p>
@@ -804,7 +836,10 @@ export default function MijnGegevensPage() {
 
                   <div className="flex flex-col gap-3">
                     {telnrSlots.map((slot, i) => (
-                      <div key={i} className="border border-border rounded-lg p-3 flex flex-col gap-2 bg-white">
+                      <div
+                        key={i}
+                        className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 shadow-sm"
+                      >
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium">Telefoonnummer {i + 1}</span>
                           {telnrSlots.length > 1 && (
@@ -836,6 +871,7 @@ export default function MijnGegevensPage() {
                               checked={slot.smsontvanger}
                               onChange={(e) => updateSlot(i, { smsontvanger: e.target.checked })}
                               disabled={isSubmitting}
+                              className="accent-primary"
                             />
                             Kan ook SMS ontvangen
                           </label>
@@ -910,7 +946,7 @@ export default function MijnGegevensPage() {
                       type="button"
                       onClick={addSlot}
                       disabled={isSubmitting}
-                      className="mt-3 ml-1 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+                      className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
                       <Plus className="size-4" />
                       Telefoonnummer toevoegen

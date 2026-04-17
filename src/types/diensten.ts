@@ -24,6 +24,10 @@ export interface Dienst {
   senderId?: number;
   /** Whether this overname row is a partial takeover compared to the original dienst. */
   isPartial?: boolean;
+  /** FK to dienstaantekening (usually set on type=1 slot rows). */
+  idaantekening?: number | null;
+  /** Resolved label from dienstaantekening.tekst when joined in GET /api/diensten. */
+  aantekeningTekst?: string | null;
   diensten_deelnemers: DienstDeelnemer | null;
   /** Target doctor info for overname records (type=4/6). Joined via iddeelnovern. */
   target_deelnemers?: DienstDeelnemer | null;
@@ -71,6 +75,8 @@ export interface ShiftBlockView {
   bottom: DoctorInfo | null;
   /** Optional label for tooltip, e.g. "Ochtend" / "Avond". */
   label?: string;
+  /** Dienstaantekening label from the type=1 slot (middle of block). */
+  aantekeningTekst?: string | null;
   /** Optional: waarneemgroep id (for grouping into calendar rows). */
   idwaarneemgroep?: number;
   /** Optional: preference type code when block has a saved preference (e.g. "2", "3", "9", "10", "5001"). Used on voorkeuren to show icon + color instead of initials. */

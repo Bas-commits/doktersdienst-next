@@ -100,6 +100,14 @@ describe('dienstenToShiftBlocks — middle stripe (US1)', () => {
     expect(blocks[0].idwaarneemgroep).toBe(WG_ID);
   });
 
+  it('copies aantekeningTekst from the type=1 base slot onto the block', () => {
+    const base = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID, { aantekeningTekst: 'Huisartsenpost' });
+    const response = makeDienstenResponse([base]);
+    const blocks = dienstenToShiftBlocks(response);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].aantekeningTekst).toBe('Huisartsenpost');
+  });
+
   it('T007: base + type=0 → middle populated with correct DoctorInfo', () => {
     const deelnemer = makeDeelnemer({ id: 42, voornaam: 'Piet', achternaam: 'Arts' });
     const base = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID);

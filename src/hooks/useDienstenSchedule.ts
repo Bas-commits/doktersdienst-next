@@ -220,6 +220,11 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
       }
     }
 
+    const aantekeningTekst =
+      typeof base.aantekeningTekst === 'string' && base.aantekeningTekst.trim() !== ''
+        ? base.aantekeningTekst.trim()
+        : undefined;
+
     blocks.push({
       id: base.id,
       assignedDienstId,
@@ -236,6 +241,7 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
       top,
       bottom,
       idwaarneemgroep: base.idwaarneemgroep,
+      ...(aantekeningTekst != null && { aantekeningTekst }),
     });
   }
 

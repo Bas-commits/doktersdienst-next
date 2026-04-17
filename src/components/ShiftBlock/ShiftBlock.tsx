@@ -266,6 +266,10 @@ export function ShiftBlock({
   const isUnassignedSlot = !block.middle;
   const showPendingDoctor = isUnassignedSlot && pendingDoctor != null;
 
+  const aantekeningLabel = (block.aantekeningTekst ?? '').trim();
+  const aantekeningTextClass =
+    doctorId || showPendingDoctor ? 'text-white/90' : 'text-[#4b5563]';
+
   if (isUnassignedSlot) {
     // Type 1 = shift slot: gray outline, or pending doctor color/initials when assigned in planner
     cssInline = {
@@ -475,17 +479,30 @@ export function ShiftBlock({
             } : {}),
           }}
           onClick={middleHasClick ? (e) => useSectionClick ? onSectionClick!('middle', e) : onClick!(e) : undefined}
-          title={preferenceChip?.label}
+          title={
+            [preferenceChip?.label, aantekeningLabel || undefined].filter(Boolean).join(' — ') || undefined
+          }
         >
           {showPreferenceFill ? (() => {
             const { Icon } = preferenceFill!;
-            return displayShortName ? (
-              <>
-                <span className="hidden @[36px]:inline text-white text-[8px] font-bold leading-none pl-0.5">{displayShortName}</span>
-                <Icon className="h-3 w-3 shrink-0 text-white pr-0.5" aria-hidden />
-              </>
-            ) : (
-              <Icon className="h-5 w-5 shrink-0 text-white" aria-hidden />
+            return (
+              <div className="flex flex-col items-center justify-center min-w-0 max-w-full gap-0.5">
+                {displayShortName ? (
+                  <span className="flex items-center">
+                    <span className="hidden @[36px]:inline text-white text-[8px] font-bold leading-none pl-0.5">
+                      {displayShortName}
+                    </span>
+                    <Icon className="h-3 w-3 shrink-0 text-white pr-0.5" aria-hidden />
+                  </span>
+                ) : (
+                  <Icon className="h-5 w-5 shrink-0 text-white" aria-hidden />
+                )}
+                {aantekeningLabel ? (
+                  <span className="hidden @[36px]:inline text-[7px] font-semibold text-white/95 text-center leading-tight truncate max-w-full px-0.5">
+                    {aantekeningLabel}
+                  </span>
+                ) : null}
+              </div>
             );
           })() : (
             <>
@@ -493,9 +510,27 @@ export function ShiftBlock({
                 className={`rotate-180 whitespace-nowrap text-sm font-mono ${doctorId ? 'text-white' : 'text-[#a0a0a0]'}`}
                 style={{ writingMode: 'vertical-rl' }}
               />
-              <span className="hidden @[36px]:inline text-white text-[10px] font-semibold tracking-[0.5px] wrap-break-word leading-[15px]">
-                {showPendingDoctor ? pendingDoctor!.shortName : displayShortName}
-              </span>
+              <div className="hidden @[36px]:flex flex-col items-center justify-center min-w-0 max-w-full gap-0 px-0.5">
+                {(() => {
+                  const primaryLabel = showPendingDoctor ? pendingDoctor!.shortName : displayShortName;
+                  return primaryLabel ? (
+                    <span
+                      className={`text-[10px] font-semibold tracking-[0.5px] wrap-break-word leading-[12px] text-center truncate max-w-full ${
+                        doctorId || showPendingDoctor ? 'text-white' : 'text-[#a0a0a0]'
+                      }`}
+                    >
+                      {primaryLabel}
+                    </span>
+                  ) : null;
+                })()}
+                {aantekeningLabel ? (
+                  <span
+                    className={`text-[8px] font-medium leading-tight text-center truncate max-w-full ${aantekeningTextClass}`}
+                  >
+                    {aantekeningLabel}
+                  </span>
+                ) : null}
+              </div>
               <span
                 className={`rotate-180 whitespace-nowrap text-sm font-mono ${doctorId ? 'text-white' : 'text-[#a0a0a0]'}`}
                 style={{ writingMode: 'vertical-rl' }}
@@ -648,6 +683,9 @@ export function ShiftBlock({
               {doctorId ? displayName : block.label}
               {doctorId !== 0 && block.label ? (
                 <span className="block text-[10px]">{block.label}</span>
+              ) : null}
+              {aantekeningLabel ? (
+                <span className="block text-[10px] font-normal opacity-90">{aantekeningLabel}</span>
               ) : null}
             </p>
             <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>

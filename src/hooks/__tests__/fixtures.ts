@@ -31,6 +31,8 @@ export function makeDienst(overrides: Partial<Dienst> & { type: number }): Diens
     iddienstovern: overrides.iddienstovern,
     iddeelnovern: overrides.iddeelnovern,
     senderId: overrides.senderId,
+    idaantekening: overrides.idaantekening,
+    aantekeningTekst: overrides.aantekeningTekst,
     diensten_deelnemers: overrides.diensten_deelnemers ?? null,
     target_deelnemers: overrides.target_deelnemers ?? null,
   };

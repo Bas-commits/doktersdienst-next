@@ -143,6 +143,7 @@ export default async function handler(
             idwaarneemgroep: waarneemgroepdeelnemers.idwaarneemgroep,
             idgroep: waarneemgroepdeelnemers.idgroep,
             naam: waarneemgroepen.naam,
+            fte: waarneemgroepdeelnemers.fte,
           })
           .from(waarneemgroepdeelnemers)
           .leftJoin(waarneemgroepen, eq(waarneemgroepdeelnemers.idwaarneemgroep, waarneemgroepen.id))
@@ -188,7 +189,12 @@ export default async function handler(
       const waarneemgroepIdregio = wg?.idregio ?? null;
       const allWaarneemgroepen = membershipRows
         .filter((m) => m.idwaarneemgroep != null)
-        .map((m) => ({ id: m.idwaarneemgroep!, naam: m.naam ?? null, idgroep: m.idgroep ?? null }));
+        .map((m) => ({
+          id: m.idwaarneemgroep!,
+          naam: m.naam ?? null,
+          idgroep: m.idgroep ?? null,
+          fte: m.fte != null && Number.isFinite(m.fte) ? m.fte : null,
+        }));
       const groep = groepRows[0]?.id != null ? { id: groepRows[0].id } : null;
       const locRow = locatieRows[0];
       const locatie =
@@ -477,6 +483,49 @@ export default async function handler(
     }
 
     // Handle telnrSlots update
+    if (body.waarneemgroepFte !== undefined) {
+      const raw = body.waarneemgroepFte;
+      if (!Array.isArray(raw)) {
+        return res.status(400).json({ error: 'waarneemgroepFte moet een array zijn' });
+      }
+      for (let i = 0; i < raw.length; i++) {
+        const row = raw[i];
+        if (!row || typeof row !== 'object') {
+          return res.status(400).json({ error: `waarneemgroepFte[${i}] is ongeldig` });
+        }
+        const idwg = (row as { idwaarneemgroep?: unknown }).idwaarneemgroep;
+        const fteVal = (row as { fte?: unknown }).fte;
+        if (typeof idwg !== 'number' || !Number.isInteger(idwg) || idwg < 1) {
+          return res.status(400).json({ error: `Ongeldige waarneemgroep bij FTE-regel ${i + 1}` });
+        }
+        if (typeof fteVal !== 'number' || !Number.isFinite(fteVal) || fteVal < 0 || fteVal > 2) {
+          return res.status(400).json({
+            error: `FTE moet tussen 0 en 2 liggen (waarneemgroep ${idwg})`,
+          });
+        }
+      }
+      for (const row of raw) {
+        const idwg = (row as { idwaarneemgroep: number }).idwaarneemgroep;
+        const fteVal = (row as { fte: number }).fte;
+        const upd = await db
+          .update(waarneemgroepdeelnemers)
+          .set({ fte: fteVal })
+          .where(
+            and(
+              eq(waarneemgroepdeelnemers.iddeelnemer, deelnemerId),
+              eq(waarneemgroepdeelnemers.idwaarneemgroep, idwg),
+              eq(waarneemgroepdeelnemers.aangemeld, true)
+            )
+          )
+          .returning({ id: waarneemgroepdeelnemers.id });
+        if (upd.length === 0) {
+          return res.status(403).json({
+            error: 'U bent niet aangemeld bij een van de opgegeven waarneemgroepen',
+          });
+        }
+      }
+    }
+
     if (body.telnrSlots !== undefined) {
       const rawSlots = body.telnrSlots;
       if (!Array.isArray(rawSlots) || rawSlots.length > 5) {

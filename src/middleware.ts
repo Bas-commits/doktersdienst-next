@@ -21,6 +21,9 @@ export function middleware(request: NextRequest) {
   // Allow public paths
   if (
     pathname.startsWith('/login') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/reset-password') ||
+    pathname.startsWith('/signup') ||
     pathname.startsWith('/api/auth') ||
     pathname === '/api/health' ||
     pathname.startsWith('/_next') ||

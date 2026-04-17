@@ -1,9 +1,11 @@
 import { betterAuth } from 'better-auth';
 import { createAuthMiddleware } from 'better-auth/api';
+import { magicLink } from 'better-auth/plugins';
 import { Pool } from 'pg';
-import { legacyMD5Verify } from '@/lib/legacy-password';
+import { legacyMD5Hash, legacyMD5Verify } from '@/lib/legacy-password';
 import { pool as appPool } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { sendMagicLinkEmailViaResend, sendPasswordResetEmailViaResend } from '@/lib/resend-email';
 
 const log = logger.child({ module: 'auth' });
 
@@ -27,37 +29,19 @@ const authDbPool = {
   },
 };
 
-// Placeholder email sending function for password reset
-// TODO: Replace with actual email service (Resend, SendGrid, Nodemailer, etc.)
-async function sendResetPasswordEmail({
-  user,
-  url,
-  token,
-}: {
+async function sendResetPasswordEmail(params: {
   user: { email: string; name: string | null };
   url: string;
   token: string;
 }) {
-  // In development, log the email to console
-  // In production, replace this with your email service
-  console.log('📧 Password Reset Email:', {
+  const { user, url } = params;
+  await sendPasswordResetEmailViaResend({
     to: user.email,
-    subject: 'Reset your password',
     url,
-    token,
+    userName: user.name,
   });
-
-  // Example implementation with a real service:
-  // await resend.emails.send({
-  //   from: 'noreply@example.com',
-  //   to: user.email,
-  //   subject: 'Reset your password',
-  //   html: `<p>Click <a href="${url}">here</a> to reset your password.</p>`,
-  // });
 }
 
-// Placeholder email sending function for email verification
-// TODO: Replace with actual email service
 async function sendVerificationEmail({
   user,
   url,
@@ -67,22 +51,38 @@ async function sendVerificationEmail({
   url: string;
   token: string;
 }) {
-  // In development, log the email to console
-  // In production, replace this with your email service
-  console.log('📧 Verification Email:', {
-    to: user.email,
-    subject: 'Verify your email address',
-    url,
-    token,
-  });
+  log.info({ to: user.email, url, tokenLen: token?.length }, 'verification email (optional flow; not sent via Resend)');
+}
 
-  // Example implementation with a real service:
-  // await resend.emails.send({
-  //   from: 'noreply@example.com',
-  //   to: user.email,
-  //   subject: 'Verify your email address',
-  //   html: `<p>Click <a href="${url}">here</a> to verify your email.</p>`,
-  // });
+async function syncDeelnemerPasswordFromAccount(userId: string): Promise<void> {
+  const client = await appPool.connect();
+  try {
+    await client.query('SET search_path TO public');
+    const accountId = `credential-${userId}`;
+    let row = await client.query<{ password: string | null }>(
+      'SELECT password FROM public.account WHERE id = $1 LIMIT 1',
+      [accountId]
+    );
+    let hash = row.rows[0]?.password ?? null;
+    if (!hash) {
+      row = await client.query<{ password: string | null }>(
+        'SELECT password FROM public.account WHERE "userId" = $1 AND "providerId" = $2 LIMIT 1',
+        [userId, 'credential']
+      );
+      hash = row.rows[0]?.password ?? null;
+    }
+    if (!hash) {
+      log.warn({ userId }, 'onPasswordReset: no credential account password found');
+      return;
+    }
+    await client.query('UPDATE public.deelnemers SET encrypted_password = $1 WHERE id = $2::int', [
+      hash,
+      userId,
+    ]);
+    log.info({ userId }, 'deelnemers.encrypted_password synced after password reset');
+  } finally {
+    client.release();
+  }
 }
 
 const _authBaseURL = process.env.BETTER_AUTH_URL || 'http://localhost:3000';
@@ -94,6 +94,14 @@ export const auth = betterAuth({
     'http://localhost:3005',
     'http://127.0.0.1:3005',
     ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL] : []),
+  ],
+  plugins: [
+    magicLink({
+      disableSignUp: true,
+      sendMagicLink: async ({ email, url }) => {
+        await sendMagicLinkEmailViaResend({ to: email, url });
+      },
+    }),
   ],
   user: {
     modelName: 'deelnemers',
@@ -114,9 +122,13 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: false,
     sendResetPassword: sendResetPasswordEmail,
+    onPasswordReset: async ({ user }) => {
+      await syncDeelnemerPasswordFromAccount(user.id);
+    },
     minPasswordLength: 8,
     maxPasswordLength: 128,
     password: {
+      hash: async (password: string) => legacyMD5Hash(password),
       verify: async ({ hash, password }) => {
         const result = await legacyMD5Verify(hash, password);
         log.info({ hashPrefix: hash?.slice(0, 6), result }, 'password verify');

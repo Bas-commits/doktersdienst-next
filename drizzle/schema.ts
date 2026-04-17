@@ -1164,6 +1164,8 @@ export const waarneemgroepdeelnemers = pgTable("waarneemgroepdeelnemers", {
 	idwaarneemgroep: integer(),
 	idgroep: integer(),
 	aangemeld: boolean(),
+	/** FTE for this member in this waarneemgroep (UI: 0–2) */
+	fte: doublePrecision(),
 	fteDd: varchar("fte_dd", { length: 50 }),
 	perDd: varchar("per_dd", { length: 50 }),
 	ftePp: varchar("fte_pp", { length: 50 }),

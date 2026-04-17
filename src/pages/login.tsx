@@ -32,15 +32,7 @@ type LoginCarouselSlide = {
 
 /** Edit each slide’s image path, title, and body here. */
 const LOGIN_CAROUSEL_SLIDES: LoginCarouselSlide[] = [
-  {
-    imageSrc: '/bellen_dienstdoende.gif',
-    imageAlt: '',
-    imageWidth: 320,
-    imageHeight: 240,
-    imageUnoptimized: true,
-    headline: 'WebPortal en telefooncentrale',
-    body: 'Uw dienstrooster automatisch gesynchroniseerd met de telefooncentrale.',
-  },
+  
   {
     imageSrc: '/Grootgifrood.gif',
     imageAlt: '',
@@ -56,6 +48,15 @@ const LOGIN_CAROUSEL_SLIDES: LoginCarouselSlide[] = [
     imageHeight: 222,
     headline: 'Dienst overnemen snel onderling geregeld',
     body: 'Tot vlak voor of zelfs tijdens een dienst kunnen deelnemers een dienst (gedeeltelijk) overnemen. Na telefonisch overleg dient één van beiden een overnamevoorstel in; de ander keurt het goed en daarmee is de wissel een feit.',
+  },
+  {
+    imageSrc: '/bellen_dienstdoende.gif',
+    imageAlt: '',
+    imageWidth: 320,
+    imageHeight: 240,
+    imageUnoptimized: true,
+    headline: 'Dienstrooster en telefooncentrale',
+    body: 'Uw dienstrooster automatisch gesynchroniseerd met de telefooncentrale.',
   },
 ];
 
@@ -150,6 +151,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [magicLinkLoading, setMagicLinkLoading] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   const afterLoginUrl = useMemo(() => {
     const raw = router.query.callbackUrl;
@@ -162,6 +165,28 @@ export default function LoginPage() {
     }
     return DEFAULT_AFTER_LOGIN_URL;
   }, [router.query.callbackUrl]);
+
+  const passwordResetDone = router.isReady && router.query.reset === 'ok';
+
+  async function handleMagicLink() {
+    setError(null);
+    setMagicLinkSent(false);
+    if (!email.trim()) {
+      setError('Vul uw e-mailadres in voor de inloglink.');
+      return;
+    }
+    setMagicLinkLoading(true);
+    const { error: mlError } = await authClient.signIn.magicLink({
+      email: email.trim(),
+      callbackURL: afterLoginUrl,
+    });
+    setMagicLinkLoading(false);
+    if (mlError) {
+      setError(mlError.message ?? 'Inloglink versturen mislukt');
+      return;
+    }
+    setMagicLinkSent(true);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -223,6 +248,16 @@ export default function LoginPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+              {passwordResetDone && (
+                <p className="text-sm text-green-700" role="status">
+                  Uw wachtwoord is bijgewerkt. U kunt nu inloggen.
+                </p>
+              )}
+              {magicLinkSent && (
+                <p className="text-sm text-neutral-800" role="status">
+                  Als dit e-mailadres bij ons bekend is, is er een inloglink naar u verstuurd. Controleer uw inbox.
+                </p>
+              )}
               {error && (
                 <p
                   className="text-sm text-destructive"
@@ -245,7 +280,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
-                  disabled={isLoading}
+                  disabled={isLoading || magicLinkLoading}
                   className="h-10 border-neutral-300 bg-rose-50/50 md:h-11"
                 />
               </div>
@@ -262,30 +297,44 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  disabled={isLoading}
+                  disabled={isLoading || magicLinkLoading}
                   className="h-10 border-neutral-300 bg-rose-50/50 md:h-11"
                 />
               </div>
 
               <Button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || magicLinkLoading}
                 data-testid="login-submit"
                 className="mx-auto h-11 min-w-[200px] rounded-xl bg-linear-to-b from-[#d1262c] to-[#a81f24] px-8 text-white shadow-md hover:from-[#b92228] hover:to-[#951b20]"
               >
                 {isLoading ? 'Bezig met inloggen…' : 'Inloggen'}
               </Button>
+
+              <div className="relative py-2 text-center text-xs text-neutral-500 before:absolute before:inset-x-0 before:top-1/2 before:border-t before:border-neutral-200">
+                <span className="relative bg-white px-2">of</span>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isLoading || magicLinkLoading}
+                onClick={handleMagicLink}
+                className="mx-auto h-11 min-w-[200px] rounded-xl border-neutral-300"
+              >
+                {magicLinkLoading ? 'Bezig…' : 'Stuur inloglink per e-mail'}
+              </Button>
             </form>
 
             <p className="mt-8 text-center text-sm text-neutral-600">
-              Wachtwoord vergeten of eerste keer dat u inlogt?{' '}
+              Wachtwoord vergeten?{' '}
               <Link
-                href="/signup"
+                href="/forgot-password"
                 className="font-medium text-foreground underline underline-offset-2 hover:text-[#d1262c]"
               >
-                Klik hier 
-              </Link>{' '}
-              om een nieuw wachtwoord aan te maken of te resetten
+                Vraag een resetlink aan
+              </Link>
+              .
             </p>
           </div>
         </main>

@@ -64,7 +64,69 @@ type FormSnapshot = {
   smsdienstbegin: boolean;
   callRecording: boolean;
   telnrSlots: TelnrSlot[];
+  fteByWaarneemgroepId: Record<number, number>;
 };
+
+function defaultFteForWaarneemgroepen(
+  waarneemgroepen: MijnGegevensProfile['waarneemgroepen']
+): Record<number, number> {
+  const out: Record<number, number> = {};
+  for (const wg of waarneemgroepen) {
+    const v = wg.fte;
+    out[wg.id] =
+      typeof v === 'number' && Number.isFinite(v) ? Math.min(2, Math.max(0, v)) : 1;
+  }
+  return out;
+}
+
+function fteRecordsDirty(a: Record<number, number>, b: Record<number, number>): boolean {
+  const ids = new Set([...Object.keys(a), ...Object.keys(b)].map(Number));
+  for (const id of ids) {
+    const x = a[id];
+    const y = b[id];
+    if (x === undefined || y === undefined) return true;
+    if (Math.abs(x - y) > 1e-6) return true;
+  }
+  return false;
+}
+
+const FTE_DECIMAL_PLACES = 2;
+
+function formatFteDisplay(n: number): string {
+  const rounded =
+    Math.round(n * 10 ** FTE_DECIMAL_PLACES) / 10 ** FTE_DECIMAL_PLACES;
+  return new Intl.NumberFormat('nl-NL', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: FTE_DECIMAL_PLACES,
+    useGrouping: false,
+  }).format(rounded);
+}
+
+/** Accept . and , as decimal separator; cap to one separator and two fraction digits */
+function sanitizeFteInputString(raw: string): string {
+  let s = raw.replace(/\./g, ',');
+  s = s.replace(/[^\d,]/g, '');
+  const firstComma = s.indexOf(',');
+  if (firstComma === -1) return s;
+  const intPart = s.slice(0, firstComma);
+  let frac = s.slice(firstComma + 1).replace(/,/g, '');
+  if (frac.length > FTE_DECIMAL_PLACES) frac = frac.slice(0, FTE_DECIMAL_PLACES);
+  return intPart + ',' + frac;
+}
+
+function parseFteInputToNumber(s: string): number | null {
+  const t = s.trim().replace(/\./g, ',');
+  if (t === '' || t === ',') return null;
+  const normalized = t.replace(',', '.');
+  const n = parseFloat(normalized);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
+function commitFteNumber(n: number): number {
+  const clamped = Math.min(2, Math.max(0, n));
+  return Math.round(clamped * 10 ** FTE_DECIMAL_PLACES) / 10 ** FTE_DECIMAL_PLACES;
+}
 
 function RequiredAsterisk() {
   return <span className="text-[#c91b23]">*</span>;
@@ -106,6 +168,9 @@ export default function MijnGegevensPage() {
   const [smsdienstbegin, setSmsdienstbegin] = useState(false);
   const [callRecording, setCallRecording] = useState(false);
   const [telnrSlots, setTelnrSlots] = useState<TelnrSlot[]>([{ ...DEFAULT_SLOT }]);
+  const [fteByWaarneemgroepId, setFteByWaarneemgroepId] = useState<Record<number, number>>({});
+  /** Raw string while editing (comma decimal); undefined = show formatted from fteByWaarneemgroepId */
+  const [fteDraftByWgId, setFteDraftByWgId] = useState<Partial<Record<number, string>>>({});
   const colorInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -149,6 +214,9 @@ export default function MijnGegevensPage() {
         setCallRecording(profileRes.deelnemer.callRecording === true);
         const initialSlots = profileRes.telnrSlots.length > 0 ? profileRes.telnrSlots : [{ ...DEFAULT_SLOT }];
         setTelnrSlots(initialSlots);
+        const initialFte = defaultFteForWaarneemgroepen(profileRes.waarneemgroepen);
+        setFteByWaarneemgroepId(initialFte);
+        setFteDraftByWgId({});
         setSavedSnapshot({
           color: profileRes.deelnemer.color ?? '#cccccc',
           achternaam: profileRes.deelnemer.achternaam ?? '',
@@ -167,6 +235,7 @@ export default function MijnGegevensPage() {
           smsdienstbegin: profileRes.deelnemer.smsdienstbegin === true,
           callRecording: profileRes.deelnemer.callRecording === true,
           telnrSlots: initialSlots,
+          fteByWaarneemgroepId: { ...initialFte },
         });
         if (typeId === -1 && lookupRes?.instellingtypen?.length > 0) {
           const firstId = lookupRes.instellingtypen[0]?.id ?? -1;
@@ -189,6 +258,11 @@ export default function MijnGegevensPage() {
     return id === 2 || id === 3;
   }, [profile?.groep?.id]);
 
+  const totalWaarneemFte = useMemo(() => {
+    if (!profile?.waarneemgroepen?.length) return null;
+    return profile.waarneemgroepen.reduce((sum, wg) => sum + (fteByWaarneemgroepId[wg.id] ?? 1), 0);
+  }, [profile?.waarneemgroepen, fteByWaarneemgroepId]);
+
   const isDirty = useMemo(() => {
     if (!savedSnapshot) return false;
     const s = savedSnapshot;
@@ -209,9 +283,30 @@ export default function MijnGegevensPage() {
       echtedeelnemer !== s.echtedeelnemer ||
       smsdienstbegin !== s.smsdienstbegin ||
       callRecording !== s.callRecording ||
-      JSON.stringify(telnrSlots) !== JSON.stringify(s.telnrSlots)
+      JSON.stringify(telnrSlots) !== JSON.stringify(s.telnrSlots) ||
+      fteRecordsDirty(fteByWaarneemgroepId, s.fteByWaarneemgroepId)
     );
-  }, [savedSnapshot, color, achternaam, voorletterstussenvoegsel, voornaam, initialen, geslacht, idlocatie, huisadrstraatnr, huisadrpostcode, huisadrplaats, huisadrtelnr, huisadrfax, huisemail, echtedeelnemer, smsdienstbegin, callRecording, telnrSlots]);
+  }, [
+    savedSnapshot,
+    color,
+    achternaam,
+    voorletterstussenvoegsel,
+    voornaam,
+    initialen,
+    geslacht,
+    idlocatie,
+    huisadrstraatnr,
+    huisadrpostcode,
+    huisadrplaats,
+    huisadrtelnr,
+    huisadrfax,
+    huisemail,
+    echtedeelnemer,
+    smsdienstbegin,
+    callRecording,
+    telnrSlots,
+    fteByWaarneemgroepId,
+  ]);
 
   useEffect(() => {
     const handleRouteChangeStart = (url: string) => {
@@ -291,6 +386,20 @@ export default function MijnGegevensPage() {
 
   async function doSave(): Promise<boolean> {
     setIsSubmitting(true);
+
+    let fteCommitted = { ...fteByWaarneemgroepId };
+    for (const wg of profile?.waarneemgroepen ?? []) {
+      const d = fteDraftByWgId[wg.id];
+      const base = fteCommitted[wg.id] ?? 1;
+      if (d !== undefined) {
+        let n = parseFteInputToNumber(d);
+        if (n === null) n = base;
+        fteCommitted[wg.id] = commitFteNumber(n);
+      } else {
+        fteCommitted[wg.id] = commitFteNumber(base);
+      }
+    }
+
     const body: MijnGegevensUpdateBody = {
       color,
       achternaam: achternaam.trim() || undefined,
@@ -316,6 +425,13 @@ export default function MijnGegevensPage() {
           idlocatietelnr: s.idLocatie ?? s.idInstellingtype,
           idomschrtelnr: s.idomschrtelnr,
         })),
+      waarneemgroepFte:
+        profile && profile.waarneemgroepen.length > 0
+          ? profile.waarneemgroepen.map((wg) => ({
+              idwaarneemgroep: wg.id,
+              fte: fteCommitted[wg.id] ?? commitFteNumber(1),
+            }))
+          : undefined,
     };
 
     const res = await fetch('/api/mijn-gegevens', {
@@ -339,7 +455,28 @@ export default function MijnGegevensPage() {
       toast.success('Gegevens opgeslagen.');
     }
 
-    setSavedSnapshot({ color, achternaam, voorletterstussenvoegsel, voornaam, initialen, geslacht, idlocatie, huisadrstraatnr, huisadrpostcode, huisadrplaats, huisadrtelnr, huisadrfax, huisemail, echtedeelnemer, smsdienstbegin, callRecording, telnrSlots });
+    setFteByWaarneemgroepId(fteCommitted);
+    setFteDraftByWgId({});
+    setSavedSnapshot({
+      color,
+      achternaam,
+      voorletterstussenvoegsel,
+      voornaam,
+      initialen,
+      geslacht,
+      idlocatie,
+      huisadrstraatnr,
+      huisadrpostcode,
+      huisadrplaats,
+      huisadrtelnr,
+      huisadrfax,
+      huisemail,
+      echtedeelnemer,
+      smsdienstbegin,
+      callRecording,
+      telnrSlots,
+      fteByWaarneemgroepId: { ...fteCommitted },
+    });
     return true;
   }
 
@@ -483,7 +620,18 @@ export default function MijnGegevensPage() {
                     ) : (
                       <ChevronRight className="size-4 shrink-0" />
                     )}
-                    Waarneemgroepen
+                    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span>Waarneemgroepen</span>
+                      {totalWaarneemFte != null && (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          Totaal FTE:{' '}
+                          {totalWaarneemFte.toLocaleString('nl-NL', {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
+                      )}
+                    </span>
                   </button>
                   {waarneemgroepenOpen && (
                     <div className="space-y-2 border-t border-border/60 px-4 py-3">
@@ -494,18 +642,64 @@ export default function MijnGegevensPage() {
                           {profile.waarneemgroepen.map((wg) => (
                             <div
                               key={wg.id}
-                              className="flex flex-col gap-1 border-b border-border/60 py-2 last:border-0 last:pb-0 first:pt-0 sm:flex-row sm:items-center sm:gap-3"
+                              className="flex flex-col gap-3 border-b border-border/60 py-2 last:border-0 last:pb-0 first:pt-0 sm:flex-row sm:items-end sm:gap-3"
                             >
                               <span className="min-w-0 flex-1 text-sm text-foreground">
                                 {wg.naam ?? `Groep ${wg.id}`}
                               </span>
                               {wg.idgroep != null && (
                                 <span
-                                  className={`rounded px-1.5 py-0.5 text-xs font-medium ${ROL_BADGE_CLASSES[wg.idgroep] ?? 'bg-muted text-foreground'}`}
+                                  className={`shrink-0 self-start rounded px-1.5 py-0.5 text-xs font-medium sm:self-center ${ROL_BADGE_CLASSES[wg.idgroep] ?? 'bg-muted text-foreground'}`}
                                 >
                                   {ROL_LABELS[wg.idgroep] ?? `Rol ${wg.idgroep}`}
                                 </span>
                               )}
+                              <div className="flex w-full shrink-0 flex-col gap-1.5 sm:w-36">
+                                <Label htmlFor={`fte-wg-${wg.id}`} className="text-xs text-muted-foreground">
+                                  FTE (0–1)
+                                </Label>
+                                <Input
+                                  id={`fte-wg-${wg.id}`}
+                                  type="text"
+                                  inputMode="decimal"
+                                  autoComplete="off"
+                                  value={
+                                    fteDraftByWgId[wg.id] !== undefined
+                                      ? fteDraftByWgId[wg.id]!
+                                      : formatFteDisplay(fteByWaarneemgroepId[wg.id] ?? 1)
+                                  }
+                                  onChange={(e) => {
+                                    const sanitized = sanitizeFteInputString(e.target.value);
+                                    setFteDraftByWgId((d) => ({ ...d, [wg.id]: sanitized }));
+                                    const n = parseFteInputToNumber(sanitized);
+                                    if (n !== null) {
+                                      setFteByWaarneemgroepId((prev) => ({
+                                        ...prev,
+                                        [wg.id]: Math.min(2, Math.max(0, n)),
+                                      }));
+                                    }
+                                  }}
+                                  onBlur={(e) => {
+                                    const raw = e.target.value;
+                                    let n = parseFteInputToNumber(raw);
+                                    if (n === null) {
+                                      n = fteByWaarneemgroepId[wg.id] ?? 1;
+                                    }
+                                    const committed = commitFteNumber(n);
+                                    setFteByWaarneemgroepId((prev) => ({
+                                      ...prev,
+                                      [wg.id]: committed,
+                                    }));
+                                    setFteDraftByWgId((d) => {
+                                      const next = { ...d };
+                                      delete next[wg.id];
+                                      return next;
+                                    });
+                                  }}
+                                  disabled={isSubmitting}
+                                  className="h-9"
+                                />
+                              </div>
                             </div>
                           ))}
                         </div>

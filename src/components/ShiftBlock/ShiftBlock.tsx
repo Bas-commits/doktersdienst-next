@@ -1,5 +1,8 @@
+'use client';
+
 import type { CSSProperties, PointerEventHandler } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Briefcase, Check, GraduationCap, Trash2, TreePalm, X } from 'lucide-react';
 import { FaQuestion } from "react-icons/fa6";
 import { BsFillQuestionSquareFill } from "react-icons/bs";
@@ -177,6 +180,32 @@ export function ShiftBlock({
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
   const [isHovered, setIsHovered] = useState(false);
+  const [shiftTooltipOpen, setShiftTooltipOpen] = useState(false);
+  const [shiftTooltipCoords, setShiftTooltipCoords] = useState<{ left: number; top: number } | null>(
+    null,
+  );
+  /** True while pointer is on the overname/voorstel badge or its hover panel (hides the shift tooltip to avoid overlap). */
+  const [overnameHoverDetailOpen, setOvernameHoverDetailOpen] = useState(false);
+  const shiftTooltipAnchorRef = useRef<HTMLDivElement>(null);
+  const showShiftTooltipPortal = shiftTooltipOpen && !overnameHoverDetailOpen;
+
+  useLayoutEffect(() => {
+    if (!showShiftTooltipPortal) return;
+    const el = shiftTooltipAnchorRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setShiftTooltipCoords({ left: r.left + r.width / 2, top: r.bottom + 4 });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [showShiftTooltipPortal]);
+
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(id);
@@ -508,8 +537,14 @@ export function ShiftBlock({
               `#${achterw}`}
           </div>
         ))}
-      <div className="group">
+      <>
         <div
+          ref={shiftTooltipAnchorRef}
+          onMouseEnter={() => setShiftTooltipOpen(true)}
+          onMouseLeave={() => {
+            setShiftTooltipOpen(false);
+            setShiftTooltipCoords(null);
+          }}
           className={`@container flex mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] ${middleRoundedClass} ${doctorId ? 'active-day' : ''} ${showPreferenceFill ? 'justify-center' : ''}`}
           data-testid="shift-block-middle"
           data-doctor={doctorId}
@@ -656,6 +691,8 @@ export function ShiftBlock({
               title="Overname"
               aria-hidden
               data-testid="overname-badge"
+              onMouseEnter={() => setOvernameHoverDetailOpen(true)}
+              onMouseLeave={() => setOvernameHoverDetailOpen(false)}
             >
               <TbSwitch3 className="h-3.5 w-3.5 text-white" />
               <div
@@ -713,6 +750,8 @@ export function ShiftBlock({
               title="Voorstel overname"
               aria-hidden
               data-testid="voorstel-overname-badge"
+              onMouseEnter={() => setOvernameHoverDetailOpen(true)}
+              onMouseLeave={() => setOvernameHoverDetailOpen(false)}
             >
               <img src="request.svg" alt="Voorstel overname" className="h-3.5 w-3.5" style={{ filter: 'invert(47%) sepia(97%) saturate(2098%) hue-rotate(2deg) brightness(106%) contrast(101%)' }} />
               <div
@@ -775,33 +814,44 @@ export function ShiftBlock({
             </span>
           )}
         </div>
-        <div
-          data-shift-block-tooltip
-          className="hidden group-hover:flex absolute right-0 top-full mt-1 left-1/2 -translate-x-1/2 min-w-[90px] w-max h-[45px] border-2 rounded-md list-none items-center z-[100] pointer-events-none after:content-[''] after:absolute after:left-1/2 after:top-[-8px] after:-translate-x-1/2 after:rotate-45 after:w-3 after:h-3 after:border-t-2 after:border-l-2 after:[border-top-color:var(--afterBorder)] after:[border-left-color:var(--afterBorder)]"
-          style={{
-            ['--afterBorder' as string]: mainColor,
-            borderColor: mainColor,
-          }}
-        >
-          <div className="flex items-center justify-between w-full px-2">
-            <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>
-              {block.startTime}
-            </p>
-            <p className="mb-0 font-bold leading-[17px] text-center">
-              {doctorId ? displayName : block.label}
-              {doctorId !== 0 && block.label ? (
-                <span className="block text-[10px]">{block.label}</span>
-              ) : null}
-              {aantekeningLabel ? (
-                <span className="block text-[10px] font-normal opacity-90">{aantekeningLabel}</span>
-              ) : null}
-            </p>
-            <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>
-              {block.endTime}
-            </p>
-          </div>
-        </div>
-      </div>
+        {showShiftTooltipPortal &&
+          shiftTooltipCoords &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              data-shift-block-tooltip
+              className="relative flex min-w-[90px] w-max h-[45px] border-2 rounded-md list-none items-center pointer-events-none after:content-[''] after:absolute after:left-1/2 after:top-[-8px] after:-translate-x-1/2 after:rotate-45 after:w-3 after:h-3 after:border-t-2 after:border-l-2 after:[border-top-color:var(--afterBorder)] after:[border-left-color:var(--afterBorder)]"
+              style={{
+                position: 'fixed',
+                left: shiftTooltipCoords.left,
+                top: shiftTooltipCoords.top,
+                transform: 'translate(-50%, 0)',
+                zIndex: 100000,
+                ['--afterBorder' as string]: mainColor,
+                borderColor: mainColor,
+              }}
+            >
+              <div className="flex items-center justify-between w-full px-2">
+                <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>
+                  {block.startTime}
+                </p>
+                <p className="mb-0 font-bold leading-[17px] text-center">
+                  {doctorId ? displayName : block.label}
+                  {doctorId !== 0 && block.label ? (
+                    <span className="block text-[10px]">{block.label}</span>
+                  ) : null}
+                  {aantekeningLabel ? (
+                    <span className="block text-[10px] font-normal opacity-90">{aantekeningLabel}</span>
+                  ) : null}
+                </p>
+                <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>
+                  {block.endTime}
+                </p>
+              </div>
+            </div>,
+            document.body,
+          )}
+      </>
       {!hideBottomStrip &&
         (extra === 0 ? (
           <div

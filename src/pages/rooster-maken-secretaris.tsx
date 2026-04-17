@@ -16,7 +16,10 @@ import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgro
 import { useDienstenSubscription, clearCacheByPrefix } from '@/hooks/useDienstenSubscription';
 import { useVoorkeurenSubscription } from '@/hooks/useVoorkeurenSubscription';
 import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
-import type { ShiftBlockView } from '@/types/diensten';
+import type { ShiftBlockView, DoctorInfo } from '@/types/diensten';
+import { shiftKeyFromBlock } from '@/types/voorkeuren';
+import { shiftBlockToastDescription } from '@/utils/shiftToastContext';
+import type { CalendarGridRow } from '@/components/CalandarGrid/CalendarGrid';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -185,6 +188,103 @@ const SECTION_LABEL: Record<string, string> = {
   bottom: 'Extra Dokter',
 };
 
+type StripeSection = 'top' | 'middle' | 'bottom';
+
+/** Pending stripe overrides until GET /api/diensten matches (optimistic UI). */
+type OptimisticStripePatch = Partial<Record<StripeSection, DoctorInfo | null>>;
+
+function doctorToDoctorInfo(d: Doctor): DoctorInfo {
+  return {
+    id: d.id,
+    name: d.fullName,
+    shortName: d.initials,
+    color: d.color ?? '#c686fd',
+  };
+}
+
+function applyStripeOptimistic(
+  block: ShiftBlockView,
+  optimistic: Map<string, OptimisticStripePatch>
+): ShiftBlockView {
+  const patch = optimistic.get(shiftKeyFromBlock(block));
+  if (!patch) return block;
+  let b = block;
+  if ('top' in patch) b = { ...b, top: patch.top ?? null };
+  if ('middle' in patch) b = { ...b, middle: patch.middle ?? null };
+  if ('bottom' in patch) b = { ...b, bottom: patch.bottom ?? null };
+  return b;
+}
+
+function mergeRowsWithOptimistic(
+  rows: CalendarGridRow[],
+  optimistic: Map<string, OptimisticStripePatch>
+): CalendarGridRow[] {
+  if (optimistic.size === 0) return rows;
+  return rows.map((row) => ({
+    ...row,
+    shiftBlocks: row.shiftBlocks.map((block) => applyStripeOptimistic(block, optimistic)),
+  }));
+}
+
+function removeStripeSectionFromOptimistic(
+  prev: Map<string, OptimisticStripePatch>,
+  shiftKey: string,
+  section: StripeSection
+): Map<string, OptimisticStripePatch> {
+  const existing = prev.get(shiftKey);
+  if (!existing || !(section in existing)) return prev;
+  const next = new Map(prev);
+  const { [section]: _removed, ...rest } = existing;
+  if (Object.keys(rest).length === 0) next.delete(shiftKey);
+  else next.set(shiftKey, rest);
+  return next;
+}
+
+function reconcileOptimisticWithBlocks(
+  optimistic: Map<string, OptimisticStripePatch>,
+  blocks: ShiftBlockView[]
+): Map<string, OptimisticStripePatch> {
+  if (optimistic.size === 0) return optimistic;
+  const byKey = new Map<string, ShiftBlockView>();
+  for (const b of blocks) {
+    byKey.set(shiftKeyFromBlock(b), b);
+  }
+  let changed = false;
+  const next = new Map(optimistic);
+  for (const key of optimistic.keys()) {
+    const block = byKey.get(key);
+    const partial = next.get(key);
+    if (!partial) continue;
+    if (!block) {
+      next.delete(key);
+      changed = true;
+      continue;
+    }
+    const newPartial: OptimisticStripePatch = { ...partial };
+    let partialChanged = false;
+    for (const s of ['top', 'middle', 'bottom'] as const) {
+      if (!(s in newPartial)) continue;
+      const want = newPartial[s];
+      const wantId = want == null ? null : want.id;
+      const actualId = block[s]?.id ?? null;
+      if (wantId === actualId) {
+        delete newPartial[s];
+        partialChanged = true;
+      }
+    }
+    if (partialChanged) {
+      changed = true;
+      if (Object.keys(newPartial).length === 0) next.delete(key);
+      else next.set(key, newPartial);
+    }
+  }
+  return changed ? next : optimistic;
+}
+
+function assignInFlightKey(shiftKey: string, section: StripeSection): string {
+  return `${shiftKey}::${section}`;
+}
+
 export default function RoosterMakenSecretarisPage() {
   const { activeWaarneemgroepId, waarneemgroepen, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
 
@@ -201,8 +301,13 @@ export default function RoosterMakenSecretarisPage() {
   // Delete mode: clicking a filled stripe removes the assignment
   const [deleteMode, setDeleteMode] = useState(false);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
-  // Prevent double-click during in-flight API call
-  const [isAssigning, setIsAssigning] = useState(false);
+  /** Per shift+section: block double submit; different slots can assign in parallel. */
+  const assignInFlightRef = useRef<Set<string>>(new Set());
+  /** For UI hints only (e.g. "bezig…"); ref tracks keys, count tracks concurrent ops. */
+  const [assignInFlightCount, setAssignInFlightCount] = useState(0);
+  const [optimisticStripes, setOptimisticStripes] = useState<Map<string, OptimisticStripePatch>>(
+    () => new Map()
+  );
   const [refreshKey, setRefreshKey] = useState(0);
   /** When null, effective selection is "only header-selected". When set, user has toggled checkboxes. */
   const [selectedIds, setSelectedIds] = useState<Set<number> | null>(null);
@@ -273,13 +378,22 @@ export default function RoosterMakenSecretarisPage() {
     [activeWaarneemgroepId, waarneemgroepIds]
   );
 
-  const rows = useMemo(
-    () => withWaarneemgroepNames(
+  const rows = useMemo(() => {
+    const base = withWaarneemgroepNames(
       allRows.filter((row) => idsToShow.has(row.id)),
       waarneemgroepNameSource
-    ),
-    [allRows, idsToShow, waarneemgroepNameSource]
-  );
+    );
+    return mergeRowsWithOptimistic(base, optimisticStripes);
+  }, [allRows, idsToShow, waarneemgroepNameSource, optimisticStripes]);
+
+  useEffect(() => {
+    if (!dienstenResponse) return;
+    setOptimisticStripes((prev) => {
+      if (prev.size === 0) return prev;
+      const blocks = dienstenToShiftBlocks(dienstenResponse);
+      return reconcileOptimisticWithBlocks(prev, blocks);
+    });
+  }, [dienstenResponse]);
 
   const selectedWaarneemgroepIds = useMemo(() => Array.from(idsToShow), [idsToShow]);
   const { data: voorkeuren } = useVoorkeurenSubscription(vanGte, totLte, selectedWaarneemgroepIds);
@@ -379,8 +493,12 @@ export default function RoosterMakenSecretarisPage() {
 
   /** Call assign or unassign API, refresh, show toast. */
   const callAssign = useCallback(
-    async (block: ShiftBlockView, section: 'top' | 'middle' | 'bottom', iddeelnemer: number | null) => {
-      if (isAssigning) return;
+    async (block: ShiftBlockView, section: StripeSection, iddeelnemer: number | null) => {
+      const shiftKey = shiftKeyFromBlock(block);
+      const inFlightKey = assignInFlightKey(shiftKey, section);
+      if (assignInFlightRef.current.has(inFlightKey)) return;
+      assignInFlightRef.current.add(inFlightKey);
+      setAssignInFlightCount((c) => c + 1);
 
       let conflictWarning: string | null = null;
       if (iddeelnemer !== null) {
@@ -394,7 +512,26 @@ export default function RoosterMakenSecretarisPage() {
         }
       }
 
-      setIsAssigning(true);
+      setOptimisticStripes((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(shiftKey) ?? {};
+        const doc = iddeelnemer != null ? allDoctors.find((d) => d.id === iddeelnemer) : null;
+        const value: DoctorInfo | null =
+          iddeelnemer == null
+            ? null
+            : doc
+              ? doctorToDoctorInfo(doc)
+              : {
+                  id: iddeelnemer,
+                  name: 'Dokter',
+                  shortName: '?',
+                  color: '#c686fd',
+                };
+        next.set(shiftKey, { ...existing, [section]: value });
+        return next;
+      });
+
+      const shiftDesc = shiftBlockToastDescription(block);
       try {
         const res = await fetch('/api/diensten/assign', {
           method: 'POST',
@@ -409,36 +546,41 @@ export default function RoosterMakenSecretarisPage() {
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          toast.error(data?.error ?? 'Toewijzen mislukt');
+          setOptimisticStripes((prev) => removeStripeSectionFromOptimistic(prev, shiftKey, section));
+          toast.error(data?.error ?? 'Toewijzen mislukt', { description: shiftDesc });
           return;
         }
         clearCacheByPrefix('/api/diensten');
         setRefreshKey((k) => k + 1);
         if (iddeelnemer == null) {
-          toast.success(`${SECTION_LABEL[section]} ontkoppeld`);
+          toast.success(`${SECTION_LABEL[section]} ontkoppeld`, { description: shiftDesc });
         } else {
           const doc = allDoctors.find((d) => d.id === iddeelnemer);
           const name = doc?.fullName ?? 'Dokter';
           const isNonMember = doc && block.idwaarneemgroep != null && !doc.waarneemgroepIds.includes(block.idwaarneemgroep);
           if (conflictWarning) {
             toast(`${name} toegewezen als ${SECTION_LABEL[section]} (let op: ${conflictWarning})`, {
+              description: shiftDesc,
               style: { background: '#f97316', color: '#fff', border: 'none' },
             });
           } else if (isNonMember) {
             toast(`Let op: ${name} is geen lid van deze waarneemgroep`, {
+              description: shiftDesc,
               style: { background: '#f97316', color: '#fff', border: 'none' },
             });
           } else {
-            toast.success(`${name} toegewezen als ${SECTION_LABEL[section]}`);
+            toast.success(`${name} toegewezen als ${SECTION_LABEL[section]}`, { description: shiftDesc });
           }
         }
       } catch {
-        toast.error('Netwerkfout bij toewijzen');
+        setOptimisticStripes((prev) => removeStripeSectionFromOptimistic(prev, shiftKey, section));
+        toast.error('Netwerkfout bij toewijzen', { description: shiftDesc });
       } finally {
-        setIsAssigning(false);
+        assignInFlightRef.current.delete(inFlightKey);
+        setAssignInFlightCount((c) => Math.max(0, c - 1));
       }
     },
-    [isAssigning, allDoctors]
+    [allDoctors]
   );
 
   /**
@@ -449,8 +591,9 @@ export default function RoosterMakenSecretarisPage() {
    * - No mode/doctor → no-op
    */
   const handleSectionShiftClick = useCallback(
-    (block: ShiftBlockView, section: 'top' | 'middle' | 'bottom') => {
-      if (isAssigning) return;
+    (block: ShiftBlockView, section: StripeSection) => {
+      const inFlightKey = assignInFlightKey(shiftKeyFromBlock(block), section);
+      if (assignInFlightRef.current.has(inFlightKey)) return;
       const currentDoctor = section === 'top' ? block.top : section === 'bottom' ? block.bottom : block.middle;
       if (deleteMode) {
         if (currentDoctor) void callAssign(block, section, null);
@@ -459,7 +602,7 @@ export default function RoosterMakenSecretarisPage() {
         void callAssign(block, section, selectedDoctor.id);
       }
     },
-    [selectedDoctor, deleteMode, isAssigning, callAssign]
+    [selectedDoctor, deleteMode, callAssign]
   );
 
   const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
@@ -641,7 +784,7 @@ export default function RoosterMakenSecretarisPage() {
               {deleteMode ? (
                 <>
                   <p className="font-medium text-destructive">
-                    Verwijdermodus{isAssigning ? ' — bezig…' : '. Klik op een bezette stripe.'}
+                    Verwijdermodus{assignInFlightCount > 0 ? ' — bezig…' : '. Klik op een bezette stripe.'}
                   </p>
                   <button
                     type="button"
@@ -655,7 +798,7 @@ export default function RoosterMakenSecretarisPage() {
                 <>
                   <p>
                     <span className="font-medium text-foreground">{selectedDoctor.fullName}</span> geselecteerd
-                    {isAssigning ? ' — bezig…' : '. Klik op een stripe.'}
+                    {assignInFlightCount > 0 ? ' — bezig…' : '. Klik op een stripe.'}
                   </p>
                   <button
                     type="button"

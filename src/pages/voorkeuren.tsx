@@ -15,6 +15,7 @@ import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { shiftKeyFromBlock, getChipByCode } from '@/types/voorkeuren';
 import type { ShiftBlockView } from '@/types/diensten';
+import { shiftBlockToastDescription } from '@/utils/shiftToastContext';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -112,6 +113,8 @@ export default function VoorkeurenPage() {
         okRemoves: number;
         fails: number;
         firstError: string | null;
+        firstFailureShiftDescription: string | null;
+        lastShiftDescription: string | null;
         ended: boolean;
       }
     >(),
@@ -199,11 +202,17 @@ export default function VoorkeurenPage() {
       }
 
       if (bag.fails > 0 && ok === 0) {
-        toast.error('Voorkeur niet opgeslagen', { description: bag.firstError ?? 'Actie mislukt.' });
+        const err = bag.firstError ?? 'Actie mislukt.';
+        const desc = bag.firstFailureShiftDescription
+          ? `${bag.firstFailureShiftDescription}\n${err}`
+          : err;
+        toast.error('Voorkeur niet opgeslagen', { description: desc });
       } else if (ok === 1 && bag.fails === 0) {
         const chip = getChipByCode(selectedChipCode ?? '');
         const label = chip?.label ?? 'Voorkeur';
-        toast.success(bag.okRemoves > 0 ? 'Voorkeur verwijderd' : `${label} opgeslagen`);
+        toast.success(bag.okRemoves > 0 ? 'Voorkeur verwijderd' : `${label} opgeslagen`, {
+          description: bag.lastShiftDescription ?? undefined,
+        });
       } else if (ok > 1) {
         if (bag.okRemoves > 0 && bag.okAdds === 0) {
           toast.success(`${bag.okRemoves} voorkeuren verwijderd`);
@@ -213,12 +222,18 @@ export default function VoorkeurenPage() {
           toast.success(`${ok} wijzigingen opgeslagen`);
         }
         if (bag.fails > 0) {
-          toast.error('Deels mislukt', {
-            description: `${bag.fails} van ${ok + bag.fails} acties konden niet worden opgeslagen.`,
-          });
+          const base = `${bag.fails} van ${ok + bag.fails} acties konden niet worden opgeslagen.`;
+          const desc = bag.firstFailureShiftDescription
+            ? `${bag.firstFailureShiftDescription}\n${base}`
+            : base;
+          toast.error('Deels mislukt', { description: desc });
         }
       } else if (ok > 0 && bag.fails > 0) {
-        toast.warning('Deels voltooid', { description: `${ok} gelukt, ${bag.fails} mislukt.` });
+        const base = `${ok} gelukt, ${bag.fails} mislukt.`;
+        const desc = bag.firstFailureShiftDescription
+          ? `${bag.firstFailureShiftDescription}\n${base}`
+          : base;
+        toast.warning('Deels voltooid', { description: desc });
       }
 
       paintStrokesRef.current.delete(strokeId);
@@ -235,6 +250,8 @@ export default function VoorkeurenPage() {
       okRemoves: 0,
       fails: 0,
       firstError: null,
+      firstFailureShiftDescription: null,
+      lastShiftDescription: null,
       ended: false,
     });
   }, []);
@@ -260,6 +277,7 @@ export default function VoorkeurenPage() {
 
       const idwaarneemgroep = block.idwaarneemgroep;
       const action = selectedChipCode === WEGHALEN_CODE ? 'remove' : 'add';
+      const shiftToastDesc = shiftBlockToastDescription(block);
 
       setPreferenceApiError(null);
       if (action === 'remove') {
@@ -310,14 +328,19 @@ export default function VoorkeurenPage() {
 
       function showFailure(reason: string) {
         setPreferenceApiError(reason);
-        toast.error('Voorkeur niet opgeslagen', { description: reason });
+        toast.error('Voorkeur niet opgeslagen', {
+          description: `${shiftToastDesc}\n${reason}`,
+        });
       }
 
       function recordHttpFailure(message: string) {
         const bag = paintStrokesRef.current.get(strokeId);
         if (bag) {
           bag.fails += 1;
-          if (!bag.firstError) bag.firstError = message;
+          if (!bag.firstError) {
+            bag.firstError = message;
+            bag.firstFailureShiftDescription = shiftToastDesc;
+          }
         } else {
           showFailure(message);
         }
@@ -344,10 +367,13 @@ export default function VoorkeurenPage() {
           if (bag) {
             if (action === 'remove') bag.okRemoves += 1;
             else bag.okAdds += 1;
+            bag.lastShiftDescription = shiftToastDesc;
           } else {
             const chip = getChipByCode(selectedChipCode);
             const label = chip?.label ?? 'Voorkeur';
-            toast.success(action === 'remove' ? 'Voorkeur verwijderd' : `${label} opgeslagen`);
+            toast.success(action === 'remove' ? 'Voorkeur verwijderd' : `${label} opgeslagen`, {
+              description: shiftToastDesc,
+            });
           }
         }
       } catch (err) {

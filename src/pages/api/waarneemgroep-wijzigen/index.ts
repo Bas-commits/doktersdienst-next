@@ -6,6 +6,7 @@ import { db, schema } from '@/db';
 const { waarneemgroepen, waarneemgroepdeelnemers, deelnemers, specialismen, regios, instellingen } = schema;
 
 const ADMIN_GROEP_ID = 5;
+const SECRETARIS_GROEP_ID = 2;
 
 function toHeaders(incoming: NextApiRequest['headers']): Headers {
   const h = new Headers();
@@ -72,7 +73,7 @@ export default async function handler(
 
     const isAdmin = deelnemerRow?.idgroep === ADMIN_GROEP_ID;
 
-    // Admins see all active waarneemgroepen; others only those they're linked to
+    // Admins see all active waarneemgroepen; others only those where they are secretaris
     const wgRows = isAdmin
       ? await db
           .select({ id: waarneemgroepen.id, naam: waarneemgroepen.naam })
@@ -87,7 +88,7 @@ export default async function handler(
             and(
               eq(waarneemgroepdeelnemers.idwaarneemgroep, waarneemgroepen.id),
               eq(waarneemgroepdeelnemers.iddeelnemer, deelnemerId),
-              eq(waarneemgroepdeelnemers.aangemeld, true)
+              eq(waarneemgroepdeelnemers.idgroep, SECRETARIS_GROEP_ID)
             )
           )
           .where(eq(waarneemgroepen.afgemeld, false))

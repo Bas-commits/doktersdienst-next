@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, asc, eq } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
+import { getWelkomWavBucket, welkomWavExistsInS3 } from '@/lib/welkom-wav-s3';
 
 const { waarneemgroepen, deelnemers, waarneemgroepdeelnemers } = schema;
 
@@ -39,6 +40,8 @@ export type DeelnemerItem = {
 export type WaarneemgroepWijzigenShowResponse = {
   waarneemgroep: WaarneemgroepDetail;
   deelnemers: DeelnemerItem[];
+  /** True if sounds/welkom-wg-{id}_gsm.sln (or legacy .gsm/.wav) exists in S3 (requires S3_WELKOM_BUCKET). */
+  welkomWavPresent: boolean;
 };
 
 export default async function handler(
@@ -118,9 +121,20 @@ export default async function handler(
         return res.status(404).json({ error: 'Waarneemgroep niet gevonden' });
       }
 
+      let welkomWavPresent = false;
+      if (getWelkomWavBucket()) {
+        try {
+          welkomWavPresent = await welkomWavExistsInS3(id);
+        } catch (headErr) {
+          console.error('GET /api/waarneemgroep-wijzigen/[id] welkom wav head', headErr);
+          return res.status(503).json({ error: 'Welkomst-audio kon niet worden gecontroleerd.' });
+        }
+      }
+
       return res.status(200).json({
         waarneemgroep: wgRows[0] as WaarneemgroepDetail,
         deelnemers: deelnemerRows.filter((d) => d.id != null) as DeelnemerItem[],
+        welkomWavPresent,
       });
     } catch (err) {
       console.error('GET /api/waarneemgroep-wijzigen/[id] error', err);
@@ -133,6 +147,16 @@ export default async function handler(
     const body = req.body as Record<string, unknown>;
     if (!body || typeof body !== 'object') {
       return res.status(400).json({ error: 'Body must be an object' });
+    }
+
+    const [currentRow] = await db
+      .select({ eigentelwelkomwav: waarneemgroepen.eigentelwelkomwav })
+      .from(waarneemgroepen)
+      .where(eq(waarneemgroepen.id, id))
+      .limit(1);
+
+    if (!currentRow) {
+      return res.status(404).json({ error: 'Waarneemgroep niet gevonden' });
     }
 
     const str = (v: unknown, max: number): string | null =>
@@ -164,6 +188,27 @@ export default async function handler(
     if ('idliason2' in body) update.idliason2 = num(body.idliason2);
     if ('idliason3' in body) update.idliason3 = num(body.idliason3);
     if ('idliason4' in body) update.idliason4 = num(body.idliason4);
+
+    const finalEigentelwelkomwav =
+      'eigentelwelkomwav' in body ? !!body.eigentelwelkomwav : currentRow.eigentelwelkomwav === true;
+
+    if (finalEigentelwelkomwav) {
+      if (!getWelkomWavBucket()) {
+        return res.status(503).json({
+          error:
+            'Eigen welkomstboodschap vereist audio-opslag (S3_WELKOM_BUCKET). Neem contact op met de beheerder.',
+        });
+      }
+      const hasWav = await welkomWavExistsInS3(id);
+      if (!hasWav) {
+        return res.status(400).json({
+          error:
+            'Voor “Eigen welkomstboodschap” is een audiobestand verplicht. Upload eerst het bestand welkom-wg-' +
+            id +
+            '_gsm.sln via de upload hieronder (WAV wordt omgezet naar SLN).',
+        });
+      }
+    }
 
     if (Object.keys(update).length > 0) {
       await db.update(waarneemgroepen).set(update as any).where(eq(waarneemgroepen.id, id));

@@ -635,7 +635,7 @@ export function ShiftBlock({
               {(() => {
                 const primaryLabel = showPendingDoctor ? pendingDoctor!.shortName : displayShortName;
                 return (
-                  <div className="hidden @[36px]:flex flex-col items-center justify-center min-w-0 max-w-full gap-0 px-0.5">
+                  <div className="hidden @[1px]:flex flex-col items-center justify-center min-w-0 max-w-full gap-0 px-0.5">
                     {primaryLabel ? (
                       <span
                         className={`text-[10px] font-semibold tracking-[0.5px] wrap-break-word leading-[12px] text-center truncate max-w-full ${

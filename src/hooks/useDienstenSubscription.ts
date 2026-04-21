@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { cachedGetJson } from '@/lib/cached-fetch';
+import { cachedGetJson, clearCacheByPrefix } from '@/lib/cached-fetch';
 export { clearCacheByPrefix } from '@/lib/cached-fetch';
 import type { DienstenResponse, Dienst } from '@/types/diensten';
 
@@ -77,6 +77,19 @@ export function useDienstenSubscription(
   const [data, setData] = useState<DienstenResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [externalRefresh, setExternalRefresh] = useState(0);
+
+  // Re-fetch when another component signals an overname mutation (e.g. the
+  // header popover accept/decline/delete). Also invalidate the cache so the
+  // next fetch hits the API, not the 2s in-memory cache.
+  useEffect(() => {
+    const onUpdate = () => {
+      clearCacheByPrefix('/api/diensten');
+      setExternalRefresh((k) => k + 1);
+    };
+    window.addEventListener('overname-updated', onUpdate);
+    return () => window.removeEventListener('overname-updated', onUpdate);
+  }, []);
 
   useEffect(() => {
     if (idwaarneemgroepen.length === 0) {
@@ -132,7 +145,7 @@ export function useDienstenSubscription(
     return () => {
       cancelled = true;
     };
-  }, [vanGte, totLte, idwaarneemgroepen.join(','), typeIn?.join(',') ?? '', iddeelnemer ?? '', _refreshKey ?? 0]);
+  }, [vanGte, totLte, idwaarneemgroepen.join(','), typeIn?.join(',') ?? '', iddeelnemer ?? '', _refreshKey ?? 0, externalRefresh]);
 
   return { data, error, loading };
 }

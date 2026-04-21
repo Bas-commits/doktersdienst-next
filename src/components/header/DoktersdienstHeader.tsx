@@ -5,6 +5,9 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { TbSwitch3 } from 'react-icons/tb';
 import { authClient } from '@/lib/auth-client';
 import { Trash2 } from 'lucide-react';
+import { FaRedo } from "react-icons/fa";
+import { toast } from 'sonner';
+
 import {
   WaarneemgroepContext,
   type WaarneemgroepContextValue,
@@ -62,6 +65,7 @@ export function DoktersdienstHeader({
   // Overname verzoeken state
   interface OvernameVerzoek {
     iddienstovern: number;
+    status?: 'pending' | 'declined' | string | null;
     datum: string;
     datumVan?: string;
     datumTot?: string;
@@ -96,10 +100,15 @@ export function DoktersdienstHeader({
   }, [fetchVerzoeken]);
 
   const handleVerzoekRespond = useCallback(
-    async (action: 'accept' | 'decline') => {
+    async (action: 'accept' | 'decline' | 'delete' | 'redo') => {
       const v = verzoeken[verzoekIndex];
       if (!v) return;
-      await fetch('/api/overnames/respond', {
+      if (action === 'redo') {
+        setVerzoekPopoverOpen(false);
+        router.push(`/overnames?recreate=${v.iddienstovern}`);
+        return;
+      }
+      const res = await fetch('/api/overnames/respond', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -108,8 +117,13 @@ export function DoktersdienstHeader({
       fetchVerzoeken();
       setVerzoekIndex(0);
       window.dispatchEvent(new Event('overname-updated'));
+      if (action === 'delete') {
+        setVerzoekPopoverOpen(false);
+        if (res.ok) toast.success('Overname verwijderd');
+        else toast.error('Verwijderen mislukt');
+      }
     },
-    [verzoeken, verzoekIndex, fetchVerzoeken]
+    [verzoeken, verzoekIndex, fetchVerzoeken, router]
   );
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -168,7 +182,6 @@ export function DoktersdienstHeader({
     [ctx, setSelectedGroupId, syncWindowDoktersdienst, router]
   );
 
-  const showAdminTools = headerUser.TypeOfUser !== 'Doctor';
   const handleLogout = useCallback(async () => {
     try {
       await authClient.signOut();
@@ -182,7 +195,7 @@ export function DoktersdienstHeader({
       <div className="sticky top-0 left-0 right-0 z-3 min-w-[1024px] bg-white border-b border-[rgba(151,151,151,0.5)]">
         <nav className="flex flex-nowrap items-center justify-start">
           <a
-            className="inline-block py-1.5 mr-4 text-[1.09375rem] leading-inherit whitespace-nowrap no-underline hover:no-underline focus:no-underline [&_img]:max-h-[46px]"
+            className="inline-block cursor-pointer py-1.5 mr-4 text-[1.09375rem] leading-inherit whitespace-nowrap no-underline hover:no-underline focus:no-underline [&_img]:max-h-[46px]"
             href="#"
             data-testid="header-logo"
           >
@@ -208,7 +221,7 @@ export function DoktersdienstHeader({
           >
             <select
               name="role"
-              className="w-full h-[50px] pl-4 pr-10 rounded-[30px] text-l font-semibold appearance-none text-[#333333] bg-white border-0"
+              className="w-full h-[50px] cursor-pointer pl-4 pr-10 rounded-[30px] text-l font-semibold appearance-none text-[#333333] bg-white border-0"
               id="groupname"
               value={selectedGroupId ?? ''}
               onChange={handleGroupChange}
@@ -229,69 +242,6 @@ export function DoktersdienstHeader({
           </div>
 
           <ul className="flex flex-row items-center list-none p-0 mb-0">
-            {showAdminTools && (
-              <li className="relative font-normal mr-6 group" data-testid="header-admin-tools">
-                <div className="cursor-pointer">
-                  <span className="text-[17px] text-black cursor-pointer inline-flex items-center gap-2" aria-hidden="true">
-                    Admin Tools <span aria-hidden="true"><ChevronDown className="w-4 h-4" /></span>
-                  </span>
-                  <ul className="hidden group-hover:block absolute w-[400px] right-0 bg-white border border-[#dcdcdc] py-2.5 px-5 list-none rounded-md z-1000 shadow-lg">
-                    <li>
-                      <a href={routes.waarneemgroep_gegevens} className="text-black text-base my-2 block">
-                        waarneemgroepen
-                      </a>
-                    </li>
-                    
-                    <li>
-                      <a href={routes.regio_toevoegen} data-inertia-link className="text-black text-base my-2 block">
-                        Regio toevoegen
-                      </a>
-                    </li>
-                    <li>
-                      <Link href="/waarneemgroep-toevoegen" className="text-black text-base my-2 block">
-                        Waarneemgroep toevoegen
-                      </Link>
-                    </li>
-                    <li>
-                      <a href={routes.waarneemgroep_wijzigen} data-inertia-link className="text-black text-base my-2 block">
-                        Waarneemgroep wijzigen
-                      </a>
-                    </li>
-                    <li>
-                      <Link href="/vakanties" className="text-black text-base my-2 block">
-                        Vakanties
-                      </Link>
-                    </li>
-                    <li>
-                      <span className="text-black text-base my-2 block">deelnemers</span>
-                      <ul className="list-none pl-0">
-                        <li>
-                          <a href={routes.deelnemer_toevoegen} className="text-[13px] my-1 block">
-                            Deelnemer toevoegen
-                          </a>
-                        </li>
-                        <li>
-                          <a href={routes.bestaande_toevoegen} className="text-[13px] my-1 block">
-                            Bestaande toevoegen (van een andere groep)
-                          </a>
-                        </li>
-                        <li>
-                          <a href={routes.lijst_deelnemers} className="text-[13px] my-1 block">
-                            Lijst deelnemers
-                          </a>
-                        </li>
-                        <li>
-                          <a href={routes.rollen_afmelden} className="text-[13px] my-1 block">
-                            Rollen & Afmelden
-                          </a>
-                        </li>
-                      </ul>
-                    </li>
-                  </ul>
-                </div>
-              </li>
-            )}
-
             <li className="relative" ref={verzoekRef}>
               <button
                 type="button"
@@ -313,6 +263,7 @@ export function DoktersdienstHeader({
                 const vanDatum = v.datumVan ?? v.datum;
                 const totDatum = v.datumTot ?? v.datumVan ?? v.datum;
                 const overnameTypeLabel = v.isPartial ? 'Gedeeltelijke overname' : 'Volledige overname';
+                const isDeclined = v.status === 'declined';
                 return (
                   <div
                     className="absolute top-full right-0 z-1000 w-[320px] bg-white border border-gray-300 rounded-lg shadow-lg p-4 mt-1"
@@ -343,23 +294,34 @@ export function DoktersdienstHeader({
                     </div>
                     <div className="bg-gray-200 rounded-md p-5 ">
                     <div className="w-full flex justify-around mb-3">
-                      <Trash2 className="w-8 h-8 text-red-500" />
+                      <div className="flex flex-1"></div>
+                      <Trash2 className="w-8 h-8 text-red-500 flex flex-1  cursor-pointer " onClick={() => handleVerzoekRespond('delete')} aria-label="Verwijderen" />
+                      <div className="flex flex-1 justify-center items-center cursor-pointer " onClick={() => handleVerzoekRespond('redo')} >
+                        {isDeclined && (
+                          <FaRedo className="w-6 h-6 text-blue-500 " />
+                        )}
+                      </div>
                     </div>
 
-                    <div className="mb-3">
+                    <div className="mb-3 flex items-center justify-between gap-2">
                       <p className="text-s font-bold ">{overnameTypeLabel}</p>
+                      {isDeclined && (
+                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-red-100 text-red-800">
+                          Afgewezen
+                        </span>
+                      )}
                     </div>
                
                     <div className="flex text-sm mb-3">
                       
-                      <p className="mb-1">Van: <br /> Tot:</p>
+                      <p className="mb-1 ">Van: <br /> Tot:</p>
                       <p className="mb-1 ml-2">{vanDatum} <strong>{v.van}</strong> <br /> {totDatum} <strong>{v.tot}</strong></p>
 
                     </div>
 
                     <div className="flex items-center justify-between mb-3 text-sm">
                       <div className="flex items-center gap-2">
-                      <p className="text-s font-bold ">Van:</p>
+                      <p className="text-s font-bold w-[35px]">Van:</p>
                         <span
                           className="inline-flex h-8 w-8 items-center justify-center rounded text-white text-xs font-bold"
                           style={{ backgroundColor: v.vanArts.color }}
@@ -376,7 +338,7 @@ export function DoktersdienstHeader({
 
                     <div className="flex items-center justify-between mb-4 text-sm">
                       <div className="flex items-center gap-2">
-                      <p className="text-s font-bold ">Naar:</p>
+                      <p className="text-s font-bold w-[35px]">Naar:</p>
                         <span
                           className="inline-flex h-8 w-8 items-center justify-center rounded text-white text-xs font-bold"
                           style={{ backgroundColor: v.naarArts.color }}
@@ -392,24 +354,38 @@ export function DoktersdienstHeader({
                     </div>
 
                     <div className="flex justify-center gap-4">
-                      <button
-                        type="button"
-                        className="flex items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-green-500"
-                        onClick={() => handleVerzoekRespond('accept')}
-                        aria-label="Verzoek accepteren"
-                        data-testid="overname-accept"
-                      >
-                        <Check className="w-6 h-6 text-[#333]" />
-                      </button>
-                      <button
-                        type="button"
-                        className="flex items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-red-500"
-                        onClick={() => handleVerzoekRespond('decline')}
-                        aria-label="Verzoek afwijzen"
-                        data-testid="overname-decline"
-                      >
-                        <X className="w-6 h-6 text-[#333]" />
-                      </button>
+                      {isDeclined ? (
+                        <button
+                          type="button"
+                          className="flex cursor-pointer items-center justify-center h-10 px-6 rounded-md border border-gray-300 bg-white text-sm hover:bg-red-300"
+                          onClick={() => handleVerzoekRespond('delete')}
+                          aria-label="Afgewezen verzoek verwijderen"
+                          data-testid="overname-delete"
+                        >
+                          <Trash2 className="w-5 h-5 text-[#333] mr-1" /> Verwijderen
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-green-300"
+                            onClick={() => handleVerzoekRespond('accept')}
+                            aria-label="Verzoek accepteren"
+                            data-testid="overname-accept"
+                          >
+                            <Check className="w-6 h-6 text-[#333]" />
+                          </button>
+                          <button
+                            type="button"
+                            className="flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-red-300"
+                            onClick={() => handleVerzoekRespond('decline')}
+                            aria-label="Verzoek afwijzen"
+                            data-testid="overname-decline"
+                          >
+                            <X className="w-6 h-6 text-[#333]" />
+                          </button>
+                        </>
+                      )}
                     </div>
                     </div>
                   </div>
@@ -450,7 +426,7 @@ export function DoktersdienstHeader({
                   aria-labelledby="navbarDropdown"
                 >
                   <Link
-                    className="block w-full py-1 px-6 font-normal text-[#222222] no-underline whitespace-nowrap bg-transparent border-0 hover:bg-gray-100 hover:text-[#151515] focus:bg-gray-100"
+                    className="block w-full cursor-pointer py-1 px-6 font-normal text-[#222222] no-underline whitespace-nowrap bg-transparent border-0 hover:bg-gray-100 hover:text-[#151515] focus:bg-gray-100"
                     href={routes.mijn_gegevens_deelnemer}
                     id="mijnGegevensLink"
                     data-testid="header-link-mijn-gegevens"
@@ -459,7 +435,7 @@ export function DoktersdienstHeader({
                   </Link>
                   <button
                     type="button"
-                    className="block w-full py-1 px-6 font-normal text-[#222222] no-underline whitespace-nowrap bg-transparent border-0 hover:bg-gray-100 hover:text-[#151515] focus:bg-gray-100"
+                    className="block w-full cursor-pointer py-1 px-6 font-normal text-[#222222] no-underline whitespace-nowrap bg-transparent border-0 hover:bg-gray-100 hover:text-[#151515] focus:bg-gray-100"
                     id="logoutDokter"
                     data-testid="header-link-logout"
                     onClick={handleLogout}

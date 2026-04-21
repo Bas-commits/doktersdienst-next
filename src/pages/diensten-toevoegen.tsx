@@ -296,7 +296,7 @@ export default function DienstenToevoegenPage() {
   return (
     <>
       <Head>
-        <title>Diensten toevoegen | Doktersdienst</title>
+        <title>Shifts toevoegen | Doktersdienst</title>
       </Head>
 
       {/* Herhalen dialog */}
@@ -465,7 +465,7 @@ export default function DienstenToevoegenPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              <h1 className="text-2xl font-semibold tracking-tight">Diensten toevoegen</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Shifts toevoegen</h1>
             </CardTitle>
           </CardHeader>
           <CardContent>

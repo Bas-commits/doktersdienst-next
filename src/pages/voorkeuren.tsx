@@ -501,11 +501,11 @@ export default function VoorkeurenPage() {
               {loading && !type1Response && waarneemgroepIds.length > 0 && (
                 <p className="mb-4 text-muted-foreground">Voorkeuren laden…</p>
               )}
-              {selectedChipCode && (
+              {/* {selectedChipCode && (
                 <p className="mb-4 text-sm text-muted-foreground">
                   Geselecteerd: klik op een dienst in de kalender om deze voorkeur toe te wijzen.
                 </p>
-              )}
+              )} */}
               {waarneemgroepIds.length > 0 && (
                 <div
                   ref={calendarGridRef}

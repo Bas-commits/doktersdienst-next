@@ -613,14 +613,14 @@ export function ShiftBlock({
                 ) : (
                   <Icon className="h-5 w-5 shrink-0" style={{ color: preferenceTextColor! }} aria-hidden />
                 )}
-                {aantekeningLabel ? (
+                {/* {aantekeningLabel ? (
                   <span
                     className="hidden @[36px]:inline text-[7px] font-semibold text-center leading-tight truncate max-w-full px-0.5"
                     style={{ color: preferenceTextColor!, opacity: 0.95 }}
                   >
                     {aantekeningLabel}
                   </span>
-                ) : null}
+                ) : null} */}
               </div>
             );
           })() : (
@@ -632,33 +632,35 @@ export function ShiftBlock({
                   ...(middleStripTextColor ? { color: middleStripTextColor } : {}),
                 }}
               />
-              <div className="hidden @[36px]:flex flex-col items-center justify-center min-w-0 max-w-full gap-0 px-0.5">
-                {(() => {
-                  const primaryLabel = showPendingDoctor ? pendingDoctor!.shortName : displayShortName;
-                  return primaryLabel ? (
-                    <span
-                      className={`text-[10px] font-semibold tracking-[0.5px] wrap-break-word leading-[12px] text-center truncate max-w-full ${
-                        middleStripTextColor ? '' : 'text-[#a0a0a0]'
-                      }`}
-                      style={middleStripTextColor ? { color: middleStripTextColor } : undefined}
-                    >
-                      {primaryLabel}
-                    </span>
-                  ) : null;
-                })()}
-                {aantekeningLabel ? (
-                  <span
-                    className={`text-[8px] font-medium leading-tight text-center truncate max-w-full ${aantekeningTextClass}`}
-                    style={
-                      middleStripTextColor
-                        ? { color: middleStripTextColor, opacity: 0.9 }
-                        : undefined
-                    }
-                  >
-                    {aantekeningLabel}
-                  </span>
-                ) : null}
-              </div>
+              {(() => {
+                const primaryLabel = showPendingDoctor ? pendingDoctor!.shortName : displayShortName;
+                return (
+                  <div className="hidden @[36px]:flex flex-col items-center justify-center min-w-0 max-w-full gap-0 px-0.5">
+                    {primaryLabel ? (
+                      <span
+                        className={`text-[10px] font-semibold tracking-[0.5px] wrap-break-word leading-[12px] text-center truncate max-w-full ${
+                          middleStripTextColor ? '' : 'text-[#a0a0a0]'
+                        }`}
+                        style={middleStripTextColor ? { color: middleStripTextColor } : undefined}
+                      >
+                        {primaryLabel}
+                      </span>
+                    ) : null}
+                    {!primaryLabel && aantekeningLabel ? (
+                      <span
+                        className={`text-[8px] font-medium leading-tight text-center truncate max-w-full ${aantekeningTextClass}`}
+                        style={
+                          middleStripTextColor
+                            ? { color: middleStripTextColor, opacity: 0.9 }
+                            : undefined
+                        }
+                      >
+                        {aantekeningLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })()}
               <span
                 className={`rotate-180 whitespace-nowrap text-sm font-mono ${middleStripTextColor ? '' : 'text-[#a0a0a0]'}`}
                 style={{

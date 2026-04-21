@@ -63,7 +63,7 @@ export function AuthenticatedLayout({ children, headerProps }: AuthenticatedLayo
           assetUrls={DEFAULT_ASSET_URLS}
         />
         <div className="flex flex-1">
-          <Sidebar />
+          <Sidebar showSecretarisAndAdmin={headerUser.TypeOfUser !== 'Doctor'} />
           <main className="flex-1">{children}</main>
         </div>
       </div>

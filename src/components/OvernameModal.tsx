@@ -226,9 +226,21 @@ export function OvernameModal({ shift, doctors, onSubmit, onClose, submitting, e
             Tot: {endDateStr} <strong>{shift.endTime}</strong>
           </p>
           {shift.middle && (
-            <p className="text-gray-600 mt-2">
-              Van: {shift.middle.name} ({shift.middle.shortName})
-            </p>
+            <div className="text-gray-600 mt-2 flex flex-col  gap-2">
+              <span>Van:</span>
+              <div className="flex gap-2">
+              <DoctorBadge
+                doctor={{
+                  id: shift.middle.id,
+                  voornaam: shift.middle.name.split(' ')[0] ?? '',
+                  achternaam: shift.middle.name.split(' ').slice(1).join(' '),
+                  initialen: shift.middle.shortName,
+                  color: shift.middle.color,
+                }}
+              />
+              <span>{shift.middle.name}</span>
+              </div>
+            </div>
           )}
         </div>
 

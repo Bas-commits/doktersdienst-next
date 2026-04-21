@@ -38,7 +38,7 @@ type Story = StoryObj<typeof meta>;
 /** Default header for a doctor: group selector, switch requests, user menu. No admin tools. */
 export const Default: Story = {};
 
-/** Admin user: shows Admin Tools dropdown with waarneemgroepen, deelnemers, shifts, etc. */
+/** Admin user: zelfde header als andere rollen; beheer staat in de sidebar. */
 export const AdminUser: Story = {
   args: {
     headerUser: {

@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, asc, eq } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
-import { getWelkomWavBucket, welkomWavExistsInS3 } from '@/lib/welkom-wav-s3';
+import { getWelkomWavBucket, welkomWelkomstFilePresent } from '@/lib/welkom-wav-s3';
 
 const { waarneemgroepen, deelnemers, waarneemgroepdeelnemers } = schema;
 
@@ -21,6 +21,7 @@ export type WaarneemgroepDetail = {
   afgemeld: boolean | null;
   smsdienstbegin: boolean | null;
   eigentelwelkomwav: boolean | null;
+  eigentelwelkomlocatie: string | null;
   gebruiktVoicemail: boolean | null;
   abomaatschapplanner: boolean | null;
   idcoordinatorwaarneemgroep: number | null;
@@ -40,7 +41,7 @@ export type DeelnemerItem = {
 export type WaarneemgroepWijzigenShowResponse = {
   waarneemgroep: WaarneemgroepDetail;
   deelnemers: DeelnemerItem[];
-  /** True if sounds/welkom-wg-{id}_gsm.sln (or legacy .gsm/.wav) exists in S3 (requires S3_WELKOM_BUCKET). */
+  /** True if eigentelwelkomlocatie object exists in S3, or legacy welkom-wg-{id} key exists. */
   welkomWavPresent: boolean;
 };
 
@@ -86,6 +87,7 @@ export default async function handler(
             afgemeld: waarneemgroepen.afgemeld,
             smsdienstbegin: waarneemgroepen.smsdienstbegin,
             eigentelwelkomwav: waarneemgroepen.eigentelwelkomwav,
+            eigentelwelkomlocatie: waarneemgroepen.eigentelwelkomlocatie,
             gebruiktVoicemail: waarneemgroepen.gebruiktVoicemail,
             abomaatschapplanner: waarneemgroepen.abomaatschapplanner,
             idcoordinatorwaarneemgroep: waarneemgroepen.idcoordinatorwaarneemgroep,
@@ -124,7 +126,7 @@ export default async function handler(
       let welkomWavPresent = false;
       if (getWelkomWavBucket()) {
         try {
-          welkomWavPresent = await welkomWavExistsInS3(id);
+          welkomWavPresent = await welkomWelkomstFilePresent(id, wgRows[0].eigentelwelkomlocatie);
         } catch (headErr) {
           console.error('GET /api/waarneemgroep-wijzigen/[id] welkom wav head', headErr);
           return res.status(503).json({ error: 'Welkomst-audio kon niet worden gecontroleerd.' });
@@ -150,7 +152,10 @@ export default async function handler(
     }
 
     const [currentRow] = await db
-      .select({ eigentelwelkomwav: waarneemgroepen.eigentelwelkomwav })
+      .select({
+        eigentelwelkomwav: waarneemgroepen.eigentelwelkomwav,
+        eigentelwelkomlocatie: waarneemgroepen.eigentelwelkomlocatie,
+      })
       .from(waarneemgroepen)
       .where(eq(waarneemgroepen.id, id))
       .limit(1);
@@ -199,13 +204,11 @@ export default async function handler(
             'Eigen welkomstboodschap vereist audio-opslag (S3_WELKOM_BUCKET). Neem contact op met de beheerder.',
         });
       }
-      const hasWav = await welkomWavExistsInS3(id);
+      const hasWav = await welkomWelkomstFilePresent(id, currentRow.eigentelwelkomlocatie);
       if (!hasWav) {
         return res.status(400).json({
           error:
-            'Voor “Eigen welkomstboodschap” is een audiobestand verplicht. Upload eerst het bestand welkom-wg-' +
-            id +
-            '_gsm.sln via de upload hieronder (WAV wordt omgezet naar SLN).',
+            'Voor “Eigen welkomstboodschap” is een audiobestand verplicht. Upload eerst een WAV via de knop hieronder (wordt als .sln opgeslagen; locatie wordt in de database gezet).',
         });
       }
     }

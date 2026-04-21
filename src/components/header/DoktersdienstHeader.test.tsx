@@ -113,23 +113,6 @@ describe('DoktersdienstHeader', () => {
     expect(screen.getByTestId('header-link-mijn-gegevens')).toHaveAttribute('href', '/mijn-gegevens');
   });
 
-  it('shows Admin Tools when TypeOfUser is not Doctor', () => {
-    render(<DoktersdienstHeader {...defaultProps} />);
-
-    expect(screen.getByTestId('header-admin-tools')).toBeInTheDocument();
-  });
-
-  it('hides Admin Tools when TypeOfUser is Doctor', () => {
-    render(
-      <DoktersdienstHeader
-        {...defaultProps}
-        headerUser={{ ...defaultProps.headerUser, TypeOfUser: 'Doctor' }}
-      />
-    );
-
-    expect(screen.queryByTestId('header-admin-tools')).not.toBeInTheDocument();
-  });
-
   it('updates localStorage and reloads on group change', () => {
     const setItem = vi.fn();
     vi.stubGlobal('localStorage', {

@@ -152,25 +152,32 @@ export default function WaarneemgroepWijzigenPage() {
       const buf = await file.arrayBuffer();
       const res = await fetch(`/api/waarneemgroep-wijzigen/${selectedId}/welkom-wav`, {
         method: 'POST',
-        headers: { 'Content-Type': 'audio/wav' },
+        headers: {
+          'Content-Type': 'audio/wav',
+          'X-Welkom-Filename': encodeURIComponent(file.name),
+        },
         credentials: 'include',
         body: buf,
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        ok?: boolean;
+        eigentelwelkomlocatie?: string;
+      };
       if (!res.ok) {
         setWelkomUploadError(typeof data.error === 'string' ? data.error : 'Upload mislukt');
         return;
       }
+      const loc = data.eigentelwelkomlocatie;
+      if (typeof loc === 'string' && loc.length > 0) {
+        setSelectedWg((w) => (w ? { ...w, eigentelwelkomlocatie: loc } : w));
+      }
       setWelkomWavPresent(true);
-      const slnKey = `sounds/welkom-wg-${selectedId}_gsm.sln`;
+      const desc = typeof loc === 'string' && loc.length > 0 ? loc : 'Opgeslagen in object storage.';
       if (wasReplace) {
-        toast.success('Welkomstbestand vervangen', {
-          description: `Bijgewerkt op ${slnKey}.`,
-        });
+        toast.success('Welkomstbestand vervangen', { description: desc });
       } else {
-        toast.success('Welkomstbestand geüpload', {
-          description: `Opgeslagen als ${slnKey}.`,
-        });
+        toast.success('Welkomstbestand geüpload', { description: desc });
       }
     } catch (err) {
       setWelkomUploadError(err instanceof Error ? err.message : 'Upload mislukt');
@@ -187,9 +194,7 @@ export default function WaarneemgroepWijzigenPage() {
 
     if (formData.eigentelwelkomwav && !welkomWavPresent) {
       setSubmitError(
-        'Voor “Eigen welkomstboodschap” moet het bestand sounds/welkom-wg-' +
-          selectedId +
-          '_gsm.sln in de opslag staan. Upload een WAV (PCM, mono of stereo); het wordt omgezet naar 8000 Hz 16-bit .sln.'
+        'Voor “Eigen welkomstboodschap” is een geüpload welkomstbestand verplicht. Upload een WAV via de knop hieronder; de locatie wordt in de database gezet (bestandsnaam + tijdstempel als .sln).'
       );
       return;
     }
@@ -489,11 +494,16 @@ export default function WaarneemgroepWijzigenPage() {
                         </Label>
                       </div>
                       <p className="text-xs text-muted-foreground pl-6">
-                        Upload alleen .wav (8- of 16-bit PCM; stereo wordt gemixt naar mono). In opslag:{' '}
-                        <span className="font-mono">sounds/welkom-wg-{selectedId}_gsm.sln</span>
-                        {' '}(raw audio, geen WAV-container).
+                        Upload alleen .wav (8- of 16-bit PCM; stereo wordt gemixt naar mono). Het bestand wordt opgeslagen als{' '}
+                        <span className="font-medium text-foreground">jouw bestandsnaam + leesbaar tijdstempel</span>
+                        {' '}als .sln onder <span className="font-mono">sounds/</span>; die locatie wordt bewaard bij deze waarneemgroep.
+                        {selectedWg.eigentelwelkomlocatie ? (
+                          <span className="block mt-1 font-mono text-foreground break-all">
+                            {selectedWg.eigentelwelkomlocatie}
+                          </span>
+                        ) : null}
                         {welkomWavPresent ? (
-                          <span className="block mt-1 text-green-600 dark:text-green-400">Bestand aanwezig.</span>
+                          <span className="block mt-1 text-green-600 dark:text-green-400">Bestand aanwezig in opslag.</span>
                         ) : (
                           <span className="block mt-1">Nog geen bestand — upload verplicht om deze optie op te slaan.</span>
                         )}

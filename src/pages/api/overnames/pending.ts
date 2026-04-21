@@ -62,14 +62,34 @@ export default async function handler(
     .map((r) => r.idwaarneemgroep)
     .filter((id): id is number => id != null);
 
-  // Build filter: proposals targeting me OR proposals in my secretaris waarneemgroepen
-  const targetFilter = eq(dienstenTable.iddeelnovern, sql`${doctorId}::integer`);
+  // Build filter:
+  // - pending proposals targeting me (iddeelnovern = self)
+  // - declined proposals where I'm the original "van" arts or sender (so the
+  //   rejection doesn't get forgotten)
+  // - secretaris: all pending/declined proposals in their waarneemgroepen
+  const pendingForTarget = and(
+    eq(dienstenTable.status, 'pending'),
+    eq(dienstenTable.iddeelnovern, sql`${doctorId}::integer`)
+  );
+  const declinedForSender = and(
+    eq(dienstenTable.status, 'declined'),
+    or(
+      eq(dienstenTable.iddeelnemer, sql`${doctorId}::integer`),
+      eq(dienstenTable.senderId, sql`${doctorId}::integer`)
+    )
+  );
+  const ownFilter = or(pendingForTarget, declinedForSender);
   const pendingFilter = and(
     eq(dienstenTable.type, 4),
-    eq(dienstenTable.status, 'pending'),
     secretarisWgIds.length > 0
-      ? or(targetFilter, inArray(dienstenTable.idwaarneemgroep, secretarisWgIds))
-      : targetFilter
+      ? or(
+          ownFilter,
+          and(
+            or(eq(dienstenTable.status, 'pending'), eq(dienstenTable.status, 'declined')),
+            inArray(dienstenTable.idwaarneemgroep, secretarisWgIds)
+          )
+        )
+      : ownFilter
   );
 
   // Aliases for joining original (van) and target (naar) doctor info
@@ -82,6 +102,7 @@ export default async function handler(
   const rows = await db
     .select({
       iddienstovern: dienstenTable.iddienstovern,
+      status: dienstenTable.status,
       van: dienstenTable.van,
       tot: dienstenTable.tot,
       originalVan: originalDienst.van,
@@ -138,6 +159,7 @@ export default async function handler(
 
     return {
       iddienstovern: r.iddienstovern,
+      status: r.status,
       datum: datumVan,
       datumVan,
       datumTot,

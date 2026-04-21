@@ -190,6 +190,15 @@ export default function RoosterInzienPage() {
               <h1 id="welcome-heading" className="text-2xl font-semibold tracking-tight">
                 Welkom, {name}
               </h1>
+              {process.env.NEXT_PUBLIC_BUILD_TIME ? (
+                <p className="mt-1 text-sm font-normal text-muted-foreground">
+                  Laatste build:{' '}
+                  {new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString('nl-NL', {
+                    dateStyle: 'full',
+                    timeStyle: 'short',
+                  })}
+                </p>
+              ) : null}
             </CardTitle>
           </CardHeader>
           <CardContent>

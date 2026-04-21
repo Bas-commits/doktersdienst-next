@@ -31,23 +31,12 @@ function getS3Client(): S3Client {
       ...(endpoint
         ? {
             endpoint,
-            // Hetzner / MinIO-style S3: path-style requests to regional endpoint
             forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false',
           }
         : {}),
     });
   }
   return s3Client;
-}
-
-/** Canonical key (telephony): raw PCM .sln — sounds/welkom-wg-{id}_gsm.sln */
-export function welkomWelkomstObjectKey(idwaarneemgroep: number): string {
-  return `${SOUNDS_PREFIX}/welkom-wg-${idwaarneemgroep}_gsm.sln`;
-}
-
-/** Backup before overwrite */
-export function welkomWelkomstBackupObjectKey(idwaarneemgroep: number, timestampLabel: string): string {
-  return `${SOUNDS_PREFIX}/welkom-wg-${idwaarneemgroep}_gsm.old-${timestampLabel}.sln`;
 }
 
 /** Local wall-clock time, filesystem-safe: 2026-04-20-14-30-45-123 */
@@ -57,6 +46,30 @@ export function welkomBackupTimestampLabel(d = new Date()): string {
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-` +
     `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}-${pad(d.getMilliseconds(), 3)}`
   );
+}
+
+/** Strip path / extension; safe ASCII-ish basename for S3 keys. */
+export function sanitizeWelkomFileBase(filename: string): string {
+  const leaf = filename.replace(/^.*[/\\]/, '').trim();
+  const base = leaf.replace(/\.[^.\\/]+$/i, '');
+  const cleaned = base
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^\.+|\.+$/g, '')
+    .replace(/^_|_$/g, '');
+  const truncated = cleaned.slice(0, 120);
+  return truncated || 'welkom';
+}
+
+/** New object key: sounds/{basename}_{human-timestamp}.sln */
+export function buildNewWelkomSlnObjectKey(originalFilename: string): string {
+  const base = sanitizeWelkomFileBase(originalFilename);
+  return `${SOUNDS_PREFIX}/${base}_${welkomBackupTimestampLabel()}.sln`;
+}
+
+/** Backup copy of an existing .sln key before replace. */
+export function welkomBackupKeyFromSourceKey(sourceKey: string, timestampLabel: string): string {
+  return sourceKey.replace(/\.sln$/i, '') + `.old-${timestampLabel}.sln`;
 }
 
 function s3CopySource(bucket: string, key: string): string {
@@ -82,26 +95,17 @@ async function objectExists(bucket: string, key: string): Promise<boolean> {
   }
 }
 
-/** Legacy / migration keys (Head only) */
-function welkomWelkomstLegacyGsmKey(idwaarneemgroep: number): string {
-  return `${SOUNDS_PREFIX}/welkom-wg-${idwaarneemgroep}_gsm.gsm`;
-}
-
-function welkomWelkomstLegacyWavKey(idwaarneemgroep: number): string {
-  return `${SOUNDS_PREFIX}/welkom-wg-${idwaarneemgroep}_gsm.wav`;
-}
-
-function welkomWelkomstHeadKeys(idwaarneemgroep: number): string[] {
+/** Legacy fixed keys (migration) — try Head after DB loc. */
+export function welkomWelkomstLegacyHeadKeys(idwaarneemgroep: number): string[] {
   return [
-    welkomWelkomstObjectKey(idwaarneemgroep),
-    welkomWelkomstLegacyGsmKey(idwaarneemgroep),
-    welkomWelkomstLegacyWavKey(idwaarneemgroep),
+    `${SOUNDS_PREFIX}/welkom-wg-${idwaarneemgroep}_gsm.sln`,
+    `${SOUNDS_PREFIX}/welkom-wg-${idwaarneemgroep}_gsm.gsm`,
+    `${SOUNDS_PREFIX}/welkom-wg-${idwaarneemgroep}_gsm.wav`,
   ];
 }
 
 /**
  * Bucket for welkom audio. Primary: S3_WELKOM_BUCKET.
- * Fallbacks help when only a generic sounds bucket env exists.
  */
 export function getWelkomWavBucket(): string | null {
   const candidates = [
@@ -164,7 +168,6 @@ function decodeWavPcmToMonoFloat(
   return out;
 }
 
-/** Linear resample to 8 kHz and emit 16-bit LE raw PCM (Asterisk .sln). */
 function floatMonoToSlnBuffer(samples: Float64Array, fromRate: number): Buffer {
   if (fromRate <= 0 || !Number.isFinite(fromRate)) return Buffer.alloc(0);
 
@@ -191,10 +194,6 @@ function floatMonoToSlnBuffer(samples: Float64Array, fromRate: number): Buffer {
   return buf;
 }
 
-/**
- * Strip WAV container; output raw 16-bit LE mono PCM at 8 kHz (Asterisk .sln).
- * Accepts 8- of 16-bit PCM, mono of stereo (gemiddeld naar mono), willekeurige gangbare sample rate (wordt hersampled).
- */
 export function extractSlnFromTelephonyWav(wav: Buffer): ExtractSlnResult {
   if (wav.length < 12 || !isLikelyWavBuffer(wav)) {
     return { ok: false, message: 'Geen geldig WAV-bestand.' };
@@ -264,23 +263,41 @@ export function extractSlnFromTelephonyWav(wav: Buffer): ExtractSlnResult {
   return { ok: true, sln };
 }
 
-export async function welkomWavExistsInS3(idwaarneemgroep: number): Promise<boolean> {
+export async function welkomWelkomstFilePresent(
+  idwaarneemgroep: number,
+  eigentelwelkomlocatie: string | null | undefined
+): Promise<boolean> {
   const bucket = getWelkomWavBucket();
   if (!bucket) return false;
 
-  for (const key of welkomWelkomstHeadKeys(idwaarneemgroep)) {
-    try {
-      await getS3Client().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-      return true;
-    } catch (err: unknown) {
-      if (isNotFound(err)) continue;
-      throw err;
-    }
+  const keys: string[] = [];
+  const loc = eigentelwelkomlocatie?.trim();
+  if (loc) keys.push(loc);
+  keys.push(...welkomWelkomstLegacyHeadKeys(idwaarneemgroep));
+
+  const seen = new Set<string>();
+  for (const key of keys) {
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (await objectExists(bucket, key)) return true;
   }
   return false;
 }
 
-export async function putWelkomWavToS3(idwaarneemgroep: number, wavBody: Buffer): Promise<void> {
+export async function copyWelkomSlnToBackupIfExists(bucket: string, sourceKey: string): Promise<void> {
+  if (!(await objectExists(bucket, sourceKey))) return;
+  const backupKey = welkomBackupKeyFromSourceKey(sourceKey, welkomBackupTimestampLabel());
+  await getS3Client().send(
+    new CopyObjectCommand({
+      Bucket: bucket,
+      Key: backupKey,
+      CopySource: s3CopySource(bucket, sourceKey),
+      MetadataDirective: 'COPY',
+    })
+  );
+}
+
+export async function putWelkomSlnAtKey(wavBody: Buffer, objectKey: string): Promise<void> {
   const bucket = getWelkomWavBucket();
   if (!bucket) {
     throw new Error('S3_WELKOM_BUCKET is not configured');
@@ -291,28 +308,12 @@ export async function putWelkomWavToS3(idwaarneemgroep: number, wavBody: Buffer)
     throw new WelkomWavValidationError(sln.message);
   }
 
-  const client = getS3Client();
-  const primaryKey = welkomWelkomstObjectKey(idwaarneemgroep);
-
-  if (await objectExists(bucket, primaryKey)) {
-    const backupKey = welkomWelkomstBackupObjectKey(idwaarneemgroep, welkomBackupTimestampLabel());
-    await client.send(
-      new CopyObjectCommand({
-        Bucket: bucket,
-        Key: backupKey,
-        CopySource: s3CopySource(bucket, primaryKey),
-        MetadataDirective: 'COPY',
-      })
-    );
-  }
-
-  await client.send(
+  await getS3Client().send(
     new PutObjectCommand({
       Bucket: bucket,
-      Key: primaryKey,
+      Key: objectKey,
       Body: sln.sln,
       ContentType: 'application/octet-stream',
-      ContentDisposition: 'inline',
     })
   );
 }

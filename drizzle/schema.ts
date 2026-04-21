@@ -1275,6 +1275,7 @@ export const waarneemgroepen = pgTable("waarneemgroepen", {
 	crisispindeelnemer: varchar({ length: 50 }),
 	crisispintime: integer(),
 	eigentelwelkomwav: boolean(),
+	eigentelwelkomlocatie: varchar({ length: 512 }),
 	abomaatschapplanner: boolean(),
 	gebruiktVoicemail: boolean("gebruikt_voicemail"),
 	gespreksopname: integer(),

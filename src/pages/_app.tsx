@@ -20,6 +20,8 @@ const AUTHENTICATED_PATHS = [
   "/diensten-toevoegen",
   "/waarneemgroep-toevoegen",
   "/vakanties",
+  "/deelnemer-toevoegen",
+  "/bestaande-toevoegen",
 ];
 
 function useIsAuthenticatedRoute(): boolean {

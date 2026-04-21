@@ -1,11 +1,17 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { eq } from 'drizzle-orm';
+import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 import {
+  buildNewWelkomSlnObjectKey,
+  copyWelkomSlnToBackupIfExists,
   getWelkomWavBucket,
   isLikelyWavBuffer,
-  putWelkomWavToS3,
+  putWelkomSlnAtKey,
   WelkomWavValidationError,
 } from '@/lib/welkom-wav-s3';
+
+const { waarneemgroepen } = schema;
 
 export const config = {
   api: {
@@ -32,19 +38,34 @@ function readBody(req: NextApiRequest, maxBytes: number): Promise<Buffer> {
   });
 }
 
+function parseWelkomFilenameHeader(req: NextApiRequest): string {
+  const raw = req.headers['x-welkom-filename'];
+  if (typeof raw !== 'string' || !raw.trim()) return 'welkom.wav';
+  try {
+    return decodeURIComponent(raw.trim());
+  } catch {
+    return 'welkom.wav';
+  }
+}
+
 /**
  * POST /api/waarneemgroep-wijzigen/:id/welkom-wav
- * Raw body: WAV bytes (8 kHz, mono, 16-bit PCM). Stored as raw .sln in S3.
+ * Body: raw WAV. Header X-Welkom-Filename: encodeURIComponent(original name).
+ * Stores SLN at sounds/{basename}_{timestamp}.sln and sets eigentelwelkomlocatie.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse<{ ok: true } | { error: string }>) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse<{ ok: true; eigentelwelkomlocatie: string } | { error: string }>
+) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  if (!getWelkomWavBucket()) {
+  const bucket = getWelkomWavBucket();
+  if (!bucket) {
     return res.status(503).json({
       error:
-        'Welkomst-audio opslag is niet geconfigureerd. Zet S3_WELKOM_BUCKET (of S3_SOUNDS_BUCKET) op de bucketnaam in .env / .env.local en herstart de server. Upload is WAV; opslag als sounds/welkom-wg-{id}_gsm.sln.',
+        'Welkomst-audio opslag is niet geconfigureerd. Zet S3_WELKOM_BUCKET (of S3_SOUNDS_BUCKET) op de bucketnaam in .env / .env.local en herstart de server.',
     });
   }
 
@@ -87,8 +108,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
 
   try {
-    await putWelkomWavToS3(id, buf);
-    return res.status(200).json({ ok: true });
+    const [row] = await db
+      .select({ loc: waarneemgroepen.eigentelwelkomlocatie })
+      .from(waarneemgroepen)
+      .where(eq(waarneemgroepen.id, id))
+      .limit(1);
+
+    if (!row) {
+      return res.status(404).json({ error: 'Waarneemgroep niet gevonden' });
+    }
+
+    const prev = row.loc?.trim() ?? null;
+    if (prev) {
+      await copyWelkomSlnToBackupIfExists(bucket, prev);
+    }
+
+    const objectKey = buildNewWelkomSlnObjectKey(parseWelkomFilenameHeader(req));
+    await putWelkomSlnAtKey(buf, objectKey);
+
+    await db
+      .update(waarneemgroepen)
+      .set({ eigentelwelkomlocatie: objectKey })
+      .where(eq(waarneemgroepen.id, id));
+
+    return res.status(200).json({ ok: true, eigentelwelkomlocatie: objectKey });
   } catch (err) {
     if (err instanceof WelkomWavValidationError) {
       return res.status(400).json({ error: err.message });

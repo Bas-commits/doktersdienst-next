@@ -1,7 +1,8 @@
 'use client';
 
 import Head from 'next/head';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -229,8 +230,7 @@ export default function OvernamesPage() {
     [selectedOvernameBlock]
   );
 
-  const handleOvernameRecreate = useCallback(async () => {
-    if (!selectedOvernameBlock?.iddienstovern) return;
+  const recreateByIdDienstOvern = useCallback(async (iddienstovern: number) => {
     setDetailSubmitting(true);
     setDetailError(null);
     try {
@@ -239,7 +239,7 @@ export default function OvernamesPage() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ iddienstovern: selectedOvernameBlock.iddienstovern, action: 'delete' }),
+        body: JSON.stringify({ iddienstovern, action: 'delete' }),
       });
       if (!res.ok) {
         const result = await res.json();
@@ -247,14 +247,12 @@ export default function OvernamesPage() {
         return;
       }
       // Find the underlying assigned shift block by matching the iddienstovern.
-      // b.id is the type=1 slot id; the assigned dienst id is stored in b.assignedDienstId.
       const allBlocks = rows.flatMap((r) => r.shiftBlocks);
       const originalBlock = allBlocks.find(
-        (b) => !b.overnameType && b.assignedDienstId === selectedOvernameBlock.iddienstovern
+        (b) => !b.overnameType && b.assignedDienstId === iddienstovern
       );
       setSelectedOvernameBlock(null);
       window.dispatchEvent(new Event('overname-updated'));
-      // Open the propose modal for the original shift
       if (originalBlock) {
         setSelectedShift(originalBlock);
         setSubmitError(null);
@@ -264,7 +262,29 @@ export default function OvernamesPage() {
     } finally {
       setDetailSubmitting(false);
     }
-  }, [selectedOvernameBlock, rows]);
+  }, [rows]);
+
+  const handleOvernameRecreate = useCallback(async () => {
+    if (!selectedOvernameBlock?.iddienstovern) return;
+    await recreateByIdDienstOvern(selectedOvernameBlock.iddienstovern);
+  }, [selectedOvernameBlock, recreateByIdDienstOvern]);
+
+  // Auto-trigger recreate flow when arriving via ?recreate=<iddienstovern>
+  const router = useRouter();
+  const recreateHandledRef = useRef<number | null>(null);
+  useEffect(() => {
+    const raw = router.query.recreate;
+    const idStr = Array.isArray(raw) ? raw[0] : raw;
+    const id = idStr ? Number(idStr) : NaN;
+    if (!Number.isFinite(id) || id <= 0) return;
+    if (recreateHandledRef.current === id) return;
+    // Wait until calendar rows are populated so we can locate the original block
+    if (!rows.length) return;
+    recreateHandledRef.current = id;
+    recreateByIdDienstOvern(id);
+    // Strip the query param so it doesn't re-trigger on reload
+    router.replace('/overnames', undefined, { shallow: true });
+  }, [router, rows, recreateByIdDienstOvern]);
 
   return (
     <>

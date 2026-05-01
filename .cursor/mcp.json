@@ -1,0 +1,19 @@
+{
+    "mcpServers": {
+      "postgres": {
+        "command": "docker",
+        "args": [
+          "run",
+          "-i",
+          "--rm",
+          "-e",
+          "DATABASE_URI",
+          "crystaldba/postgres-mcp",
+          "--access-mode=restricted"
+        ],
+        "env": {
+          "DATABASE_URI": "postgresql://postgres:qrcaro17y0drleoi@204.168.234.122:5432/doktersdienst-dev"
+        }
+      }
+    }
+  }

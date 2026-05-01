@@ -127,6 +127,7 @@ export default async function handler(
 
     const telnronzecentrale =
       typeof body.telnronzecentrale === 'string' ? body.telnronzecentrale.trim() || null : null;
+    const telnronzecentrale2 = telnronzecentrale ? normalizeTelnrRingaandKey(telnronzecentrale) : null;
 
     // Validate phone format
     if (telnronzecentrale && !TELNR_RINGAAND_REGEX.test(telnronzecentrale)) {
@@ -183,6 +184,7 @@ export default async function handler(
       telnrnietopgenomen: str(body.telnrnietopgenomen, 50),
       idinvoegendewaarneemgroep: num(body.idinvoegendewaarneemgroep),
       telnronzecentrale,
+      telnronzecentrale2,
       telnrconference: str(body.telnrconference, 50),
       afgemeld: false,
       smsdienstbegin: !!body.smsdienstbegin,

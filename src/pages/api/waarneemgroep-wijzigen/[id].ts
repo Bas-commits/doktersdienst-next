@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, asc, eq } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
+import { normalizeTelnrRingaandKey } from '@/lib/waarneemgroep-telnringaand';
 import { getWelkomWavBucket, welkomWelkomstFilePresent } from '@/lib/welkom-wav-s3';
 
 const { waarneemgroepen, deelnemers, waarneemgroepdeelnemers } = schema;
@@ -181,7 +182,11 @@ export default async function handler(
     if ('telnringaand' in body) update.telnringaand = str(body.telnringaand, 50);
     if ('telnrnietopgenomen' in body) update.telnrnietopgenomen = str(body.telnrnietopgenomen, 50);
     if ('idinvoegendewaarneemgroep' in body) update.idinvoegendewaarneemgroep = num(body.idinvoegendewaarneemgroep);
-    if ('telnronzecentrale' in body) update.telnronzecentrale = str(body.telnronzecentrale, 50);
+    if ('telnronzecentrale' in body) {
+      const telnronzecentrale = str(body.telnronzecentrale, 50);
+      update.telnronzecentrale = telnronzecentrale;
+      update.telnronzecentrale2 = telnronzecentrale ? normalizeTelnrRingaandKey(telnronzecentrale) : null;
+    }
     if ('telnrconference' in body) update.telnrconference = str(body.telnrconference, 50);
     if ('afgemeld' in body) update.afgemeld = !!body.afgemeld;
     if ('smsdienstbegin' in body) update.smsdienstbegin = !!body.smsdienstbegin;

@@ -82,7 +82,7 @@ describe('generateTelRecords', () => {
       },
     ]);
     await expect(readFile(join(outputDir, '31880026406.txt'), 'utf8')).resolves.toBe(
-      'v3\n1000;2000;welkom-default_gsm;;31612345678~~0;2274396699;31611111111~~',
+      'v3\n1000;2000;welkom-default_gsm;0;31612345678~~0;2274396699;31611111111~~',
     );
   });
 

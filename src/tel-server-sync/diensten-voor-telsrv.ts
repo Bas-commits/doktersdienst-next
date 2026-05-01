@@ -52,6 +52,13 @@ function phpString(value: unknown): string {
   return String(value);
 }
 
+function voicemailDoorschakelingString(value: DienstTelSyncRow['is_voicemail_doorschakeling']): string {
+  if (value === null || value === undefined) return '';
+  if (value === true) return '1';
+  if (value === false) return '0';
+  return String(value);
+}
+
 export function buildTelServerText(
   wg: WaarneemgroepForTelSync,
   rows: DienstTelSyncRow[],
@@ -71,7 +78,7 @@ export function buildTelServerText(
     }
 
     let diensttext = `${phpString(row.van)};${phpString(row.tot)};${welkom};${phpString(
-      row.is_voicemail_doorschakeling,
+      voicemailDoorschakelingString(row.is_voicemail_doorschakeling),
     )}`;
 
     for (let i = 1; i <= 5; i += 1) {

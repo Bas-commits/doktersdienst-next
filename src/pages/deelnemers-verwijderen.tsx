@@ -36,6 +36,7 @@ export default function DeelnemersVerwijderenPage() {
   const [understood, setUnderstood] = useState(false);
   const [confirmLoginInput, setConfirmLoginInput] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [afmeldingWgId, setAfmeldingWgId] = useState<number | null>(null);
 
   const currentDeelnemerId = session?.user?.id != null ? Number(session.user.id) : NaN;
 
@@ -75,6 +76,7 @@ export default function DeelnemersVerwijderenPage() {
     setPending(d);
     setUnderstood(false);
     setConfirmLoginInput('');
+    setAfmeldingWgId(null);
     dialogRef.current?.showModal();
   }
 
@@ -83,13 +85,20 @@ export default function DeelnemersVerwijderenPage() {
     setPending(null);
     setUnderstood(false);
     setConfirmLoginInput('');
+    setAfmeldingWgId(null);
   }
 
   const expectedLoginNorm = (pending?.login ?? '').trim();
   const confirmInputNorm = confirmLoginInput.trim();
   const loginMatches =
     expectedLoginNorm.length > 0 && confirmInputNorm === expectedLoginNorm;
-  const canSubmitDelete = understood && loginMatches && !deleting;
+  const hasActiveWaarneemgroepen = (pending?.waarneemgroepen.length ?? 0) > 0;
+  const canSubmitDelete =
+    !hasActiveWaarneemgroepen &&
+    understood &&
+    loginMatches &&
+    !deleting &&
+    afmeldingWgId === null;
 
   async function handleDeleteConfirmed() {
     if (!pending || !canSubmitDelete) return;
@@ -113,6 +122,51 @@ export default function DeelnemersVerwijderenPage() {
       toast.error('Verwijderen mislukt.');
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleAfmeldenFromWg(idwaarneemgroep: number) {
+    if (!pending || afmeldingWgId != null) return;
+    setAfmeldingWgId(idwaarneemgroep);
+    const deelnemerId = pending.id;
+    try {
+      const res = await fetch('/api/deelnemers/registratie', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actie: 'afmelden',
+          IDdeelnemer: deelnemerId,
+          IDwaarneemgroep: idwaarneemgroep,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || (data && typeof data === 'object' && 'error' in data && data.error)) {
+        toast.error(
+          typeof (data as { error?: string }).error === 'string'
+            ? (data as { error: string }).error
+            : 'Afmelden mislukt'
+        );
+        return;
+      }
+      toast.success('Afgemeld bij deze waarneemgroep.');
+      const nextWgs = pending.waarneemgroepen.filter((w) => w.id !== idwaarneemgroep);
+      setPending((p) => (p ? { ...p, waarneemgroepen: nextWgs } : null));
+      if (nextWgs.length === 0) {
+        setUnderstood(false);
+        setConfirmLoginInput('');
+      }
+      setDeelnemers((prev) =>
+        prev.map((d) =>
+          d.id !== deelnemerId
+            ? d
+            : { ...d, waarneemgroepen: d.waarneemgroepen.filter((w) => w.id !== idwaarneemgroep) }
+        )
+      );
+    } catch {
+      toast.error('Afmelden mislukt.');
+    } finally {
+      setAfmeldingWgId(null);
     }
   }
 
@@ -153,20 +207,28 @@ export default function DeelnemersVerwijderenPage() {
       <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
         <dialog
           ref={dialogRef}
-          className="max-w-lg rounded-lg border border-border bg-background p-0 text-foreground shadow-lg backdrop:bg-black/50"
+          className="fixed left-1/2 top-1/2 z-50 max-h-[min(90vh,44rem)] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-border bg-background p-0 text-foreground shadow-lg backdrop:bg-black/50"
           onClose={() => {
             setPending(null);
             setUnderstood(false);
             setConfirmLoginInput('');
+            setAfmeldingWgId(null);
           }}
         >
           {pending && (
             <div className="p-6 space-y-4">
               <h2 className="text-lg font-semibold text-destructive">Deelnemer permanent verwijderen</h2>
-              <p className="text-sm text-muted-foreground">
-                Deze actie kan niet ongedaan worden gemaakt. Alle koppelingen met waarneemgroepen en het
-                inlogaccount worden verwijderd uit het systeem.
-              </p>
+              {hasActiveWaarneemgroepen ? (
+                <p className="text-sm text-amber-700 dark:text-amber-500">
+                  Deze deelnemer is nog aangemeld bij onderstaande waarneemgroepen. U moet eerst per groep
+                  afmelden voordat definitief verwijderen mogelijk is.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Deze actie kan niet ongedaan worden gemaakt. Resterende koppelingen en het inlogaccount
+                  worden verwijderd uit het systeem.
+                </p>
+              )}
               <ul className="text-sm border rounded-md border-border p-3 space-y-1 bg-muted/30">
                 <li>
                   <span className="text-muted-foreground">Naam: </span>
@@ -180,47 +242,78 @@ export default function DeelnemersVerwijderenPage() {
                   <span className="text-muted-foreground">Login: </span>
                   <strong>{pending.login ?? '—'}</strong>
                 </li>
-                <li>
-                  <span className="text-muted-foreground">Waarneemgroepen: </span>
-                  <strong>{pending.waarneemgroepen.length}</strong>
-                </li>
               </ul>
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="begrepen"
-                  checked={understood}
-                  onCheckedChange={setUnderstood}
-                />
-                <Label htmlFor="begrepen" className="text-sm font-normal leading-snug cursor-pointer">
-                  Ik begrijp dat deze actie permanent is en niet terug te draaien is.
-                </Label>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-login">
-                  Typ het login (e-mailadres) hieronder exact overeenkomend om te bevestigen:
-                </Label>
-                <Input
-                  id="confirm-login"
-                  type="text"
-                  autoComplete="off"
-                  value={confirmLoginInput}
-                  onChange={(e) => setConfirmLoginInput(e.target.value)}
-                  placeholder={pending.login ?? ''}
-                  className={loginMatches && understood ? 'border-green-600/50' : undefined}
-                />
-              </div>
+              {hasActiveWaarneemgroepen && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Waarneemgroepen (nog aangemeld)</p>
+                  <ul className="rounded-md border border-border divide-y divide-border bg-card text-sm">
+                    {pending.waarneemgroepen.map((wg) => (
+                      <li
+                        key={wg.id}
+                        className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
+                      >
+                        <span className="font-medium">{wg.naam ?? `Groep ${wg.id}`}</span>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={afmeldingWgId != null}
+                          onClick={() => void handleAfmeldenFromWg(wg.id)}
+                        >
+                          {afmeldingWgId === wg.id ? 'Bezig…' : 'Afmelden bij deze groep'}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {!hasActiveWaarneemgroepen && (
+                <>
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="begrepen"
+                      checked={understood}
+                      onCheckedChange={setUnderstood}
+                    />
+                    <Label htmlFor="begrepen" className="text-sm font-normal leading-snug cursor-pointer">
+                      Ik begrijp dat deze actie permanent is en niet terug te draaien is.
+                    </Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-login">
+                      Typ het login (e-mailadres) hieronder exact overeenkomend om te bevestigen:
+                    </Label>
+                    <Input
+                      id="confirm-login"
+                      type="text"
+                      autoComplete="off"
+                      value={confirmLoginInput}
+                      onChange={(e) => setConfirmLoginInput(e.target.value)}
+                      placeholder={pending.login ?? ''}
+                      className={loginMatches && understood ? 'border-green-600/50' : undefined}
+                    />
+                  </div>
+                </>
+              )}
               <div className="flex flex-wrap justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={closeDialog} disabled={deleting}>
-                  Annuleren
-                </Button>
                 <Button
                   type="button"
-                  variant="destructive"
-                  disabled={!canSubmitDelete}
-                  onClick={() => void handleDeleteConfirmed()}
+                  variant="outline"
+                  onClick={closeDialog}
+                  disabled={deleting || afmeldingWgId != null}
                 >
-                  {deleting ? 'Bezig…' : 'Verwijder definitief'}
+                  Annuleren
                 </Button>
+                {!hasActiveWaarneemgroepen && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={!canSubmitDelete}
+                    onClick={() => void handleDeleteConfirmed()}
+                  >
+                    {deleting ? 'Bezig…' : 'Verwijder definitief'}
+                  </Button>
+                )}
               </div>
             </div>
           )}

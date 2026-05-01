@@ -24,7 +24,7 @@ export function syntheticSignUpTrustHeaders(): Headers {
 }
 
 /**
- * Secretaris (idgroep 2) or administrator (idgroep 5) with `groepen.deelnemertoev` on their role row.
+ * Secretaris (idgroep 2) with `groepen.deelnemertoev`, or administrator (idgroep 5).
  */
 export async function resolveDeelnemerCreatePermission(actor: AuthenticatedUser): Promise<
   { ok: true } | { ok: false; forbiddenReason: string }
@@ -38,6 +38,9 @@ export async function resolveDeelnemerCreatePermission(actor: AuthenticatedUser)
       ok: false,
       forbiddenReason: 'Alleen secretaris of administrator kan hier deelnemers toevoegen.',
     };
+  }
+  if (ig === GROEP_ADMINISTRATOR) {
+    return { ok: true };
   }
   const [row] = await db
     .select({ deelnemertoev: groepen.deelnemertoev })

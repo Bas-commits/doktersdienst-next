@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, GROEP_ADMINISTRATOR } from '@/lib/api-auth';
 
@@ -59,6 +59,24 @@ export default async function handler(
     if (target.idgroep === GROEP_ADMINISTRATOR) {
       return res.status(403).json({
         error: 'Verwijderen van een andere beheerder is niet toegestaan.',
+      });
+    }
+
+    const [stillAangemeld] = await db
+      .select({ id: waarneemgroepdeelnemers.id })
+      .from(waarneemgroepdeelnemers)
+      .where(
+        and(
+          eq(waarneemgroepdeelnemers.iddeelnemer, iddeelnemer),
+          eq(waarneemgroepdeelnemers.aangemeld, true)
+        )
+      )
+      .limit(1);
+
+    if (stillAangemeld) {
+      return res.status(409).json({
+        error:
+          'Deelnemer is nog aangemeld bij een of meer waarneemgroepen. Meld eerst overal af voordat u verwijdert.',
       });
     }
 

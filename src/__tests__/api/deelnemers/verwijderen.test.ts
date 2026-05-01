@@ -4,6 +4,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 const mockGetAuthenticatedUser = vi.fn();
 const mockTransaction = vi.fn();
 let selectResult: { id: number; login: string | null; idgroep: number | null }[] = [];
+let activeMembershipSelectResult: { id: number }[] = [];
+let selectLimitCallCount = 0;
 
 vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedUser: (...args: unknown[]) => mockGetAuthenticatedUser(...args),
@@ -15,7 +17,13 @@ vi.mock('@/db', () => ({
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve(selectResult)),
+          limit: vi.fn(() => {
+            selectLimitCallCount += 1;
+            if (selectLimitCallCount === 1) {
+              return Promise.resolve(selectResult);
+            }
+            return Promise.resolve(activeMembershipSelectResult);
+          }),
         })),
       })),
     })),
@@ -29,6 +37,7 @@ vi.mock('@/db', () => ({
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((a: unknown, b: unknown) => [a, b]),
+  and: vi.fn((...args: unknown[]) => ({ and: args })),
   sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values })),
 }));
 
@@ -63,6 +72,8 @@ describe('POST /api/deelnemers/verwijderen', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     selectResult = [];
+    activeMembershipSelectResult = [];
+    selectLimitCallCount = 0;
     mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<void>) => {
       const tx = {
         delete: vi.fn(() => ({
@@ -123,6 +134,7 @@ describe('POST /api/deelnemers/verwijderen', () => {
   it('returns 200 and runs transaction when delete is allowed', async () => {
     mockGetAuthenticatedUser.mockResolvedValue(adminUser);
     selectResult = [{ id: 10, login: 'kill@test.nl', idgroep: 1 }];
+    activeMembershipSelectResult = [];
     const { default: handler } = await import('@/pages/api/deelnemers/verwijderen');
     const res = makeRes();
     await handler(makeReq({ iddeelnemer: 10 }), res);
@@ -130,5 +142,18 @@ describe('POST /api/deelnemers/verwijderen', () => {
     expect(res._status).toBe(200);
     expect(res._json).toEqual({ ok: true });
     expect(mockTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 409 when deelnemer nog aangemeld bij waarneemgroep', async () => {
+    mockGetAuthenticatedUser.mockResolvedValue(adminUser);
+    selectResult = [{ id: 10, login: 'busy@test.nl', idgroep: 1 }];
+    activeMembershipSelectResult = [{ id: 999 }];
+    const { default: handler } = await import('@/pages/api/deelnemers/verwijderen');
+    const res = makeRes();
+    await handler(makeReq({ iddeelnemer: 10 }), res);
+
+    expect(res._status).toBe(409);
+    expect((res._json as { error: string }).error).toMatch(/aangemeld/i);
+    expect(mockTransaction).not.toHaveBeenCalled();
   });
 });

@@ -228,7 +228,7 @@ export default function LoginPage() {
           'Dit account is nog niet geverifieerd. Open de uitnodiging in uw inbox of vraag onderaan een nieuwe verificatie-aan uw e‑mail adres.';
       } else if (code === 'PASSWORD_NOT_SET') {
         msg =
-          'U heeft nog geen wachtwoord ingesteld. Gebruik de tweede uitnodigingsmail nadat uw e‑mail gecontroleerd is, of gebruik hieronder „Wachtwoord vergeten” om nu een link te ontvangen.';
+          'U heeft nog geen wachtwoord ingesteld. Open de uitnodigingsmail en voltooi de stappen, of gebruik hieronder „Wachtwoord vergeten” om een instellink te ontvangen.';
       }
 
       setError(msg);

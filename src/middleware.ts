@@ -25,6 +25,7 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/reset-password') ||
     pathname.startsWith('/signup') ||
     pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/invite/') ||
     pathname === '/api/health' ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/static') ||

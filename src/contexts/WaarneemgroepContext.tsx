@@ -67,8 +67,6 @@ export function WaarneemgroepProvider({ children }: WaarneemgroepProviderProps) 
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     cachedGetJson<{ waarneemgroepen?: ApiWaarneemgroep[]; error?: string }>('/api/waarneemgroepen')
       .then((data) => {
         if (cancelled) return;
@@ -93,18 +91,31 @@ export function WaarneemgroepProvider({ children }: WaarneemgroepProviderProps) 
     };
   }, []);
 
-  // Auto-select first waarneemgroep when none is stored (fresh session)
+  // Keep the header selection inside the server-authorized waarneemgroepen list.
   useEffect(() => {
-    if (!activeWaarneemgroepId && waarneemgroepen.length > 0) {
+    if (loading) return;
+
+    if (waarneemgroepen.length === 0) {
+      if (activeWaarneemgroepId) {
+        localStorage.removeItem(STORAGE_GROUP_ID_KEY);
+        queueMicrotask(() => setActiveWaarneemgroepIdState(null));
+      }
+      return;
+    }
+
+    const activeIsAllowed = waarneemgroepen.some((wg) => String(wg.ID) === activeWaarneemgroepId);
+    if (!activeWaarneemgroepId || !activeIsAllowed) {
       const firstId = String(waarneemgroepen[0].ID);
       localStorage.setItem(STORAGE_GROUP_ID_KEY, firstId);
-      setActiveWaarneemgroepIdState(firstId);
+      queueMicrotask(() => setActiveWaarneemgroepIdState(firstId));
     }
-  }, [activeWaarneemgroepId, waarneemgroepen]);
+  }, [activeWaarneemgroepId, loading, waarneemgroepen]);
 
   const setActiveWaarneemgroepId = useCallback((id: string | null) => {
     if (id) {
       localStorage.setItem(STORAGE_GROUP_ID_KEY, id);
+    } else {
+      localStorage.removeItem(STORAGE_GROUP_ID_KEY);
     }
     setActiveWaarneemgroepIdState(id);
   }, []);

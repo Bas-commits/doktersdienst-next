@@ -295,10 +295,12 @@ describe('POST /api/deelnemers/nieuw', () => {
     });
     expect(typeof (res._json as { message: string }).message).toBe('string');
     expect(mockSendVerificationWithProof).toHaveBeenCalledTimes(1);
-    expect(mockSendVerificationWithProof).toHaveBeenCalledWith(
-      expect.objectContaining({
-        url: expect.stringMatching(/^https?:\/\/.+\/api\/auth\/verify-email\?token=/),
-      })
+    const verificationCall = mockSendVerificationWithProof.mock.calls[0]?.[0] as
+      | { url?: string }
+      | undefined;
+    expect(verificationCall?.url).toMatch(/^https?:\/\/.+\/api\/auth\/verify-email\?token=/);
+    expect(verificationCall?.url).toContain(
+      encodeURIComponent('/api/invite/na-verificatie')
     );
     expect(mockTxInsert).toHaveBeenCalledTimes(2);
   });

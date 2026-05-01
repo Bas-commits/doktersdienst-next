@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Head from 'next/head';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
@@ -10,9 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { WaarneemgroepToevoegenOptions, WaarneemgroepTableItem } from './api/waarneemgroep-toevoegen/index';
-
-/** Telefoonnummer: 08800264XX of 318800264XX (laatste twee cijfers variabel) */
-const TELNR_REGEX = /^(08800264[0-9]{2}|318800264[0-9]{2})$/;
+import {
+  normalizeTelnrRingaandKey,
+  suggestAvailableRingaandNummers,
+  takenTelnrRingaandKeys,
+  TELNR_RINGAAND_REGEX,
+} from '@/lib/waarneemgroep-telnringaand';
 
 type FormData = {
   naam: string;
@@ -20,7 +23,6 @@ type FormData = {
   idregio: string;
   idinstelling: string;
   regiobeschrijving: string;
-  telnringaand: string;
   telnrnietopgenomen: string;
   idinvoegendewaarneemgroep: string;
   telnronzecentrale: string;
@@ -37,7 +39,6 @@ const EMPTY_FORM: FormData = {
   idregio: '',
   idinstelling: '',
   regiobeschrijving: '',
-  telnringaand: '',
   telnrnietopgenomen: '',
   idinvoegendewaarneemgroep: '0',
   telnronzecentrale: '',
@@ -71,7 +72,7 @@ export default function WaarneemgroepToevoegenPage() {
 
   const [formData, setFormData] = useState<FormData>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
-  const [telnringaandError, setTelnringaandError] = useState<string | null>(null);
+  const [telnronzecentraleError, setTelnronzecentraleError] = useState<string | null>(null);
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<WaarneemgroepTableItem | null>(null);
@@ -92,21 +93,34 @@ export default function WaarneemgroepToevoegenPage() {
   const set = (key: keyof FormData, value: string | boolean) =>
     setFormData((f) => ({ ...f, [key]: value }));
 
-  const takenTelnrs = options?.waarneemgroepenTable
-    .map((wg) => wg.telnringaand)
-    .filter((t): t is string => t != null) ?? [];
+  const takenTelnrKeys = useMemo(
+    () =>
+      takenTelnrRingaandKeys(
+        options?.waarneemgroepenTable.map((wg) => wg.telnronzecentrale) ?? []
+      ),
+    [options?.waarneemgroepenTable]
+  );
 
-  const validateTelnr = (value: string): string | null => {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    if (!TELNR_REGEX.test(trimmed)) {
-      return 'Formaat: 08800264XX of 318800264XX (laatste twee cijfers variabel).';
-    }
-    if (takenTelnrs.includes(trimmed)) {
-      return `Telefoonnummer ${trimmed} is al in gebruik door een andere waarneemgroep.`;
-    }
-    return null;
-  };
+  const availableTelnrsOnzeCentrale = useMemo(
+    () => suggestAvailableRingaandNummers(takenTelnrKeys, 100),
+    [takenTelnrKeys]
+  );
+
+  const validateTelnrOnzeCentrale = useCallback(
+    (value: string): string | null => {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      if (!TELNR_RINGAAND_REGEX.test(trimmed)) {
+        return 'Kies een geldig telefoonnummer.';
+      }
+      const key = normalizeTelnrRingaandKey(trimmed);
+      if (key && takenTelnrKeys.has(key)) {
+        return `Telefoonnummer ${trimmed} is al in gebruik door een andere waarneemgroep.`;
+      }
+      return null;
+    },
+    [takenTelnrKeys]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,9 +129,9 @@ export default function WaarneemgroepToevoegenPage() {
       return;
     }
 
-    const telnrErr = validateTelnr(formData.telnringaand);
+    const telnrErr = validateTelnrOnzeCentrale(formData.telnronzecentrale);
     if (telnrErr) {
-      setTelnringaandError(telnrErr);
+      setTelnronzecentraleError(telnrErr);
       return;
     }
 
@@ -135,7 +149,6 @@ export default function WaarneemgroepToevoegenPage() {
         idregio: toNum(formData.idregio),
         idinstelling: toNum(formData.idinstelling),
         regiobeschrijving: formData.regiobeschrijving.trim() || null,
-        telnringaand: formData.telnringaand.trim() || null,
         telnrnietopgenomen: formData.telnrnietopgenomen.trim() || null,
         idinvoegendewaarneemgroep: toNum(formData.idinvoegendewaarneemgroep),
         telnronzecentrale: formData.telnronzecentrale.trim() || null,
@@ -161,7 +174,7 @@ export default function WaarneemgroepToevoegenPage() {
 
       toast.success(`Waarneemgroep "${formData.naam.trim()}" aangemaakt (ID: ${data.id}).`);
       setFormData(EMPTY_FORM);
-      setTelnringaandError(null);
+      setTelnronzecentraleError(null);
       refreshOptions(setOptions);
     } catch {
       toast.error('Opslaan mislukt. Probeer het opnieuw.');
@@ -335,24 +348,34 @@ export default function WaarneemgroepToevoegenPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1">
-                      <Label htmlFor="wg-telnringaand">Telefoonnummer doorgerouteerd naar diensdoende</Label>
-                      <Input
-                        id="wg-telnringaand"
-                        value={formData.telnringaand}
+                      <Label htmlFor="wg-telnronzecentrale">Tel nr onze centrale</Label>
+                      <select
+                        id="wg-telnronzecentrale"
+                        className={selectClass}
+                        value={formData.telnronzecentrale}
                         onChange={(e) => {
-                          set('telnringaand', e.target.value);
-                          if (telnringaandError) setTelnringaandError(null);
+                          const v = e.target.value;
+                          set('telnronzecentrale', v);
+                          setTelnronzecentraleError(validateTelnrOnzeCentrale(v));
                         }}
-                        onBlur={() => setTelnringaandError(validateTelnr(formData.telnringaand))}
-                        disabled={submitting}
-                        placeholder="bijv. 0880026400 of 31880026499"
-                        aria-invalid={Boolean(telnringaandError)}
-                      />
-                      {telnringaandError ? (
-                        <p className="text-xs text-destructive" role="alert">{telnringaandError}</p>
+                        disabled={submitting || availableTelnrsOnzeCentrale.length === 0}
+                        aria-invalid={Boolean(telnronzecentraleError)}
+                      >
+                        <option value="">— Kies beschikbaar nummer —</option>
+                        {availableTelnrsOnzeCentrale.map((n) => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                      {telnronzecentraleError ? (
+                        <p className="text-xs text-destructive" role="alert">{telnronzecentraleError}</p>
                       ) : (
                         <p className="text-xs text-muted-foreground">
-                          Optioneel. Formaat: 08800264XX of 318800264XX. Moet uniek zijn.
+                          Alleen vrije nummers worden getoond. Beschikbaar: {availableTelnrsOnzeCentrale.length}.
+                        </p>
+                      )}
+                      {availableTelnrsOnzeCentrale.length === 0 && (
+                        <p className="text-xs text-destructive" role="alert">
+                          Geen beschikbare nummers gevonden.
                         </p>
                       )}
                     </div>
@@ -382,27 +405,6 @@ export default function WaarneemgroepToevoegenPage() {
                         <option key={w.id} value={String(w.id)}>{w.naam}</option>
                       ))}
                     </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="wg-telnronzecentrale">Telnr onze centrale</Label>
-                      <Input
-                        id="wg-telnronzecentrale"
-                        value={formData.telnronzecentrale}
-                        onChange={(e) => set('telnronzecentrale', e.target.value)}
-                        disabled={submitting}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="wg-telnrconference">Telnr conference</Label>
-                      <Input
-                        id="wg-telnrconference"
-                        value={formData.telnrconference}
-                        onChange={(e) => set('telnrconference', e.target.value)}
-                        disabled={submitting}
-                      />
-                    </div>
                   </div>
 
                   <div className="flex flex-wrap gap-x-6 gap-y-3">
@@ -446,7 +448,7 @@ export default function WaarneemgroepToevoegenPage() {
                       <th className="pb-2 pt-3 px-4 font-medium">Naam</th>
                       <th className="pb-2 pt-3 px-4 font-medium">Specialisme</th>
                       <th className="pb-2 pt-3 px-4 font-medium">Regio</th>
-                      <th className="pb-2 pt-3 px-4 font-medium">Telefoonnummer doorgerouteerd</th>
+                      <th className="pb-2 pt-3 px-4 font-medium">Tel nr onze centrale</th>
                       <th className="pb-2 pt-3 px-4 font-medium">Facturering</th>
                       <th className="pb-2 pt-3 px-4 font-medium w-32" />
                     </tr>
@@ -465,7 +467,7 @@ export default function WaarneemgroepToevoegenPage() {
                           <td className="px-4 py-2.5 font-medium">{wg.naam}</td>
                           <td className="px-4 py-2.5 text-muted-foreground">{wg.specialisme ?? '—'}</td>
                           <td className="px-4 py-2.5 text-muted-foreground">{wg.regio ?? '—'}</td>
-                          <td className="px-4 py-2.5 font-mono text-xs">{wg.telnringaand ?? '—'}</td>
+                          <td className="px-4 py-2.5 font-mono text-xs">{wg.telnronzecentrale ?? '—'}</td>
                           <td className="px-4 py-2.5 text-muted-foreground">
                             {wg.idfacturering != null ? String(wg.idfacturering) : '—'}
                           </td>

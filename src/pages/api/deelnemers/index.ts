@@ -15,6 +15,7 @@ export type DeelnemerWithGroepen = {
   login: string | null;
   color: string | null;
   idgroep: number | null;
+  emailVerified: boolean | null;
   waarneemgroepen: { id: number; naam: string | null; aangemeld: boolean; idgroep: number | null }[];
 };
 
@@ -160,6 +161,7 @@ export default async function handler(
         login: deelnemers.login,
         color: deelnemers.color,
         idgroep: deelnemers.idgroep,
+        emailVerified: deelnemers.emailVerified,
       })
       .from(deelnemers)
       .where(
@@ -214,6 +216,7 @@ export default async function handler(
       login: d.login,
       color: d.color,
       idgroep: d.idgroep,
+      emailVerified: d.emailVerified,
       waarneemgroepen: membershipMap.get(d.id ?? 0) ?? [],
     }));
 

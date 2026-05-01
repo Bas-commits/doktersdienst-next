@@ -16,6 +16,7 @@ import { ROL_LABELS } from '@/lib/rol-labels';
 
 /** Zelfde als rooster-maken-secretaris: rol `groepen.id` voor secretaris in een waarneemgroep. */
 const GROEP_SECRETARIS = 2;
+const GROEP_ADMINISTRATOR = 5;
 
 const selectClass =
   'h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50';
@@ -59,8 +60,14 @@ export default function DeelnemerToevoegenPage() {
   const [ledenLoading, setLedenLoading] = useState(false);
   const [ledenError, setLedenError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [resendingVerificationId, setResendingVerificationId] = useState<number | null>(null);
 
   const colorInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
+
+  const isAdmin = useMemo(
+    () => (waarneemgroepen ?? []).some((wg) => wg.idgroep === GROEP_ADMINISTRATOR),
+    [waarneemgroepen]
+  );
 
   const myDeelnemerId =
     session?.user?.id != null && session.user.id !== '' ? Number(session.user.id) : NaN;
@@ -111,13 +118,14 @@ export default function DeelnemerToevoegenPage() {
 
   /** Actieve groep bestaat maar gebruiker is daar geen secretaris (zelfde logica als rooster-maken-secretaris). */
   const isActiveGroupForbidden = useMemo(() => {
+    if (isAdmin) return false;
     if (!activeWaarneemgroepId) return false;
     const n = Number(activeWaarneemgroepId);
     if (Number.isNaN(n)) return false;
     const activeWg = (waarneemgroepen ?? []).find((wg) => wg.ID === n);
     if (!activeWg && wgCtxLoading) return false;
     return activeWg ? activeWg.idgroep !== GROEP_SECRETARIS : false;
-  }, [activeWaarneemgroepId, waarneemgroepen, wgCtxLoading]);
+  }, [activeWaarneemgroepId, isAdmin, waarneemgroepen, wgCtxLoading]);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -219,6 +227,43 @@ export default function DeelnemerToevoegenPage() {
       toast.error('Afmelden mislukt');
     } finally {
       setRemovingId(null);
+    }
+  }
+
+  async function handleResendVerification(d: DeelnemerWithGroepen) {
+    const wg = activeWaarneemgroepId != null ? Number(activeWaarneemgroepId) : NaN;
+    if (!Number.isFinite(wg)) return;
+    if (d.emailVerified === true) {
+      toast.info('Dit e-mailadres is al geverifieerd.');
+      return;
+    }
+
+    setResendingVerificationId(d.id);
+    try {
+      const res = await fetch('/api/deelnemers/verificatie-opnieuw', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          iddeelnemer: d.id,
+          idwaarneemgroep: wg,
+          inviteInitiatedOrigin:
+            typeof window !== 'undefined' ? window.location.origin : undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        toast.error(typeof data.error === 'string' ? data.error : 'Verificatiemail versturen mislukt');
+        return;
+      }
+      toast.success('Verificatiemail opnieuw verstuurd.');
+      if (data.emailVerified === true) {
+        setLeden((prev) => prev.map((row) => (row.id === d.id ? { ...row, emailVerified: true } : row)));
+      }
+    } catch {
+      toast.error('Verificatiemail versturen mislukt');
+    } finally {
+      setResendingVerificationId(null);
     }
   }
 
@@ -375,8 +420,8 @@ export default function DeelnemerToevoegenPage() {
                       className="max-w-xl"
                     />
                     <p className="max-w-xl text-xs text-muted-foreground">
-                      De nieuwe gebruiker ontvangt een e‑mail om dit adres te bevestigen en daarna een tweede om
-                      een wachtwoord in te stellen. U hoeft hier geen wachtwoord meer in te vullen.
+                      De nieuwe gebruiker ontvangt één e‑mail met een link om dit adres te bevestigen; daarna wordt
+                      direct gevraagd een sterk wachtwoord te kiezen. U hoeft hier geen wachtwoord meer in te vullen.
                     </p>
                     <p className="max-w-xl text-xs text-muted-foreground">
                       De waarneemgroep waarin de deelnemer wordt toegevoegd volgt uit de keuze in de kopbalk
@@ -518,9 +563,10 @@ export default function DeelnemerToevoegenPage() {
                         <tr className="border-b text-left text-muted-foreground">
                           <th className="pb-2 pr-4 font-medium">Naam</th>
                           <th className="pb-2 pr-4 font-medium">Email</th>
+                          <th className="pb-2 pr-4 font-medium">Verificatie</th>
                           <th className="pb-2 pr-4 font-medium">Kleur</th>
                           <th className="pb-2 pr-4 font-medium">Rol in groep</th>
-                          <th className="pb-2 font-medium w-36" />
+                          <th className="pb-2 font-medium w-44" />
                         </tr>
                       </thead>
                       <tbody>
@@ -530,6 +576,31 @@ export default function DeelnemerToevoegenPage() {
                             <tr key={d.id} className="border-b last:border-0 hover:bg-muted/50">
                               <td className="py-2.5 pr-4 font-medium">{formatNaam(d)}</td>
                               <td className="py-2.5 pr-4 text-muted-foreground">{d.login ?? '—'}</td>
+                              <td className="py-2.5 pr-4">
+                                <div className="flex flex-col gap-1">
+                                  <span
+                                    className={`w-fit rounded px-2 py-0.5 text-xs font-medium ${
+                                      d.emailVerified === true
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-amber-100 text-amber-900'
+                                    }`}
+                                  >
+                                    {d.emailVerified === true ? 'Geverifieerd' : 'Niet geverifieerd'}
+                                  </span>
+                                  {d.emailVerified !== true && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 w-fit text-xs"
+                                      disabled={resendingVerificationId === d.id || !d.login}
+                                      onClick={() => void handleResendVerification(d)}
+                                    >
+                                      {resendingVerificationId === d.id ? 'Bezig…' : 'Opnieuw sturen'}
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
                               <td className="py-2.5 pr-4">
                                 <div className="flex items-center gap-2">
                                   <button

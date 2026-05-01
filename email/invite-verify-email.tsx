@@ -84,9 +84,9 @@ export default function InviteVerifyEmail({
         hieronder.
       </Text>
       <Text style={paragraphStyle}>
-        Zodra je je e-mail hebt bevestigd, kun je de volgende stappen in het
-        platform volgen. Heb je deze uitnodiging niet verwacht? Dan kun je deze
-        e-mail negeren.
+        Direct na bevestiging word je doorgestuurd om een sterk wachtwoord in te
+        stellen. Daarmee is je account gereed. Heb je deze uitnodiging niet
+        verwacht? Dan kun je deze e-mail negeren.
       </Text>
 
       <PrimaryButton href={verifyUrl}>E-mailadres bevestigen</PrimaryButton>

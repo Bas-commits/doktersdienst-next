@@ -6,11 +6,13 @@ import { Pool } from 'pg';
 import { legacyMD5Hash, legacyMD5Verify } from '@/lib/legacy-password';
 import { pool as appPool } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { assertStrongPasswordOrThrow } from '@/lib/password-policy';
 import {
   sendMagicLinkEmailViaResend,
   sendPasswordResetEmailViaResend,
   sendVerificationEmailViaResend,
 } from '@/lib/resend-email';
+import { silentInviteResetAls } from '@/lib/silent-invite-reset';
 
 const log = logger.child({ module: 'auth' });
 
@@ -34,11 +36,18 @@ const authDbPool = {
   },
 };
 
-async function sendResetPasswordEmail(params: {
-  user: { email: string; name: string | null };
-  url: string;
-  token: string;
-}) {
+async function sendResetPasswordEmail(
+  params: {
+    user: { email: string; name: string | null };
+    url: string;
+    token: string;
+  }
+) {
+  const store = silentInviteResetAls.getStore();
+  if (store) {
+    store.url = params.url;
+    return;
+  }
   const { user, url } = params;
   void sendPasswordResetEmailViaResend({
     to: user.email,
@@ -138,7 +147,7 @@ export const auth = betterAuth({
     onPasswordReset: async ({ user }) => {
       await syncDeelnemerPasswordFromAccount(user.id);
     },
-    minPasswordLength: 8,
+    minPasswordLength: 12,
     maxPasswordLength: 128,
     password: {
       hash: async (password: string) => legacyMD5Hash(password),
@@ -171,16 +180,17 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: true,
     sendVerificationEmail: sendVerificationEmail,
-    afterEmailVerification: async (updatedUser) => {
-      const mod = await import('@/lib/auth-invite-followup');
-      await mod.maybeRequestPasswordSetupAfterVerification(updatedUser?.email ?? null);
-    },
+    autoSignInAfterVerification: true,
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      // Ensure credential account exists for deelnemers so Better Auth finds the hash and calls our verify.
-      // Use app pool to avoid connection contention with Better Auth's authDbPool.
-      if (ctx.path === '/sign-in/email' && ctx.body?.email) {
+      if (ctx.path === '/reset-password' && ctx.body?.newPassword != null) {
+        assertStrongPasswordOrThrow(ctx.body.newPassword);
+      } else if (ctx.path === '/sign-up/email' && ctx.body?.password != null) {
+        assertStrongPasswordOrThrow(ctx.body.password);
+      } else if (ctx.path === '/sign-in/email' && ctx.body?.email) {
+        // Ensure credential account exists for deelnemers so Better Auth finds the hash and calls our verify.
+        // Use app pool to avoid connection contention with Better Auth's authDbPool.
         log.info({ email: ctx.body.email }, 'sign-in attempt started');
         const client = await appPool.connect();
         try {
@@ -231,7 +241,7 @@ export const auth = betterAuth({
           if (row?.id != null && row.email_verified === true && !hasPwdHash) {
             throw APIError.from('FORBIDDEN', {
               message:
-                'U heeft nog geen wachtwoord ingesteld. Na verificatie ontvangt u een tweede mail met een wachtwoordlink, of kies hieronder voor “wachtwoord vergeten”.',
+                'U heeft nog geen wachtwoord ingesteld. Open de link in uw uitnodigingsmail om uw wachtwoord te kiezen, of gebruik “wachtwoord vergeten” om een nieuwe link aan te vragen.',
               code: 'PASSWORD_NOT_SET',
             });
           }

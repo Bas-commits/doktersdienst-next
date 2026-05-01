@@ -1,7 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { GROEP_ADMINISTRATOR } from '@/lib/api-auth';
 
 const { waarneemgroepen, waarneemgroepdeelnemers, deelnemers } = schema;
 
@@ -24,13 +25,13 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
 /**
  * GET /api/waarneemgroepen
  *
- * Recreates the legacy query:
+ * Recreates the legacy query for regular users:
  *   waarneemgroepen left join waarneemgroepdeelnemers on wg.ID = wgd.IDwaarneemgroep
- *   where ((wgd.aangemeld = 1 and wgd.IDdeelnemer = $user) or wg.IDregio = $idRegio) and wg.afgemeld = 0
+ *   where wgd.aangemeld = 1 and wgd.IDdeelnemer = $user and wg.afgemeld = 0
  *   select wg.*
  *
+ * Administrators (deelnemers.idgroep = 5) may select any active waarneemgroep.
  * Requires authentication. Resolves current user to deelnemer by email.
- * Optional query param: idRegio (number) to also include groups in that regio.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -57,29 +58,39 @@ export default async function handler(
 
     const t1 = Date.now();
     const [deelnemer] = await db
-      .select({ id: deelnemers.id })
+      .select({ id: deelnemers.id, idgroep: deelnemers.idgroep })
       .from(deelnemers)
       .where(eq(deelnemers.email, email))
       .limit(1);
     const tDeelnemer = Date.now() - t1;
 
     const idDeelnemer = deelnemer?.id ?? null;
-    const idRegioParam = req.query.idRegio;
-    const idRegio =
-      idRegioParam !== undefined && idRegioParam !== ''
-        ? Number(idRegioParam)
-        : undefined;
+    if (idDeelnemer === null) {
+      return res.status(403).json({ error: 'Deelnemer not found' });
+    }
 
-    const orConditions = [
-      and(
-        eq(waarneemgroepdeelnemers.aangemeld, true),
-        idDeelnemer !== null
-          ? eq(waarneemgroepdeelnemers.iddeelnemer, idDeelnemer)
-          : eq(waarneemgroepdeelnemers.iddeelnemer, -1)
-      ),
-    ];
-    if (idRegio !== undefined && !Number.isNaN(idRegio)) {
-      orConditions.push(eq(waarneemgroepen.idregio, idRegio));
+    const isAdmin = deelnemer?.idgroep === GROEP_ADMINISTRATOR;
+    if (isAdmin) {
+      const t2 = Date.now();
+      const rows = await db
+        .select({ wg: waarneemgroepen })
+        .from(waarneemgroepen)
+        .where(eq(waarneemgroepen.afgemeld, false));
+      const tQuery = Date.now() - t2;
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[waarneemgroepen]', {
+          sessionMs: tSession,
+          deelnemerMs: tDeelnemer,
+          mainQueryMs: tQuery,
+          totalMs: Date.now() - t0,
+          scope: 'admin',
+        });
+      }
+
+      return res.status(200).json({
+        waarneemgroepen: rows.map((r) => ({ ...r.wg, idgroep: GROEP_ADMINISTRATOR })),
+      });
     }
 
     const t2 = Date.now();
@@ -95,7 +106,11 @@ export default async function handler(
         eq(waarneemgroepen.id, waarneemgroepdeelnemers.idwaarneemgroep)
       )
       .where(
-        and(eq(waarneemgroepen.afgemeld, false), or(...orConditions))
+        and(
+          eq(waarneemgroepen.afgemeld, false),
+          eq(waarneemgroepdeelnemers.aangemeld, true),
+          eq(waarneemgroepdeelnemers.iddeelnemer, idDeelnemer)
+        )
       );
     const tQuery = Date.now() - t2;
 

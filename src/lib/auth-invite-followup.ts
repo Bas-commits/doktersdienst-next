@@ -1,41 +1,40 @@
 import { auth } from '@/lib/auth';
 import { getBetterAuthApiBase } from '@/lib/better-auth-url';
 import { syntheticSignUpTrustHeaders } from '@/lib/deelnemer-nieuw';
-import { pool as appPool } from '@/lib/db';
+import {
+  parseTokenFromBetterAuthResetUrl,
+  silentInviteResetAls,
+  SILENT_INVITE_RESET_HEADER,
+} from '@/lib/silent-invite-reset';
 
 /**
- * Na succesvol verifiëren: als er nog geen legacy-hash op deelnemer staat, wordt de
- * officiële wachtwoord‑reset‑flow getriggers (zelfde als “wachtwoord vergeten”).
- * Bestaande accounts met encrypted_password worden overgeslagen.
+ * Mint a reset-password token via Better Auth without sending e-mail (invite completion).
+ * Must run inside the same async context as the matching `sendResetPassword` handler.
  */
-export async function maybeRequestPasswordSetupAfterVerification(
-  email: string | null | undefined
-): Promise<void> {
-  if (!email?.trim()) return;
-  const e = email.trim().toLowerCase();
-
-  const client = await appPool.connect();
-  try {
-    await client.query('SET search_path TO public');
-    const r = await client.query<{ pwd: string | null; ev: boolean | null }>(
-      'SELECT encrypted_password AS pwd, email_verified AS ev FROM deelnemers WHERE login = $1 LIMIT 1',
-      [e]
-    );
-    const row = r.rows?.[0];
-    if (!row || row.ev !== true) return;
-    const hasLegacyHash = !!(row.pwd && String(row.pwd).trim() !== '');
-    if (hasLegacyHash) return;
-  } finally {
-    client.release();
-  }
-
+export async function requestPasswordResetSilently(email: string): Promise<string> {
+  const normalized = email.trim().toLowerCase();
   const siteOrigin = new URL(getBetterAuthApiBase()).origin;
 
-  await auth.api.requestPasswordReset({
-    body: {
-      email: e,
-      redirectTo: `${siteOrigin}/reset-password`,
-    },
-    headers: syntheticSignUpTrustHeaders(),
+  return silentInviteResetAls.run({ url: null }, async () => {
+    const headers = syntheticSignUpTrustHeaders();
+    headers.set(SILENT_INVITE_RESET_HEADER, '1');
+
+    await auth.api.requestPasswordReset({
+      body: {
+        email: normalized,
+        redirectTo: `${siteOrigin}/reset-password`,
+      },
+      headers,
+    });
+
+    const url = silentInviteResetAls.getStore()?.url ?? null;
+    if (!url) {
+      throw new Error('silent password reset: URL not captured');
+    }
+    const token = parseTokenFromBetterAuthResetUrl(url);
+    if (!token) {
+      throw new Error('silent password reset: could not parse token from URL');
+    }
+    return token;
   });
 }

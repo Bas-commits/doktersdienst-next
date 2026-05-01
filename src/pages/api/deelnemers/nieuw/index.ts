@@ -153,7 +153,7 @@ export default async function handler(
   let verificationUrl: string;
   try {
     const token = await signJWT({ email: emailRaw }, authSecret, EMAIL_VERIFICATION_TTL_SEC);
-    verificationUrl = `${authApiBase}/verify-email?token=${encodeURIComponent(token)}&callbackURL=${encodeURIComponent('/login')}`;
+    verificationUrl = `${authApiBase}/verify-email?token=${encodeURIComponent(token)}&callbackURL=${encodeURIComponent('/api/invite/na-verificatie')}`;
   } catch (err) {
     console.error('deelnemer-nieuw: sign verification JWT failed', err);
     return res.status(500).json({
@@ -258,7 +258,7 @@ export default async function handler(
     ok: true,
     iddeelnemer: newUserId,
     message:
-      'Deelnemer toegevoegd. Er is een e‑mail gestuurd om het adres te bevestigen. Daarna wordt automatisch nog een bericht gestuurd om een wachtwoord in te stellen.',
+      'Deelnemer toegevoegd. Er is een e‑mail gestuurd met een link om het adres te bevestigen; daarna wordt direct gevraagd een sterk wachtwoord te kiezen.',
   });
 }
 

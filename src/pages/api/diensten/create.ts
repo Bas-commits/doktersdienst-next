@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, lt, gt, sql } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
+import { query } from '@/lib/db';
 
 type Data = { success: true; message: string } | { error: string };
 
@@ -155,26 +156,35 @@ export default async function handler(
       return res.status(400).json({ error: 'Geen shifts gevonden in het opgegeven datumbereik.' });
     }
 
-    // Check for overlapping type=1 slots across entire series
-    for (const slot of slots) {
-      const conflicts = await db
-        .select({ id: dienstenTable.id })
-        .from(dienstenTable)
-        .where(
-          and(
-            eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
-            eq(dienstenTable.type, 1),
-            lt(dienstenTable.van, slot.tot),
-            gt(dienstenTable.tot, slot.van)
-          )
+    // Check the whole recurrence range in one round-trip instead of querying per slot.
+    const slotParams = slots.flatMap((slot) => [slot.van, slot.tot]);
+    const valuesSql = slots
+      .map((_, index) => `($${index * 2 + 2}::bigint, $${index * 2 + 3}::bigint)`)
+      .join(', ');
+    const conflicts = await query<{ conflict_van: string }>(
+      `
+        with slots(van, tot) as (values ${valuesSql})
+        select slots.van::text as conflict_van
+        from slots
+        where exists (
+          select 1
+          from diensten
+          where idwaarneemgroep = $1
+            and type = 1
+            and van < slots.tot
+            and tot > slots.van
         )
-        .limit(1);
+        order by slots.van
+        limit 1
+      `,
+      [idwaarneemgroep, ...slotParams]
+    );
 
-      if (conflicts.length > 0) {
-        return res.status(409).json({
-          error: `Er is al een overlappende shift voor ${new Date(slot.van * 1000).toLocaleDateString('nl-NL')}.`,
-        });
-      }
+    if ((conflicts.rowCount ?? 0) > 0) {
+      const conflictVan = Number(conflicts.rows[0]?.conflict_van);
+      return res.status(409).json({
+        error: `Er is al een overlappende shift voor ${new Date(conflictVan * 1000).toLocaleDateString('nl-NL')}.`,
+      });
     }
 
     // Insert dienstherhalen record

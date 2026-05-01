@@ -1,7 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { asc, eq, max } from 'drizzle-orm';
+import { asc, eq, max, or } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser } from '@/lib/api-auth';
+import {
+  normalizeTelnrRingaandKey,
+  TELNR_RINGAAND_REGEX,
+} from '@/lib/waarneemgroep-telnringaand';
 
 const { waarneemgroepen, specialismen, regios, instellingen } = schema;
 
@@ -15,7 +19,7 @@ export type WaarneemgroepTableItem = {
   naam: string;
   specialisme: string | null;
   regio: string | null;
-  telnringaand: string | null;
+  telnronzecentrale: string | null;
   idfacturering: number | null;
 };
 
@@ -27,8 +31,8 @@ export type WaarneemgroepToevoegenOptions = {
   waarneemgroepenTable: WaarneemgroepTableItem[];
 };
 
-/** Telefoonnummer: 08800264XX of 318800264XX (laatste twee cijfers variabel) */
-export const TELNR_REGEX = /^(08800264[0-9]{2}|318800264[0-9]{2})$/;
+/** @deprecated use TELNR_RINGAAND_REGEX from @/lib/waarneemgroep-telnringaand */
+export const TELNR_REGEX = TELNR_RINGAAND_REGEX;
 
 export default async function handler(
   req: NextApiRequest,
@@ -66,7 +70,7 @@ export default async function handler(
           .select({
             id: waarneemgroepen.id,
             naam: waarneemgroepen.naam,
-            telnringaand: waarneemgroepen.telnringaand,
+            telnronzecentrale: waarneemgroepen.telnronzecentrale,
             idfacturering: waarneemgroepen.idfacturering,
             specialismeOmschrijving: specialismen.omschrijving,
             regioNaam: regios.naam,
@@ -96,7 +100,7 @@ export default async function handler(
           naam: r.naam!,
           specialisme: r.specialismeOmschrijving ?? null,
           regio: r.regioNaam ?? null,
-          telnringaand: r.telnringaand ?? null,
+          telnronzecentrale: r.telnronzecentrale ?? null,
           idfacturering: r.idfacturering ?? null,
         })),
       });
@@ -121,26 +125,38 @@ export default async function handler(
       return res.status(400).json({ error: 'Naam mag maximaal 50 tekens zijn.' });
     }
 
-    const telnringaand =
-      typeof body.telnringaand === 'string' ? body.telnringaand.trim() || null : null;
+    const telnronzecentrale =
+      typeof body.telnronzecentrale === 'string' ? body.telnronzecentrale.trim() || null : null;
 
     // Validate phone format
-    if (telnringaand && !TELNR_REGEX.test(telnringaand)) {
+    if (telnronzecentrale && !TELNR_RINGAAND_REGEX.test(telnronzecentrale)) {
       return res.status(400).json({
         error: 'Het telefoonnummer moet het formaat 08800264XX of 318800264XX hebben.',
       });
     }
 
-    // Check phone uniqueness
-    if (telnringaand) {
+    // Check phone uniqueness (088… and 3188… are the same line)
+    if (telnronzecentrale) {
+      const canonicalKey = normalizeTelnrRingaandKey(telnronzecentrale);
+      if (!canonicalKey) {
+        return res.status(400).json({
+          error: 'Het telefoonnummer moet het formaat 08800264XX of 318800264XX hebben.',
+        });
+      }
+      const nationalForm = `0${canonicalKey.slice(2)}`;
       const existing = await db
         .select({ id: waarneemgroepen.id })
         .from(waarneemgroepen)
-        .where(eq(waarneemgroepen.telnringaand, telnringaand))
+        .where(
+          or(
+            eq(waarneemgroepen.telnronzecentrale, canonicalKey),
+            eq(waarneemgroepen.telnronzecentrale, nationalForm)
+          )
+        )
         .limit(1);
       if (existing.length > 0) {
         return res.status(400).json({
-          error: `Telefoonnummer ${telnringaand} is al in gebruik door een andere waarneemgroep.`,
+          error: `Telefoonnummer ${telnronzecentrale} is al in gebruik door een andere waarneemgroep.`,
         });
       }
     }
@@ -163,10 +179,10 @@ export default async function handler(
       idregio: num(body.idregio),
       idinstelling: num(body.idinstelling),
       regiobeschrijving: str(body.regiobeschrijving, 1024),
-      telnringaand,
+      telnringaand: str(body.telnringaand, 50),
       telnrnietopgenomen: str(body.telnrnietopgenomen, 50),
       idinvoegendewaarneemgroep: num(body.idinvoegendewaarneemgroep),
-      telnronzecentrale: str(body.telnronzecentrale, 50),
+      telnronzecentrale,
       telnrconference: str(body.telnrconference, 50),
       afgemeld: false,
       smsdienstbegin: !!body.smsdienstbegin,

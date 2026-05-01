@@ -19,7 +19,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "email:dev": "node -r ./email/load-dotenv.cjs ./node_modules/react-email/dist/cli/index.mjs dev --dir email --port 3010",
-    "email:export": "node -r ./email/load-dotenv.cjs ./node_modules/react-email/dist/cli/index.mjs export --dir email"
+    "email:export": "node -r ./email/load-dotenv.cjs ./node_modules/react-email/dist/cli/index.mjs export --dir email",
+    "tel-server-sync": "tsx src/tel-server-sync/generate-telrecords.ts",
+    "tel-server-sync:send": "tsx src/tel-server-sync/send-telnrs.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1032.0",
@@ -69,6 +71,7 @@
     "jsdom": "^29.0.1",
     "pino-pretty": "^13.1.3",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "5.9.3",
     "vitest": "^4.1.2"
   },

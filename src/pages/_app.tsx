@@ -22,6 +22,7 @@ const AUTHENTICATED_PATHS = [
   "/vakanties",
   "/deelnemer-toevoegen",
   "/bestaande-toevoegen",
+  "/deelnemers-verwijderen",
 ];
 
 function useIsAuthenticatedRoute(): boolean {
@@ -33,7 +34,7 @@ export default function App({ Component, pageProps }: AppProps) {
   const useAuthenticatedLayout = useIsAuthenticatedRoute();
 
   useEffect(() => {
-    fetch("/api/health").catch(() => {});
+    // fetch("/api/health").catch(() => {});
   }, []);
 
   if (useAuthenticatedLayout) {

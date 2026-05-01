@@ -1,3 +1,4 @@
+import { APIError, BASE_ERROR_CODES } from '@better-auth/core/error';
 import { betterAuth } from 'better-auth';
 import { createAuthMiddleware } from 'better-auth/api';
 import { magicLink } from 'better-auth/plugins';
@@ -5,7 +6,11 @@ import { Pool } from 'pg';
 import { legacyMD5Hash, legacyMD5Verify } from '@/lib/legacy-password';
 import { pool as appPool } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import { sendMagicLinkEmailViaResend, sendPasswordResetEmailViaResend } from '@/lib/resend-email';
+import {
+  sendMagicLinkEmailViaResend,
+  sendPasswordResetEmailViaResend,
+  sendVerificationEmailViaResend,
+} from '@/lib/resend-email';
 
 const log = logger.child({ module: 'auth' });
 
@@ -35,23 +40,26 @@ async function sendResetPasswordEmail(params: {
   token: string;
 }) {
   const { user, url } = params;
-  await sendPasswordResetEmailViaResend({
+  void sendPasswordResetEmailViaResend({
     to: user.email,
     url,
     userName: user.name,
-  });
+  }).catch((err) => log.error({ err, to: user.email }, 'password reset email failed'));
 }
 
-async function sendVerificationEmail({
-  user,
-  url,
-  token,
-}: {
+async function sendVerificationEmail(arg: {
   user: { email: string; name: string | null };
   url: string;
   token: string;
 }) {
-  log.info({ to: user.email, url, tokenLen: token?.length }, 'verification email (optional flow; not sent via Resend)');
+  const { user, url } = arg;
+  void sendVerificationEmailViaResend({
+    to: user.email,
+    url,
+    userName: user.name,
+  }).catch((err) =>
+    log.error({ err, to: user.email }, 'verification email failed')
+  );
 }
 
 async function syncDeelnemerPasswordFromAccount(userId: string): Promise<void> {
@@ -99,7 +107,9 @@ export const auth = betterAuth({
     magicLink({
       disableSignUp: true,
       sendMagicLink: async ({ email, url }) => {
-        await sendMagicLinkEmailViaResend({ to: email, url });
+        void sendMagicLinkEmailViaResend({ to: email, url }).catch((err) =>
+          log.error({ err, to: email }, 'magic link email failed')
+        );
       },
     }),
   ],
@@ -108,6 +118,9 @@ export const auth = betterAuth({
     fields: {
       email: 'login',
       password: 'encrypted_password',
+      emailVerified: 'email_verified',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
     } as Record<string, string>,
     additionalFields: {
       role: {
@@ -156,8 +169,12 @@ export const auth = betterAuth({
     modelName: 'auth_verification',
   },
   emailVerification: {
-    // Optional email verification (can be triggered manually)
+    sendOnSignUp: true,
     sendVerificationEmail: sendVerificationEmail,
+    afterEmailVerification: async (updatedUser) => {
+      const mod = await import('@/lib/auth-invite-followup');
+      await mod.maybeRequestPasswordSetupAfterVerification(updatedUser?.email ?? null);
+    },
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
@@ -169,21 +186,56 @@ export const auth = betterAuth({
         try {
           await client.query('SET search_path TO public');
           // Debug: check which DB we're connected to
-          const dbCheck = await client.query('SELECT current_database(), current_schema(), inet_server_addr(), inet_server_port()');
+          const dbCheck = await client.query(
+            'SELECT current_database(), current_schema(), inet_server_addr(), inet_server_port()'
+          );
           log.info({ db: dbCheck.rows[0] }, 'hook connected to database');
           const countRes = await client.query('SELECT COUNT(*) as cnt FROM deelnemers');
           log.info({ deelnemersCount: countRes.rows[0]?.cnt }, 'total deelnemers in table');
 
-          const deelnemerRes = await client.query<{ id: number; encrypted_password: string | null; name: string | null; email_verified: boolean | null }>(
-            'SELECT id, encrypted_password, name, email_verified FROM deelnemers WHERE login = $1 LIMIT 1',
-            [ctx.body.email]
+          const emailNorm = String(ctx.body.email).trim().toLowerCase();
+          const deelnemerRes = await client.query<{
+            id: number;
+            encrypted_password: string | null;
+            name: string | null;
+            email_verified: boolean | null;
+          }>(
+            'SELECT id, encrypted_password, name, email_verified FROM deelnemers WHERE LOWER(TRIM(login)) = $1 LIMIT 1',
+            [emailNorm]
           );
-          log.info({ rowCount: deelnemerRes.rowCount, rows: deelnemerRes.rows }, 'raw deelnemers query result');
-          const row = deelnemerRes.rows?.[0];
           log.info(
-            { email: ctx.body.email, found: !!row, id: row?.id, hasPassword: !!row?.encrypted_password, name: row?.name, emailVerified: row?.email_verified },
+            { rowCount: deelnemerRes.rowCount, rows: deelnemerRes.rows },
+            'raw deelnemers query result'
+          );
+          const row = deelnemerRes.rows?.[0];
+          const hasPwdHash = !!(row?.encrypted_password && String(row.encrypted_password).trim() !== '');
+          log.info(
+            {
+              email: ctx.body.email,
+              found: !!row,
+              id: row?.id,
+              hasPassword: hasPwdHash,
+              name: row?.name,
+              emailVerified: row?.email_verified,
+            },
             'deelnemers lookup result'
           );
+
+          if (row?.id != null && row.email_verified !== true) {
+            throw APIError.from('FORBIDDEN', {
+              message:
+                'Dit e-mailadres is nog niet bevestigd. Open de link in de uitnodiging om uw account te verifiëren.',
+              code: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED.code,
+            });
+          }
+          if (row?.id != null && row.email_verified === true && !hasPwdHash) {
+            throw APIError.from('FORBIDDEN', {
+              message:
+                'U heeft nog geen wachtwoord ingesteld. Na verificatie ontvangt u een tweede mail met een wachtwoordlink, of kies hieronder voor “wachtwoord vergeten”.',
+              code: 'PASSWORD_NOT_SET',
+            });
+          }
+
           if (row?.id != null && row?.encrypted_password) {
             const userId = String(row.id);
             const accountId = `credential-${userId}`;

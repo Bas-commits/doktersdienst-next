@@ -6,6 +6,8 @@ import { db, schema } from '@/db';
 const { deelnemers, waarneemgroepdeelnemers } = schema;
 
 export const GROEP_ADMINISTRATOR = 5;
+/** Default participant role (“Deelnemer” in UI). */
+export const GROEP_DEELNEMER = 1;
 export const GROEP_SECRETARIS = 2;
 
 /** Convert Next.js request headers to Headers for Better Auth */

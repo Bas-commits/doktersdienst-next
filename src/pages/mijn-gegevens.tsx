@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PasswordChangeModal } from '@/components/mijn-gegevens/PasswordChangeModal';
 import type { MijnGegevensProfile, MijnGegevensLookup, MijnGegevensUpdateBody, TelnrSlot } from '@/types/mijn-gegevens';
+import { ROL_LABELS } from '@/lib/rol-labels';
 
 const TELNR_SPECIAL_TYPES = [
   { id: 1001, naam: 'Mobiel' },
@@ -27,13 +28,6 @@ const DEFAULT_SLOT: TelnrSlot = {
   idLocatie: null,
   locatieSuffix: 'binnen',
   idomschrtelnr: 2,
-};
-
-const ROL_LABELS: Record<number, string> = {
-  1: 'Deelnemer',
-  2: 'Secretaris',
-  3: 'Receptionist',
-  4: 'Kijker',
 };
 
 const ROL_BADGE_CLASSES: Record<number, string> = {

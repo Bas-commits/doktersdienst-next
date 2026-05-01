@@ -1,5 +1,10 @@
 import { Resend } from 'resend';
 import { logger } from '@/lib/logger';
+import {
+  renderMagicLinkBodies,
+  renderPasswordResetBodies,
+  renderVerificationBodies,
+} from '@/lib/render-auth-email';
 
 const log = logger.child({ module: 'resend-email' });
 
@@ -17,103 +22,217 @@ function getFromAddress(): string | null {
   return from || null;
 }
 
-function standardLinkEmailHtml(params: {
-  title: string;
-  intro: string;
-  actionLabel: string;
-  actionUrl: string;
-  footer: string;
-}): string {
-  const { title, intro, actionLabel, actionUrl, footer } = params;
-  return `<!DOCTYPE html>
-<html lang="nl">
-<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width" /></head>
-<body style="margin:0;background:#f6f6f6;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:8px;padding:32px 28px;border:1px solid #e5e5e5;">
-          <tr><td style="font-size:20px;font-weight:600;color:#111;">${title}</td></tr>
-          <tr><td style="height:16px;"></td></tr>
-          <tr><td style="font-size:15px;line-height:1.5;color:#333;">${intro}</td></tr>
-          <tr><td style="height:24px;"></td></tr>
-          <tr><td align="center">
-            <a href="${actionUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;font-size:15px;font-weight:600;">${actionLabel}</a>
-          </td></tr>
-          <tr><td style="height:20px;"></td></tr>
-          <tr><td style="font-size:13px;line-height:1.5;color:#666;">${footer}</td></tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+async function sendRenderedEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  devLogPayload: Record<string, unknown>;
+  warnMessage: string;
+  errorLabel: string;
+}): Promise<void> {
+  const resend = getResend();
+  const from = getFromAddress();
+
+  if (!resend || !from) {
+    log.warn(
+      {
+        ...params.devLogPayload,
+        hasKey: !!resend,
+        hasFrom: !!from,
+      },
+      params.warnMessage
+    );
+    console.log('[auth email]', params.devLogPayload);
+    return;
+  }
+
+  const { error } = await resend.emails.send({
+    from,
+    to: params.to,
+    subject: params.subject,
+    html: params.html,
+    text: params.text,
+  });
+  if (error) {
+    log.error({ err: error, to: params.to }, params.errorLabel);
+    throw new Error(error.message);
+  }
+}
+
+/**
+ * Send via Resend and require API proof of enqueue (numeric/string id).
+ * Throws if Resend is not configured — callers that must avoid DB writes when mail fails should use this.
+ */
+async function sendRenderedEmailRequireResendDelivery(params: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  devLogPayload: Record<string, unknown>;
+  errorLabel: string;
+}): Promise<{ resendEmailId: string }> {
+  const resend = getResend();
+  const from = getFromAddress();
+  if (!resend || !from) {
+    log.error({ ...params.devLogPayload, hasKey: !!resend, hasFrom: !!from }, 'Resend niet geconfigureerd');
+    throw new Error(
+      'E-mail kan niet worden verstuurd: stel RESEND_API_KEY en RESEND_FROM in voor productie gebruik.'
+    );
+  }
+
+  const { data, error } = await resend.emails.send({
+    from,
+    to: params.to,
+    subject: params.subject,
+    html: params.html,
+    text: params.text,
+  });
+
+  if (error) {
+    log.error({ err: error, to: params.to }, params.errorLabel);
+    throw new Error(error.message);
+  }
+  const id = data?.id;
+  if (id == null || String(id).trim() === '') {
+    log.error({ data, to: params.to }, `${params.errorLabel}: missing Resend message id`);
+    throw new Error('E-mail versturen lukte niet: geen bevestiging van Resend (ontbrekend bericht‑id).');
+  }
+  return { resendEmailId: String(id) };
 }
 
 export async function sendPasswordResetEmailViaResend(params: {
   to: string;
   url: string;
   userName: string | null;
+  /** `'setup'`: eerste wachtwoord; default forgot-flow */
+  purpose?: 'reset' | 'setup';
 }): Promise<void> {
-  const { to, url, userName } = params;
-  const resend = getResend();
-  const from = getFromAddress();
-  const greeting = userName ? `Hallo ${userName},` : 'Hallo,';
-  const subject = 'Wachtwoord resetten — Doktersdienst';
-  const html = standardLinkEmailHtml({
-    title: 'Wachtwoord resetten',
-    intro: `${greeting}<br/><br/>Klik op de knop hieronder om een nieuw wachtwoord in te stellen. Deze link is beperkt geldig.`,
-    actionLabel: 'Nieuw wachtwoord instellen',
-    actionUrl: url,
-    footer: `Als de knop niet werkt, kopieer en plak deze link in je browser:<br/><span style="word-break:break-all;color:#111;">${url}</span>`,
+  const purpose = params.purpose ?? 'reset';
+  const { html, text } = await renderPasswordResetBodies({
+    url: params.url,
+    userName: params.userName,
+    purpose,
   });
-  const text = `${greeting}\n\nStel je wachtwoord opnieuw in via deze link (eenmalig, beperkt geldig):\n${url}\n`;
+  const subject =
+    purpose === 'setup'
+      ? 'Welkom — stel je wachtwoord in — De Doktersdienst'
+      : 'Wachtwoord resetten — De Doktersdienst';
 
-  if (!resend || !from) {
-    log.warn(
-      { to, hasKey: !!resend, hasFrom: !!from },
-      'Resend niet geconfigureerd (RESEND_API_KEY / RESEND_FROM); reset-mail alleen gelogd'
-    );
-    console.log('[auth email] Password reset (dev)', { to, subject, url });
-    return;
-  }
+  await sendRenderedEmail({
+    to: params.to,
+    subject,
+    html,
+    text,
+    devLogPayload: { to: params.to, subject, url: params.url, purpose },
+    warnMessage:
+      'Resend niet geconfigureerd (RESEND_API_KEY / RESEND_FROM); reset/setup-mail alleen gelogd',
+    errorLabel:
+      purpose === 'setup'
+        ? 'Resend password setup mail failed'
+        : 'Resend password reset failed',
+  });
+}
 
-  const { error } = await resend.emails.send({ from, to, subject, html, text });
-  if (error) {
-    log.error({ err: error, to }, 'Resend password reset failed');
-    throw new Error(error.message);
-  }
+export async function sendPasswordSetupEmailViaResend(params: {
+  to: string;
+  url: string;
+  userName: string | null;
+}): Promise<void> {
+  return sendPasswordResetEmailViaResend({ ...params, purpose: 'setup' });
 }
 
 export async function sendMagicLinkEmailViaResend(params: {
   to: string;
   url: string;
 }): Promise<void> {
-  const { to, url } = params;
-  const resend = getResend();
-  const from = getFromAddress();
-  const subject = 'Inloggen — Doktersdienst';
-  const html = standardLinkEmailHtml({
-    title: 'Inloggen',
-    intro: 'Klik op de knop hieronder om in te loggen op Doktersdienst. Deze link is beperkt geldig en kan maar één keer worden gebruikt.',
-    actionLabel: 'Inloggen',
-    actionUrl: url,
-    footer: `Als de knop niet werkt, kopieer en plak deze link in je browser:<br/><span style="word-break:break-all;color:#111;">${url}</span>`,
+  const { html, text } = await renderMagicLinkBodies({ url: params.url });
+  const subject = 'Inloggen — De Doktersdienst';
+
+  await sendRenderedEmail({
+    to: params.to,
+    subject,
+    html,
+    text,
+    devLogPayload: { to: params.to, subject, url: params.url },
+    warnMessage:
+      'Resend niet geconfigureerd; magic-link-mail alleen gelogd',
+    errorLabel: 'Resend magic link failed',
   });
-  const text = `Log in op Doktersdienst via deze link (eenmalig, beperkt geldig):\n${url}\n`;
+}
 
-  if (!resend || !from) {
-    log.warn(
-      { to, hasKey: !!resend, hasFrom: !!from },
-      'Resend niet geconfigureerd; magic-link-mail alleen gelogd'
-    );
-    console.log('[auth email] Magic link (dev)', { to, subject, url });
-    return;
-  }
+export async function sendVerificationEmailViaResend(params: {
+  to: string;
+  url: string;
+  userName: string | null;
+}): Promise<void> {
+  const { html, text } = await renderVerificationBodies({
+    url: params.url,
+    variant: 'signup',
+    userName: params.userName,
+  });
+  const subject = 'Bevestig je e-mailadres — De Doktersdienst';
 
-  const { error } = await resend.emails.send({ from, to, subject, html, text });
-  if (error) {
-    log.error({ err: error, to }, 'Resend magic link failed');
-    throw new Error(error.message);
-  }
+  await sendRenderedEmail({
+    to: params.to,
+    subject,
+    html,
+    text,
+    devLogPayload: { to: params.to, subject, url: params.url, flow: 'signup-verify' },
+    warnMessage:
+      'Resend niet geconfigureerd; verificatiemail alleen gelogd',
+    errorLabel: 'Resend verification email failed',
+  });
+}
+
+/** Same template as signup verify, but refuses to return until Resend returns a message id (no silent dev skip). */
+export async function sendVerificationEmailViaResendWithProof(params: {
+  to: string;
+  url: string;
+  userName: string | null;
+}): Promise<{ resendEmailId: string }> {
+  const { html, text } = await renderVerificationBodies({
+    url: params.url,
+    variant: 'signup',
+    userName: params.userName,
+  });
+  const subject = 'Bevestig je e-mailadres — De Doktersdienst';
+
+  return sendRenderedEmailRequireResendDelivery({
+    to: params.to,
+    subject,
+    html,
+    text,
+    devLogPayload: { to: params.to, subject, url: params.url, flow: 'signup-verify-strict' },
+    errorLabel: 'Resend verification email failed',
+  });
+}
+
+export async function sendInvitationVerifyEmailViaResend(params: {
+  to: string;
+  url: string;
+  invitedByName?: string | null;
+}): Promise<void> {
+  const { html, text } = await renderVerificationBodies({
+    url: params.url,
+    variant: 'invite',
+    invitedByName: params.invitedByName,
+  });
+  const subject = 'Bevestig je uitnodiging — De Doktersdienst';
+
+  await sendRenderedEmail({
+    to: params.to,
+    subject,
+    html,
+    text,
+    devLogPayload: {
+      to: params.to,
+      subject,
+      url: params.url,
+      flow: 'invite-verify',
+    },
+    warnMessage:
+      'Resend niet geconfigureerd; uitnodigingsmail alleen gelogd',
+    errorLabel: 'Resend invitation verify email failed',
+  });
 }

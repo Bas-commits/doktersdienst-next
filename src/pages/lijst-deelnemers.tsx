@@ -6,13 +6,7 @@ import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { DeelnemerWithGroepen } from './api/deelnemers/index';
-
-const ROL_LABELS: Record<number, string> = {
-  1: 'Deelnemer',
-  2: 'Secretaris',
-  3: 'Receptionist',
-  4: 'Kijker',
-};
+import { ROL_LABELS } from '@/lib/rol-labels';
 
 function formatNaam(d: DeelnemerWithGroepen): string {
   return [d.voornaam, d.voorletterstussenvoegsel, d.achternaam]

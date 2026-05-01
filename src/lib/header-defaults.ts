@@ -18,6 +18,7 @@ export const DEFAULT_ROUTES: Record<string, string> = {
   deelnemer_toevoegen: '/deelnemer-toevoegen',
   bestaande_toevoegen: '/bestaande-toevoegen',
   lijst_deelnemers: '/lijst-deelnemers',
+  deelnemers_verwijderen: '/deelnemers-verwijderen',
   rollen_afmelden: '/rollen-afmelden',
   shift_toevoegen: '/shift-toevoegen',
   shift_toevoegen_jsx: '/shift-toevoegen',

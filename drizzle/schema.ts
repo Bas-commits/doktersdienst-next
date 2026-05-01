@@ -557,7 +557,6 @@ export const deelnemers = pgTable("deelnemers", {
 	huisadrfax: varchar({ length: 50 }),
 	huisemail: varchar({ length: 50 }),
 	login: varchar({ length: 50 }),
-	password1: varchar({ length: 50 }),
 	smscode: varchar({ length: 10 }),
 	smstime: integer(),
 	ip: varchar({ length: 50 }),

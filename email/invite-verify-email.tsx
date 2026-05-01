@@ -7,12 +7,17 @@ import {
   paragraphStyle,
 } from './components/doktersdienst-shell';
 
+export type VerifyEmailVariant = 'invite' | 'signup';
+
 export type InviteVerifyEmailProps = {
-  /** Link om het e-mailadres te bevestigen en de uitnodiging af te ronden. */
   verifyUrl?: string;
   siteUrl?: string;
   logoSrc?: string;
-  /** Optioneel: naam van degene die uitnodigt. */
+  /** `'invite'`: uitnodiging; `'signup'`: na registratie via Better Auth */
+  variant?: VerifyEmailVariant;
+  /** Alleen gebruikt bij `signup`: naam uit registratieprofiel */
+  accountName?: string | null;
+  /** Alleen voor `variant: 'invite'`: naam van degene die uitnodigt. */
   invitedByName?: string | null;
 };
 
@@ -23,12 +28,44 @@ export default function InviteVerifyEmail({
   verifyUrl = DEMO_VERIFY,
   siteUrl = '',
   logoSrc,
+  variant = 'invite',
+  accountName,
   invitedByName,
 }: InviteVerifyEmailProps = {}) {
   const inviter = invitedByName?.trim();
-  const inviterLine = inviter
+  const inviteLine = inviter
     ? `${inviter} heeft je uitgenodigd om mee te doen met De Doktersdienst.`
     : 'Je bent uitgenodigd om mee te doen met De Doktersdienst.';
+
+  if (variant === 'signup') {
+    const name = accountName?.trim();
+    const greetingLead = name ? `Hallo ${name},` : 'Hallo,';
+    return (
+      <DoktersdienstShell
+        previewText="Bevestig je e-mailadres voor De Doktersdienst"
+        siteUrl={siteUrl}
+        logoSrc={logoSrc}
+      >
+        <Heading as="h1" style={headingStyle}>
+          Bevestig je e-mailadres
+        </Heading>
+        <Text style={paragraphStyle}>{greetingLead}</Text>
+        <Text style={paragraphStyle}>
+          Bedankt voor je registratie bij De Doktersdienst. Voordat je verder
+          gaat, vragen we je om te bevestigen dat dit e-mailadres van jou is.
+        </Text>
+        <Text style={paragraphStyle}>
+          Gebruik de knop hieronder om je e-mailadres te bevestigen. De link is
+          maar korte tijd geldig. Heb je geen account aangemaakt? Dan kun je
+          deze e-mail negeren.
+        </Text>
+
+        <PrimaryButton href={verifyUrl}>E-mailadres bevestigen</PrimaryButton>
+
+        <LinkFallback actionUrl={verifyUrl} />
+      </DoktersdienstShell>
+    );
+  }
 
   return (
     <DoktersdienstShell
@@ -40,11 +77,11 @@ export default function InviteVerifyEmail({
         Je uitnodiging voor De Doktersdienst
       </Heading>
       <Text style={paragraphStyle}>Hallo,</Text>
-      <Text style={paragraphStyle}>{inviterLine}</Text>
+      <Text style={paragraphStyle}>{inviteLine}</Text>
       <Text style={paragraphStyle}>
-        Om je account te activeren en verder te gaan, willen we graag weten
-        dat dit e-mailadres van jou is. Bevestig daarom je e-mailadres via de
-        knop hieronder.
+        Om je account te activeren en verder te gaan, willen we graag weten dat
+        dit e-mailadres van jou is. Bevestig daarom je e-mailadres via de knop
+        hieronder.
       </Text>
       <Text style={paragraphStyle}>
         Zodra je je e-mail hebt bevestigd, kun je de volgende stappen in het

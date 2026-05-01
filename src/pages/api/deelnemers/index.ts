@@ -36,7 +36,7 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
  *
  * Returns participants with their waarneemgroep memberships.
  * Admins (idgroep = 5) see all participants; non-admins see only participants in their own groups.
- * Optional query param: ?idwaarneemgroep=N (admin-only filter)
+ * Optional query param: ?idwaarneemgroep=N — admins filter vrij; niet-admins alleen eigen lidmaatschappen.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -110,12 +110,20 @@ export default async function handler(
         return res.status(200).json({ deelnemers: [], isAdmin });
       }
 
+      let wgIdsScope = myWgIds;
+      if (filterWgId !== undefined && !Number.isNaN(filterWgId)) {
+        if (!myWgIds.includes(filterWgId)) {
+          return res.status(403).json({ error: 'Geen toegang tot deze waarneemgroep.' });
+        }
+        wgIdsScope = [filterWgId];
+      }
+
       const colleagues = await db
         .select({ iddeelnemer: waarneemgroepdeelnemers.iddeelnemer })
         .from(waarneemgroepdeelnemers)
         .where(
           and(
-            inArray(waarneemgroepdeelnemers.idwaarneemgroep, myWgIds),
+            inArray(waarneemgroepdeelnemers.idwaarneemgroep, wgIdsScope),
             eq(waarneemgroepdeelnemers.aangemeld, true)
           )
         );

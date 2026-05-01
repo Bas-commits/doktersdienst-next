@@ -7,12 +7,18 @@ import {
   paragraphStyle,
 } from './components/doktersdienst-shell';
 
+export type ResetPasswordPurpose = 'reset' | 'setup';
+
 export type ResetPasswordEmailProps = {
-  /** Link om een nieuw wachtwoord in te stellen. */
   resetUrl?: string;
   siteUrl?: string;
   logoSrc?: string;
   userName?: string | null;
+  /**
+   * `'reset'`: gebruiker vroeg reset aan; `'setup'`: eerste keer wachtwoord
+   * (bijv. na account door beheerder).
+   */
+  purpose?: ResetPasswordPurpose;
 };
 
 const DEMO_RESET =
@@ -23,9 +29,38 @@ export default function ResetPasswordEmail({
   siteUrl = '',
   logoSrc,
   userName,
+  purpose = 'reset',
 }: ResetPasswordEmailProps = {}) {
   const name = userName?.trim();
   const greeting = name ? `Hallo ${name},` : 'Hallo,';
+
+  if (purpose === 'setup') {
+    return (
+      <DoktersdienstShell
+        previewText="Stel je wachtwoord in voor De Doktersdienst"
+        siteUrl={siteUrl}
+        logoSrc={logoSrc}
+      >
+        <Heading as="h1" style={headingStyle}>
+          Welkom bij De Doktersdienst
+        </Heading>
+        <Text style={paragraphStyle}>{greeting}</Text>
+        <Text style={paragraphStyle}>
+          Er is een account voor je aangemaakt in De Doktersdienst. Om veilig
+          in te loggen, stel je nu een wachtwoord in via de knop hieronder.
+        </Text>
+        <Text style={paragraphStyle}>
+          Deze link is maar korte tijd geldig en is persoonlijk. Deel hem niet
+          met anderen. Herken je deze mail niet? Neem dan contact op met je
+          beheerder.
+        </Text>
+
+        <PrimaryButton href={resetUrl}>Wachtwoord instellen</PrimaryButton>
+
+        <LinkFallback actionUrl={resetUrl} />
+      </DoktersdienstShell>
+    );
+  }
 
   return (
     <DoktersdienstShell

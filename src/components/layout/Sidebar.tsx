@@ -16,6 +16,7 @@ import {
   FolderPlus,
   Palmtree,
   Shield,
+  Trash2,
 } from 'lucide-react';
 import { FaCalendarPlus } from 'react-icons/fa';
 import { DEFAULT_ROUTES } from '@/lib/header-defaults';
@@ -97,6 +98,12 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
     label: 'Rollen & afmelden',
     href: DEFAULT_ROUTES.rollen_afmelden,
     icon: <Shield className="size-4 shrink-0" />,
+  },
+  {
+    id: 'deelnemers-verwijderen',
+    label: 'Deelnemers verwijderen',
+    href: DEFAULT_ROUTES.deelnemers_verwijderen,
+    icon: <Trash2 className="size-4 shrink-0" />,
   },
 ];
 

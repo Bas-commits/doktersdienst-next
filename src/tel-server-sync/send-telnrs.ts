@@ -1,12 +1,10 @@
 import { pathToFileURL } from 'node:url';
 import { logger } from '@/lib/logger';
 import { loadTelServerSyncConfig } from './config';
-import { loadTelServerSyncEnv } from './env';
 import { sendSms } from './http';
 import { zetDienstenVoorTelSrvKlaar, type WaarneemgroepForTelSync } from './diensten-voor-telsrv';
 
 export async function sendTelnrs(): Promise<void> {
-  loadTelServerSyncEnv();
   logger.info('SEND_TELNRS: init');
 
   const config = loadTelServerSyncConfig();

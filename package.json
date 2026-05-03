@@ -20,8 +20,8 @@
     "test:e2e:ui": "playwright test --ui",
     "email:dev": "node -r ./email/load-dotenv.cjs ./node_modules/react-email/dist/cli/index.mjs dev --dir email --port 3010",
     "email:export": "node -r ./email/load-dotenv.cjs ./node_modules/react-email/dist/cli/index.mjs export --dir email",
-    "tel-server-sync": "tsx src/tel-server-sync/generate-telrecords.ts",
-    "tel-server-sync:send": "tsx src/tel-server-sync/send-telnrs.ts"
+    "tel-server-sync": "node -r ./scripts/load-root-env.cjs ./node_modules/tsx/dist/cli.mjs src/tel-server-sync/generate-telrecords.ts",
+    "tel-server-sync:send": "node -r ./scripts/load-root-env.cjs ./node_modules/tsx/dist/cli.mjs src/tel-server-sync/send-telnrs.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1032.0",

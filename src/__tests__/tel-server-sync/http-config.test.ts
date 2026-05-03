@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadTelServerSyncConfig, parseTelSyncTargets } from '@/tel-server-sync/config';
+import { loadTelGenerationConfig, loadTelServerSyncConfig, parseTelSyncTargets } from '@/tel-server-sync/config';
 import { encodeFormData, parseServerCommResponse } from '@/tel-server-sync/http';
 
 describe('tel-server-sync config and HTTP helpers', () => {
@@ -26,6 +26,18 @@ describe('tel-server-sync config and HTTP helpers', () => {
     expect(config.telSync.syncOn).toBe(true);
     expect(config.telSync.tijdVooruit).toBe(604800);
     expect(config.sms.gatewayAuth).toBe('user:pass');
+  });
+
+  it('loads only tijdVooruit for PBX telrecord generation from env', () => {
+    expect(
+      loadTelGenerationConfig({
+        TEL_SYNC_TIJD_VOORUIT: '604800',
+      }),
+    ).toEqual({ tijdVooruit: 604800 });
+  });
+
+  it('requires TEL_SYNC_TIJD_VOORUIT for PBX telrecord generation', () => {
+    expect(() => loadTelGenerationConfig({})).toThrow(/TEL_SYNC_TIJD_VOORUIT/);
   });
 
   it('encodes and parses form responses with PHP-compatible plus decoding', () => {

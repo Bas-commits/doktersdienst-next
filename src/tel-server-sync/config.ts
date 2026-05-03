@@ -69,6 +69,13 @@ export function loadTelSyncConfig(env: Env = process.env): TelSyncConfig {
   };
 }
 
+/** Only tijd-window for PBX .txt generation; no TEL_SYNC_TARGETS / SMS needed. */
+export function loadTelGenerationConfig(env: Env = process.env): Pick<TelSyncConfig, 'tijdVooruit'> {
+  return {
+    tijdVooruit: parsePositiveInteger(requireEnv(env, 'TEL_SYNC_TIJD_VOORUIT'), 'TEL_SYNC_TIJD_VOORUIT'),
+  };
+}
+
 export function loadTelServerSyncConfig(env: Env = process.env): TelServerSyncConfig {
   return {
     telSync: loadTelSyncConfig(env),

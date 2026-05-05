@@ -131,6 +131,7 @@ export default function MijnGegevensPage() {
   const { data: session, isPending } = authClient.useSession();
   const [profile, setProfile] = useState<MijnGegevensProfile | null>(null);
   const [lookup, setLookup] = useState<MijnGegevensLookup | null>(null);
+  const [isDelegatedEdit, setIsDelegatedEdit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -167,12 +168,24 @@ export default function MijnGegevensPage() {
   const [fteDraftByWgId, setFteDraftByWgId] = useState<Partial<Record<number, string>>>({});
   const colorInputRef = useRef<HTMLInputElement | null>(null);
 
+  const delegatedDeelnemerId = useMemo(() => {
+    if (!router.isReady) return null;
+    const raw = router.query.deelnemerId;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (!value) return null;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
+  }, [router.isReady, router.query.deelnemerId]);
+
+  const apiPath = useMemo(() => {
+    if (delegatedDeelnemerId == null) return '/api/mijn-gegevens';
+    return `/api/mijn-gegevens?deelnemerId=${delegatedDeelnemerId}`;
+  }, [delegatedDeelnemerId]);
+
   useEffect(() => {
-    if (!session?.user) return;
+    if (!session?.user || !router.isReady) return;
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetch('/api/mijn-gegevens', { credentials: 'include' })
+    fetch(apiPath, { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
@@ -183,6 +196,7 @@ export default function MijnGegevensPage() {
           return;
         }
         const { profile: profileRes, lookup: lookupRes } = data;
+        setIsDelegatedEdit(data.isDelegatedEdit === true);
         setProfile(profileRes);
         setLookup(lookupRes);
         setLogin(profileRes.deelnemer.login ?? '');
@@ -245,7 +259,7 @@ export default function MijnGegevensPage() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user]);
+  }, [session?.user, router.isReady, delegatedDeelnemerId, apiPath]);
 
   const showEchtedeelnemer = useMemo(() => {
     const id = profile?.groep?.id;
@@ -255,7 +269,7 @@ export default function MijnGegevensPage() {
   const totalWaarneemFte = useMemo(() => {
     if (!profile?.waarneemgroepen?.length) return null;
     return profile.waarneemgroepen.reduce((sum, wg) => sum + (fteByWaarneemgroepId[wg.id] ?? 1), 0);
-  }, [profile?.waarneemgroepen, fteByWaarneemgroepId]);
+  }, [profile, fteByWaarneemgroepId]);
 
   const isDirty = useMemo(() => {
     if (!savedSnapshot) return false;
@@ -381,7 +395,7 @@ export default function MijnGegevensPage() {
   async function doSave(): Promise<boolean> {
     setIsSubmitting(true);
 
-    let fteCommitted = { ...fteByWaarneemgroepId };
+    const fteCommitted = { ...fteByWaarneemgroepId };
     for (const wg of profile?.waarneemgroepen ?? []) {
       const d = fteDraftByWgId[wg.id];
       const base = fteCommitted[wg.id] ?? 1;
@@ -407,7 +421,6 @@ export default function MijnGegevensPage() {
       huisadrplaats: huisadrplaats.trim() || undefined,
       huisadrtelnr: huisadrtelnr.trim() || undefined,
       huisadrfax: huisadrfax.trim() || undefined,
-      huisemail: huisemail.trim() || undefined,
       echtedeelnemer: showEchtedeelnemer ? echtedeelnemer : undefined,
       smsdienstbegin,
       callRecording,
@@ -427,8 +440,11 @@ export default function MijnGegevensPage() {
             }))
           : undefined,
     };
+    if (!isDelegatedEdit) {
+      body.huisemail = huisemail.trim() || undefined;
+    }
 
-    const res = await fetch('/api/mijn-gegevens', {
+    const res = await fetch(apiPath, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -442,7 +458,7 @@ export default function MijnGegevensPage() {
       return false;
     }
 
-    if (data.loginUpdated) {
+    if (!isDelegatedEdit && data.loginUpdated) {
       setLogin(huisemail.trim());
       toast.success('Gegevens opgeslagen. Uw loginnaam is bijgewerkt naar uw e-mailadres.');
     } else {
@@ -703,50 +719,58 @@ export default function MijnGegevensPage() {
                 </div>
 
                 <div className={formSectionClass}>
-                  <div className="flex flex-col gap-4 sm:flex-row">
-                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                      <Label htmlFor="huisemail">E-mail <RequiredAsterisk /></Label>
-                      <Input
-                        id="huisemail"
-                        type="email"
-                        value={huisemail}
-                        onChange={(e) => setHuisemail(e.target.value)}
-                        required
-                        disabled={isSubmitting}
-                      />
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                      <Label htmlFor="login" className="text-muted-foreground">
-                        Loginnaam
-                      </Label>
-                      <Input
-                        id="login"
-                        type="text"
-                        value={login}
-                        autoComplete="username"
-                        disabled
-                        className="text-muted-foreground"
-                      />
-                      {login !== huisemail && login !== '' && (
-                        <p className="text-xs text-muted-foreground">
-                          Uw loginnaam verschilt van uw e-mailadres en wordt automatisch bijgewerkt bij het opslaan.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1.5 border-t border-border/60 pt-4">
-                    <Label>Wachtwoord</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-fit"
-                      onClick={() => setPasswordModalOpen(true)}
-                      disabled={isSubmitting}
-                    >
-                      Wijzig wachtwoord
-                    </Button>
-                  </div>
+                  {!isDelegatedEdit ? (
+                    <>
+                      <div className="flex flex-col gap-4 sm:flex-row">
+                        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                          <Label htmlFor="huisemail">E-mail <RequiredAsterisk /></Label>
+                          <Input
+                            id="huisemail"
+                            type="email"
+                            value={huisemail}
+                            onChange={(e) => setHuisemail(e.target.value)}
+                            required
+                            disabled={isSubmitting}
+                          />
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                          <Label htmlFor="login" className="text-muted-foreground">
+                            Loginnaam
+                          </Label>
+                          <Input
+                            id="login"
+                            type="text"
+                            value={login}
+                            autoComplete="username"
+                            disabled
+                            className="text-muted-foreground"
+                          />
+                          {login !== huisemail && login !== '' && (
+                            <p className="text-xs text-muted-foreground">
+                              Uw loginnaam verschilt van uw e-mailadres en wordt automatisch bijgewerkt bij het opslaan.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5 border-t border-border/60 pt-4">
+                        <Label>Wachtwoord</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-fit"
+                          onClick={() => setPasswordModalOpen(true)}
+                          disabled={isSubmitting}
+                        >
+                          Wijzig wachtwoord
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      E-mail en wachtwoord kunnen niet worden aangepast bij het bewerken van een andere deelnemer.
+                    </p>
+                  )}
                 </div>
 
                 <div className={formSectionClass}>
@@ -832,13 +856,12 @@ export default function MijnGegevensPage() {
                       />
                     </div>
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:min-w-[140px]">
-                      <Label htmlFor="voorletterstussenvoegsel">Tussenvoegsel <RequiredAsterisk /></Label>
+                      <Label htmlFor="voorletterstussenvoegsel">Tussenvoegsel</Label>
                       <Input
                         id="voorletterstussenvoegsel"
                         type="text"
                         value={voorletterstussenvoegsel}
                         onChange={(e) => setVoorletterstussenvoegsel(e.target.value)}
-                        required
                         disabled={isSubmitting}
                       />
                     </div>

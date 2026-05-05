@@ -1,9 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { eq, and, ne, asc, inArray } from 'drizzle-orm';
-import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { pool } from '@/lib/db';
 import { legacyMD5Hash } from '@/lib/legacy-password';
+import { getAuthenticatedUser } from '@/lib/api-auth';
+import { hasDelegatedProfileAccess } from '@/lib/mijn-gegevens-access';
 import type {
   MijnGegevensProfile,
   MijnGegevensLookup,
@@ -31,17 +32,8 @@ function normaliseLocatieId(raw: number): number {
   return raw >= 1_000_000_000 ? raw - 1_000_000_000 : raw;
 }
 
-/** Validate a Dutch-style phone number (lenient: ≥7 digit-like chars, starts with + or digit) */
+/** Validate a Dutch-style phone number (lenient: >=7 digit-like chars, starts with + or digit) */
 const TELNR_VALID = /^\+?[0-9][0-9\s\-]{5,18}[0-9]$/;
-
-function toHeaders(incoming: NextApiRequest['headers']): Headers {
-  const h = new Headers();
-  for (const [k, v] of Object.entries(incoming)) {
-    if (v !== undefined && v !== null)
-      h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
-  }
-  return h;
-}
 
 export default async function handler(
   req: NextApiRequest,
@@ -51,14 +43,25 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const session = await auth.api.getSession({ headers: toHeaders(req.headers) });
-  if (!session?.user?.id) {
+  const actor = await getAuthenticatedUser(req);
+  if (!actor) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const deelnemerId = Number(session.user.id);
-  if (Number.isNaN(deelnemerId)) {
-    return res.status(403).json({ error: 'Invalid user id' });
+  const rawTargetId = Array.isArray(req.query.deelnemerId)
+    ? req.query.deelnemerId[0]
+    : req.query.deelnemerId;
+  const targetDeelnemerId = rawTargetId ? Number(rawTargetId) : actor.id;
+  if (!Number.isInteger(targetDeelnemerId) || targetDeelnemerId < 1) {
+    return res.status(400).json({ error: 'Invalid deelnemerId' });
+  }
+
+  const isDelegatedEdit = targetDeelnemerId !== actor.id;
+  if (isDelegatedEdit) {
+    const hasAccess = await hasDelegatedProfileAccess(actor, targetDeelnemerId);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Geen toegang tot deze deelnemer' });
+    }
   }
 
   if (req.method === 'GET') {
@@ -90,7 +93,7 @@ export default async function handler(
             idsettelnrdienst: deelnemers.idsettelnrdienst,
           })
           .from(deelnemers)
-          .where(eq(deelnemers.id, deelnemerId))
+          .where(eq(deelnemers.id, targetDeelnemerId))
           .limit(1)
           .then((rows) => rows[0]),
         db
@@ -149,7 +152,7 @@ export default async function handler(
           .leftJoin(waarneemgroepen, eq(waarneemgroepdeelnemers.idwaarneemgroep, waarneemgroepen.id))
           .where(
             and(
-              eq(waarneemgroepdeelnemers.iddeelnemer, deelnemerId),
+              eq(waarneemgroepdeelnemers.iddeelnemer, targetDeelnemerId),
               eq(waarneemgroepdeelnemers.aangemeld, true)
             )
           ),
@@ -371,7 +374,13 @@ export default async function handler(
         omschrijvingtelnrs: omschrijvingRows,
       };
 
-      const pageData: MijnGegevensPageData = { profile, lookup };
+      const pageData: MijnGegevensPageData = {
+        profile,
+        lookup,
+        isDelegatedEdit,
+        targetDeelnemerId,
+        actingDeelnemerId: actor.id,
+      };
       return res.status(200).json(pageData);
     } catch (err) {
       console.error('GET /api/mijn-gegevens error', err);
@@ -388,6 +397,14 @@ export default async function handler(
   }
 
   try {
+    if (isDelegatedEdit) {
+      if (body.huisemail !== undefined || body.passa !== undefined || body.passb !== undefined) {
+        return res.status(403).json({
+          error: 'E-mail en wachtwoord kunnen niet worden aangepast voor deze deelnemer',
+        });
+      }
+    }
+
     const passa = typeof body.passa === 'string' ? body.passa : undefined;
     const passb = typeof body.passb === 'string' ? body.passb : undefined;
     if (passa !== undefined && passb !== undefined) {
@@ -444,13 +461,13 @@ export default async function handler(
         const [currentDeelnemer] = await db
           .select({ login: deelnemers.login })
           .from(deelnemers)
-          .where(eq(deelnemers.id, deelnemerId))
+          .where(eq(deelnemers.id, targetDeelnemerId))
           .limit(1);
         if (currentDeelnemer && currentDeelnemer.login !== newEmail) {
           const [dupe] = await db
             .select({ id: deelnemers.id })
             .from(deelnemers)
-            .where(and(eq(deelnemers.login, newEmail), ne(deelnemers.id, deelnemerId)))
+            .where(and(eq(deelnemers.login, newEmail), ne(deelnemers.id, targetDeelnemerId)))
             .limit(1);
           if (dupe) {
             return res.status(400).json({ error: 'Dit e-mailadres is al in gebruik als loginnaam' });
@@ -471,11 +488,14 @@ export default async function handler(
     }
 
     if (Object.keys(update).length > 0) {
-      await db.update(deelnemers).set(update as any).where(eq(deelnemers.id, deelnemerId));
+      await db
+        .update(deelnemers)
+        .set(update as Record<string, unknown>)
+        .where(eq(deelnemers.id, targetDeelnemerId));
     }
 
     if (newEncryptedPassword !== null) {
-      const accountId = `credential-${deelnemerId}`;
+      const accountId = `credential-${targetDeelnemerId}`;
       await pool.query(
         `UPDATE account SET password = $1, "updatedAt" = now() WHERE id = $2`,
         [newEncryptedPassword, accountId]
@@ -512,7 +532,7 @@ export default async function handler(
           .set({ fte: fteVal })
           .where(
             and(
-              eq(waarneemgroepdeelnemers.iddeelnemer, deelnemerId),
+              eq(waarneemgroepdeelnemers.iddeelnemer, targetDeelnemerId),
               eq(waarneemgroepdeelnemers.idwaarneemgroep, idwg),
               eq(waarneemgroepdeelnemers.aangemeld, true)
             )
@@ -566,7 +586,7 @@ export default async function handler(
       const [deelnRecord] = await db
         .select({ idsettelnrdienst: deelnemers.idsettelnrdienst })
         .from(deelnemers)
-        .where(eq(deelnemers.id, deelnemerId))
+        .where(eq(deelnemers.id, targetDeelnemerId))
         .limit(1);
 
       const currentSid = deelnRecord?.idsettelnrdienst;
@@ -627,7 +647,7 @@ export default async function handler(
         await db
           .update(deelnemers)
           .set({ idsettelnrdienst: newId })
-          .where(eq(deelnemers.id, deelnemerId));
+          .where(eq(deelnemers.id, targetDeelnemerId));
       }
     }
 

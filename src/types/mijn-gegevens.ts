@@ -65,6 +65,9 @@ export interface MijnGegevensLookup {
 export interface MijnGegevensPageData {
   profile: MijnGegevensProfile;
   lookup: MijnGegevensLookup;
+  isDelegatedEdit?: boolean;
+  targetDeelnemerId?: number;
+  actingDeelnemerId?: number;
 }
 
 export interface MijnGegevensUpdateBody {

@@ -1,6 +1,7 @@
 'use client';
 
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
@@ -15,6 +16,7 @@ function formatNaam(d: DeelnemerWithGroepen): string {
 }
 
 export default function LijstDeelnemersPage() {
+  const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
 
   const [deelnemers, setDeelnemers] = useState<DeelnemerWithGroepen[]>([]);
@@ -70,6 +72,10 @@ export default function LijstDeelnemersPage() {
     } catch {
       toast.error('Kleur opslaan mislukt');
     }
+  }
+
+  function openDeelnemerGegevens(deelnemerId: number) {
+    void router.push(`/mijn-gegevens?deelnemerId=${deelnemerId}`);
   }
 
   // Client-side search: name, login, or waarneemgroep name
@@ -157,7 +163,20 @@ export default function LijstDeelnemersPage() {
                     </thead>
                     <tbody>
                       {filtered.map((d) => (
-                        <tr key={d.id} className="border-b last:border-0 hover:bg-muted/50">
+                        <tr
+                          key={d.id}
+                          className="cursor-pointer border-b last:border-0 hover:bg-muted/50"
+                          onClick={() => openDeelnemerGegevens(d.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              openDeelnemerGegevens(d.id);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          title="Open gegevens van deze deelnemer"
+                        >
                           <td className="py-2.5 pr-4 font-medium">{formatNaam(d)}</td>
                           <td className="py-2.5 pr-4 text-muted-foreground">{d.login ?? '—'}</td>
                           <td className="py-2.5 pr-4">
@@ -165,7 +184,10 @@ export default function LijstDeelnemersPage() {
                               <button
                                 type="button"
                                 title="Wijzig kleur"
-                                onClick={() => colorInputRefs.current.get(d.id)?.click()}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  colorInputRefs.current.get(d.id)?.click();
+                                }}
                                 className="h-6 w-10 rounded border border-input shadow-sm hover:scale-105 transition-transform"
                                 style={{ backgroundColor: d.color || '#cccccc' }}
                               />
@@ -177,11 +199,15 @@ export default function LijstDeelnemersPage() {
                                 type="color"
                                 className="sr-only"
                                 value={d.color || '#cccccc'}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => handleColorChange(d.id, e.target.value)}
                               />
                               <button
                                 type="button"
-                                onClick={() => colorInputRefs.current.get(d.id)?.click()}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  colorInputRefs.current.get(d.id)?.click();
+                                }}
                                 className="text-xs text-muted-foreground hover:text-foreground underline"
                               >
                                 Wijzig

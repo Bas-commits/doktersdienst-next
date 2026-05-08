@@ -75,6 +75,9 @@ function wgToForm(wg: WaarneemgroepDetail): FormData {
 const selectClass =
   'h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50';
 
+const formSectionClass =
+  'rounded-xl border border-border bg-muted/30 p-4 space-y-4 shadow-sm dark:bg-muted/20';
+
 export default function WaarneemgroepWijzigenPage() {
   const { data: session, isPending } = authClient.useSession();
 
@@ -257,64 +260,64 @@ export default function WaarneemgroepWijzigenPage() {
       <Head>
         <title>Waarneemgroep wijzigen | Doktersdienst</title>
       </Head>
-      <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Waarneemgroep wijzigen</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Kies een waarneemgroep waarvoor u secretaris bent en pas de gegevens aan.
-          </p>
-        </div>
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        <Card>
+          <CardHeader className="space-y-1 border-b border-border/80 pb-4">
+            <CardTitle>
+              <h1 className="text-2xl font-semibold tracking-tight">Waarneemgroep wijzigen</h1>
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Kies een waarneemgroep waarvoor u secretaris bent en pas de gegevens aan.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6 pt-6">
+            {optionsLoading && <p className="text-sm text-muted-foreground">Laden…</p>}
+            {optionsError && <p className="text-sm text-destructive" role="alert">{optionsError}</p>}
 
-        {optionsLoading && <p className="text-sm text-muted-foreground">Laden…</p>}
-        {optionsError && <p className="text-sm text-destructive" role="alert">{optionsError}</p>}
+            {options && (
+              <>
+                <div className={formSectionClass}>
+                  <div className="flex max-w-md flex-col gap-1.5">
+                    <Label htmlFor="wg-kiezen">Waarneemgroep</Label>
+                    {options.waarneemgroepen.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Geen waarneemgroepen gevonden waarvoor u secretaris bent.
+                      </p>
+                    ) : (
+                      <select
+                        id="wg-kiezen"
+                        className={selectClass}
+                        value={selectedId != null ? String(selectedId) : ''}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (!v) {
+                            clearSelection();
+                            return;
+                          }
+                          loadSelected(Number(v));
+                        }}
+                        disabled={selectedLoading}
+                        aria-label="Waarneemgroep kiezen"
+                      >
+                        <option value="">— Kies waarneemgroep —</option>
+                        {options.waarneemgroepen.map((wg) => (
+                          <option key={wg.id} value={String(wg.id)}>
+                            {wg.naam}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
 
-        {options && (
-          <>
-            <div className="flex flex-col gap-2 max-w-md">
-              <Label htmlFor="wg-kiezen">Waarneemgroep</Label>
-              {options.waarneemgroepen.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Geen waarneemgroepen gevonden waarvoor u secretaris bent.
-                </p>
-              ) : (
-                <select
-                  id="wg-kiezen"
-                  className={selectClass}
-                  value={selectedId != null ? String(selectedId) : ''}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (!v) {
-                      clearSelection();
-                      return;
-                    }
-                    loadSelected(Number(v));
-                  }}
-                  disabled={selectedLoading}
-                  aria-label="Waarneemgroep kiezen"
-                >
-                  <option value="">— Kies waarneemgroep —</option>
-                  {options.waarneemgroepen.map((wg) => (
-                    <option key={wg.id} value={String(wg.id)}>
-                      {wg.naam}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+                {selectedLoading && (
+                  <p className="text-sm text-muted-foreground">Gegevens laden…</p>
+                )}
+                {selectedError && (
+                  <p className="text-sm text-destructive" role="alert">{selectedError}</p>
+                )}
 
-            {selectedLoading && (
-              <p className="text-sm text-muted-foreground">Gegevens laden…</p>
-            )}
-            {selectedError && (
-              <p className="text-sm text-destructive" role="alert">{selectedError}</p>
-            )}
-
-            {selectedWg && formData && !selectedLoading && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Gegevens: {selectedWg.naam}</CardTitle>
-                </CardHeader>
-                <CardContent>
+                {selectedWg && formData && !selectedLoading && (
                   <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     {submitError && (
                       <p className="text-sm text-destructive" role="alert">{submitError}</p>
@@ -325,256 +328,283 @@ export default function WaarneemgroepWijzigenPage() {
                       </p>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="wg-naam">Naam</Label>
-                        <Input
-                          id="wg-naam"
-                          value={formData.naam}
-                          onChange={(e) => set('naam', e.target.value)}
-                          disabled={submitting}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="wg-specialisme">Specialisme</Label>
-                        <select
-                          id="wg-specialisme"
-                          className={selectClass}
-                          value={formData.idspecialisme}
-                          onChange={(e) => set('idspecialisme', e.target.value)}
-                          disabled={submitting}
-                        >
-                          <option value="">— Kies specialisme —</option>
-                          {options.specialismen.map((s) => (
-                            <option key={s.id} value={String(s.id)}>{s.omschrijving}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="wg-regio">Regio</Label>
-                        <select
-                          id="wg-regio"
-                          className={selectClass}
-                          value={formData.idregio}
-                          onChange={(e) => set('idregio', e.target.value)}
-                          disabled={submitting}
-                        >
-                          <option value="">— Kies regio —</option>
-                          {options.regios.map((r) => (
-                            <option key={r.id} value={String(r.id)}>{r.naam}</option>
-                          ))}
-                        </select>
-                      </div>
-                      {options.instellingen.length > 0 && (
+                    <div className={formSectionClass}>
+                      <h2 className="text-base font-medium">Algemeen</h2>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="flex flex-col gap-1">
-                          <Label htmlFor="wg-instelling">Instelling</Label>
+                          <Label htmlFor="wg-naam">Naam</Label>
+                          <Input
+                            id="wg-naam"
+                            value={formData.naam}
+                            onChange={(e) => set('naam', e.target.value)}
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <Label htmlFor="wg-specialisme">Specialisme</Label>
                           <select
-                            id="wg-instelling"
+                            id="wg-specialisme"
                             className={selectClass}
-                            value={formData.idinstelling}
-                            onChange={(e) => set('idinstelling', e.target.value)}
+                            value={formData.idspecialisme}
+                            onChange={(e) => set('idspecialisme', e.target.value)}
                             disabled={submitting}
                           >
-                            <option value="">— Kies instelling —</option>
-                            {options.instellingen.map((i) => (
-                              <option key={i.id} value={String(i.id)}>{i.naam}</option>
+                            <option value="">— Kies specialisme —</option>
+                            {options.specialismen.map((s) => (
+                              <option key={s.id} value={String(s.id)}>{s.omschrijving}</option>
                             ))}
                           </select>
                         </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="wg-regiobeschrijving">Regio beschrijving</Label>
-                      <textarea
-                        id="wg-regiobeschrijving"
-                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        value={formData.regiobeschrijving}
-                        onChange={(e) => set('regiobeschrijving', e.target.value)}
-                        disabled={submitting}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="wg-telnringaand">Telefoonnummer doorgerouteerd naar diensdoende</Label>
-                        <Input
-                          id="wg-telnringaand"
-                          value={formData.telnringaand}
-                          onChange={(e) => set('telnringaand', e.target.value)}
-                          disabled={submitting}
-                          placeholder="31880026477"
-                        />
                       </div>
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="wg-telnrnietopgenomen">Telefoonnummer achtervang</Label>
-                        <Input
-                          id="wg-telnrnietopgenomen"
-                          value={formData.telnrnietopgenomen}
-                          onChange={(e) => set('telnrnietopgenomen', e.target.value)}
-                          disabled={submitting}
-                          placeholder="31880026477"
-                        />
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="flex flex-col gap-1">
+                          <Label htmlFor="wg-regio">Regio</Label>
+                          <select
+                            id="wg-regio"
+                            className={selectClass}
+                            value={formData.idregio}
+                            onChange={(e) => set('idregio', e.target.value)}
+                            disabled={submitting}
+                          >
+                            <option value="">— Kies regio —</option>
+                            {options.regios.map((r) => (
+                              <option key={r.id} value={String(r.id)}>{r.naam}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {options.instellingen.length > 0 && (
+                          <div className="flex flex-col gap-1">
+                            <Label htmlFor="wg-instelling">Instelling</Label>
+                            <select
+                              id="wg-instelling"
+                              className={selectClass}
+                              value={formData.idinstelling}
+                              onChange={(e) => set('idinstelling', e.target.value)}
+                              disabled={submitting}
+                            >
+                              <option value="">— Kies instelling —</option>
+                              {options.instellingen.map((i) => (
+                                <option key={i.id} value={String(i.id)}>{i.naam}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                       </div>
-                    </div>
 
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="wg-invoegende">Bij gat in rooster naar waarneemgroep</Label>
-                      <select
-                        id="wg-invoegende"
-                        className={selectClass}
-                        value={formData.idinvoegendewaarneemgroep}
-                        onChange={(e) => set('idinvoegendewaarneemgroep', e.target.value)}
-                        disabled={submitting}
-                      >
-                        <option value="0">Geen</option>
-                        {options.waarneemgroepenForInvoegende
-                          .filter((w) => w.id !== selectedId)
-                          .map((w) => (
-                            <option key={w.id} value={String(w.id)}>{w.naam}</option>
-                          ))}
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="flex flex-col gap-1">
-                        <Label htmlFor="wg-telnronzecentrale">Telnr onze centrale</Label>
-                        <Input
-                          id="wg-telnronzecentrale"
-                          value={formData.telnronzecentrale}
-                          onChange={(e) => set('telnronzecentrale', e.target.value)}
+                        <Label htmlFor="wg-regiobeschrijving">Regio beschrijving</Label>
+                        <textarea
+                          id="wg-regiobeschrijving"
+                          className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          value={formData.regiobeschrijving}
+                          onChange={(e) => set('regiobeschrijving', e.target.value)}
                           disabled={submitting}
                         />
                       </div>
-                      {/* <div className="flex flex-col gap-1">
-                        <Label htmlFor="wg-telnrconference">Telnr conference</Label>
-                        <Input
-                          id="wg-telnrconference"
-                          value={formData.telnrconference}
-                          onChange={(e) => set('telnrconference', e.target.value)}
-                          disabled={submitting}
-                        />
-                      </div> */}
                     </div>
 
-                    <div className="flex flex-wrap gap-x-6 gap-y-3">
-                      {(
-                        [
-                          ['afgemeld', 'Afgemeld'],
-                          ['smsdienstbegin', 'SMS begin dienst'],
+                    <div className={formSectionClass}>
+                      <h2 className="text-base font-medium">Telefonie</h2>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="flex flex-col gap-1">
+                          <Label htmlFor="wg-telnringaand">Telefoonnummer doorgerouteerd naar diensdoende</Label>
+                          <Input
+                            id="wg-telnringaand"
+                            value={formData.telnringaand}
+                            onChange={(e) => set('telnringaand', e.target.value)}
+                            disabled={submitting}
+                            placeholder="31880026477"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <Label htmlFor="wg-telnrnietopgenomen">Telefoonnummer achtervang</Label>
+                          <Input
+                            id="wg-telnrnietopgenomen"
+                            value={formData.telnrnietopgenomen}
+                            onChange={(e) => set('telnrnietopgenomen', e.target.value)}
+                            disabled={submitting}
+                            placeholder="31880026477"
+                          />
+                        </div>
+                      </div>
 
-                          // ['abomaatschapplanner', 'Praktijkplanner abonnement'],
-                        ] as [keyof FormData, string][]
-                      ).map(([key, label]) => (
-                        <div key={key} className="flex items-center gap-2">
-                          <Checkbox
-                            id={`wg-${key}`}
-                            checked={formData[key] as boolean}
-                            onCheckedChange={(c) => set(key, !!c)}
+                      <div className="flex flex-col gap-1">
+                        <Label htmlFor="wg-invoegende">Bij gat in rooster naar waarneemgroep</Label>
+                        <select
+                          id="wg-invoegende"
+                          className={selectClass}
+                          value={formData.idinvoegendewaarneemgroep}
+                          onChange={(e) => set('idinvoegendewaarneemgroep', e.target.value)}
+                          disabled={submitting}
+                        >
+                          <option value="0">Geen</option>
+                          {options.waarneemgroepenForInvoegende
+                            .filter((w) => w.id !== selectedId)
+                            .map((w) => (
+                              <option key={w.id} value={String(w.id)}>{w.naam}</option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="flex flex-col gap-1">
+                          <Label htmlFor="wg-telnronzecentrale">Telnr onze centrale</Label>
+                          <Input
+                            id="wg-telnronzecentrale"
+                            value={formData.telnronzecentrale}
+                            onChange={(e) => set('telnronzecentrale', e.target.value)}
                             disabled={submitting}
                           />
-                          <Label htmlFor={`wg-${key}`} className="cursor-pointer font-normal">{label}</Label>
                         </div>
-                      ))}
-                    </div>
-
-                    <div className="rounded-lg border border-border p-4 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id="wg-eigentelwelkomwav"
-                          checked={formData.eigentelwelkomwav}
-                          onCheckedChange={(c) => set('eigentelwelkomwav', !!c)}
-                          disabled={submitting}
-                        />
-                        <Label htmlFor="wg-eigentelwelkomwav" className="cursor-pointer font-normal">
-                          Eigen welkomstboodschap
-                        </Label>
-                      </div>
-                      <p className="text-xs text-muted-foreground pl-6">
-                        Upload alleen .wav (8- of 16-bit PCM; stereo wordt gemixt naar mono). Het bestand wordt opgeslagen als{' '}
-                        <span className="font-medium text-foreground">jouw bestandsnaam + leesbaar tijdstempel</span>
-                        {' '}als .sln onder <span className="font-mono">sounds/</span>; die locatie wordt bewaard bij deze waarneemgroep.
-                        {selectedWg.eigentelwelkomlocatie ? (
-                          <span className="block mt-1 font-mono text-foreground break-all">
-                            {selectedWg.eigentelwelkomlocatie}
-                          </span>
-                        ) : null}
-                        {welkomWavPresent ? (
-                          <span className="block mt-1 text-green-600 dark:text-green-400">Bestand aanwezig in opslag.</span>
-                        ) : (
-                          <span className="block mt-1">Nog geen bestand — upload verplicht om deze optie op te slaan.</span>
-                        )}
-                      </p>
-                      {formData.eigentelwelkomwav && (
-                        <div className="pl-6 mt-1">
-                          <input
-                            ref={welkomFileInputRef}
-                            id="wg-welkom-wav"
-                            type="file"
-                            accept=".wav,audio/wav"
-                            className="sr-only"
-                            tabIndex={-1}
-                            disabled={submitting || welkomUploading}
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              e.target.value = '';
-                              if (f) void uploadWelkomWav(f);
-                            }}
+                        {/* <div className="flex flex-col gap-1">
+                          <Label htmlFor="wg-telnrconference">Telnr conference</Label>
+                          <Input
+                            id="wg-telnrconference"
+                            value={formData.telnrconference}
+                            onChange={(e) => set('telnrconference', e.target.value)}
+                            disabled={submitting}
                           />
-                          <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/40 px-4 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="default"
-                              className="w-full sm:w-auto gap-2 font-medium shadow-sm border border-border/60 bg-background hover:bg-muted/80"
-                              disabled={submitting || welkomUploading}
-                              aria-busy={welkomUploading}
-                              onClick={() => welkomFileInputRef.current?.click()}
-                            >
-                              {welkomUploading ? (
-                                <>
-                                  <Loader2 className="size-4 shrink-0 animate-spin opacity-80" aria-hidden />
-                                  Bezig met uploaden…
-                                </>
-                              ) : welkomWavPresent ? (
-                                <>
-                                  <RefreshCw className="size-4 shrink-0 opacity-80" aria-hidden />
-                                  Bestand vervangen
-                                </>
-                              ) : (
-                                <>
-                                  <Upload className="size-4 shrink-0 opacity-80" aria-hidden />
-                                  Bestand uploaden
-                                </>
-                              )}
-                            </Button>
-                            <p className="text-xs text-muted-foreground sm:max-w-md sm:border-l sm:border-border/60 sm:pl-4">
-                              Kies een .wav-bestand. Stereo wordt naar mono gemixt; opslag is 8000 Hz als .sln.
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      {welkomUploadError && (
-                        <p className="text-sm text-destructive pl-6" role="alert">{welkomUploadError}</p>
-                      )}
+                        </div> */}
+                      </div>
                     </div>
 
-                    
+                    <div className={formSectionClass}>
+                      <h2 className="text-base font-medium">Opties</h2>
+                      <div className="flex flex-wrap gap-x-6 gap-y-3">
+                        {(
+                          [
+                            ['afgemeld', 'Afgemeld'],
+                            ['smsdienstbegin', 'SMS begin dienst'],
+
+                            // ['abomaatschapplanner', 'Praktijkplanner abonnement'],
+                          ] as [keyof FormData, string][]
+                        ).map(([key, label]) => (
+                          <div key={key} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`wg-${key}`}
+                              checked={formData[key] as boolean}
+                              onCheckedChange={(c) => set(key, !!c)}
+                              disabled={submitting}
+                            />
+                            <Label htmlFor={`wg-${key}`} className="cursor-pointer font-normal">{label}</Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={formSectionClass}>
+                      <h2 className="text-base font-medium">Welkomstboodschap</h2>
+                      <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="wg-eigentelwelkomwav"
+                            checked={formData.eigentelwelkomwav}
+                            onCheckedChange={(c) => set('eigentelwelkomwav', !!c)}
+                            disabled={submitting}
+                          />
+                          <Label htmlFor="wg-eigentelwelkomwav" className="cursor-pointer font-normal">
+                            Eigen welkomstboodschap
+                          </Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground pl-6">
+                          Upload alleen .wav (8- of 16-bit PCM; stereo wordt gemixt naar mono). Het bestand wordt opgeslagen als{' '}
+                          <span className="font-medium text-foreground">jouw bestandsnaam + leesbaar tijdstempel</span>
+                          {' '}als .sln onder <span className="font-mono">sounds/</span>; die locatie wordt bewaard bij deze waarneemgroep.
+                          {selectedWg.eigentelwelkomlocatie ? (
+                            <span className="block mt-1 font-mono text-foreground break-all">
+                              {selectedWg.eigentelwelkomlocatie}
+                            </span>
+                          ) : null}
+                          {welkomWavPresent ? (
+                            <span className="block mt-1 text-green-600 dark:text-green-400">Bestand aanwezig in opslag.</span>
+                          ) : (
+                            <span className="block mt-1">Nog geen bestand — upload verplicht om deze optie op te slaan.</span>
+                          )}
+                        </p>
+                        {formData.eigentelwelkomwav && (
+                          <div className="pl-6 mt-1">
+                            <input
+                              ref={welkomFileInputRef}
+                              id="wg-welkom-wav"
+                              type="file"
+                              accept=".wav,audio/wav"
+                              className="sr-only"
+                              tabIndex={-1}
+                              disabled={submitting || welkomUploading}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                e.target.value = '';
+                                if (f) void uploadWelkomWav(f);
+                              }}
+                            />
+                            <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/40 px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="default"
+                                className="w-full gap-2 border border-border/60 bg-background font-medium shadow-sm hover:bg-muted/80 sm:w-auto"
+                                disabled={submitting || welkomUploading}
+                                aria-busy={welkomUploading}
+                                onClick={() => welkomFileInputRef.current?.click()}
+                              >
+                                {welkomUploading ? (
+                                  <>
+                                    <Loader2 className="size-4 shrink-0 animate-spin opacity-80" aria-hidden />
+                                    Bezig met uploaden…
+                                  </>
+                                ) : welkomWavPresent ? (
+                                  <>
+                                    <RefreshCw className="size-4 shrink-0 opacity-80" aria-hidden />
+                                    Bestand vervangen
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="size-4 shrink-0 opacity-80" aria-hidden />
+                                    Bestand uploaden
+                                  </>
+                                )}
+                              </Button>
+                              <p className="text-xs text-muted-foreground sm:max-w-md sm:border-l sm:border-border/60 sm:pl-4">
+                                Kies een .wav-bestand. Stereo wordt naar mono gemixt; opslag is 8000 Hz als .sln.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        {welkomUploadError && (
+                          <p className="text-sm text-destructive pl-6" role="alert">{welkomUploadError}</p>
+                        )}
+                      </div>
+                    </div>
 
                     <div>
-                      <Button type="submit" disabled={submitting}>
+                      <Button
+                        type="submit"
+                        disabled={submitting}
+                        className="font-bold text-white"
+                        style={{
+                          background: 'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)',
+                          transition: 'background 0.2s',
+                        }}
+                        onMouseOver={(e) => {
+                          if (submitting) return;
+                          (e.currentTarget as HTMLButtonElement).style.background =
+                            'linear-gradient(90deg, rgb(56, 19, 108) 0%, rgb(45, 34, 69) 100%)';
+                        }}
+                        onMouseOut={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background =
+                            'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)';
+                        }}
+                      >
                         {submitting ? 'Opslaan…' : 'Opslaan'}
                       </Button>
                     </div>
                   </form>
-                </CardContent>
-              </Card>
+                )}
+              </>
             )}
-          </>
-        )}
+          </CardContent>
+        </Card>
       </div>
     </>
   );

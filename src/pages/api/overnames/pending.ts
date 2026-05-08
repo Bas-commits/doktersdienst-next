@@ -101,6 +101,7 @@ export default async function handler(
 
   const rows = await db
     .select({
+      overnameId: dienstenTable.id,
       iddienstovern: dienstenTable.iddienstovern,
       status: dienstenTable.status,
       van: dienstenTable.van,
@@ -158,8 +159,14 @@ export default async function handler(
         : Number(r.van) !== Number(r.originalVan) || Number(r.tot) !== Number(r.originalTot);
 
     return {
-      iddienstovern: r.iddienstovern,
+      overnameId: r.overnameId == null ? null : Number(r.overnameId),
+      iddienstovern: Number(r.iddienstovern ?? 0),
+      idwaarneemgroep: r.idwaarneemgroep == null ? null : Number(r.idwaarneemgroep),
       status: r.status,
+      overnameVanUnix: Number(r.van ?? 0),
+      overnameTotUnix: Number(r.tot ?? 0),
+      originalVanUnix: r.originalVan == null ? null : Number(r.originalVan),
+      originalTotUnix: r.originalTot == null ? null : Number(r.originalTot),
       datum: datumVan,
       datumVan,
       datumTot,

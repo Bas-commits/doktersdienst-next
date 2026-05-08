@@ -64,6 +64,7 @@ export function DoktersdienstHeader({
 
   // Overname verzoeken state
   interface OvernameVerzoek {
+    overnameId?: number;
     iddienstovern: number;
     status?: 'pending' | 'declined' | string | null;
     datum: string;
@@ -105,7 +106,11 @@ export function DoktersdienstHeader({
       if (!v) return;
       if (action === 'redo') {
         setVerzoekPopoverOpen(false);
-        router.push(`/overnames?recreate=${v.iddienstovern}`);
+        const query = new URLSearchParams({ recreate: String(v.iddienstovern) });
+        if (typeof v.overnameId === 'number' && v.overnameId > 0) {
+          query.set('recreateProposal', String(v.overnameId));
+        }
+        router.push(`/overnames?${query.toString()}`);
         return;
       }
       const res = await fetch('/api/overnames/respond', {

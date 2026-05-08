@@ -506,12 +506,13 @@ export function ShiftBlock({
             ? `calc(${leftPercent}% - 1px)`
             : `${leftPercent}%`,
         transform: 'translateY(-50%)',
-        // Base shifts use z-index 9999 on hover (tooltips). Overname overlays must stay above
-        // that so the onderliggende shift does not visually cover the overname when hovered.
+        // Layering on the calendar lane:
+        // 1) normal blocks, 2) hovered blocks, 3) overname blocks (+hover),
+        // while global modals live much higher in their own layer.
         zIndex: overnameType
-          ? isHovered ? 10001 : 10000
+          ? isHovered ? 40 : 30
           : isHovered
-            ? 9999
+            ? 20
             : continuesFromPrev || continuesToNext
               ? 1
               : undefined,
@@ -727,7 +728,7 @@ export function ShiftBlock({
             >
               <TbSwitch3 className="h-3.5 w-3.5 text-white" />
               <div
-                className="hidden group-hover/overname:block absolute top-full right-0 z-101 mt-2 w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
+                className="hidden group-hover/overname:block absolute top-full right-0 z-50 mt-2 w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
                 data-testid="overname-hover-popover"
               >
                 <div className="mb-2 flex items-center justify-between gap-2">
@@ -786,7 +787,7 @@ export function ShiftBlock({
             >
               <img src="request.svg" alt="Voorstel overname" className="h-3.5 w-3.5" style={{ filter: 'invert(47%) sepia(97%) saturate(2098%) hue-rotate(2deg) brightness(106%) contrast(101%)' }} />
               <div
-                className="hidden group-hover/voorstel-overname:block absolute top-full right-0 z-101 mt-2 w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
+                className="hidden group-hover/voorstel-overname:block absolute top-full right-0 z-50 mt-2 w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
                 data-testid="voorstel-overname-hover-popover"
               >
                 <div className="mb-2 flex items-center justify-between gap-2">
@@ -857,7 +858,7 @@ export function ShiftBlock({
                 left: shiftTooltipCoords.left,
                 top: shiftTooltipCoords.top,
                 transform: 'translate(-50%, 0)',
-                zIndex: 100000,
+                zIndex: 60,
                 ['--afterBorder' as string]: mainColor,
                 borderColor: mainColor,
               }}

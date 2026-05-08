@@ -21,6 +21,10 @@ export interface OvernameDoctor {
   color?: string;
 }
 
+const OVERNAMES_Z = {
+  modalOverlay: 2000,
+} as const;
+
 function DoctorBadge({ doctor, size = 'sm' }: { doctor: OvernameDoctor; size?: 'sm' | 'md' }) {
   const initials = doctor.initialen ?? `${doctor.voornaam[0] ?? ''}${doctor.achternaam[0] ?? ''}`.toUpperCase();
   const bg = doctor.color ?? '#6b7280';
@@ -83,7 +87,12 @@ function TimeRow({
             <CalendarIcon className="size-3.5 text-muted-foreground" />
             <span>{format(date, 'd MMM', { locale: nl })}</span>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" side="bottom" align="start">
+          <PopoverContent
+            className="z-[2010] w-auto p-0"
+            positionerClassName="z-[2010]"
+            side="bottom"
+            align="start"
+          >
             <Calendar
               mode="single"
               selected={date}
@@ -212,7 +221,11 @@ export function OvernameModal({ shift, doctors, onSubmit, onClose, submitting, e
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-black/50"
+      style={{ zIndex: OVERNAMES_Z.modalOverlay }}
+      onClick={onClose}
+    >
       <div
         className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6"
         onClick={(e) => e.stopPropagation()}
@@ -260,7 +273,7 @@ export function OvernameModal({ shift, doctors, onSubmit, onClose, submitting, e
             )}
             <ChevronDownIcon className="size-4 text-gray-400 shrink-0" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent>
+          <DropdownMenuContent className="z-[2010]" positionerClassName="z-[2010]">
             {doctors.filter((doc) => doc.id !== shift.middle?.id).map((doc) => (
               <DropdownMenuItem
                 key={doc.id}

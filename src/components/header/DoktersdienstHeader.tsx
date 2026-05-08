@@ -192,7 +192,7 @@ export function DoktersdienstHeader({
 
   return (
     <header className="relative" data-testid="doktersdienst-header">
-      <div className="sticky top-0 left-0 right-0 z-3 min-w-[1024px] bg-white border-b border-[rgba(151,151,151,0.5)]">
+      <div className="sticky top-0 left-0 right-0 z-[1500] min-w-[1024px] bg-white border-b border-[rgba(151,151,151,0.5)]">
         <nav className="flex flex-nowrap items-center justify-start">
           <a
             className="inline-block cursor-pointer py-1.5 mr-4 text-[1.09375rem] leading-inherit whitespace-nowrap no-underline hover:no-underline focus:no-underline [&_img]:max-h-[46px]"
@@ -264,6 +264,9 @@ export function DoktersdienstHeader({
                 const totDatum = v.datumTot ?? v.datumVan ?? v.datum;
                 const overnameTypeLabel = v.isPartial ? 'Gedeeltelijke overname' : 'Volledige overname';
                 const isDeclined = v.status === 'declined';
+                const redoTitle = isDeclined
+                  ? 'Opnieuw voorstellen'
+                  : 'Een overname moet eerst worden afgewezen voordat je opnieuw kunt voorstellen';
                 return (
                   <div
                     className="absolute top-full right-0 z-1000 w-[320px] bg-white border border-gray-300 rounded-lg shadow-lg p-4 mt-1"
@@ -296,10 +299,23 @@ export function DoktersdienstHeader({
                     <div className="w-full flex justify-around mb-3">
                       <div className="flex flex-1"></div>
                       <Trash2 className="w-8 h-8 text-red-500 flex flex-1  cursor-pointer " onClick={() => handleVerzoekRespond('delete')} aria-label="Verwijderen" />
-                      <div className="flex flex-1 justify-center items-center cursor-pointer " onClick={() => handleVerzoekRespond('redo')} >
-                        {isDeclined && (
-                          <FaRedo className="w-6 h-6 text-blue-500 " />
-                        )}
+                      <div className="flex flex-1 justify-center items-center">
+                        <button
+                          type="button"
+                          className={`bg-transparent border-0 p-0 flex items-center justify-center ${isDeclined ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                          onClick={() => {
+                            if (isDeclined) {
+                              handleVerzoekRespond('redo');
+                              return;
+                            }
+                            toast.info('Opnieuw toewijzen kan alleen nadat een voorstel is afgewezen');
+                          }}
+                          aria-label="Opnieuw voorstellen"
+                          aria-disabled={!isDeclined}
+                          title={redoTitle}
+                        >
+                          <FaRedo className={`w-6 h-6 ${isDeclined ? 'text-blue-500' : 'text-gray-400'}`} />
+                        </button>
                       </div>
                     </div>
 

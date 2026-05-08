@@ -11,6 +11,10 @@ const { mockSelect, mockLimit } = vi.hoisted(() => ({
   })),
 }));
 
+const { mockHasGroupManagementAccess } = vi.hoisted(() => ({
+  mockHasGroupManagementAccess: vi.fn(),
+}));
+
 vi.mock('@/db', () => ({
   db: {
     select: mockSelect,
@@ -28,10 +32,18 @@ vi.mock('drizzle-orm', () => ({
   inArray: vi.fn((a: unknown, b: unknown) => [a, b]),
 }));
 
+vi.mock('@/lib/api-auth', () => ({
+  GROEP_ADMINISTRATOR: 5,
+  GROEP_DEELNEMER: 1,
+  GROEP_SECRETARIS: 2,
+  hasGroupManagementAccess: mockHasGroupManagementAccess,
+}));
+
 describe('resolveDeelnemerCreatePermission', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLimit.mockResolvedValue([]);
+    mockHasGroupManagementAccess.mockResolvedValue(true);
     vi.resetModules();
   });
 
@@ -43,7 +55,7 @@ describe('resolveDeelnemerCreatePermission', () => {
       email: 'admin@test.nl',
       idgroep: 5,
       isAdmin: true,
-    });
+    }, 10);
 
     expect(result).toEqual({ ok: true });
     expect(mockSelect).not.toHaveBeenCalled();
@@ -58,11 +70,31 @@ describe('resolveDeelnemerCreatePermission', () => {
       email: 'secretaris@test.nl',
       idgroep: 2,
       isAdmin: false,
-    });
+    }, 10);
 
     expect(result).toEqual({
       ok: false,
       forbiddenReason: 'Uw rol heeft geen recht om deelnemers toe te voegen (deelnemertoev staat uit).',
+    });
+  });
+
+  it('rejects non-secretaris for selected waarneemgroep', async () => {
+    mockHasGroupManagementAccess.mockResolvedValueOnce(false);
+    const { resolveDeelnemerCreatePermission } = await import('@/lib/deelnemer-nieuw');
+
+    const result = await resolveDeelnemerCreatePermission(
+      {
+        id: 3,
+        email: 'deelnemer@test.nl',
+        idgroep: 2,
+        isAdmin: false,
+      },
+      99
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      forbiddenReason: 'U bent geen secretaris voor de gekozen waarneemgroep.',
     });
   });
 });

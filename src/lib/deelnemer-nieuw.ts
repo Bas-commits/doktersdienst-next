@@ -4,6 +4,7 @@ import {
   GROEP_ADMINISTRATOR,
   GROEP_DEELNEMER,
   GROEP_SECRETARIS,
+  hasGroupManagementAccess,
   type AuthenticatedUser,
 } from '@/lib/api-auth';
 import { getBetterAuthApiBase } from '@/lib/better-auth-url';
@@ -26,26 +27,32 @@ export function syntheticSignUpTrustHeaders(): Headers {
 /**
  * Secretaris (idgroep 2) with `groepen.deelnemertoev`, or administrator (idgroep 5).
  */
-export async function resolveDeelnemerCreatePermission(actor: AuthenticatedUser): Promise<
+export async function resolveDeelnemerCreatePermission(
+  actor: AuthenticatedUser,
+  idwaarneemgroep: number | null
+): Promise<
   { ok: true } | { ok: false; forbiddenReason: string }
 > {
-  const ig = actor.idgroep;
-  if (ig === null || ig === undefined) {
-    return { ok: false, forbiddenReason: 'Geen rol toegewezen voor dit account.' };
-  }
-  if (ig !== GROEP_SECRETARIS && ig !== GROEP_ADMINISTRATOR) {
-    return {
-      ok: false,
-      forbiddenReason: 'Alleen secretaris of administrator kan hier deelnemers toevoegen.',
-    };
-  }
-  if (ig === GROEP_ADMINISTRATOR) {
+  if (actor.idgroep === GROEP_ADMINISTRATOR) {
     return { ok: true };
   }
+
+  if (!Number.isFinite(idwaarneemgroep) || !idwaarneemgroep || idwaarneemgroep <= 0) {
+    return { ok: false, forbiddenReason: 'Kies eerst een geldige waarneemgroep in de kopbalk.' };
+  }
+
+  const mayManageSelectedGroup = await hasGroupManagementAccess(actor, idwaarneemgroep);
+  if (!mayManageSelectedGroup) {
+    return {
+      ok: false,
+      forbiddenReason: 'U bent geen secretaris voor de gekozen waarneemgroep.',
+    };
+  }
+
   const [row] = await db
     .select({ deelnemertoev: groepen.deelnemertoev })
     .from(groepen)
-    .where(eq(groepen.id, ig))
+    .where(eq(groepen.id, GROEP_SECRETARIS))
     .limit(1);
   if (!row?.deelnemertoev) {
     return {

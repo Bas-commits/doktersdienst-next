@@ -72,10 +72,14 @@ export default function DeelnemerToevoegenPage() {
   const myDeelnemerId =
     session?.user?.id != null && session.user.id !== '' ? Number(session.user.id) : NaN;
 
-  const loadOpties = useCallback(async () => {
+  const loadOpties = useCallback(async (wgId: string | null) => {
     setOptieState({ status: 'loading' });
     try {
-      const r = await fetch('/api/deelnemers/nieuw/opties', { credentials: 'include' });
+      const qs =
+        wgId && wgId.trim() !== ''
+          ? `?idwaarneemgroep=${encodeURIComponent(wgId)}`
+          : '';
+      const r = await fetch(`/api/deelnemers/nieuw/opties${qs}`, { credentials: 'include' });
       if (r.status === 401) {
         setOptieState({ status: 'err', msg: 'U bent niet ingelogd.' });
         return;
@@ -129,8 +133,8 @@ export default function DeelnemerToevoegenPage() {
 
   useEffect(() => {
     if (!session?.user) return;
-    void loadOpties();
-  }, [session?.user, loadOpties]);
+    void loadOpties(activeWaarneemgroepId);
+  }, [activeWaarneemgroepId, session?.user, loadOpties]);
 
   useEffect(() => {
     const allowed =
@@ -322,7 +326,7 @@ export default function DeelnemerToevoegenPage() {
       setInitialen('');
       setMobiel('');
       setIdgroep('');
-      void loadOpties();
+      void loadOpties(activeWaarneemgroepId);
       void loadLeden(idWG);
     } catch {
       toast.error('Opslaan mislukt. Probeer het opnieuw.');

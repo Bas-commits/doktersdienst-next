@@ -30,7 +30,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
 
   try {
-    const perm = await resolveDeelnemerCreatePermission(user);
+    const idwaarneemgroepRaw =
+      typeof req.query.idwaarneemgroep === 'string'
+        ? req.query.idwaarneemgroep
+        : Array.isArray(req.query.idwaarneemgroep)
+          ? req.query.idwaarneemgroep[0]
+          : null;
+    const idwaarneemgroep =
+      idwaarneemgroepRaw != null && idwaarneemgroepRaw !== ''
+        ? Number(idwaarneemgroepRaw)
+        : null;
+
+    const perm = await resolveDeelnemerCreatePermission(user, idwaarneemgroep);
     if (!perm.ok) {
       return res.status(200).json({ allowed: false, forbiddenReason: perm.forbiddenReason, groepen: [] });
     }

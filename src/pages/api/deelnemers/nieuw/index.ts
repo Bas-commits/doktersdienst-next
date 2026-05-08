@@ -69,11 +69,6 @@ export default async function handler(
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const perm = await resolveDeelnemerCreatePermission(user);
-  if (!perm.ok) {
-    return res.status(403).json({ error: perm.forbiddenReason });
-  }
-
   const b = req.body as PostBody;
   const idwaarneemgroep =
     typeof b.idwaarneemgroep === 'number' ? b.idwaarneemgroep : Number(b.idwaarneemgroep);
@@ -82,6 +77,11 @@ export default async function handler(
     return res
       .status(400)
       .json({ error: 'idwaarneemgroep en idgroep zijn verplicht en moeten een getal zijn.' });
+  }
+
+  const perm = await resolveDeelnemerCreatePermission(user, idwaarneemgroep);
+  if (!perm.ok) {
+    return res.status(403).json({ error: perm.forbiddenReason });
   }
 
   if (!(await hasGroupManagementAccess(user, idwaarneemgroep))) {

@@ -4,30 +4,11 @@ import { useRouter } from "next/router";
 import { useEffect } from "react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { Toaster } from "@/components/ui/sonner";
-
-const AUTHENTICATED_PATHS = [
-  "/dashboard",
-  "/rooster-inzien",
-  "/rooster-maken-secretaris",
-  "/overnames",
-  "/voorkeuren",
-  "/mijn-gegevens",
-  "/lijst-deelnemers",
-  "/rollen-afmelden",
-  "/waarneemgroep-gegevens",
-  "/regio-toevoegen",
-  "/waarneemgroep-wijzigen",
-  "/diensten-toevoegen",
-  "/waarneemgroep-toevoegen",
-  "/vakanties",
-  "/deelnemer-toevoegen",
-  "/bestaande-toevoegen",
-  "/deelnemers-verwijderen",
-];
+import { isAuthenticatedPath } from "@/lib/route-access";
 
 function useIsAuthenticatedRoute(): boolean {
   const router = useRouter();
-  return AUTHENTICATED_PATHS.some((path) => router.pathname === path);
+  return isAuthenticatedPath(router.pathname);
 }
 
 export default function App({ Component, pageProps }: AppProps) {

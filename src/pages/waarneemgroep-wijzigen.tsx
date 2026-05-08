@@ -449,7 +449,7 @@ export default function WaarneemgroepWijzigenPage() {
                           disabled={submitting}
                         />
                       </div>
-                      <div className="flex flex-col gap-1">
+                      {/* <div className="flex flex-col gap-1">
                         <Label htmlFor="wg-telnrconference">Telnr conference</Label>
                         <Input
                           id="wg-telnrconference"
@@ -457,7 +457,7 @@ export default function WaarneemgroepWijzigenPage() {
                           onChange={(e) => set('telnrconference', e.target.value)}
                           disabled={submitting}
                         />
-                      </div>
+                      </div> */}
                     </div>
 
                     <div className="flex flex-wrap gap-x-6 gap-y-3">

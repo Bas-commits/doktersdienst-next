@@ -2,13 +2,10 @@ import type { NextApiRequest } from 'next';
 import { and, eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { GROEP_ADMINISTRATOR, GROEP_SECRETARIS } from '@/lib/roles';
 
 const { deelnemers, waarneemgroepdeelnemers } = schema;
-
-export const GROEP_ADMINISTRATOR = 5;
-/** Default participant role (“Deelnemer” in UI). */
-export const GROEP_DEELNEMER = 1;
-export const GROEP_SECRETARIS = 2;
+export { GROEP_ADMINISTRATOR, GROEP_DEELNEMER, GROEP_SECRETARIS } from '@/lib/roles';
 
 /** Convert Next.js request headers to Headers for Better Auth */
 export function toHeaders(incoming: NextApiRequest['headers']): Headers {

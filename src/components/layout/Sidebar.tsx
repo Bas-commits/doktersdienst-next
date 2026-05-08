@@ -9,7 +9,6 @@ import {
   Check,
   PencilLine,
   MapPinPlus,
-  Building2,
   UserPlus,
   UserPlus2,
   List,
@@ -20,6 +19,12 @@ import {
 } from 'lucide-react';
 import { FaCalendarPlus } from 'react-icons/fa';
 import { DEFAULT_ROUTES } from '@/lib/header-defaults';
+import {
+  GROEP_DEELNEMER,
+  hasAdminAccess,
+  hasSecretarisAccess,
+  type RoleTier,
+} from '@/lib/roles';
 
 type NavItem = {
   id: string;
@@ -42,12 +47,12 @@ const SECRETARIS_NAV_ITEMS: NavItem[] = [
     href: DEFAULT_ROUTES.waarneemgroep_wijzigen,
     icon: <PencilLine className="size-4 shrink-0" />,
   },
-  {
-    id: 'waarneemgroep-gegevens',
-    label: 'Deze waarneemgroep',
-    href: DEFAULT_ROUTES.waarneemgroep_gegevens,
-    icon: <Building2 className="size-4 shrink-0" />,
-  },
+  // {
+  //   id: 'waarneemgroep-gegevens',
+  //   label: 'Deze waarneemgroep',
+  //   href: DEFAULT_ROUTES.waarneemgroep_gegevens,
+  //   icon: <Building2 className="size-4 shrink-0" />,
+  // },
   {
     id: 'deelnemer-toevoegen',
     label: 'Deelnemer toevoegen',
@@ -156,13 +161,14 @@ function SectionHeading({ label }: { label: string }) {
 }
 
 export interface SidebarProps {
-  /** Secretaris- en admin-secties in de sidebar (niet voor Doctor). */
-  showSecretarisAndAdmin?: boolean;
+  roleTier?: RoleTier;
 }
 
-export function Sidebar({ showSecretarisAndAdmin = true }: SidebarProps) {
+export function Sidebar({ roleTier = GROEP_DEELNEMER }: SidebarProps) {
   const router = useRouter();
   const pathname = router.pathname;
+  const showSecretaris = hasSecretarisAccess(roleTier);
+  const showAdmin = hasAdminAccess(roleTier);
 
   return (
     <aside
@@ -172,10 +178,14 @@ export function Sidebar({ showSecretarisAndAdmin = true }: SidebarProps) {
       <nav className="h-full overflow-y-auto px-2 py-4 transition-[padding] duration-200 group-hover/sb:px-4">
         <ul className="sidebar-nav flex flex-col gap-1" role="navigation" aria-label="Hoofdnavigatie">
           <NavLinkList items={MAIN_NAV_ITEMS} pathname={pathname} />
-          {showSecretarisAndAdmin && (
+          {showSecretaris && (
             <>
               <SectionHeading label="Secretaris" />
               <NavLinkList items={SECRETARIS_NAV_ITEMS} pathname={pathname} />
+            </>
+          )}
+          {showAdmin && (
+            <>
               <SectionHeading label="Admin" />
               <NavLinkList items={ADMIN_NAV_ITEMS} pathname={pathname} />
             </>

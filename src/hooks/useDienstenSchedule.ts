@@ -6,6 +6,13 @@ function formatTwoDigits(n: number): string {
   return n.toString().padStart(2, '0');
 }
 
+/** Normalizes DB/API status for comparisons (trim + lowercase). Empty → null. */
+function normalizedOvernameStatus(status: string | null | undefined): string | null {
+  if (status == null || typeof status !== 'string') return null;
+  const s = status.trim().toLowerCase();
+  return s === '' ? null : s;
+}
+
 /** True if [aVan, aTot] and [bVan, bTot] overlap (half-open-style boundary check matches PHP shift overlap). */
 export function intervalsOverlap(aVan: number, aTot: number, bVan: number, bTot: number): boolean {
   return aVan < bTot && aTot > bVan;
@@ -76,10 +83,23 @@ export function dienstenToShiftBlocksFromParticipant(
 
 /** Returns the overnameType for a dienst based on its type and status, or undefined for non-overname records. */
 function getOvernameType(dienst: Dienst): ShiftBlockView['overnameType'] {
-  if (!dienst.status) return undefined;
-  if (dienst.type === 4 && dienst.status === 'pending') return 'voorstelOvername';
-  if (dienst.type === 4 && dienst.status === 'declined') return 'vraagtekenOvername';
-  if (dienst.type === 6 && dienst.status === 'accepted') return 'overname';
+  const st = normalizedOvernameStatus(dienst.status);
+  if (dienst.type === 4) {
+    if (st === 'pending') return 'voorstelOvername';
+    if (st === 'declined') return 'vraagtekenOvername';
+    // Fallback: propose rows reference another dienst + target + sender; partial times would
+    // otherwise hit `if (!base) continue` and vanish when status is missing/legacy DB quirks.
+    if (
+      st == null &&
+      (dienst.iddienstovern ?? 0) > 0 &&
+      (dienst.iddeelnovern ?? 0) > 0 &&
+      (dienst.senderId ?? 0) > 0
+    ) {
+      return 'voorstelOvername';
+    }
+    return undefined;
+  }
+  if (dienst.type === 6 && st === 'accepted') return 'overname';
   return undefined;
 }
 

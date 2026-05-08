@@ -146,7 +146,10 @@ export default async function handler(
       idwaarneemgroep: r.idwaarneemgroep,
       idaantekening: r.idaantekening,
       aantekeningTekst: r.aantekeningTekst,
-      status: r.status,
+      status:
+        r.status != null && String(r.status).trim() !== ''
+          ? String(r.status).trim().toLowerCase()
+          : null,
       iddienstovern: r.iddienstovern,
       iddeelnovern: r.iddeelnovern,
       senderId: r.senderId,

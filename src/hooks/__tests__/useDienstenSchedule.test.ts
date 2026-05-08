@@ -538,4 +538,37 @@ describe('dienstenToShiftBlocks — overname overlay blocks', () => {
     // Original doctor should still be stored
     expect(overlay!.originalDoctor?.id).toBe(50);
   });
+
+  it('treats type=4 with messy-cased status as voorstel overlay', () => {
+    const originalDoc = makeDeelnemer({ id: 50, voornaam: 'Piet', achternaam: 'Origineel', color: '#ff0000' });
+    const targetDoc = makeDeelnemer({ id: 60, voornaam: 'Jan', achternaam: 'Doelarts', color: '#00ff00' });
+    const slot = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID);
+    const proposal = makeOvernameProposal(SHIFT_VAN, SHIFT_TOT, WG_ID, originalDoc, targetDoc, {
+      iddienstovern: slot.id,
+      status: ' Pending ',
+      senderId: 50,
+    });
+
+    const blocks = dienstenToShiftBlocks(makeDienstenResponse([slot, proposal]));
+    const overlay = blocks.find((b) => b.overnameType === 'voorstelOvername');
+    expect(overlay).toBeDefined();
+  });
+
+  it('type=4 partial row with FKs but no status still becomes overlay (not dropped)', () => {
+    const originalDoc = makeDeelnemer({ id: 50, voornaam: 'Piet', achternaam: 'Origineel', color: '#ff0000' });
+    const targetDoc = makeDeelnemer({ id: 60, voornaam: 'Jan', achternaam: 'Doelarts', color: '#00ff00' });
+    const slot = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID);
+    const partialVan = SHIFT_VAN + 3600;
+    const partialTot = SHIFT_TOT - 3600;
+    const proposal = makeOvernameProposal(partialVan, partialTot, WG_ID, originalDoc, targetDoc, {
+      iddienstovern: slot.id,
+      status: undefined,
+      senderId: 50,
+    });
+
+    const blocks = dienstenToShiftBlocks(makeDienstenResponse([slot, proposal]));
+    const overlay = blocks.find((b) => b.overnameType === 'voorstelOvername');
+    expect(overlay).toBeDefined();
+    expect(overlay!.isPartial).toBe(true);
+  });
 });

@@ -465,8 +465,8 @@ export default function WaarneemgroepWijzigenPage() {
                         [
                           ['afgemeld', 'Afgemeld'],
                           ['smsdienstbegin', 'SMS begin dienst'],
-                          ['gebruiktVoicemail', 'Gebruikt voicemail'],
-                          ['abomaatschapplanner', 'Praktijkplanner abonnement'],
+
+                          // ['abomaatschapplanner', 'Praktijkplanner abonnement'],
                         ] as [keyof FormData, string][]
                       ).map(([key, label]) => (
                         <div key={key} className="flex items-center gap-2">

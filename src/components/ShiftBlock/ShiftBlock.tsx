@@ -485,7 +485,15 @@ export function ShiftBlock({
             ? `calc(${leftPercent}% - 1px)`
             : `${leftPercent}%`,
         transform: 'translateY(-50%)',
-        zIndex: isHovered ? 9999 : (continuesFromPrev || continuesToNext) ? 1 : undefined,
+        // Base shifts use z-index 9999 on hover (tooltips). Overname overlays must stay above
+        // that so the onderliggende shift does not visually cover the overname when hovered.
+        zIndex: overnameType
+          ? isHovered ? 10001 : 10000
+          : isHovered
+            ? 9999
+            : continuesFromPrev || continuesToNext
+              ? 1
+              : undefined,
       }}
     >
       {onDelete && (

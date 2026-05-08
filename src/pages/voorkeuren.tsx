@@ -123,6 +123,8 @@ export default function VoorkeurenPage() {
   /** Cursor position for chip preview (only used when selectedChipCode is set). */
   const [cursorPreview, setCursorPreview] = useState<{ x: number; y: number } | null>(null);
 
+  const pointerDownStartedInCalendarRef = useRef(false);
+
   /** Only the selected waarneemgroep in the header (one at a time). */
   const waarneemgroepIds = useMemo(() => {
     if (!activeWaarneemgroepId) return [];
@@ -406,25 +408,39 @@ export default function VoorkeurenPage() {
       return;
     }
     function onMove(e: MouseEvent) {
+      const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
+      const hidePreview = hoveredEl instanceof Element && Boolean(
+        hoveredEl.closest('[data-voorkeuren-chip-panel], [data-voorkeuren-header-panel], header, aside')
+      );
+      if (hidePreview) {
+        setCursorPreview(null);
+        return;
+      }
       setCursorPreview({ x: e.clientX, y: e.clientY });
-    }
-    function onLeave() {
-      setCursorPreview(null);
     }
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') setSelectedChipCode(null);
     }
-    function onPointerDown(e: MouseEvent) {
-      const el = calendarGridRef.current;
-      if (!el || !el.contains(e.target as Node)) setSelectedChipCode(null);
+    /**
+     * End “chip on cursor” only when clicking outside the calendar grid.
+     * Clicks on the chip sidebar must not clear first (that briefly nulled selectedChipCode,
+     * ran the effect cleanup, and dropped cursor preview until the chip click re-selected).
+     */
+    function onPointerDown(e: PointerEvent) {
+      const t = e.target;
+      const el = t instanceof Element ? t : t instanceof Text ? t.parentElement : null;
+      const startedInCalendarCapture = pointerDownStartedInCalendarRef.current;
+      pointerDownStartedInCalendarRef.current = false;
+      const insideCal = startedInCalendarCapture || Boolean(el?.closest('[data-voorkeuren-calendar]'));
+      const insideChips = Boolean(el?.closest('[data-voorkeuren-chip-panel]'));
+      if (startedInCalendarCapture || insideCal || insideChips) return;
+      setSelectedChipCode(null);
     }
     window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseleave', onLeave);
     window.addEventListener('keydown', onKeyDown);
     document.addEventListener('pointerdown', onPointerDown);
     return () => {
       window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseleave', onLeave);
       window.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('pointerdown', onPointerDown);
     };
@@ -438,8 +454,10 @@ export default function VoorkeurenPage() {
       {cursorPreview && chipStyle && CursorChipIcon && (
         <div
           aria-hidden
-          className="pointer-events-none fixed z-9999 flex h-9 w-9 items-center justify-center rounded-md border-2 border-primary shadow-lg"
+          className="pointer-events-none fixed flex h-9 w-9 items-center justify-center rounded-md border-2 border-primary shadow-lg"
           style={{
+            // Above ShiftBlock hover (9999) and overname overlays (10k–10k1); below portaled shift tooltips (100k).
+            zIndex: 10200,
             left: cursorPreview.x + 12,
             top: cursorPreview.y + 12,
             backgroundColor: chipStyle.backgroundColor,
@@ -453,7 +471,7 @@ export default function VoorkeurenPage() {
         <title>Voorkeuren | Doktersdienst</title>
       </Head>
       <div className="mx-auto max-w-[2000px] space-y-6 px-4 py-8">
-        <Card className="overflow-visible">
+        <Card className="overflow-visible" data-voorkeuren-header-panel>
           <CardHeader className="overflow-visible">
             <CardTitle>
               <h1 id="voorkeuren-heading" className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -467,7 +485,7 @@ export default function VoorkeurenPage() {
           </CardContent>
         </Card>
         <div className="flex flex-col gap-6 lg:flex-row">
-          <Card className="shrink-0 lg:w-[220px]">
+          <Card className="shrink-0 lg:w-[220px]" data-voorkeuren-chip-panel>
             <CardHeader>
               <CardTitle className="text-base">Voorkeur kiezen</CardTitle>
             </CardHeader>
@@ -509,6 +527,10 @@ export default function VoorkeurenPage() {
               {waarneemgroepIds.length > 0 && (
                 <div
                   ref={calendarGridRef}
+                  data-voorkeuren-calendar
+                  onPointerDownCapture={() => {
+                    pointerDownStartedInCalendarRef.current = true;
+                  }}
                   className={selectedChipCode ? 'select-none' : undefined}
                 >
                   <CalendarGridWithNavState
@@ -533,6 +555,8 @@ export default function VoorkeurenPage() {
                     getChipByCode={getChipByCode}
                     showPreferences={false}
                     hidePreferenceFillInitialsOnShiftBlocks
+                    hideOwnerNameInTooltip
+                    hideUnassignedAantekening
                     enablePreferencePaintAssign={Boolean(selectedChipCode)}
                     onPreferencePaintSessionStart={onPreferencePaintSessionStart}
                     onPreferencePaintSessionEnd={onPreferencePaintSessionEnd}

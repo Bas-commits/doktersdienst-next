@@ -77,6 +77,10 @@ export interface CalendarGridProps {
   /** Called when a paint stroke ends (pointerup / cancel / blur). */
   onPreferencePaintSessionStart?: () => void;
   onPreferencePaintSessionEnd?: () => void;
+  /** When true, shift tooltips omit doctor names and show only shift labels. */
+  hideOwnerNameInTooltip?: boolean;
+  /** When true, aantekening text is hidden for unassigned blocks (type=1 slots). */
+  hideUnassignedAantekening?: boolean;
 }
 
 /** Width of the right-hand column that shows waarneemgroep names per row (when multiple rows). */
@@ -401,6 +405,8 @@ export function CalendarGrid({
   enablePreferencePaintAssign = false,
   onPreferencePaintSessionStart,
   onPreferencePaintSessionEnd,
+  hideOwnerNameInTooltip = false,
+  hideUnassignedAantekening = false,
 }: CalendarGridProps) {
   const paintSessionRef = useRef<{ active: boolean; keysTouched: Set<string> }>({
     active: false,
@@ -682,6 +688,8 @@ export function CalendarGrid({
                                     preferenceChip={preferenceChip ?? null}
                                     hideInitialsInPreferenceFill={hidePreferenceFillInitialsOnShiftBlocks}
                                     overnameType={block.overnameType}
+                                    hideOwnerNameInTooltip={hideOwnerNameInTooltip}
+                                    hideUnassignedAantekening={hideUnassignedAantekening}
                                   />
                                 );
                               })}
@@ -723,6 +731,8 @@ export function CalendarGrid({
                                             preferenceChip={
                                               CHIP_DEFINITIONS.find((c) => c.code === String(voorkeur.type ?? '')) ?? null
                                             }
+                                            hideOwnerNameInTooltip={hideOwnerNameInTooltip}
+                                            hideUnassignedAantekening={hideUnassignedAantekening}
                                           />
                                         ))}
                                       </div>

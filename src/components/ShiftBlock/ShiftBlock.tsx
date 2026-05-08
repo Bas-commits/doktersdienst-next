@@ -146,6 +146,19 @@ export interface ShiftBlockProps {
    */
   onMiddlePointerDown?: PointerEventHandler<HTMLDivElement>;
   onMiddlePointerEnter?: PointerEventHandler<HTMLDivElement>;
+  /**
+   * When true, the hover tooltip center line never shows the doctor's full name.
+   * It uses only the shift label (if present). Intended for /voorkeuren where shifts
+   * always belong to the logged-in user.
+   */
+  hideOwnerNameInTooltip?: boolean;
+  /**
+   * When true, aantekening text is hidden for unassigned blocks (type=1 slots):
+   * - middle strip fallback text
+   * - native title
+   * - hover tooltip
+   */
+  hideUnassignedAantekening?: boolean;
 }
 
 export function ShiftBlock({
@@ -177,6 +190,8 @@ export function ShiftBlock({
   overnameType,
   onMiddlePointerDown,
   onMiddlePointerEnter,
+  hideOwnerNameInTooltip = false,
+  hideUnassignedAantekening = false,
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
   const [isHovered, setIsHovered] = useState(false);
@@ -311,7 +326,9 @@ export function ShiftBlock({
   const isUnassignedSlot = !block.middle;
   const showPendingDoctor = isUnassignedSlot && pendingDoctor != null;
 
-  const aantekeningLabel = (block.aantekeningTekst ?? '').trim();
+  const rawAantekeningLabel = (block.aantekeningTekst ?? '').trim();
+  const showAantekening = !(hideUnassignedAantekening && isUnassignedSlot);
+  const aantekeningLabel = showAantekening ? rawAantekeningLabel : '';
   const aantekeningTextClass =
     doctorId || showPendingDoctor ? '' : 'text-[#4b5563]';
 
@@ -463,6 +480,10 @@ export function ShiftBlock({
   });
   const vanArts = block.originalDoctor;
   const naarArts = block.middle;
+  const tooltipMainLabel = hideOwnerNameInTooltip
+    ? (block.label ?? '')
+    : (doctorId ? displayName : block.label);
+  const tooltipAantekeningLabel = rawAantekeningLabel;
 
   return (
     <div
@@ -846,12 +867,12 @@ export function ShiftBlock({
                   {block.startTime}
                 </p>
                 <p className="mb-0 font-bold leading-[17px] text-center">
-                  {doctorId ? displayName : block.label}
+                  {tooltipMainLabel}
                   {doctorId !== 0 && block.label ? (
                     <span className="block text-[10px]">{block.label}</span>
                   ) : null}
-                  {aantekeningLabel ? (
-                    <span className="block text-[10px] font-normal opacity-90">{aantekeningLabel}</span>
+                  {tooltipAantekeningLabel ? (
+                    <span className="block text-[10px] font-normal opacity-90">{tooltipAantekeningLabel}</span>
                   ) : null}
                 </p>
                 <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>

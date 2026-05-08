@@ -44,6 +44,10 @@ export interface CalendarGridWithNavStateProps {
   enablePreferencePaintAssign?: boolean;
   onPreferencePaintSessionStart?: () => void;
   onPreferencePaintSessionEnd?: () => void;
+  /** When true, shift tooltips omit doctor names and show only shift labels. */
+  hideOwnerNameInTooltip?: boolean;
+  /** When true, aantekening text is hidden for unassigned blocks (type=1 slots). */
+  hideUnassignedAantekening?: boolean;
   /**
    * When set, each stripe (top/middle/bottom) is individually clickable for the planning view.
    */
@@ -84,6 +88,8 @@ export function CalendarGridWithNavState({
   enablePreferencePaintAssign,
   onPreferencePaintSessionStart,
   onPreferencePaintSessionEnd,
+  hideOwnerNameInTooltip,
+  hideUnassignedAantekening,
   onSectionShiftClick,
   plannerDoctorPreferenceMap,
   onShiftDelete,
@@ -128,6 +134,8 @@ export function CalendarGridWithNavState({
       enablePreferencePaintAssign={enablePreferencePaintAssign}
       onPreferencePaintSessionStart={onPreferencePaintSessionStart}
       onPreferencePaintSessionEnd={onPreferencePaintSessionEnd}
+      hideOwnerNameInTooltip={hideOwnerNameInTooltip}
+      hideUnassignedAantekening={hideUnassignedAantekening}
       onSectionShiftClick={onSectionShiftClick}
       plannerDoctorPreferenceMap={plannerDoctorPreferenceMap}
       onShiftDelete={onShiftDelete}

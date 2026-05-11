@@ -15,6 +15,14 @@ function formatNaam(d: DeelnemerWithGroepen): string {
     .join(' ');
 }
 
+function getDisplayInitials(d: DeelnemerWithGroepen): string {
+  const fallback = [d.voornaam, d.achternaam]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .map((value) => value.trim().charAt(0).toUpperCase())
+    .join('');
+  return fallback.slice(0, 3) || '—';
+}
+
 export default function LijstDeelnemersPage() {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
@@ -155,8 +163,9 @@ export default function LijstDeelnemersPage() {
                     <thead>
                       <tr className="border-b text-left text-muted-foreground">
                         <th className="pb-2 pr-4 font-medium">Naam</th>
-                        <th className="pb-2 pr-4 font-medium">Login</th>
-                        <th className="pb-2 pr-4 font-medium">Kleur</th>
+                        <th className="pb-2 pr-4 font-medium">Email</th>
+                        <th className="pb-2 pr-4 font-medium">Verificatie</th>
+                        <th className="w-[6rem] pb-2 pr-4 font-medium">Kleur</th>
                         {showWaarneemgroepColumn && <th className="pb-2 pr-4 font-medium">Waarneemgroepen</th>}
                         {showWaarneemgroepColumn && <th className="pb-2 font-medium">Rol</th>}
                       </tr>
@@ -165,7 +174,7 @@ export default function LijstDeelnemersPage() {
                       {filtered.map((d) => (
                         <tr
                           key={d.id}
-                          className="cursor-pointer border-b last:border-0 hover:bg-muted/50"
+                          className="cursor-pointer border-b last:border-0 even:bg-muted/80 hover:bg-muted/50"
                           onClick={() => openDeelnemerGegevens(d.id)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
@@ -177,9 +186,30 @@ export default function LijstDeelnemersPage() {
                           tabIndex={0}
                           title="Open gegevens van deze deelnemer"
                         >
-                          <td className="py-2.5 pr-4 font-medium">{formatNaam(d)}</td>
+                          <td className="py-2.5 pr-4 font-medium">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
+                                style={{ backgroundColor: d.color || '#cccccc' }}
+                              >
+                                {getDisplayInitials(d)}
+                              </span>
+                              <span>{formatNaam(d)}</span>
+                            </div>
+                          </td>
                           <td className="py-2.5 pr-4 text-muted-foreground">{d.login ?? '—'}</td>
                           <td className="py-2.5 pr-4">
+                            <span
+                              className={`w-fit rounded px-2 py-0.5 text-xs font-medium ${
+                                d.emailVerified === true
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-amber-100 text-amber-900'
+                              }`}
+                            >
+                              {d.emailVerified === true ? 'Geverifieerd' : 'Niet geverifieerd'}
+                            </span>
+                          </td>
+                          <td className="w-[6rem] py-2.5 pr-4">
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
@@ -188,7 +218,7 @@ export default function LijstDeelnemersPage() {
                                   e.stopPropagation();
                                   colorInputRefs.current.get(d.id)?.click();
                                 }}
-                                className="h-6 w-10 rounded border border-input shadow-sm hover:scale-105 transition-transform"
+                                className="h-6 w-[3.75rem] rounded border border-input shadow-sm transition-transform hover:scale-105"
                                 style={{ backgroundColor: d.color || '#cccccc' }}
                               />
                               <input
@@ -202,16 +232,6 @@ export default function LijstDeelnemersPage() {
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => handleColorChange(d.id, e.target.value)}
                               />
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  colorInputRefs.current.get(d.id)?.click();
-                                }}
-                                className="text-xs text-muted-foreground hover:text-foreground underline"
-                              >
-                                Wijzig
-                              </button>
                             </div>
                           </td>
                           {showWaarneemgroepColumn && (

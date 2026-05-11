@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, UserPlus, X } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,7 +31,16 @@ function formatNaam(d: DeelnemerWithGroepen): string {
   return [d.voornaam, d.voorletterstussenvoegsel, d.achternaam].filter(Boolean).join(' ');
 }
 
+function getDisplayInitials(d: DeelnemerWithGroepen): string {
+  const fallback = [d.voornaam, d.achternaam]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .map((value) => value.trim().charAt(0).toUpperCase())
+    .join('');
+  return fallback.slice(0, 3) || '—';
+}
+
 export default function DeelnemerToevoegenPage() {
+  const router = useRouter();
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const {
     waarneemgroepen,
@@ -51,15 +61,17 @@ export default function DeelnemerToevoegenPage() {
   const [tussen, setTussen] = useState('');
   const [achternaam, setAchternaam] = useState('');
   const [initialen, setInitialen] = useState('');
-  const [mobiel, setMobiel] = useState('');
   const [idgroep, setIdgroep] = useState('');
+  const [bestaatInAndereWaarneemgroep, setBestaatInAndereWaarneemgroep] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const [leden, setLeden] = useState<DeelnemerWithGroepen[]>([]);
   const [ledenLoading, setLedenLoading] = useState(false);
   const [ledenError, setLedenError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
   const [resendingVerificationId, setResendingVerificationId] = useState<number | null>(null);
 
   const colorInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
@@ -173,8 +185,12 @@ export default function DeelnemerToevoegenPage() {
 
   const validateClient = (): string | null => {
     const em = email.trim().toLowerCase();
+    if (!em) return 'Vul een e-mailadres in.';
     if (!em.includes('@')) return 'Vul een geldig e-mailadres in.';
-    if (!voornaam.trim() || !achternaam.trim() || !initialen.trim()) {
+    if (
+      !bestaatInAndereWaarneemgroep &&
+      (!voornaam.trim() || !achternaam.trim() || !initialen.trim())
+    ) {
       return 'Voornaam, achternaam en initialen zijn verplicht.';
     }
     if (!idgroep) return 'Selecteer een rol.';
@@ -207,7 +223,6 @@ export default function DeelnemerToevoegenPage() {
   async function handleRemoveFromWg(deelnemerId: number) {
     const wg = activeWaarneemgroepId != null ? Number(activeWaarneemgroepId) : NaN;
     if (!Number.isFinite(wg)) return;
-    if (!window.confirm('Deze deelnemer uit deze waarneemgroep afmelden?')) return;
     setRemovingId(deelnemerId);
     try {
       const res = await fetch('/api/deelnemers/registratie', {
@@ -231,7 +246,12 @@ export default function DeelnemerToevoegenPage() {
       toast.error('Afmelden mislukt');
     } finally {
       setRemovingId(null);
+      setConfirmRemoveId(null);
     }
+  }
+
+  function requestRemoveFromWg(deelnemerId: number) {
+    setConfirmRemoveId(deelnemerId);
   }
 
   async function handleResendVerification(d: DeelnemerWithGroepen) {
@@ -302,9 +322,9 @@ export default function DeelnemerToevoegenPage() {
           voorletterstussenvoegsel: tussen.trim(),
           achternaam: achternaam.trim(),
           initialen: initialen.trim(),
-          huisadrtelnr: mobiel.trim(),
           idgroep: idRol,
           idwaarneemgroep: idWG,
+          bestaatInAndereWaarneemgroep,
           inviteInitiatedOrigin:
             typeof window !== 'undefined' ? window.location.origin : undefined,
         }),
@@ -312,6 +332,14 @@ export default function DeelnemerToevoegenPage() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error(typeof body?.error === 'string' ? body.error : `Fout (${res.status})`);
+        return;
+      }
+      const outcome =
+        typeof (body as { outcome?: string }).outcome === 'string'
+          ? (body as { outcome: string }).outcome
+          : 'created';
+      if (outcome === 'already-linked') {
+        toast.info('gebruiker al toegewezen aan deze waarneemgroep');
         return;
       }
       const okMsg =
@@ -324,8 +352,9 @@ export default function DeelnemerToevoegenPage() {
       setTussen('');
       setAchternaam('');
       setInitialen('');
-      setMobiel('');
       setIdgroep('');
+      setBestaatInAndereWaarneemgroep(false);
+      setIsAddModalOpen(false);
       void loadOpties(activeWaarneemgroepId);
       void loadLeden(idWG);
     } catch {
@@ -335,16 +364,20 @@ export default function DeelnemerToevoegenPage() {
     }
   }
 
+  function openDeelnemerGegevens(deelnemerId: number) {
+    void router.push(`/mijn-gegevens?deelnemerId=${deelnemerId}`);
+  }
+
   if (sessionPending) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-8">
         <p className="text-sm text-muted-foreground">Laden…</p>
       </div>
     );
   }
   if (!session?.user) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-8">
         <p className="text-sm text-muted-foreground">Niet ingelogd.</p>
       </div>
     );
@@ -360,7 +393,7 @@ export default function DeelnemerToevoegenPage() {
       <Head>
         <title>Deelnemer toevoegen</title>
       </Head>
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
         <Card>
           <CardHeader>
             <CardTitle>
@@ -410,126 +443,9 @@ export default function DeelnemerToevoegenPage() {
                 ) : null}
 
                 {!isActiveGroupForbidden && (
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div className="grid gap-2">
-                    <Label htmlFor="email">E‑mailadres</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      maxLength={50}
-                      className="max-w-xl"
-                    />
-                    <p className="max-w-xl text-xs text-muted-foreground">
-                      De nieuwe gebruiker ontvangt één e‑mail met een link om dit adres te bevestigen; daarna wordt
-                      direct gevraagd een sterk wachtwoord te kiezen. U hoeft hier geen wachtwoord meer in te vullen.
-                    </p>
-                    <p className="max-w-xl text-xs text-muted-foreground">
-                      De waarneemgroep waarin de deelnemer wordt toegevoegd volgt uit de keuze in de kopbalk
-                      {selectedWgLabel ? <> ({selectedWgLabel})</> : null}.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="grid gap-2 sm:col-span-2 sm:max-w-md">
-                      <Label htmlFor="rol">Rol deelnemer</Label>
-                      <select
-                        id="rol"
-                        className={selectClass}
-                        value={idgroep}
-                        onChange={(e) => setIdgroep(e.target.value)}
-                        disabled={groepChoices.length === 0}
-                        required
-                      >
-                        <option value="">— Kies —</option>
-                        {groepChoices.map((g) => (
-                          <option key={g.id} value={String(g.id)}>
-                            {g.naam ?? `Groep ${g.id}`}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="vn">Voornaam</Label>
-                      <Input
-                        id="vn"
-                        value={voornaam}
-                        onChange={(e) => setVoornaam(e.target.value)}
-                        required
-                        maxLength={50}
-                      />
-                    </div>
-                    {/* <div className="grid gap-2">
-                      <Label htmlFor="tussen">Voorletters / tussenvoegsel</Label>
-                      <Input
-                        id="tussen"
-                        value={tussen}
-                        onChange={(e) => setTussen(e.target.value)}
-                        maxLength={50}
-                      />
-                    </div> */}
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="an">Achternaam</Label>
-                      <Input
-                        id="an"
-                        value={achternaam}
-                        onChange={(e) => setAchternaam(e.target.value)}
-                        required
-                        maxLength={50}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="inl">Initialen</Label>
-                      <Input
-                        id="inl"
-                        value={initialen}
-                        onChange={(e) => setInitialen(e.target.value)}
-                        required
-                        maxLength={50}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="mob">Mobiele telefoon</Label>
-                    <Input
-                      id="mob"
-                      type="tel"
-                      value={mobiel}
-                      onChange={(e) => setMobiel(e.target.value)}
-                      maxLength={50}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Wordt opgeslagen bij het legacy veld voor het mobiele nummer van deelnemers.
-                    </p>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    disabled={
-                      submitting ||
-                      waarneemgroepen.length === 0 ||
-                      groepChoices.length === 0 ||
-                      !activeWaarneemgroepId
-                    }
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Bezig…
-                      </>
-                    ) : (
-                      'Opslaan'
-                    )}
-                  </Button>
-                </form>
+                  <p className="text-sm text-muted-foreground">
+                    Voeg een deelnemer toe via de knop rechtsboven in de deelnemerslijst.
+                  </p>
                 )}
               </>
             )}
@@ -543,10 +459,23 @@ export default function DeelnemerToevoegenPage() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <h2 className="text-lg font-semibold tracking-tight">
-                    Deelnemers in deze waarneemgroep
-                    {selectedWgLabel ? ` — ${selectedWgLabel}` : ''}
-                  </h2>
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-lg font-semibold tracking-tight">
+                      Deelnemers in deze waarneemgroep
+                      {selectedWgLabel ? ` — ${selectedWgLabel}` : ''}
+                    </h2>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        title="Nieuwe deelnemer toevoegen"
+                        aria-label="Nieuwe deelnemer toevoegen"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-destructive text-destructive-foreground transition-colors hover:bg-destructive/90"
+                        onClick={() => setIsAddModalOpen(true)}
+                      >
+                        <UserPlus className="h-5 w-5 text-white" />
+                      </button>
+                    </div>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -568,7 +497,7 @@ export default function DeelnemerToevoegenPage() {
                           <th className="pb-2 pr-4 font-medium">Naam</th>
                           <th className="pb-2 pr-4 font-medium">Email</th>
                           <th className="pb-2 pr-4 font-medium">Verificatie</th>
-                          <th className="pb-2 pr-4 font-medium">Kleur</th>
+                          <th className="w-[6rem] pb-2 pr-4 font-medium">Kleur</th>
                           <th className="pb-2 pr-4 font-medium">Rol in groep</th>
                           <th className="pb-2 font-medium w-44" />
                         </tr>
@@ -577,8 +506,31 @@ export default function DeelnemerToevoegenPage() {
                         {leden.map((d) => {
                           const rolInWg = d.waarneemgroepen.find((wg) => wg.id === wgNumeric)?.idgroep;
                           return (
-                            <tr key={d.id} className="border-b last:border-0 hover:bg-muted/50">
-                              <td className="py-2.5 pr-4 font-medium">{formatNaam(d)}</td>
+                            <tr
+                              key={d.id}
+                              className="cursor-pointer border-b last:border-0 even:bg-muted/80 hover:bg-muted/50"
+                              onClick={() => openDeelnemerGegevens(d.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  openDeelnemerGegevens(d.id);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              title="Open gegevens van deze deelnemer"
+                            >
+                              <td className="py-2.5 pr-4 font-medium">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
+                                    style={{ backgroundColor: d.color || '#cccccc' }}
+                                  >
+                                    {getDisplayInitials(d)}
+                                  </span>
+                                  <span>{formatNaam(d)}</span>
+                                </div>
+                              </td>
                               <td className="py-2.5 pr-4 text-muted-foreground">{d.login ?? '—'}</td>
                               <td className="py-2.5 pr-4">
                                 <div className="flex flex-col gap-1">
@@ -598,20 +550,26 @@ export default function DeelnemerToevoegenPage() {
                                       size="sm"
                                       className="h-7 w-fit text-xs"
                                       disabled={resendingVerificationId === d.id || !d.login}
-                                      onClick={() => void handleResendVerification(d)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        void handleResendVerification(d);
+                                      }}
                                     >
                                       {resendingVerificationId === d.id ? 'Bezig…' : 'Opnieuw sturen'}
                                     </Button>
                                   )}
                                 </div>
                               </td>
-                              <td className="py-2.5 pr-4">
+                              <td className="w-[6rem] py-2.5 pr-4">
                                 <div className="flex items-center gap-2">
                                   <button
                                     type="button"
                                     title="Wijzig kleur"
-                                    onClick={() => colorInputRefs.current.get(d.id)?.click()}
-                                    className="h-6 w-10 rounded border border-input shadow-sm hover:scale-105 transition-transform"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      colorInputRefs.current.get(d.id)?.click();
+                                    }}
+                                    className="h-6 w-[3.75rem] rounded border border-input shadow-sm transition-transform hover:scale-105"
                                     style={{ backgroundColor: d.color || '#cccccc' }}
                                   />
                                   <input
@@ -622,15 +580,9 @@ export default function DeelnemerToevoegenPage() {
                                     type="color"
                                     className="sr-only"
                                     value={d.color || '#cccccc'}
+                                    onClick={(e) => e.stopPropagation()}
                                     onChange={(e) => handleColorChange(d.id, e.target.value)}
                                   />
-                                  <button
-                                    type="button"
-                                    onClick={() => colorInputRefs.current.get(d.id)?.click()}
-                                    className="text-xs text-muted-foreground hover:text-foreground underline"
-                                  >
-                                    Wijzig
-                                  </button>
                                 </div>
                               </td>
                               <td className="py-2.5 pr-4 text-muted-foreground">
@@ -646,7 +598,10 @@ export default function DeelnemerToevoegenPage() {
                                     removingId === d.id ||
                                     (Number.isFinite(myDeelnemerId) && d.id === myDeelnemerId)
                                   }
-                                  onClick={() => void handleRemoveFromWg(d.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    requestRemoveFromWg(d.id);
+                                  }}
                                 >
                                   {removingId === d.id
                                     ? 'Bezig…'
@@ -666,6 +621,201 @@ export default function DeelnemerToevoegenPage() {
             </Card>
           )}
       </div>
+      {confirmRemoveId != null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Bevestig afmelden deelnemer"
+          onClick={() => {
+            if (removingId == null) setConfirmRemoveId(null);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border bg-card p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold tracking-tight">Deelnemer afmelden</h2>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Weet u zeker dat u deze deelnemer uit deze waarneemgroep wilt afmelden?
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={removingId != null}
+                onClick={() => setConfirmRemoveId(null)}
+              >
+                Annuleren
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={removingId != null}
+                onClick={() => void handleRemoveFromWg(confirmRemoveId)}
+              >
+                {removingId != null ? 'Bezig…' : 'Ja, afmelden'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isAddModalOpen && mayCreate && !isActiveGroupForbidden && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nieuwe deelnemer toevoegen"
+          onClick={() => {
+            if (!submitting) setIsAddModalOpen(false);
+          }}
+        >
+          <div
+            className="w-full max-w-2xl rounded-xl border bg-card p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold tracking-tight">Nieuwe deelnemer toevoegen</h2>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsAddModalOpen(false)}
+                disabled={submitting}
+                aria-label="Sluit toevoegen deelnemer"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <form id="deelnemer-formulier" onSubmit={handleSubmit} className="space-y-5">
+              <div className="grid gap-2">
+                <Label htmlFor="email">
+                  E‑mailadres <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  maxLength={50}
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                  De nieuwe gebruiker ontvangt één e‑mail met een link om dit adres te bevestigen; daarna wordt direct
+                  gevraagd een sterk wachtwoord te kiezen. U hoeft hier geen wachtwoord meer in te vullen.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  De waarneemgroep waarin de deelnemer wordt toegevoegd volgt uit de keuze in de kopbalk
+                  {selectedWgLabel ? <> ({selectedWgLabel})</> : null}.
+                </p>
+                <label className="mt-1 inline-flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={bestaatInAndereWaarneemgroep}
+                    onChange={(e) => setBestaatInAndereWaarneemgroep(e.target.checked)}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  deelnemer bestaat al binnen een andere waarneemgroep
+                </label>
+                {bestaatInAndereWaarneemgroep && (
+                  <p className="text-xs text-muted-foreground">
+                    Met deze optie wordt de deelnemer op basis van e-mailadres opgezocht en alleen aan deze
+                    waarneemgroep gekoppeld.
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="rol">
+                    Rol deelnemer <span className="text-destructive">*</span>
+                  </Label>
+                  <select
+                    id="rol"
+                    className={selectClass}
+                    value={idgroep}
+                    onChange={(e) => setIdgroep(e.target.value)}
+                    disabled={groepChoices.length === 0}
+                    required
+                  >
+                    <option value="">— Kies —</option>
+                    {groepChoices.map((g) => (
+                      <option key={g.id} value={String(g.id)}>
+                        {g.naam ?? `Groep ${g.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {!bestaatInAndereWaarneemgroep && (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="vn">
+                        Voornaam <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="vn"
+                        value={voornaam}
+                        onChange={(e) => setVoornaam(e.target.value)}
+                        required={!bestaatInAndereWaarneemgroep}
+                        maxLength={50}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="an">
+                        Achternaam <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="an"
+                        value={achternaam}
+                        onChange={(e) => setAchternaam(e.target.value)}
+                        required={!bestaatInAndereWaarneemgroep}
+                        maxLength={50}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="inl">
+                        Initialen <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="inl"
+                        value={initialen}
+                        onChange={(e) => setInitialen(e.target.value)}
+                        required={!bestaatInAndereWaarneemgroep}
+                        maxLength={50}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <Button
+                type="submit"
+                disabled={
+                  submitting ||
+                  waarneemgroepen.length === 0 ||
+                  groepChoices.length === 0 ||
+                  !activeWaarneemgroepId
+                }
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Bezig…
+                  </>
+                ) : (
+                  'Opslaan'
+                )}
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -12,6 +12,8 @@ import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
 import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
+import { computeOvernameCaps, canCurrentUserProposeOvername, OVERNAME_ACTION_FORBIDDEN_TOAST } from '@/lib/overname-ui-access';
+import { deriveEffectiveRoleTier, GROEP_DEELNEMER } from '@/lib/roles';
 import { OvernameModal } from '@/components/OvernameModal';
 import { OvernameDetailModal } from '@/components/OvernameDetailModal';
 import type { OvernameDoctor } from '@/components/OvernameModal';
@@ -39,14 +41,13 @@ function timeFromUnix(unixSeconds: number): string {
 
 export default function OvernamesPage() {
   const { data: session } = authClient.useSession();
-  const name = session?.user?.name ?? session?.user?.email ?? 'daar';
 
   const now = useMemo(() => new Date(), []);
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const calendarVakanties = useCalendarVakanties(viewYear);
 
-  const { waarneemgroepen, activeWaarneemgroepId, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
+  const { waarneemgroepen, activeWaarneemgroepId, activeWaarneemgroep, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
   const waarneemgroepIds = useMemo(() => {
     if (!activeWaarneemgroepId) return [];
     const id = Number(activeWaarneemgroepId);
@@ -89,8 +90,67 @@ export default function OvernamesPage() {
   const [selectedOvernameBlock, setSelectedOvernameBlock] = useState<ShiftBlockView | null>(null);
   const [detailSubmitting, setDetailSubmitting] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [globalIdgroep, setGlobalIdgroep] = useState<number | null | undefined>(undefined);
 
-  // Re-fetch calendar data when any source (header, this page) signals an overname change
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const abortController = new AbortController();
+    fetch('/api/deelnemers/role', {
+      credentials: 'include',
+      signal: abortController.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Kon rol niet ophalen');
+        }
+        return response.json() as Promise<{ idgroep?: number | null }>;
+      })
+      .then((data) => {
+        setGlobalIdgroep(data.idgroep ?? null);
+      })
+      .catch(() => {
+        if (!abortController.signal.aborted) {
+          setGlobalIdgroep(GROEP_DEELNEMER);
+        }
+      });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [session?.user]);
+
+  const roleTier = useMemo(
+    () =>
+      deriveEffectiveRoleTier({
+        globalIdgroep: globalIdgroep ?? null,
+        selectedWaarneemgroepIdgroep: activeWaarneemgroep?.idgroep ?? null,
+      }),
+    [globalIdgroep, activeWaarneemgroep?.idgroep]
+  );
+
+  const currentDeelnemerId = useMemo(() => {
+    if (session?.user?.id == null || session.user.id === '') return NaN;
+    const n = Number(session.user.id);
+    return Number.isFinite(n) ? n : NaN;
+  }, [session?.user?.id]);
+
+  const detailModalCaps = useMemo(() => {
+    if (!selectedOvernameBlock || !Number.isFinite(currentDeelnemerId)) {
+      // Deny by default — never expose actions when session user cannot be resolved to a numeric
+      // deelnemer id (see Better Auth mapping to `deelnemers`). Previously defaulting "true"
+      // unintentionally unlocked delete/accept for every viewer when id parsing failed.
+      return { canRespondPending: false, canManageProposalLifecycle: false };
+    }
+    return computeOvernameCaps({
+      currentDeelnemerId,
+      globalIdgroep,
+      roleTier,
+      middleId: selectedOvernameBlock.middle?.id,
+      senderId: selectedOvernameBlock.senderId,
+    });
+  }, [selectedOvernameBlock, currentDeelnemerId, globalIdgroep, roleTier]);
+
   useEffect(() => {
     const onUpdate = () => setRefreshKey((k) => k + 1);
     window.addEventListener('overname-updated', onUpdate);
@@ -151,10 +211,21 @@ export default function OvernamesPage() {
       toast.error('Het is niet mogelijk om een overname aan te maken voor een dienst in het verleden.');
       return;
     }
+    if (
+      !canCurrentUserProposeOvername({
+        currentDeelnemerId,
+        globalIdgroep,
+        roleTier,
+        assignedMiddleId: block.middle.id,
+      })
+    ) {
+      toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+      return;
+    }
     setPendingRecreateDelete(null);
     setSelectedShift(block);
     setSubmitError(null);
-  }, []);
+  }, [currentDeelnemerId, globalIdgroep, roleTier]);
 
   const handleModalClose = useCallback(() => {
     setSelectedShift(null);
@@ -165,6 +236,17 @@ export default function OvernamesPage() {
   const handleModalSubmit = useCallback(
     async (data: { iddeelnovern: number; van: number; tot: number; isPartial: boolean }) => {
       if (!selectedShift || !activeWaarneemgroepId) return;
+      if (
+        !canCurrentUserProposeOvername({
+          currentDeelnemerId,
+          globalIdgroep,
+          roleTier,
+          assignedMiddleId: selectedShift.middle?.id,
+        })
+      ) {
+        toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+        return;
+      }
       const resolvedDienstOvernId =
         (selectedShift.assignedDienstId != null && selectedShift.assignedDienstId > 0)
           ? selectedShift.assignedDienstId
@@ -227,12 +309,37 @@ export default function OvernamesPage() {
         setSubmitting(false);
       }
     },
-    [selectedShift, activeWaarneemgroepId, pendingRecreateDelete]
+    [selectedShift, activeWaarneemgroepId, pendingRecreateDelete, currentDeelnemerId, globalIdgroep, roleTier]
   );
 
   const handleOvernameRespond = useCallback(
     async (action: 'accept' | 'decline' | 'delete') => {
       if (!selectedOvernameBlock?.iddienstovern) return;
+
+      if (Number.isFinite(currentDeelnemerId)) {
+        const caps = computeOvernameCaps({
+          currentDeelnemerId,
+          globalIdgroep,
+          roleTier,
+          middleId: selectedOvernameBlock.middle?.id,
+          senderId: selectedOvernameBlock.senderId,
+        });
+        if (action === 'delete' && !caps.canManageProposalLifecycle) {
+          toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+          return;
+        }
+        if (
+          (action === 'accept' || action === 'decline') &&
+          !caps.canRespondPending
+        ) {
+          toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+          return;
+        }
+      } else {
+        toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+        return;
+      }
+
       setDetailSubmitting(true);
       setDetailError(null);
       try {
@@ -255,7 +362,7 @@ export default function OvernamesPage() {
         setDetailSubmitting(false);
       }
     },
-    [selectedOvernameBlock]
+    [selectedOvernameBlock, currentDeelnemerId, globalIdgroep, roleTier]
   );
 
   const recreateByIdDienstOvern = useCallback(async (iddienstovern: number, overnameId?: number) => {
@@ -455,6 +562,8 @@ export default function OvernamesPage() {
           onClose={() => { setSelectedOvernameBlock(null); setDetailError(null); }}
           submitting={detailSubmitting}
           error={detailError}
+          canRespondPending={detailModalCaps.canRespondPending}
+          canManageProposalLifecycle={detailModalCaps.canManageProposalLifecycle}
         />
       )}
     </>

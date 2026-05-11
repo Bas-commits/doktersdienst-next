@@ -36,7 +36,6 @@ type NavItem = {
 const MAIN_NAV_ITEMS: NavItem[] = [
   { id: 'rooster_inzien', label: 'Rooster', href: '/rooster-inzien', icon: <Calendar className="size-4 shrink-0" /> },
   { id: 'voorkeuren', label: 'Voorkeuren', href: '/voorkeuren', icon: <Check className="size-4 shrink-0" /> },
-  { id: 'rooster-maken-secretaris', label: 'Rooster maken secretaris', href: '/rooster-maken-secretaris', icon: <FaCalendarPlus className="size-4 shrink-0" /> },
   { id: 'overnames', label: 'Overnames', href: '/overnames', icon: <ArrowLeftRight className="size-4 shrink-0" /> },
 ];
 
@@ -46,6 +45,12 @@ const SECRETARIS_NAV_ITEMS: NavItem[] = [
     label: 'Waarneemgroep wijzigen',
     href: DEFAULT_ROUTES.waarneemgroep_wijzigen,
     icon: <PencilLine className="size-4 shrink-0" />,
+  },
+  {
+    id: 'rooster-maken-secretaris',
+    label: 'Rooster maken secretaris',
+    href: '/rooster-maken-secretaris',
+    icon: <FaCalendarPlus className="size-4 shrink-0" />,
   },
   // {
   //   id: 'waarneemgroep-gegevens',
@@ -59,12 +64,7 @@ const SECRETARIS_NAV_ITEMS: NavItem[] = [
     href: DEFAULT_ROUTES.deelnemer_toevoegen,
     icon: <UserPlus className="size-4 shrink-0" />,
   },
-  {
-    id: 'bestaande-deelnemer-toevoegen',
-    label: 'Bestaande deelnemer toevoegen',
-    href: DEFAULT_ROUTES.bestaande_toevoegen,
-    icon: <UserPlus2 className="size-4 shrink-0" />,
-  },
+
   {
     id: 'lijst-deelnemers',
     label: 'Lijst deelnemers',

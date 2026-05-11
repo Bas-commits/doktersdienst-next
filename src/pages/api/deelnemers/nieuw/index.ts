@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { signJWT } from 'better-auth/crypto';
-import { eq, or, sql } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 import {
@@ -30,6 +30,7 @@ type PostBody = {
   huisadrtelnr?: unknown;
   idgroep?: unknown;
   idwaarneemgroep?: unknown;
+  bestaatInAndereWaarneemgroep?: unknown;
   /** Browser `window.location.origin`; must agree with server's Host/Forwarded/Origin (`Origin` matches on POST). */
   inviteInitiatedOrigin?: unknown;
 };
@@ -52,6 +53,7 @@ function coerceInsertedDeelnemerId(raw: unknown): number | null {
 export type PostDeelnemerNieuwOk = {
   ok: true;
   iddeelnemer: number;
+  outcome: 'created' | 'linked' | 'already-linked';
   message: string;
 };
 export type PostDeelnemerNieuwErr = { error: string };
@@ -105,6 +107,9 @@ export default async function handler(
     });
   }
 
+  const bestaatInAndereWaarneemgroep =
+    b.bestaatInAndereWaarneemgroep === true || b.bestaatInAndereWaarneemgroep === 'true';
+
   const voornaam = clip((typeof b.voornaam === 'string' ? b.voornaam : '').trim(), MAX_NAME_FIELD);
   const tussen = clip(
     (typeof b.voorletterstussenvoegsel === 'string' ? b.voorletterstussenvoegsel : '').trim(),
@@ -114,6 +119,93 @@ export default async function handler(
   const initialen = clip((typeof b.initialen === 'string' ? b.initialen : '').trim(), MAX_NAME_FIELD);
   const mobil = clip((typeof b.huisadrtelnr === 'string' ? b.huisadrtelnr : '').trim(), MAX_NAME_FIELD);
 
+  const [existingDeelnemer] = await db
+    .select({ id: deelnemers.id })
+    .from(deelnemers)
+    .where(or(eq(deelnemers.login, emailRaw), eq(deelnemers.email, emailRaw)))
+    .limit(1);
+
+  const existingDeelnemerId = coerceInsertedDeelnemerId(existingDeelnemer?.id);
+  if (existingDeelnemer?.id != null && existingDeelnemerId == null) {
+    return res.status(500).json({ error: 'Bestaande deelnemer-id kon niet worden gelezen.' });
+  }
+
+  if (existingDeelnemerId != null) {
+    try {
+      const [existingMembership] = await db
+        .select({ id: waarneemgroepdeelnemers.id, aangemeld: waarneemgroepdeelnemers.aangemeld })
+        .from(waarneemgroepdeelnemers)
+        .where(
+          and(
+            eq(waarneemgroepdeelnemers.iddeelnemer, existingDeelnemerId),
+            eq(waarneemgroepdeelnemers.idwaarneemgroep, idwaarneemgroep)
+          )
+        )
+        .limit(1);
+
+      if (existingMembership?.id != null) {
+        if (existingMembership.aangemeld === true) {
+          return res.status(200).json({
+            ok: true,
+            iddeelnemer: existingDeelnemerId,
+            outcome: 'already-linked',
+            message: 'gebruiker al toegewezen aan deze waarneemgroep',
+          });
+        }
+
+        await db
+          .update(waarneemgroepdeelnemers)
+          .set({ aangemeld: true, idgroep })
+          .where(eq(waarneemgroepdeelnemers.id, existingMembership.id));
+
+        return res.status(200).json({
+          ok: true,
+          iddeelnemer: existingDeelnemerId,
+          outcome: 'linked',
+          message: 'Bestaande gebruiker opnieuw aangemeld in deze waarneemgroep.',
+        });
+      }
+
+      await db.insert(waarneemgroepdeelnemers).values({
+        iddeelnemer: existingDeelnemerId,
+        idwaarneemgroep,
+        idgroep,
+        aangemeld: true,
+      });
+
+      return res.status(200).json({
+        ok: true,
+        iddeelnemer: existingDeelnemerId,
+        outcome: 'linked',
+        message: 'Bestaande gebruiker toegevoegd aan deze waarneemgroep.',
+      });
+    } catch (err) {
+      console.error('deelnemer-nieuw existing-user-link error', err);
+      const code = typeof err === 'object' && err !== null ? (err as { code?: string }).code : '';
+      const cause =
+        err && typeof err === 'object' && 'cause' in err && err.cause && typeof err.cause === 'object'
+          ? (err.cause as { code?: string }).code
+          : undefined;
+      const pgCode = code || cause || '';
+      if (code === '23505' || pgCode === '23505') {
+        return res.status(200).json({
+          ok: true,
+          iddeelnemer: existingDeelnemerId,
+          outcome: 'already-linked',
+          message: 'gebruiker al toegewezen aan deze waarneemgroep',
+        });
+      }
+      const msg = err instanceof Error ? err.message : 'Koppelen deelnemer aan waarneemgroep mislukt.';
+      return res.status(500).json({ error: msg });
+    }
+  }
+
+  if (bestaatInAndereWaarneemgroep) {
+    return res.status(422).json({
+      error: 'Er is geen bestaande deelnemer gevonden met dit e-mailadres.',
+    });
+  }
+
   if (!voornaam || !achternaam || !initialen) {
     return res.status(400).json({ error: 'Voornaam, achternaam en initialen zijn verplicht.' });
   }
@@ -122,17 +214,6 @@ export default async function handler(
     [voornaam, tussen, achternaam].filter(Boolean).join(' '),
     MAX_NAME_FIELD
   );
-
-  const [dupLogin] = await db
-    .select({ id: deelnemers.id })
-    .from(deelnemers)
-    .where(or(eq(deelnemers.login, emailRaw), eq(deelnemers.email, emailRaw)))
-    .limit(1);
-  if (dupLogin?.id != null) {
-    return res.status(422).json({
-      error: 'Er bestaat al een gebruiker met dit e‑mailadres.',
-    });
-  }
 
   const authSecret = getAuthSecret();
   if (!authSecret) {
@@ -257,6 +338,7 @@ export default async function handler(
   return res.status(200).json({
     ok: true,
     iddeelnemer: newUserId,
+    outcome: 'created',
     message:
       'Deelnemer toegevoegd. Er is een e‑mail gestuurd met een link om het adres te bevestigen; daarna wordt direct gevraagd een sterk wachtwoord te kiezen.',
   });

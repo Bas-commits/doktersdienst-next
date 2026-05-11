@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useContext } from 'react';
+import { useState, useEffect, useCallback, useRef, useContext, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -7,6 +7,9 @@ import { authClient } from '@/lib/auth-client';
 import { Trash2 } from 'lucide-react';
 import { FaRedo } from "react-icons/fa";
 import { toast } from 'sonner';
+
+import { computeOvernameCaps, OVERNAME_ACTION_FORBIDDEN_TOAST } from '@/lib/overname-ui-access';
+import { deriveEffectiveRoleTier, GROEP_DEELNEMER } from '@/lib/roles';
 
 import {
   WaarneemgroepContext,
@@ -67,6 +70,10 @@ export function DoktersdienstHeader({
     overnameId?: number;
     iddienstovern: number;
     status?: 'pending' | 'declined' | string | null;
+    idwaarneemgroep?: number | null;
+    iddeelnovern?: number | null;
+    iddeelnemer?: number | null;
+    senderId?: number | null;
     datum: string;
     datumVan?: string;
     datumTot?: string;
@@ -82,6 +89,47 @@ export function DoktersdienstHeader({
   const [verzoekPopoverOpen, setVerzoekPopoverOpen] = useState(false);
   const [verzoekIndex, setVerzoekIndex] = useState(0);
   const verzoekRef = useRef<HTMLLIElement>(null);
+
+  const { data: session } = authClient.useSession();
+  const [globalIdgroep, setGlobalIdgroep] = useState<number | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const abortController = new AbortController();
+    fetch('/api/deelnemers/role', {
+      credentials: 'include',
+      signal: abortController.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Kon rol niet ophalen');
+        }
+        return response.json() as Promise<{ idgroep?: number | null }>;
+      })
+      .then((data) => {
+        setGlobalIdgroep(data.idgroep ?? null);
+      })
+      .catch(() => {
+        if (!abortController.signal.aborted) {
+          setGlobalIdgroep(GROEP_DEELNEMER);
+        }
+      });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [session?.user]);
+
+  const activeWaarneemgroep = ctx?.activeWaarneemgroep ?? null;
+  const roleTier = useMemo(
+    () =>
+      deriveEffectiveRoleTier({
+        globalIdgroep: globalIdgroep ?? null,
+        selectedWaarneemgroepIdgroep: activeWaarneemgroep?.idgroep ?? null,
+      }),
+    [globalIdgroep, activeWaarneemgroep?.idgroep]
+  );
 
   const fetchVerzoeken = useCallback(() => {
     fetch('/api/overnames/pending', { credentials: 'include' })
@@ -104,7 +152,24 @@ export function DoktersdienstHeader({
     async (action: 'accept' | 'decline' | 'delete' | 'redo') => {
       const v = verzoeken[verzoekIndex];
       if (!v) return;
+
+      const uid =
+        session?.user?.id != null && session.user.id !== '' ? Number(session.user.id) : NaN;
+      const caps = Number.isFinite(uid)
+        ? computeOvernameCaps({
+            currentDeelnemerId: uid,
+            globalIdgroep,
+            roleTier,
+            middleId: v.iddeelnovern ?? undefined,
+            senderId: v.senderId ?? undefined,
+          })
+        : { canRespondPending: false, canManageProposalLifecycle: false };
+
       if (action === 'redo') {
+        if (!caps.canManageProposalLifecycle) {
+          toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+          return;
+        }
         setVerzoekPopoverOpen(false);
         const query = new URLSearchParams({ recreate: String(v.iddienstovern) });
         if (typeof v.overnameId === 'number' && v.overnameId > 0) {
@@ -113,6 +178,20 @@ export function DoktersdienstHeader({
         router.push(`/overnames?${query.toString()}`);
         return;
       }
+
+      if (action === 'delete' && !caps.canManageProposalLifecycle) {
+        toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+        return;
+      }
+
+      if (
+        (action === 'accept' || action === 'decline') &&
+        !caps.canRespondPending
+      ) {
+        toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+        return;
+      }
+
       const res = await fetch('/api/overnames/respond', {
         method: 'POST',
         credentials: 'include',
@@ -128,7 +207,7 @@ export function DoktersdienstHeader({
         else toast.error('Verwijderen mislukt');
       }
     },
-    [verzoeken, verzoekIndex, fetchVerzoeken, router]
+    [verzoeken, verzoekIndex, fetchVerzoeken, router, session?.user?.id, globalIdgroep, roleTier]
   );
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -272,6 +351,27 @@ export function DoktersdienstHeader({
                 const redoTitle = isDeclined
                   ? 'Opnieuw voorstellen'
                   : 'Een overname moet eerst worden afgewezen voordat je opnieuw kunt voorstellen';
+
+                const uid =
+                  session?.user?.id != null && session.user.id !== ''
+                    ? Number(session.user.id)
+                    : NaN;
+                const caps = Number.isFinite(uid)
+                  ? computeOvernameCaps({
+                      currentDeelnemerId: uid,
+                      globalIdgroep,
+                      roleTier,
+                      middleId: v.iddeelnovern ?? undefined,
+                      senderId: v.senderId ?? undefined,
+                    })
+                  : { canRespondPending: false, canManageProposalLifecycle: false };
+                const inactiveLifecycle = !caps.canManageProposalLifecycle
+                  ? 'opacity-40 cursor-not-allowed'
+                  : '';
+                const inactiveRespond = !caps.canRespondPending
+                  ? 'opacity-40 cursor-not-allowed'
+                  : '';
+
                 return (
                   <div
                     className="absolute top-full right-0 z-1000 w-[320px] bg-white border border-gray-300 rounded-lg shadow-lg p-4 mt-1"
@@ -303,12 +403,29 @@ export function DoktersdienstHeader({
                     <div className="bg-gray-200 rounded-md p-5 ">
                     <div className="w-full flex justify-around mb-3">
                       <div className="flex flex-1"></div>
-                      <Trash2 className="w-8 h-8 text-red-500 flex flex-1  cursor-pointer " onClick={() => handleVerzoekRespond('delete')} aria-label="Verwijderen" />
+                      <button
+                        type="button"
+                        className={`flex flex-1 justify-center bg-transparent border-0 p-0 cursor-pointer ${inactiveLifecycle}`}
+                        onClick={() => {
+                          if (!caps.canManageProposalLifecycle) {
+                            toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                            return;
+                          }
+                          handleVerzoekRespond('delete');
+                        }}
+                        aria-label="Verwijderen"
+                      >
+                        <Trash2 className="w-8 h-8 text-red-500 pointer-events-none" aria-hidden />
+                      </button>
                       <div className="flex flex-1 justify-center items-center">
                         <button
                           type="button"
-                          className={`bg-transparent border-0 p-0 flex items-center justify-center ${isDeclined ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                          className={`bg-transparent border-0 p-0 flex items-center justify-center ${isDeclined ? 'cursor-pointer' : 'cursor-not-allowed'} ${inactiveLifecycle}`}
                           onClick={() => {
+                            if (!caps.canManageProposalLifecycle) {
+                              toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                              return;
+                            }
                             if (isDeclined) {
                               handleVerzoekRespond('redo');
                               return;
@@ -378,8 +495,14 @@ export function DoktersdienstHeader({
                       {isDeclined ? (
                         <button
                           type="button"
-                          className="flex cursor-pointer items-center justify-center h-10 px-6 rounded-md border border-gray-300 bg-white text-sm hover:bg-red-300"
-                          onClick={() => handleVerzoekRespond('delete')}
+                          className={`flex cursor-pointer items-center justify-center h-10 px-6 rounded-md border border-gray-300 bg-white text-sm hover:bg-red-300 ${inactiveLifecycle}`}
+                          onClick={() => {
+                            if (!caps.canManageProposalLifecycle) {
+                              toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                              return;
+                            }
+                            handleVerzoekRespond('delete');
+                          }}
                           aria-label="Afgewezen verzoek verwijderen"
                           data-testid="overname-delete"
                         >
@@ -389,8 +512,14 @@ export function DoktersdienstHeader({
                         <>
                           <button
                             type="button"
-                            className="flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-green-300"
-                            onClick={() => handleVerzoekRespond('accept')}
+                            className={`flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-green-300 ${inactiveRespond}`}
+                            onClick={() => {
+                              if (!caps.canRespondPending) {
+                                toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                                return;
+                              }
+                              handleVerzoekRespond('accept');
+                            }}
                             aria-label="Verzoek accepteren"
                             data-testid="overname-accept"
                           >
@@ -398,8 +527,14 @@ export function DoktersdienstHeader({
                           </button>
                           <button
                             type="button"
-                            className="flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-red-300"
-                            onClick={() => handleVerzoekRespond('decline')}
+                            className={`flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-red-300 ${inactiveRespond}`}
+                            onClick={() => {
+                              if (!caps.canRespondPending) {
+                                toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                                return;
+                              }
+                              handleVerzoekRespond('decline');
+                            }}
                             aria-label="Verzoek afwijzen"
                             data-testid="overname-decline"
                           >

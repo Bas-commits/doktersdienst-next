@@ -3,9 +3,9 @@ import { and, eq, or } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { logger } from '@/lib/logger';
+import { GROEP_ADMINISTRATOR, GROEP_SECRETARIS } from '@/lib/roles';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
-const GROEP_SECRETARIS = 2;
 
 type Data = { success: true } | { error: string };
 
@@ -74,9 +74,9 @@ export default async function handler(
       return res.status(400).json({ error: 'Invalid delete status filter' });
     }
 
-    // Get the logged-in doctor's deelnemer ID
+    // Get the logged-in doctor's deelnemer ID and global idgroep (administrator)
     const currentDoctor = await db
-      .select({ id: deelnemers.id })
+      .select({ id: deelnemers.id, idgroep: deelnemers.idgroep })
       .from(deelnemers)
       .where(eq(deelnemers.login, session.user.email))
       .limit(1);
@@ -85,6 +85,7 @@ export default async function handler(
     if (!doctorId) {
       return res.status(403).json({ error: 'Not authorized' });
     }
+    const isGlobalAdmin = currentDoctor[0]?.idgroep === GROEP_ADMINISTRATOR;
 
     // Find the proposal by composite key.
     // Delete can target pending, declined (type=4) and accepted (type=6) proposals.
@@ -145,16 +146,25 @@ export default async function handler(
       .limit(1)
     ).some((r) => r.idgroep === GROEP_SECRETARIS);
 
+    const canManageViaRole = isSecretaris || isGlobalAdmin;
+
     if (action === 'delete') {
-      // Sender or secretaris can delete/cancel a proposal
-      if (senderId !== doctorId && !isSecretaris) {
+      // Sender, secretaris, or administrator can delete/cancel a proposal
+      if (senderId !== doctorId && !canManageViaRole) {
         return res.status(403).json({ error: 'Not authorized' });
       }
       await db.delete(dienstenTable).where(lookupCondition);
-      logger.info({ msg: 'overname-respond:deleted', proposalId, iddienstovern: proposalDienstOvernId, doctorId, isSecretaris });
+      logger.info({
+        msg: 'overname-respond:deleted',
+        proposalId,
+        iddienstovern: proposalDienstOvernId,
+        doctorId,
+        isSecretaris,
+        isGlobalAdmin,
+      });
     } else {
-      // Target doctor or secretaris can accept/decline
-      if (iddeelnovern !== doctorId && !isSecretaris) {
+      // Target doctor, secretaris, or administrator can accept/decline
+      if (iddeelnovern !== doctorId && !canManageViaRole) {
         return res.status(403).json({ error: 'Not authorized' });
       }
       // Only pending proposals can be accepted/declined (already enforced by lookupCondition)
@@ -168,13 +178,25 @@ export default async function handler(
           .update(dienstenTable)
           .set({ type: 6, status: 'accepted' })
           .where(pendingCondition);
-        logger.info({ msg: 'overname-respond:accepted', iddienstovern: iddienstovernNum, doctorId, isSecretaris });
+        logger.info({
+          msg: 'overname-respond:accepted',
+          iddienstovern: iddienstovernNum,
+          doctorId,
+          isSecretaris,
+          isGlobalAdmin,
+        });
       } else {
         await db
           .update(dienstenTable)
           .set({ status: 'declined' })
           .where(pendingCondition);
-        logger.info({ msg: 'overname-respond:declined', iddienstovern: iddienstovernNum, doctorId, isSecretaris });
+        logger.info({
+          msg: 'overname-respond:declined',
+          iddienstovern: iddienstovernNum,
+          doctorId,
+          isSecretaris,
+          isGlobalAdmin,
+        });
       }
     }
 

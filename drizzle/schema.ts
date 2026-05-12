@@ -1,4 +1,4 @@
-import { pgTable, integer, varchar, uuid, boolean, bigint, date, timestamp, text, index, doublePrecision } from "drizzle-orm/pg-core"
+import { pgTable, integer, varchar, uuid, boolean, bigint, date, timestamp, text, index, doublePrecision, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 
@@ -1538,3 +1538,42 @@ export const rollen = pgTable("rollen", {
 // 	inteuros: integer(),
 // 	intpercentage: integer(),
 // });
+
+// ########################################################
+export const account = pgTable("account", {
+	id: text().notNull(),
+	accountId: text().notNull(),
+	providerId: text().notNull(),
+	userId: text().notNull(),
+	accessToken: text(),
+	refreshToken: text(),
+	idToken: text(),
+	accessTokenExpiresAt: timestamp({ withTimezone: true, mode: "string" }),
+	refreshTokenExpiresAt: timestamp({ withTimezone: true, mode: "string" }),
+	scope: text(),
+	password: text(),
+	createdAt: timestamp({ withTimezone: true, mode: "string" }).notNull(),
+	updatedAt: timestamp({ withTimezone: true, mode: "string" }).notNull(),
+  }, (table) => [
+	primaryKey({ columns: [table.id], name: "account_pkey" }),
+  ]);
+
+  export const session = pgTable("session", {
+	id: text().notNull(),
+	expiresAt: timestamp({ withTimezone: true, mode: "string" }).notNull(),
+	token: text().notNull(),
+	createdAt: timestamp({ withTimezone: true, mode: "string" }).notNull(),
+	updatedAt: timestamp({ withTimezone: true, mode: "string" }).notNull(),
+	ipAddress: text(),
+	userAgent: text(),
+	userId: text().notNull(),
+  });
+
+  export const authVerification = pgTable("auth_verification", {
+	id: text().notNull(),
+	identifier: text().notNull(),
+	value: text().notNull(),
+	expiresAt: timestamp({ withTimezone: true, mode: "string" }).notNull(),
+	createdAt: timestamp({ withTimezone: true, mode: "string" }).notNull(),
+	updatedAt: timestamp({ withTimezone: true, mode: "string" }).notNull(),
+  });

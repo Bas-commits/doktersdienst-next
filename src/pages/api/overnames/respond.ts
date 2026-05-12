@@ -167,6 +167,14 @@ export default async function handler(
       if (iddeelnovern !== doctorId && !canManageViaRole) {
         return res.status(403).json({ error: 'Not authorized' });
       }
+      if (proposalDienstOvernId == null) {
+        logger.error({
+          msg: 'overname-respond:missing-iddienstovern',
+          proposalId,
+          doctorId,
+        });
+        return res.status(500).json({ error: 'Invalid proposal data' });
+      }
       // Only pending proposals can be accepted/declined (already enforced by lookupCondition)
       const pendingCondition = and(
         eq(dienstenTable.iddienstovern, proposalDienstOvernId),

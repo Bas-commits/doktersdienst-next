@@ -119,7 +119,7 @@ export function OvernameDetailModal({
     block.overnameType === 'vraagtekenOvername' ? 'bg-red-100 text-red-800' :
     block.overnameType === 'overname' ? 'bg-green-100 text-green-800' : '';
 
-  const overnameTypeLabel = block.isPartial ? 'Gedeeltelijke overname' : 'Volledige overname';
+  const overnameTypeLabel = block.isPartial ? 'Overname gedeelte dienst' : 'Overname volledige dienst';
 
   const redoEnabled = Boolean(isDeclined && onRecreate);
 
@@ -159,8 +159,8 @@ export function OvernameDetailModal({
         </div>
 
         <div className="bg-gray-200 rounded-md p-5 -mt-1">
-          <div className="w-full flex justify-around mb-3">
-            <div className="flex flex-1" />
+          <div className="w-full flex justify-between mb-3">
+            {/* <div className="flex flex-1" /> */}
             <button
               type="button"
               className={`flex flex-1 justify-center bg-transparent border-0 p-0 cursor-pointer disabled:opacity-50 ${inactiveLifecycleClass}`}

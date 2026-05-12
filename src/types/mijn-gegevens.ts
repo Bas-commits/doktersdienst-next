@@ -45,7 +45,13 @@ export interface MijnGegevensProfile {
     callRecording: boolean | null;
   };
   waarneemgroep: { id: number; naam: string | null } | null;
-  waarneemgroepen: { id: number; naam: string | null; idgroep: number | null; fte: number | null }[];
+  waarneemgroepen: {
+    id: number;
+    naam: string | null;
+    idgroep: number | null;
+    fte: number | null;
+    idfunctie: number | null;
+  }[];
   groep: { id: number } | null;
   locatie: { id: number; idinstellingtype: number | null; idregio: number | null } | null;
   /** 'binnen' | 'buiten' for location dropdown */
@@ -91,5 +97,5 @@ export interface MijnGegevensUpdateBody {
   callRecording?: boolean;
   telnrSlots?: TelnrSlotRaw[];
   /** Per waarneemgroep FTE (0–2); only rows where the user is aangemeld are updated */
-  waarneemgroepFte?: { idwaarneemgroep: number; fte: number }[];
+  waarneemgroepFte?: { idwaarneemgroep: number; fte: number; idfunctie?: 1 | 2 | 3 | 4 | null }[];
 }

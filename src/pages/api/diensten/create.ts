@@ -3,24 +3,9 @@ import { and, eq, lt, gt, sql } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 import { query } from '@/lib/db';
+import { APP_TIME_ZONE, parseAmsterdamWallDateTimeToUnixSeconds } from '@/lib/amsterdamWallTime';
 
 type Data = { success: true; message: string } | { error: string };
-
-/** Parse "YYYY-MM-DD HH:MM:SS" local datetime string to Unix seconds. */
-function parseLocalDateTime(s: string): number | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(s.trim());
-  if (!m) return null;
-  const d = new Date(
-    Number(m[1]),
-    Number(m[2]) - 1,
-    Number(m[3]),
-    Number(m[4]),
-    Number(m[5]),
-    Number(m[6])
-  );
-  if (isNaN(d.getTime())) return null;
-  return Math.floor(d.getTime() / 1000);
-}
 
 /**
  * POST /api/diensten/create
@@ -61,8 +46,8 @@ export default async function handler(
     return res.status(400).json({ error: 'Van en Tot zijn verplicht.' });
   }
 
-  const vanUnix = parseLocalDateTime(vanStr);
-  const totUnix = parseLocalDateTime(totStr);
+  const vanUnix = parseAmsterdamWallDateTimeToUnixSeconds(String(vanStr));
+  const totUnix = parseAmsterdamWallDateTimeToUnixSeconds(String(totStr));
 
   if (vanUnix === null || totUnix === null) {
     return res.status(400).json({ error: 'Ongeldige datum/tijd formaat. Gebruik YYYY-MM-DD HH:MM:SS.' });
@@ -183,7 +168,7 @@ export default async function handler(
     if ((conflicts.rowCount ?? 0) > 0) {
       const conflictVan = Number(conflicts.rows[0]?.conflict_van);
       return res.status(409).json({
-        error: `Er is al een overlappende shift voor ${new Date(conflictVan * 1000).toLocaleDateString('nl-NL')}.`,
+        error: `Er is al een overlappende shift voor ${new Date(conflictVan * 1000).toLocaleDateString('nl-NL', { timeZone: APP_TIME_ZONE })}.`,
       });
     }
 

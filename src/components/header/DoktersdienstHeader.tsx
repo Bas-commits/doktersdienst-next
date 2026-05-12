@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { TbSwitch3 } from 'react-icons/tb';
 import { authClient } from '@/lib/auth-client';
-import { Trash2 } from 'lucide-react';
+import { Trash2, CircleQuestionMark } from 'lucide-react';
 import { FaRedo } from "react-icons/fa";
 import { toast } from 'sonner';
 
@@ -346,7 +346,7 @@ export function DoktersdienstHeader({
                 if (!v) return null;
                 const vanDatum = v.datumVan ?? v.datum;
                 const totDatum = v.datumTot ?? v.datumVan ?? v.datum;
-                const overnameTypeLabel = v.isPartial ? 'Gedeeltelijke overname' : 'Volledige overname';
+                const overnameTypeLabel = v.isPartial ? 'Overname gedeelte dienst' : 'Overname volledige dienst';
                 const isDeclined = v.status === 'declined';
                 const redoTitle = isDeclined
                   ? 'Opnieuw voorstellen'
@@ -402,7 +402,7 @@ export function DoktersdienstHeader({
                     </div>
                     <div className="bg-gray-200 rounded-md p-5 ">
                     <div className="w-full flex justify-around mb-3">
-                      <div className="flex flex-1"></div>
+                      {/* <div className="flex flex-1"></div> */}
                       <button
                         type="button"
                         className={`flex flex-1 justify-center bg-transparent border-0 p-0 cursor-pointer ${inactiveLifecycle}`}
@@ -436,18 +436,18 @@ export function DoktersdienstHeader({
                           aria-disabled={!isDeclined}
                           title={redoTitle}
                         >
-                          <FaRedo className={`w-6 h-6 ${isDeclined ? 'text-blue-500' : 'text-gray-400'}`} />
+                          <FaRedo className={`w-7 h-7 ${isDeclined ? 'text-red-500' : 'text-gray-400'}`} />
                         </button>
                       </div>
                     </div>
 
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <p className="text-s font-bold ">{overnameTypeLabel}</p>
-                      {isDeclined && (
-                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-red-100 text-red-800">
-                          Afgewezen
-                        </span>
-                      )}
+                      {/* {isDeclined && (
+                        // <span className="text-xs font-medium px-2 py-1 rounded-full bg-red-100 text-red-800">
+                        //   Afgewezen
+                        // </span>
+                      )} */}
                     </div>
                
                     <div className="flex text-sm mb-3">
@@ -493,21 +493,23 @@ export function DoktersdienstHeader({
 
                     <div className="flex justify-center gap-4">
                       {isDeclined ? (
-                        <button
-                          type="button"
-                          className={`flex cursor-pointer items-center justify-center h-10 px-6 rounded-md border border-gray-300 bg-white text-sm hover:bg-red-300 ${inactiveLifecycle}`}
-                          onClick={() => {
-                            if (!caps.canManageProposalLifecycle) {
-                              toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
-                              return;
-                            }
-                            handleVerzoekRespond('delete');
-                          }}
-                          aria-label="Afgewezen verzoek verwijderen"
-                          data-testid="overname-delete"
-                        >
-                          <Trash2 className="w-5 h-5 text-[#333] mr-1" /> Verwijderen
-                        </button>
+                        // <button
+                        //   type="button"
+                        //   className={`flex cursor-pointer items-center justify-center h-10 px-6 rounded-md border border-gray-300 bg-white text-sm hover:bg-red-300 ${inactiveLifecycle}`}
+                        //   onClick={() => {
+                        //     if (!caps.canManageProposalLifecycle) {
+                        //       toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                        //       return;
+                        //     }
+                        //     handleVerzoekRespond('delete');
+                        //   }}
+                        //   aria-label="Afgewezen verzoek verwijderen"
+                        //   data-testid="overname-delete"
+                        // >
+                        //   <Trash2 className="w-5 h-5 text-[#333] mr-1" /> Verwijderen
+                        // </button>
+                        <div><CircleQuestionMark className="w-8 h-8 text-[#333] mr-1" /></div>
+                        
                       ) : (
                         <>
                           <button

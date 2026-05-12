@@ -457,7 +457,7 @@ export function ShiftBlock({
     return null;
   }, [bottomPending, pendingDoctorBottom, extraDoc]);
   const showPreferenceBadge = preferenceChip != null && !showPreferenceFill;
-  const overnameTypeLabel = block.isPartial ? 'Gedeeltelijke overname' : 'Volledige overname';
+  const overnameTypeLabel = block.isPartial ? 'Overname gedeelte dienst' : 'Overname volledige dienst';
   const overnameStatusLabel =
     overnameType === 'voorstelOvername' ? 'In afwachting' :
     overnameType === 'overname' ? 'Goedgekeurd' :

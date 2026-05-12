@@ -32,7 +32,7 @@ function toDateTimeLocal(d: Date): string {
 }
 
 function dateTimeLocalToLocalString(s: string): string {
-  // "2024-03-15T08:00" → "2024-03-15 08:00:00"
+  // "2024-03-15T08:00" → "2024-03-15 08:00:00" (Europe/Amsterdam wall clock; API converts to Unix)
   if (!s || s.length < 16) return '';
   return s.slice(0, 10) + ' ' + s.slice(11, 16) + ':00';
 }
@@ -165,7 +165,11 @@ export default function DienstenToevoegenPage() {
       idwaarneemgroep: String(deleteBlock.idwaarneemgroep ?? ''),
     });
     fetch(`/api/diensten/recurrence-info?${params}`, { credentials: 'include' })
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error ?? 'Herhalingsgegevens ophalen mislukt.');
+        return data;
+      })
       .then((data) => {
         setRecurrenceInfo(data);
         setRecurrenceLoading(false);

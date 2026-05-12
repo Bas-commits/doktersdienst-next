@@ -1,20 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, gte, sql } from 'drizzle-orm';
-import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 
 type Data =
   | { has_recurrence: boolean; future_count?: number; last_van?: number }
   | { error: string };
-
-function toHeaders(incoming: NextApiRequest['headers']): Headers {
-  const h = new Headers();
-  for (const [k, v] of Object.entries(incoming)) {
-    if (v !== undefined && v !== null)
-      h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
-  }
-  return h;
-}
 
 /**
  * GET /api/diensten/recurrence-info?van=<n>&tot=<n>&idwaarneemgroep=<n>
@@ -29,8 +20,8 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const session = await auth.api.getSession({ headers: toHeaders(req.headers) });
-  if (!session?.user) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -40,6 +31,10 @@ export default async function handler(
 
   if (Number.isNaN(van) || Number.isNaN(tot) || Number.isNaN(idwaarneemgroep)) {
     return res.status(400).json({ error: 'Ongeldige van, tot of idwaarneemgroep.' });
+  }
+  const hasAccess = await hasGroupManagementAccess(user, idwaarneemgroep);
+  if (!hasAccess) {
+    return res.status(403).json({ error: 'Geen toegang tot deze waarneemgroep.' });
   }
 
   const { diensten: dienstenTable } = schema;
@@ -61,6 +56,31 @@ export default async function handler(
     const iddienstherhalen = rows[0]?.iddienstherhalen;
 
     if (iddienstherhalen == null) {
+      const durationSecs = tot - van;
+      const cadenceRows = await db
+        .select({
+          count: sql<number>`count(*)::int`,
+          lastVan: sql<number>`max(van)`,
+        })
+        .from(dienstenTable)
+        .where(
+          and(
+            eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+            eq(dienstenTable.type, 1),
+            gte(dienstenTable.van, van),
+            sql`${dienstenTable.tot} - ${dienstenTable.van} = ${durationSecs}`,
+            sql`(${dienstenTable.van} - ${van}) % ${7 * 24 * 3600} = 0`
+          )
+        );
+      const cadenceCount = Number(cadenceRows[0]?.count ?? 0);
+      const cadenceLastVan = cadenceRows[0]?.lastVan != null ? Number(cadenceRows[0].lastVan) : undefined;
+      if (cadenceCount > 1) {
+        return res.status(200).json({
+          has_recurrence: true,
+          future_count: cadenceCount - 1,
+          last_van: cadenceLastVan,
+        });
+      }
       return res.status(200).json({ has_recurrence: false });
     }
 

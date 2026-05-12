@@ -34,6 +34,7 @@ function normaliseLocatieId(raw: number): number {
 
 /** Validate a Dutch-style phone number (lenient: >=7 digit-like chars, starts with + or digit) */
 const TELNR_VALID = /^\+?[0-9][0-9\s\-]{5,18}[0-9]$/;
+const GELDIGE_WAARNEEMGROEP_FUNCTIES = new Set([1, 2, 3, 4]);
 
 export default async function handler(
   req: NextApiRequest,
@@ -147,6 +148,7 @@ export default async function handler(
             idgroep: waarneemgroepdeelnemers.idgroep,
             naam: waarneemgroepen.naam,
             fte: waarneemgroepdeelnemers.fte,
+            idfunctie: waarneemgroepdeelnemers.idfunctie,
           })
           .from(waarneemgroepdeelnemers)
           .leftJoin(waarneemgroepen, eq(waarneemgroepdeelnemers.idwaarneemgroep, waarneemgroepen.id))
@@ -197,6 +199,10 @@ export default async function handler(
           naam: m.naam ?? null,
           idgroep: m.idgroep ?? null,
           fte: m.fte != null && Number.isFinite(m.fte) ? m.fte : null,
+          idfunctie:
+            m.idfunctie != null && GELDIGE_WAARNEEMGROEP_FUNCTIES.has(m.idfunctie)
+              ? m.idfunctie
+              : null,
         }));
       const groep = groepRows[0]?.id != null ? { id: groepRows[0].id } : null;
       const locRow = locatieRows[0];
@@ -515,6 +521,7 @@ export default async function handler(
         }
         const idwg = (row as { idwaarneemgroep?: unknown }).idwaarneemgroep;
         const fteVal = (row as { fte?: unknown }).fte;
+        const functieVal = (row as { idfunctie?: unknown }).idfunctie;
         if (typeof idwg !== 'number' || !Number.isInteger(idwg) || idwg < 1) {
           return res.status(400).json({ error: `Ongeldige waarneemgroep bij FTE-regel ${i + 1}` });
         }
@@ -523,13 +530,28 @@ export default async function handler(
             error: `FTE moet tussen 0 en 2 liggen (waarneemgroep ${idwg})`,
           });
         }
+        if (
+          functieVal !== undefined &&
+          functieVal !== null &&
+          (typeof functieVal !== 'number' ||
+            !Number.isInteger(functieVal) ||
+            !GELDIGE_WAARNEEMGROEP_FUNCTIES.has(functieVal))
+        ) {
+          return res.status(400).json({
+            error: `Functie moet een van de toegestane waarden zijn (waarneemgroep ${idwg})`,
+          });
+        }
       }
       for (const row of raw) {
         const idwg = (row as { idwaarneemgroep: number }).idwaarneemgroep;
         const fteVal = (row as { fte: number }).fte;
+        const functieVal = (row as { idfunctie?: 1 | 2 | 3 | 4 | null }).idfunctie;
         const upd = await db
           .update(waarneemgroepdeelnemers)
-          .set({ fte: fteVal })
+          .set({
+            fte: fteVal,
+            ...(functieVal !== undefined ? { idfunctie: functieVal } : {}),
+          })
           .where(
             and(
               eq(waarneemgroepdeelnemers.iddeelnemer, targetDeelnemerId),

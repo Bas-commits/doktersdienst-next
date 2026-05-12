@@ -60,7 +60,7 @@ const SECRETARIS_NAV_ITEMS: NavItem[] = [
   // },
   {
     id: 'deelnemer-toevoegen',
-    label: 'Deelnemer toevoegen',
+    label: 'Deelnemers beheren',
     href: DEFAULT_ROUTES.deelnemer_toevoegen,
     icon: <UserPlus className="size-4 shrink-0" />,
   },

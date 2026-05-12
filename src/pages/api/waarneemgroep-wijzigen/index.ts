@@ -23,6 +23,7 @@ export type RegioItem = { id: number; naam: string };
 export type InstellingItem = { id: number; naam: string };
 
 export type WaarneemgroepWijzigenOptions = {
+  isAdmin: boolean;
   waarneemgroepen: WaarneemgroepListItem[];
   specialismen: SpecialismeItem[];
   regios: RegioItem[];
@@ -103,21 +104,39 @@ export default async function handler(
       ).values()
     );
 
-    // All active waarneemgroepen are used for the "invoegende" dropdown regardless of role
-    const allWgRows = isAdmin
-      ? wgList
-      : await db
+    // Match header behavior: non-admins only see active groups they are linked to via left join.
+    const invoegendeRows = isAdmin
+      ? await db
           .select({ id: waarneemgroepen.id, naam: waarneemgroepen.naam })
           .from(waarneemgroepen)
           .where(eq(waarneemgroepen.afgemeld, false))
           .orderBy(asc(waarneemgroepen.naam))
-          .then((rows) =>
-            rows
-              .filter((r) => r.id != null && r.naam != null)
-              .map((r) => ({ id: r.id!, naam: r.naam! }))
-          );
+      : await db
+          .select({ id: waarneemgroepen.id, naam: waarneemgroepen.naam })
+          .from(waarneemgroepen)
+          .leftJoin(
+            waarneemgroepdeelnemers,
+            eq(waarneemgroepen.id, waarneemgroepdeelnemers.idwaarneemgroep)
+          )
+          .where(
+            and(
+              eq(waarneemgroepen.afgemeld, false),
+              eq(waarneemgroepdeelnemers.aangemeld, true),
+              eq(waarneemgroepdeelnemers.iddeelnemer, deelnemerId)
+            )
+          )
+          .orderBy(asc(waarneemgroepen.naam));
+
+    const waarneemgroepenForInvoegende: WaarneemgroepListItem[] = Array.from(
+      new Map(
+        invoegendeRows
+          .filter((r) => r.id != null && r.naam != null)
+          .map((r) => [r.id!, { id: r.id!, naam: r.naam! }])
+      ).values()
+    );
 
     return res.status(200).json({
+      isAdmin,
       waarneemgroepen: wgList,
       specialismen: specialismenRows
         .filter((r) => r.id != null && r.omschrijving != null)
@@ -128,7 +147,7 @@ export default async function handler(
       instellingen: instellingenRows
         .filter((r) => r.id != null && r.naam != null)
         .map((r) => ({ id: r.id!, naam: r.naam! })),
-      waarneemgroepenForInvoegende: allWgRows,
+      waarneemgroepenForInvoegende,
     });
   } catch (err) {
     console.error('GET /api/waarneemgroep-wijzigen error', err);

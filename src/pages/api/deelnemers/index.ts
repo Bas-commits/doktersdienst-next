@@ -16,7 +16,13 @@ export type DeelnemerWithGroepen = {
   color: string | null;
   idgroep: number | null;
   emailVerified: boolean | null;
-  waarneemgroepen: { id: number; naam: string | null; aangemeld: boolean; idgroep: number | null }[];
+  waarneemgroepen: {
+    id: number;
+    naam: string | null;
+    aangemeld: boolean;
+    idgroep: number | null;
+    idfunctie: number | null;
+  }[];
 };
 
 type Data =
@@ -184,6 +190,7 @@ export default async function handler(
         idwaarneemgroep: waarneemgroepdeelnemers.idwaarneemgroep,
         aangemeld: waarneemgroepdeelnemers.aangemeld,
         idgroep: waarneemgroepdeelnemers.idgroep,
+        idfunctie: waarneemgroepdeelnemers.idfunctie,
         naam: waarneemgroepen.naam,
       })
       .from(waarneemgroepdeelnemers)
@@ -196,7 +203,16 @@ export default async function handler(
       );
 
     // Group memberships by deelnemer
-    const membershipMap = new Map<number, { id: number; naam: string | null; aangemeld: boolean; idgroep: number | null }[]>();
+    const membershipMap = new Map<
+      number,
+      {
+        id: number;
+        naam: string | null;
+        aangemeld: boolean;
+        idgroep: number | null;
+        idfunctie: number | null;
+      }[]
+    >();
     for (const m of memberships) {
       if (m.iddeelnemer === null || m.idwaarneemgroep === null) continue;
       if (!membershipMap.has(m.iddeelnemer)) membershipMap.set(m.iddeelnemer, []);
@@ -205,6 +221,7 @@ export default async function handler(
         naam: m.naam,
         aangemeld: m.aangemeld ?? false,
         idgroep: m.idgroep ?? null,
+        idfunctie: m.idfunctie ?? null,
       });
     }
 

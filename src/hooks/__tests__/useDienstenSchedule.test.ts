@@ -520,7 +520,7 @@ describe('dienstenToShiftBlocks — overname overlay blocks', () => {
     expect(overlay!.middle?.id).toBe(50);
   });
 
-  it('declined overlay block has middle=null (gray, no initials)', () => {
+  it('declined overlay block keeps target as middle and stores original doctor', () => {
     const originalDoc = makeDeelnemer({ id: 50, voornaam: 'Piet', achternaam: 'Origineel', color: '#ff0000' });
     const targetDoc = makeDeelnemer({ id: 60, voornaam: 'Jan', achternaam: 'Doelarts', color: '#00ff00' });
     const slot = makeBaseSlot(SHIFT_VAN, SHIFT_TOT, WG_ID);
@@ -533,8 +533,8 @@ describe('dienstenToShiftBlocks — overname overlay blocks', () => {
     const overlay = blocks.find((b) => b.overnameType === 'vraagtekenOvername');
 
     expect(overlay).toBeDefined();
-    // Declined: middle should be null (gray block, no initials)
-    expect(overlay!.middle).toBeNull();
+    // Declined: keep target doctor data available as "naar"
+    expect(overlay!.middle?.id).toBe(60);
     // Original doctor should still be stored
     expect(overlay!.originalDoctor?.id).toBe(50);
   });

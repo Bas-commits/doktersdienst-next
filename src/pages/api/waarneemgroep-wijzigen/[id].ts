@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, asc, eq } from 'drizzle-orm';
 import { db, schema } from '@/db';
-import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
+import { GROEP_ADMINISTRATOR, getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 import { normalizeTelnrRingaandKey } from '@/lib/waarneemgroep-telnringaand';
 import { getWelkomWavBucket, welkomWelkomstFilePresent } from '@/lib/welkom-wav-s3';
 
@@ -25,6 +25,9 @@ export type WaarneemgroepDetail = {
   eigentelwelkomlocatie: string | null;
   gebruiktVoicemail: boolean | null;
   abomaatschapplanner: boolean | null;
+  abbonementDoktersdienst: boolean | null;
+  laatstAangemeldDoktersdienst: string | null;
+  laastsAfgemeldDoktersidenst: string | null;
   idcoordinatorwaarneemgroep: number | null;
   idliason1: number | null;
   idliason2: number | null;
@@ -91,6 +94,9 @@ export default async function handler(
             eigentelwelkomlocatie: waarneemgroepen.eigentelwelkomlocatie,
             gebruiktVoicemail: waarneemgroepen.gebruiktVoicemail,
             abomaatschapplanner: waarneemgroepen.abomaatschapplanner,
+            abbonementDoktersdienst: waarneemgroepen.abbonementDoktersdienst,
+            laatstAangemeldDoktersdienst: waarneemgroepen.laatstAangemeldDoktersdienst,
+            laastsAfgemeldDoktersidenst: waarneemgroepen.laastsAfgemeldDoktersidenst,
             idcoordinatorwaarneemgroep: waarneemgroepen.idcoordinatorwaarneemgroep,
             idliason1: waarneemgroepen.idliason1,
             idliason2: waarneemgroepen.idliason2,
@@ -147,6 +153,7 @@ export default async function handler(
 
   // PUT
   try {
+    const isAdmin = user.idgroep === GROEP_ADMINISTRATOR;
     const body = req.body as Record<string, unknown>;
     if (!body || typeof body !== 'object') {
       return res.status(400).json({ error: 'Body must be an object' });
@@ -156,6 +163,7 @@ export default async function handler(
       .select({
         eigentelwelkomwav: waarneemgroepen.eigentelwelkomwav,
         eigentelwelkomlocatie: waarneemgroepen.eigentelwelkomlocatie,
+        abbonementDoktersdienst: waarneemgroepen.abbonementDoktersdienst,
       })
       .from(waarneemgroepen)
       .where(eq(waarneemgroepen.id, id))
@@ -173,7 +181,7 @@ export default async function handler(
       return Number.isFinite(n) && n > 0 ? n : null;
     };
 
-    const update: Record<string, unknown> = {};
+    const update: Partial<typeof waarneemgroepen.$inferInsert> = {};
     if ('naam' in body) update.naam = str(body.naam, 50);
     if ('idspecialisme' in body) update.idspecialisme = num(body.idspecialisme);
     if ('idregio' in body) update.idregio = num(body.idregio);
@@ -193,6 +201,22 @@ export default async function handler(
     if ('eigentelwelkomwav' in body) update.eigentelwelkomwav = !!body.eigentelwelkomwav;
     if ('gebruiktVoicemail' in body) update.gebruiktVoicemail = !!body.gebruiktVoicemail;
     if ('abomaatschapplanner' in body) update.abomaatschapplanner = !!body.abomaatschapplanner;
+    if ('abbonementDoktersdienst' in body) {
+      if (!isAdmin) {
+        return res.status(403).json({ error: 'Alleen een administrator kan het doktersdienst-abonnement aanpassen.' });
+      }
+      const nextAbbonement = !!body.abbonementDoktersdienst;
+      const prevAbbonement = currentRow.abbonementDoktersdienst === true;
+      update.abbonementDoktersdienst = nextAbbonement;
+      if (nextAbbonement !== prevAbbonement) {
+        const nowIso = new Date().toISOString();
+        if (nextAbbonement) {
+          update.laatstAangemeldDoktersdienst = nowIso;
+        } else {
+          update.laastsAfgemeldDoktersidenst = nowIso;
+        }
+      }
+    }
     if ('idcoordinatorwaarneemgroep' in body) update.idcoordinatorwaarneemgroep = num(body.idcoordinatorwaarneemgroep);
     if ('idliason1' in body) update.idliason1 = num(body.idliason1);
     if ('idliason2' in body) update.idliason2 = num(body.idliason2);
@@ -219,7 +243,7 @@ export default async function handler(
     }
 
     if (Object.keys(update).length > 0) {
-      await db.update(waarneemgroepen).set(update as any).where(eq(waarneemgroepen.id, id));
+      await db.update(waarneemgroepen).set(update).where(eq(waarneemgroepen.id, id));
     }
 
     return res.status(200).json({ success: true });

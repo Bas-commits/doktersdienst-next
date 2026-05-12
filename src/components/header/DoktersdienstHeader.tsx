@@ -22,6 +22,10 @@ export interface WaarneemgroepItem {
   ID: number;
   naam: string;
   idgroep?: number | null;
+  /** Telefoonnummer ingaand (DB: `telnringaand`) */
+  telnringaand?: string | null;
+  /** Onze-centrale nummer (DB: `telnronzecentrale`) */
+  telnronzecentrale?: string | null;
 }
 
 export interface HeaderUser {
@@ -48,6 +52,14 @@ function getStoredGroupId(): string | null {
   if (typeof localStorage === 'undefined') return null;
   const id = localStorage.getItem(STORAGE_GROUP_ID_KEY);
   return id && id.trim() !== '' ? id : null;
+}
+
+function waarneemgroepSelectOptionLabel(wg: WaarneemgroepItem): string {
+  const ring = wg.telnringaand?.trim() ?? '';
+  const centrale = wg.telnronzecentrale?.trim() ?? '';
+  const suffix =
+    ring && centrale ? `${ring} — ${centrale}` : ring || centrale;
+  return suffix ? `${wg.naam} — ${suffix}` : wg.naam;
 }
 
 export function DoktersdienstHeader({
@@ -122,13 +134,21 @@ export function DoktersdienstHeader({
   }, [session?.user]);
 
   const activeWaarneemgroep = ctx?.activeWaarneemgroep ?? null;
+  const headerActiveWaarneemgroep = useMemo(() => {
+    if (ctx) {
+      return activeWaarneemgroep;
+    }
+    if (!selectedGroupId) return null;
+    return waarneemgroepen.find((w) => String(w.ID) === selectedGroupId) ?? null;
+  }, [ctx, activeWaarneemgroep, selectedGroupId, waarneemgroepen]);
+
   const roleTier = useMemo(
     () =>
       deriveEffectiveRoleTier({
         globalIdgroep: globalIdgroep ?? null,
-        selectedWaarneemgroepIdgroep: activeWaarneemgroep?.idgroep ?? null,
+        selectedWaarneemgroepIdgroep: headerActiveWaarneemgroep?.idgroep ?? null,
       }),
-    [globalIdgroep, activeWaarneemgroep?.idgroep]
+    [globalIdgroep, headerActiveWaarneemgroep?.idgroep]
   );
 
   const fetchVerzoeken = useCallback(() => {
@@ -299,7 +319,7 @@ export function DoktersdienstHeader({
           )}
 
           <div
-            className="relative ml-auto mr-auto w-[30%]"
+            className="relative ml-auto mr-auto w-[650]"
             style={router.pathname === '/mijn-gegevens' ? { visibility: 'hidden' } : undefined}
             aria-hidden={router.pathname === '/mijn-gegevens'}
           >
@@ -315,7 +335,7 @@ export function DoktersdienstHeader({
             >
               {waarneemgroepen.map((wg: WaarneemgroepItem) => (
                 <option key={wg.ID} value={String(wg.ID)}>
-                  {wg.naam}
+                  {waarneemgroepSelectOptionLabel(wg)}
                 </option>
               ))}
             </select>

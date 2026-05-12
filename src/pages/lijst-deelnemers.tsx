@@ -10,9 +10,7 @@ import type { DeelnemerWithGroepen } from './api/deelnemers/index';
 import { ROL_LABELS } from '@/lib/rol-labels';
 
 function formatNaam(d: DeelnemerWithGroepen): string {
-  return [d.voornaam, d.voorletterstussenvoegsel, d.achternaam]
-    .filter(Boolean)
-    .join(' ');
+  return [d.achternaam, d.voornaam, d.voorletterstussenvoegsel].filter(Boolean).join(', ');
 }
 
 function getDisplayInitials(d: DeelnemerWithGroepen): string {
@@ -164,7 +162,7 @@ export default function LijstDeelnemersPage() {
                       <tr className="border-b text-left text-muted-foreground">
                         <th className="pb-2 pr-4 font-medium">Naam</th>
                         <th className="pb-2 pr-4 font-medium">Email</th>
-                        <th className="pb-2 pr-4 font-medium">Verificatie</th>
+                        <th className="pb-2 pr-4 font-medium">E-mail verificatie</th>
                         <th className="w-[6rem] pb-2 pr-4 font-medium">Kleur</th>
                         {showWaarneemgroepColumn && <th className="pb-2 pr-4 font-medium">Waarneemgroepen</th>}
                         {showWaarneemgroepColumn && <th className="pb-2 font-medium">Rol</th>}

@@ -230,7 +230,11 @@ export function ShiftBlock({
     [block, now, disableActiveHighlight],
   );
 
-  const doctorId = block.middle?.id ?? 0;
+  const primaryDoctorForBlock =
+    overnameType === 'voorstelOvername' || overnameType === 'vraagtekenOvername'
+      ? (block.originalDoctor ?? block.middle)
+      : block.middle;
+  const doctorId = primaryDoctorForBlock?.id ?? 0;
   const achterw = block.top?.id ?? 0;
   const extra = block.bottom?.id ?? 0;
 
@@ -315,7 +319,7 @@ export function ShiftBlock({
 
   const achterwDoc = block.top ?? null;
   const extraDoc = block.bottom ?? null;
-  const mainDoc = block.middle ?? null;
+  const mainDoc = primaryDoctorForBlock ?? null;
   const displayShortName =
     (mainDoc?.shortName ?? '').trim() ||
     (mainDoc?.name ?? '').slice(0, 3).toUpperCase() ||
@@ -323,7 +327,7 @@ export function ShiftBlock({
   const displayName = (mainDoc?.name ?? '').trim() || (doctorId ? `Doctor ${doctorId}` : '');
 
   const mainColor = mainDoc?.color ?? (doctorId ? '#c686fd' : 'transparent');
-  const isUnassignedSlot = !block.middle;
+  const isUnassignedSlot = !mainDoc;
   const showPendingDoctor = isUnassignedSlot && pendingDoctor != null;
 
   const rawAantekeningLabel = (block.aantekeningTekst ?? '').trim();
@@ -869,11 +873,19 @@ export function ShiftBlock({
                 </p>
                 <p className="mb-0 font-bold leading-[17px] text-center">
                   {tooltipMainLabel}
-                  {doctorId !== 0 && block.label ? (
+                  {doctorId !== 0 && block.label && overnameType !== 'voorstelOvername' && overnameType !== 'overname' && overnameType !== 'vraagtekenOvername' ? (
                     <span className="block text-[10px]">{block.label}</span>
                   ) : null}
-                  {tooltipAantekeningLabel ? (
+                  {tooltipAantekeningLabel && overnameType !== 'voorstelOvername' && overnameType !== 'overname' && overnameType !== 'vraagtekenOvername' ? (
                     <span className="block text-[10px] font-normal opacity-90">{tooltipAantekeningLabel}</span>
+                  ) : null}
+                  {overnameType === 'voorstelOvername' || overnameType === 'overname' ? (
+                    <>
+                      {/* <span className="block text-[10px] font-normal opacity-90">van: {vanArts?.name ?? '??'}</span> */}
+                      <span className="block text-[15px] font-normal opacity-90">naar: {naarArts?.name ?? '??'} ?</span>
+                    </>
+                  ) : overnameType === 'vraagtekenOvername' ? (
+                    <span className="block text-[17px] font-normal opacity-90">naar: ?</span>
                   ) : null}
                 </p>
                 <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>

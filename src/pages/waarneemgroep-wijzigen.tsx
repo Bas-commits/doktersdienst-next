@@ -40,6 +40,7 @@ type FormData = {
   eigentelwelkomwav: boolean;
   gebruiktVoicemail: boolean;
   abomaatschapplanner: boolean;
+  abbonementDoktersdienst: boolean;
   idcoordinatorwaarneemgroep: string;
   idliason1: string;
   idliason2: string;
@@ -64,12 +65,24 @@ function wgToForm(wg: WaarneemgroepDetail): FormData {
     eigentelwelkomwav: wg.eigentelwelkomwav === true,
     gebruiktVoicemail: wg.gebruiktVoicemail === true,
     abomaatschapplanner: wg.abomaatschapplanner === true,
+    abbonementDoktersdienst: wg.abbonementDoktersdienst === true,
     idcoordinatorwaarneemgroep: toFormId(wg.idcoordinatorwaarneemgroep),
     idliason1: toFormId(wg.idliason1) || '0',
     idliason2: toFormId(wg.idliason2) || '0',
     idliason3: toFormId(wg.idliason3) || '0',
     idliason4: toFormId(wg.idliason4) || '0',
   };
+}
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return 'Nog niet ingesteld';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return new Intl.DateTimeFormat('nl-NL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(d);
 }
 
 const selectClass =
@@ -99,6 +112,7 @@ export default function WaarneemgroepWijzigenPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const canEditAbbonementDoktersdienst = options?.isAdmin === true;
 
   useEffect(() => {
     if (!session?.user) return;
@@ -231,6 +245,9 @@ export default function WaarneemgroepWijzigenPage() {
       idliason2: toNum(formData.idliason2),
       idliason3: toNum(formData.idliason3),
       idliason4: toNum(formData.idliason4),
+      ...(canEditAbbonementDoktersdienst
+        ? { abbonementDoktersdienst: formData.abbonementDoktersdienst }
+        : {}),
     };
 
     try {
@@ -242,6 +259,22 @@ export default function WaarneemgroepWijzigenPage() {
       });
       const data = await res.json();
       if (!res.ok) { setSubmitError(data.error ?? 'Opslaan mislukt'); return; }
+      if (canEditAbbonementDoktersdienst) {
+        const prevAbbonement = selectedWg?.abbonementDoktersdienst === true;
+        const nextAbbonement = formData.abbonementDoktersdienst;
+        if (prevAbbonement !== nextAbbonement) {
+          const nowIso = new Date().toISOString();
+          setSelectedWg((wg) => {
+            if (!wg) return wg;
+            return {
+              ...wg,
+              abbonementDoktersdienst: nextAbbonement,
+              laatstAangemeldDoktersdienst: nextAbbonement ? nowIso : wg.laatstAangemeldDoktersdienst,
+              laastsAfgemeldDoktersidenst: nextAbbonement ? wg.laastsAfgemeldDoktersidenst : nowIso,
+            };
+          });
+        }
+      }
       setSubmitSuccess(true);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Opslaan mislukt');
@@ -408,7 +441,7 @@ export default function WaarneemgroepWijzigenPage() {
                       <h2 className="text-base font-medium">Telefonie</h2>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="flex flex-col gap-1">
-                          <Label htmlFor="wg-telnringaand">Telefoonnummer doorgerouteerd naar diensdoende</Label>
+                          <Label htmlFor="wg-telnringaand">Telefoonnummer naar doktersdienst centrale</Label>
                           <Input
                             id="wg-telnringaand"
                             value={formData.telnringaand}
@@ -453,10 +486,11 @@ export default function WaarneemgroepWijzigenPage() {
                           <Input
                             id="wg-telnronzecentrale"
                             value={formData.telnronzecentrale}
-                            onChange={(e) => set('telnronzecentrale', e.target.value)}
-                            disabled={submitting}
+                            readOnly
+                            disabled
                           />
                         </div>
+                  
                         {/* <div className="flex flex-col gap-1">
                           <Label htmlFor="wg-telnrconference">Telnr conference</Label>
                           <Input
@@ -474,8 +508,7 @@ export default function WaarneemgroepWijzigenPage() {
                       <div className="flex flex-wrap gap-x-6 gap-y-3">
                         {(
                           [
-                            ['afgemeld', 'Afgemeld'],
-                            ['smsdienstbegin', 'SMS begin dienst'],
+                            ['smsdienstbegin', 'Bericht begin dienst'],
 
                             // ['abomaatschapplanner', 'Praktijkplanner abonnement'],
                           ] as [keyof FormData, string][]
@@ -485,12 +518,58 @@ export default function WaarneemgroepWijzigenPage() {
                               id={`wg-${key}`}
                               checked={formData[key] as boolean}
                               onCheckedChange={(c) => set(key, !!c)}
-                              disabled={submitting}
+                              disabled={submitting || (key === 'abbonementDoktersdienst' && !canEditAbbonementDoktersdienst)}
                             />
-                            <Label htmlFor={`wg-${key}`} className="cursor-pointer font-normal">{label}</Label>
+                            <Label
+                              htmlFor={`wg-${key}`}
+                              className={`font-normal ${key === 'abbonementDoktersdienst' && !canEditAbbonementDoktersdienst ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer'}`}
+                            >
+                              {label}
+                            </Label>
                           </div>
                         ))}
                       </div>
+                      <div className="overflow-x-auto rounded-lg border border-border">
+                        <table className="w-full min-w-[540px] text-sm">
+                          <thead className="bg-muted/40">
+                            <tr className="border-b border-border text-left">
+                              <th className="px-4 py-2.5 font-semibold">Abonnement</th>
+                              <th className="px-4 py-2.5 font-semibold md:text-center">Actief</th>
+                              <th className="px-4 py-2.5 font-semibold">Datum ingang</th>
+                              <th className="px-4 py-2.5 font-semibold">Stop gezet</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td className="px-4 py-3 font-medium">DoktersDienst</td>
+                              <td className="px-4 py-3">
+                                <div className="flex justify-end md:justify-center">
+                                  <Checkbox
+                                    id="wg-abbonementDoktersdienst"
+                                    checked={formData.abbonementDoktersdienst}
+                                    onCheckedChange={(c) => set('abbonementDoktersdienst', !!c)}
+                                    disabled={submitting || !canEditAbbonementDoktersdienst}
+                                  />
+                                </div>
+                                <Label htmlFor="wg-abbonementDoktersdienst" className="sr-only">
+                                  Actief abonnement doktersdienst
+                                </Label>
+                              </td>
+                              <td className="px-4 py-3 font-medium text-foreground">
+                                {formatDate(selectedWg.laatstAangemeldDoktersdienst)}
+                              </td>
+                              <td className="px-4 py-3 font-medium text-foreground">
+                                {formatDate(selectedWg.laastsAfgemeldDoktersidenst)}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      {!canEditAbbonementDoktersdienst && (
+                        <p className="text-xs text-muted-foreground">
+                          Alleen administrators kunnen dit abonnement wijzigen.
+                        </p>
+                      )}
                     </div>
 
                     <div className={formSectionClass}>

@@ -286,10 +286,10 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
     const isPartial = originalDienst
       ? originalDienst.van !== dienst.van || originalDienst.tot !== dienst.tot
       : dienst.isPartial;
-    // Declined proposals: gray block with no initials (middle = null)
-    // Pending/accepted: show the target doctor (iddeelnovern) instead of the original
+    // Keep target doctor data on `middle` for all overname states; the ShiftBlock UI decides
+    // whether to render original (`vanArts`) or target (`naarArts`) as the primary assignee.
     const targetDoctor = dienst.target_deelnemers ? toDoctorInfoFromDeelnemer(dienst.target_deelnemers) : null;
-    const middle = overnameType === 'vraagtekenOvername' ? null : (targetDoctor ?? originalDoctor);
+    const middle = targetDoctor ?? originalDoctor;
 
     blocks.push({
       id: dienst.id,

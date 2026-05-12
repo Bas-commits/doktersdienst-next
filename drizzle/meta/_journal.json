@@ -15,6 +15,13 @@
       "when": 1742140800000,
       "tag": "0001_add_better_auth_columns_to_deelnemers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778580623002,
+      "tag": "0002_huge_siren",
+      "breakpoints": true
     }
   ]
 }

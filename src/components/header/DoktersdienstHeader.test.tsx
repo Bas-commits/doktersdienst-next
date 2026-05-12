@@ -41,8 +41,18 @@ globalThis.fetch = mockFetch as unknown as typeof fetch;
 
 const defaultProps = {
   waarneemgroepen: [
-    { ID: 1, naam: 'Groep A' },
-    { ID: 2, naam: 'Groep B' },
+    {
+      ID: 1,
+      naam: 'Groep A',
+      telnringaand: '020-1234567',
+      telnronzecentrale: '088-1112233',
+    },
+    {
+      ID: 2,
+      naam: 'Groep B',
+      telnringaand: '030-7654321',
+      telnronzecentrale: '088-4445566',
+    },
   ],
   headerUser: {
     UserName: 'Jan de Vries',
@@ -102,6 +112,14 @@ describe('DoktersdienstHeader', () => {
     expect(screen.getByTestId('header-logo')).toBeInTheDocument();
     expect(screen.getByTestId('header-group-select')).toBeInTheDocument();
     expect(screen.getByTestId('header-user-menu')).toBeInTheDocument();
+  });
+
+  it('appends telnringaand and telnronzecentrale to each option label', () => {
+    render(<DoktersdienstHeader {...defaultProps} />);
+
+    const options = screen.getAllByRole('option');
+    expect(options[0]).toHaveTextContent('Groep A — 020-1234567 - 088-1112233');
+    expect(options[1]).toHaveTextContent('Groep B — 030-7654321 - 088-4445566');
   });
 
   it('renders group select options from waarneemgroepen', () => {

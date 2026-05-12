@@ -65,7 +65,7 @@ export async function resolveDeelnemerCreatePermission(
 }
 
 /**
- * Rol-opties voor “Deelnemer toevoegen”: alleen **Deelnemer** en **Secretaris** met vaste weergavenaam (id 1 en 2).
+ * Rol-opties voor “Deelnemers beheren”: alleen **Deelnemer** en **Secretaris** met vaste weergavenaam (id 1 en 2).
  * Valideert dat de groep‑rijen in `groepen` bestaan.
  */
 export async function listGroepChoicesForNewDeelnemer(): Promise<Array<{ id: number; naam: string | null }>> {

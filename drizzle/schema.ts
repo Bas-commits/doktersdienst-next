@@ -187,13 +187,13 @@ import { sql } from "drizzle-orm"
 // 	updatedAt: timestamp("updated_at", { mode: 'string' }),
 // });
 
-export const expertises = pgTable("expertises", {
-	id: integer(),
-	afkorting: varchar({ length: 10 }),
-	omschrijving: varchar({ length: 50 }),
-	idspecialisme: integer(),
-	verwijderd: integer(),
-});
+// export const expertises = pgTable("expertises", {
+// 	id: integer(),
+// 	afkorting: varchar({ length: 10 }),
+// 	omschrijving: varchar({ length: 50 }),
+// 	idspecialisme: integer(),
+// 	verwijderd: integer(),
+// });
 
 // export const newUrentelling = pgTable("new_urentelling", {
 // 	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
@@ -246,30 +246,30 @@ export const instellingtype = pgTable("instellingtype", {
 // 	idmedicijnmerk: integer(),
 // });
 
-export const waarneemgroeplocaties = pgTable("waarneemgroeplocaties", {
-	id: integer(),
-	idlocatie: integer(),
-	idwaarneemgroep: integer(),
-	rowguid: uuid(),
-});
+// export const waarneemgroeplocaties = pgTable("waarneemgroeplocaties", {
+// 	id: integer(),
+// 	idlocatie: integer(),
+// 	idwaarneemgroep: integer(),
+// 	rowguid: uuid(),
+// });
 
-export const newActivity = pgTable("new_activity", {
-	id: integer(),
-	team: integer(),
-	expertisecompetencesId: integer("expertisecompetences_id"),
-	namelong: varchar({ length: 25 }),
-	nameshort: varchar({ length: 14 }),
-	backgrndcolor: varchar({ length: 255 }),
-	icon: varchar({ length: 255 }),
-	createdAt: timestamp("created_at", { mode: 'string' }),
-	updatedAt: timestamp("updated_at", { mode: 'string' }),
-});
+// export const newActivity = pgTable("new_activity", {
+// 	id: integer(),
+// 	team: integer(),
+// 	expertisecompetencesId: integer("expertisecompetences_id"),
+// 	namelong: varchar({ length: 25 }),
+// 	nameshort: varchar({ length: 14 }),
+// 	backgrndcolor: varchar({ length: 255 }),
+// 	icon: varchar({ length: 255 }),
+// 	createdAt: timestamp("created_at", { mode: 'string' }),
+// 	updatedAt: timestamp("updated_at", { mode: 'string' }),
+// });
 
-export const migrations = pgTable("migrations", {
-	id: integer(),
-	migration: varchar({ length: 255 }),
-	batch: integer(),
-});
+// export const migrations = pgTable("migrations", {
+// 	id: integer(),
+// 	migration: varchar({ length: 255 }),
+// 	batch: integer(),
+// });
 
 // export const cdrOld = pgTable("cdr_old", {
 // 	id: integer(),
@@ -494,12 +494,12 @@ export const diensten = pgTable(
 // 	verrekening: varchar({ length: 50 }),
 // });
 
-export const praktijkdeelnemers = pgTable("praktijkdeelnemers", {
-	id: integer(),
-	idpraktijk: integer(),
-	iddeelnemer: integer(),
-	rowguid: uuid(),
-});
+// export const praktijkdeelnemers = pgTable("praktijkdeelnemers", {
+// 	id: integer(),
+// 	idpraktijk: integer(),
+// 	iddeelnemer: integer(),
+// 	rowguid: uuid(),
+// });
 
 // export const medicijnmerk = pgTable("medicijnmerk", {
 // 	id: integer(),
@@ -657,22 +657,22 @@ export const groepen = pgTable("groepen", {
 	maatschapplanner: boolean(),
 });
 
-export const newDagdelen = pgTable("new_dagdelen", {
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	id: bigint({ mode: "number" }),
-	daypartWithDate: varchar("daypart_with_date", { length: 255 }),
-	doctor: integer(),
-	team: integer(),
-	maandag: varchar({ length: 50 }),
-	dinsdag: varchar({ length: 50 }),
-	woensdag: varchar({ length: 50 }),
-	donderdag: varchar({ length: 50 }),
-	vrijdag: varchar({ length: 50 }),
-	zaterdag: varchar({ length: 50 }),
-	zondag: varchar({ length: 50 }),
-	createdAt: timestamp("created_at", { mode: 'string' }),
-	updatedAt: timestamp("updated_at", { mode: 'string' }),
-});
+// export const newDagdelen = pgTable("new_dagdelen", {
+// 	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+// 	id: bigint({ mode: "number" }),
+// 	daypartWithDate: varchar("daypart_with_date", { length: 255 }),
+// 	doctor: integer(),
+// 	team: integer(),
+// 	maandag: varchar({ length: 50 }),
+// 	dinsdag: varchar({ length: 50 }),
+// 	woensdag: varchar({ length: 50 }),
+// 	donderdag: varchar({ length: 50 }),
+// 	vrijdag: varchar({ length: 50 }),
+// 	zaterdag: varchar({ length: 50 }),
+// 	zondag: varchar({ length: 50 }),
+// 	createdAt: timestamp("created_at", { mode: 'string' }),
+// 	updatedAt: timestamp("updated_at", { mode: 'string' }),
+// });
 
 // export const formmails = pgTable("formmails", {
 // 	id: integer(),
@@ -859,33 +859,33 @@ export const newDagdelen = pgTable("new_dagdelen", {
 // 	wekadviesuur: doublePrecision(),
 // });
 
-export const dienstenNewOld = pgTable("diensten_new_old", {
-	id: integer(),
-	idwaarneemgroep: integer(),
-	idpraktijk: integer(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	van: bigint({ mode: "number" }),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	tot: bigint({ mode: "number" }),
-	iddeelnemer: integer(),
-	rol: integer(),
-	iddienstherhalen: integer(),
-	idaantekening: integer(),
-	iddeelnovern: integer(),
-	iddienstovern: integer(),
-	type: integer(),
-	idshift: integer(),
-	idtarief: integer(),
-	idkamer: integer(),
-	idtelnr: integer(),
-	idlocatie: integer(),
-	iddeelnemer2: integer(),
-	idtaaktype: integer(),
-	currentDate: date("curr_date"),
-	nextDate: date("next_date"),
-	senderId: integer("sender_id"),
-	deleteRequest: integer("delete_request"),
-});
+// export const dienstenNewOld = pgTable("diensten_new_old", {
+// 	id: integer(),
+// 	idwaarneemgroep: integer(),
+// 	idpraktijk: integer(),
+// 	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+// 	van: bigint({ mode: "number" }),
+// 	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+// 	tot: bigint({ mode: "number" }),
+// 	iddeelnemer: integer(),
+// 	rol: integer(),
+// 	iddienstherhalen: integer(),
+// 	idaantekening: integer(),
+// 	iddeelnovern: integer(),
+// 	iddienstovern: integer(),
+// 	type: integer(),
+// 	idshift: integer(),
+// 	idtarief: integer(),
+// 	idkamer: integer(),
+// 	idtelnr: integer(),
+// 	idlocatie: integer(),
+// 	iddeelnemer2: integer(),
+// 	idtaaktype: integer(),
+// 	currentDate: date("curr_date"),
+// 	nextDate: date("next_date"),
+// 	senderId: integer("sender_id"),
+// 	deleteRequest: integer("delete_request"),
+// });
 
 export const dienstherhalen = pgTable("dienstherhalen", {
 	id: integer(),
@@ -925,11 +925,11 @@ export const gesprekken = pgTable("gesprekken", {
 	recordingShow: integer("recording_show"),
 });
 
-export const deelnemerexpertises = pgTable("deelnemerexpertises", {
-	id: integer(),
-	iddeelnemer: integer(),
-	idexpertise: integer(),
-});
+// export const deelnemerexpertises = pgTable("deelnemerexpertises", {
+// 	id: integer(),
+// 	iddeelnemer: integer(),
+// 	idexpertise: integer(),
+// });
 
 // export const kamertelnrs = pgTable("kamertelnrs", {
 // 	id: integer(),
@@ -938,35 +938,35 @@ export const deelnemerexpertises = pgTable("deelnemerexpertises", {
 // 	telnr: varchar({ length: 50 }),
 // });
 
-export const praktijken = pgTable("praktijken", {
-	id: integer(),
-	naam: varchar({ length: 50 }),
-	idspecialisme: integer(),
-	email: varchar({ length: 50 }),
-	password: varchar({ length: 16 }),
-	straatnr: varchar({ length: 30 }),
-	postcode: varchar({ length: 7 }),
-	plaats: varchar({ length: 50 }),
-	telnr: varchar({ length: 20 }),
-	dagbegin: integer(),
-	dageind: integer(),
-	eigenrooster: boolean(),
-	idsecretaris: integer(),
-	rowguid: uuid(),
-});
+// export const praktijken = pgTable("praktijken", {
+// 	id: integer(),
+// 	naam: varchar({ length: 50 }),
+// 	idspecialisme: integer(),
+// 	email: varchar({ length: 50 }),
+// 	password: varchar({ length: 16 }),
+// 	straatnr: varchar({ length: 30 }),
+// 	postcode: varchar({ length: 7 }),
+// 	plaats: varchar({ length: 50 }),
+// 	telnr: varchar({ length: 20 }),
+// 	dagbegin: integer(),
+// 	dageind: integer(),
+// 	eigenrooster: boolean(),
+// 	idsecretaris: integer(),
+// 	rowguid: uuid(),
+// });
 
-export const pagehit = pgTable("pagehit", {
-	id: integer(),
-	datetime: integer(),
-	visitor: integer(),
-	useraccount: integer(),
-	requestMethod: varchar("request_method", { length: 5 }),
-	queryString: varchar("query_string", { length: 255 }),
-	pageid: integer(),
-	pagename: varchar({ length: 50 }),
-	refererid: integer(),
-	referername: varchar({ length: 50 }),
-});
+// export const pagehit = pgTable("pagehit", {
+// 	id: integer(),
+// 	datetime: integer(),
+// 	visitor: integer(),
+// 	useraccount: integer(),
+// 	requestMethod: varchar("request_method", { length: 5 }),
+// 	queryString: varchar("query_string", { length: 255 }),
+// 	pageid: integer(),
+// 	pagename: varchar({ length: 50 }),
+// 	refererid: integer(),
+// 	referername: varchar({ length: 50 }),
+// });
 
 export const locaties = pgTable("locaties", {
 	id: integer(),
@@ -1095,11 +1095,11 @@ export const tarieven = pgTable("tarieven", {
 	pm: boolean(),
 });
 
-export const waarneemgroepvakantieregios = pgTable("waarneemgroepvakantieregios", {
-	id: integer(),
-	idwaarneemgroep: integer(),
-	idvakantieregio: integer(),
-});
+// export const waarneemgroepvakantieregios = pgTable("waarneemgroepvakantieregios", {
+// 	id: integer(),
+// 	idwaarneemgroep: integer(),
+// 	idvakantieregio: integer(),
+// });
 
 // export const protocollen = pgTable("protocollen", {
 // 	id: integer(),
@@ -1276,6 +1276,9 @@ export const waarneemgroepen = pgTable("waarneemgroepen", {
 	eigentelwelkomwav: boolean(),
 	eigentelwelkomlocatie: varchar({ length: 512 }),
 	abomaatschapplanner: boolean(),
+	abbonementDoktersdienst: boolean("abbonement_doktersdienst"),
+	laatstAangemeldDoktersdienst: timestamp("laatst_aangemeld_doktersdienst", { mode: 'string' }),
+	laastsAfgemeldDoktersidenst: timestamp("laasts_afgemeld_doktersidenst", { mode: 'string' }),
 	gebruiktVoicemail: boolean("gebruikt_voicemail"),
 	gespreksopname: integer(),
 });
@@ -1314,35 +1317,35 @@ export const sms = pgTable("sms", {
 	newid: integer(),
 });
 
-export const newChipsdaypart = pgTable("new_chipsdaypart", {
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	id: bigint({ mode: "number" }),
-	date: timestamp({ mode: 'string' }),
-	daypartWithDate: varchar("daypart_with_date", { length: 255 }),
-	doctor: integer(),
-	team: integer(),
-	createdAt: timestamp("created_at", { mode: 'string' }),
-	updatedAt: timestamp("updated_at", { mode: 'string' }),
-	grabsence: integer(),
-	grlocation: integer(),
-	gractivity: integer(),
-	grspec: integer(),
-	grtask1: integer(),
-	grtask2: integer(),
-	grtask3: integer(),
-	repetition: integer(),
-	fte: integer(),
-	lastUpdatedUserid: integer("last_updated_userid"),
-	tplocation: integer(),
-	tpactivity: integer(),
-	tpspec: integer(),
-	tptask1: integer(),
-	tptask2: integer(),
-	tptask3: integer(),
-	tpabsence: integer(),
-	tplastedited: timestamp({ mode: 'string' }),
-	tplastdateedited: integer(),
-});
+// export const newChipsdaypart = pgTable("new_chipsdaypart", {
+// 	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+// 	id: bigint({ mode: "number" }),
+// 	date: timestamp({ mode: 'string' }),
+// 	daypartWithDate: varchar("daypart_with_date", { length: 255 }),
+// 	doctor: integer(),
+// 	team: integer(),
+// 	createdAt: timestamp("created_at", { mode: 'string' }),
+// 	updatedAt: timestamp("updated_at", { mode: 'string' }),
+// 	grabsence: integer(),
+// 	grlocation: integer(),
+// 	gractivity: integer(),
+// 	grspec: integer(),
+// 	grtask1: integer(),
+// 	grtask2: integer(),
+// 	grtask3: integer(),
+// 	repetition: integer(),
+// 	fte: integer(),
+// 	lastUpdatedUserid: integer("last_updated_userid"),
+// 	tplocation: integer(),
+// 	tpactivity: integer(),
+// 	tpspec: integer(),
+// 	tptask1: integer(),
+// 	tptask2: integer(),
+// 	tptask3: integer(),
+// 	tpabsence: integer(),
+// 	tplastedited: timestamp({ mode: 'string' }),
+// 	tplastdateedited: integer(),
+// });
 
 // export const gemeentearrondissement = pgTable("gemeentearrondissement", {
 // 	id: integer(),

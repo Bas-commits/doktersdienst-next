@@ -21,6 +21,16 @@ const GROEP_ADMINISTRATOR = 5;
 
 const selectClass =
   'h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50';
+const rolInGroepChoices = [
+  { id: 1, label: 'Deelnemer' },
+  { id: 2, label: 'Secretaris' },
+] as const;
+const functieChoices = [
+  { id: 1, label: 'Ajo' },
+  { id: 2, label: 'Specialist' },
+  { id: 3, label: 'Assisitent' },
+  { id: 4, label: 'Toa' },
+] as const;
 
 function toOpties(data: unknown): DeelnemerNieuwOptiesResponse | null {
   if (!data || typeof data !== 'object') return null;
@@ -28,7 +38,7 @@ function toOpties(data: unknown): DeelnemerNieuwOptiesResponse | null {
 }
 
 function formatNaam(d: DeelnemerWithGroepen): string {
-  return [d.voornaam, d.voorletterstussenvoegsel, d.achternaam].filter(Boolean).join(' ');
+  return [d.achternaam, d.voornaam, d.voorletterstussenvoegsel].filter(Boolean).join(', ');
 }
 
 function getDisplayInitials(d: DeelnemerWithGroepen): string {
@@ -73,6 +83,8 @@ export default function DeelnemerToevoegenPage() {
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
   const [resendingVerificationId, setResendingVerificationId] = useState<number | null>(null);
+  const [updatingRolId, setUpdatingRolId] = useState<number | null>(null);
+  const [updatingFunctieId, setUpdatingFunctieId] = useState<number | null>(null);
 
   const colorInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
 
@@ -250,6 +262,104 @@ export default function DeelnemerToevoegenPage() {
     }
   }
 
+  async function handleRolInGroepChange(deelnemerId: number, nextRolId: number, wgId: number) {
+    let prevRolInWg: number | null = null;
+    setLeden((prev) =>
+      prev.map((d) => {
+        if (d.id !== deelnemerId) return d;
+        const idx = d.waarneemgroepen.findIndex((wg) => wg.id === wgId);
+        if (idx === -1) return d;
+        prevRolInWg = d.waarneemgroepen[idx]?.idgroep ?? null;
+        const waarneemgroepen = [...d.waarneemgroepen];
+        waarneemgroepen[idx] = { ...waarneemgroepen[idx], idgroep: nextRolId };
+        return { ...d, waarneemgroepen };
+      })
+    );
+
+    setUpdatingRolId(deelnemerId);
+    try {
+      const res = await fetch('/api/deelnemers/registratie', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actie: 'groep',
+          IDdeelnemer: deelnemerId,
+          IDwaarneemgroep: wgId,
+          IDgroep: nextRolId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Rol wijzigen mislukt');
+      }
+      toast.success('Rol in groep bijgewerkt.');
+    } catch (error) {
+      setLeden((prev) =>
+        prev.map((d) => {
+          if (d.id !== deelnemerId) return d;
+          const idx = d.waarneemgroepen.findIndex((wg) => wg.id === wgId);
+          if (idx === -1) return d;
+          const waarneemgroepen = [...d.waarneemgroepen];
+          waarneemgroepen[idx] = { ...waarneemgroepen[idx], idgroep: prevRolInWg };
+          return { ...d, waarneemgroepen };
+        })
+      );
+      toast.error(error instanceof Error ? error.message : 'Rol wijzigen mislukt');
+    } finally {
+      setUpdatingRolId(null);
+    }
+  }
+
+  async function handleFunctieChange(deelnemerId: number, nextFunctie: number | null, wgId: number) {
+    let prevFunctieInWg: number | null = null;
+    setLeden((prev) =>
+      prev.map((d) => {
+        if (d.id !== deelnemerId) return d;
+        const idx = d.waarneemgroepen.findIndex((wg) => wg.id === wgId);
+        if (idx === -1) return d;
+        prevFunctieInWg = d.waarneemgroepen[idx]?.idfunctie ?? null;
+        const waarneemgroepen = [...d.waarneemgroepen];
+        waarneemgroepen[idx] = { ...waarneemgroepen[idx], idfunctie: nextFunctie };
+        return { ...d, waarneemgroepen };
+      })
+    );
+
+    setUpdatingFunctieId(deelnemerId);
+    try {
+      const res = await fetch('/api/deelnemers/registratie', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actie: 'functie',
+          IDdeelnemer: deelnemerId,
+          IDwaarneemgroep: wgId,
+          IDfunctie: nextFunctie,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Functie wijzigen mislukt');
+      }
+      toast.success('Functie bijgewerkt.');
+    } catch (error) {
+      setLeden((prev) =>
+        prev.map((d) => {
+          if (d.id !== deelnemerId) return d;
+          const idx = d.waarneemgroepen.findIndex((wg) => wg.id === wgId);
+          if (idx === -1) return d;
+          const waarneemgroepen = [...d.waarneemgroepen];
+          waarneemgroepen[idx] = { ...waarneemgroepen[idx], idfunctie: prevFunctieInWg };
+          return { ...d, waarneemgroepen };
+        })
+      );
+      toast.error(error instanceof Error ? error.message : 'Functie wijzigen mislukt');
+    } finally {
+      setUpdatingFunctieId(null);
+    }
+  }
+
   function requestRemoveFromWg(deelnemerId: number) {
     setConfirmRemoveId(deelnemerId);
   }
@@ -264,7 +374,7 @@ export default function DeelnemerToevoegenPage() {
 
     setResendingVerificationId(d.id);
     try {
-      const res = await fetch('/api/deelnemers/verificatie-opnieuw', {
+      const res = await fetch('/api/deelnemers/E-mail verificatie-opnieuw', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -277,15 +387,15 @@ export default function DeelnemerToevoegenPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) {
-        toast.error(typeof data.error === 'string' ? data.error : 'Verificatiemail versturen mislukt');
+        toast.error(typeof data.error === 'string' ? data.error : 'E-mail verificatiemail versturen mislukt');
         return;
       }
-      toast.success('Verificatiemail opnieuw verstuurd.');
+      toast.success('E-mail verificatiemail opnieuw verstuurd.');
       if (data.emailVerified === true) {
         setLeden((prev) => prev.map((row) => (row.id === d.id ? { ...row, emailVerified: true } : row)));
       }
     } catch {
-      toast.error('Verificatiemail versturen mislukt');
+      toast.error('E-mail verificatiemail versturen mislukt');
     } finally {
       setResendingVerificationId(null);
     }
@@ -391,13 +501,13 @@ export default function DeelnemerToevoegenPage() {
   return (
     <>
       <Head>
-        <title>Deelnemer toevoegen</title>
+        <title>Deelnemers beheren</title>
       </Head>
       <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
         <Card>
           <CardHeader>
             <CardTitle>
-              <h1 className="text-2xl font-semibold tracking-tight">Deelnemer toevoegen</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Deelnemers beheren</h1>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -467,8 +577,8 @@ export default function DeelnemerToevoegenPage() {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        title="Nieuwe deelnemer toevoegen"
-                        aria-label="Nieuwe deelnemer toevoegen"
+                        title="Nieuwe Deelnemers beheren"
+                        aria-label="Nieuwe Deelnemers beheren"
                         className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-destructive text-destructive-foreground transition-colors hover:bg-destructive/90"
                         onClick={() => setIsAddModalOpen(true)}
                       >
@@ -496,15 +606,18 @@ export default function DeelnemerToevoegenPage() {
                         <tr className="border-b text-left text-muted-foreground">
                           <th className="pb-2 pr-4 font-medium">Naam</th>
                           <th className="pb-2 pr-4 font-medium">Email</th>
-                          <th className="pb-2 pr-4 font-medium">Verificatie</th>
+                          <th className="pb-2 pr-4 font-medium">E-mail verificatie</th>
                           <th className="w-[6rem] pb-2 pr-4 font-medium">Kleur</th>
                           <th className="pb-2 pr-4 font-medium">Rol in groep</th>
-                          <th className="pb-2 font-medium w-44" />
+                          <th className="pb-2 pr-4 font-medium">Functie</th>
+                          <th className="pb-2 font-medium w-25" />
                         </tr>
                       </thead>
                       <tbody>
                         {leden.map((d) => {
-                          const rolInWg = d.waarneemgroepen.find((wg) => wg.id === wgNumeric)?.idgroep;
+                          const membershipInWg = d.waarneemgroepen.find((wg) => wg.id === wgNumeric);
+                          const rolInWg = membershipInWg?.idgroep ?? null;
+                          const functieInWg = membershipInWg?.idfunctie ?? null;
                           return (
                             <tr
                               key={d.id}
@@ -585,10 +698,55 @@ export default function DeelnemerToevoegenPage() {
                                   />
                                 </div>
                               </td>
-                              <td className="py-2.5 pr-4 text-muted-foreground">
-                                {rolInWg != null ? ROL_LABELS[rolInWg] ?? `Rol ${rolInWg}` : '—'}
+                              <td className="py-2.5 pr-4">
+                                <select
+                                  className="h-8 min-w-[7rem] rounded-md border border-input bg-background px-2 text-xs"
+                                  value={rolInWg != null ? String(rolInWg) : ''}
+                                  disabled={updatingRolId === d.id}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    const nextRol = Number(e.target.value);
+                                    if (!Number.isFinite(nextRol) || nextRol === rolInWg) return;
+                                    void handleRolInGroepChange(d.id, nextRol, wgNumeric);
+                                  }}
+                                >
+                                  <option value="" disabled>
+                                    — Kies —
+                                  </option>
+                                  {rolInGroepChoices.map((choice) => (
+                                    <option key={choice.id} value={String(choice.id)}>
+                                      {ROL_LABELS[choice.id] ?? choice.label}
+                                    </option>
+                                  ))}
+                                </select>
                               </td>
-                              <td className="py-2.5">
+                              <td className="py-2.5 pr-4">
+                                <select
+                                  className="h-8 min-w-[7rem] rounded-md border border-input bg-background px-2 text-xs"
+                                  value={functieInWg != null ? String(functieInWg) : ''}
+                                  disabled={updatingFunctieId === d.id}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    const raw = e.target.value;
+                                    const nextFunctie = raw === '' ? null : Number(raw);
+                                    if (nextFunctie === functieInWg) return;
+                                    if (nextFunctie !== null && !Number.isFinite(nextFunctie)) return;
+                                    void handleFunctieChange(d.id, nextFunctie, wgNumeric);
+                                  }}
+                                >
+                                  <option value="">— Geen —</option>
+                                  {functieChoices.map((choice) => (
+                                    <option key={choice.id} value={String(choice.id)}>
+                                      {choice.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="">
                                 <Button
                                   type="button"
                                   variant="destructive"
@@ -665,7 +823,7 @@ export default function DeelnemerToevoegenPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           role="dialog"
           aria-modal="true"
-          aria-label="Nieuwe deelnemer toevoegen"
+          aria-label="Nieuwe Deelnemers beheren"
           onClick={() => {
             if (!submitting) setIsAddModalOpen(false);
           }}
@@ -675,7 +833,7 @@ export default function DeelnemerToevoegenPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold tracking-tight">Nieuwe deelnemer toevoegen</h2>
+              <h2 className="text-lg font-semibold tracking-tight">Nieuwe Deelnemers beheren</h2>
               <Button
                 type="button"
                 variant="ghost"

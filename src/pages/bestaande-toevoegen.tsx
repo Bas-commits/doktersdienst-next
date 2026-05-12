@@ -25,13 +25,13 @@ export default function BestaandeDeelnemerToevoegenPage() {
   return (
     <>
       <Head>
-        <title>Bestaande deelnemer toevoegen</title>
+        <title>Bestaande Deelnemers beheren</title>
       </Head>
       <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
         <Card>
           <CardHeader>
             <CardTitle>
-              <h1 className="text-2xl font-semibold tracking-tight">Bestaande deelnemer toevoegen</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Bestaande Deelnemers beheren</h1>
             </CardTitle>
           </CardHeader>
           <CardContent>

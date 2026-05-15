@@ -10,12 +10,12 @@ import {
   PencilLine,
   MapPinPlus,
   UserPlus,
-  UserPlus2,
   List,
   FolderPlus,
   Palmtree,
   Shield,
   Trash2,
+  PhoneCall,
 } from 'lucide-react';
 import { FaCalendarPlus } from 'react-icons/fa';
 import { DEFAULT_ROUTES } from '@/lib/header-defaults';
@@ -70,6 +70,12 @@ const SECRETARIS_NAV_ITEMS: NavItem[] = [
     label: 'Lijst deelnemers',
     href: DEFAULT_ROUTES.lijst_deelnemers,
     icon: <List className="size-4 shrink-0" />,
+  },
+  {
+    id: 'gesprekken',
+    label: 'Gesprekken',
+    href: '/gesprekken',
+    icon: <PhoneCall className="size-4 shrink-0" />,
   },
 ];
 

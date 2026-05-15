@@ -22,6 +22,7 @@ export type WaarneemgroepDetail = {
   afgemeld: boolean | null;
   smsdienstbegin: boolean | null;
   eigentelwelkomwav: boolean | null;
+  gespreksopname: number | null;
   eigentelwelkomlocatie: string | null;
   gebruiktVoicemail: boolean | null;
   abomaatschapplanner: boolean | null;
@@ -91,6 +92,7 @@ export default async function handler(
             afgemeld: waarneemgroepen.afgemeld,
             smsdienstbegin: waarneemgroepen.smsdienstbegin,
             eigentelwelkomwav: waarneemgroepen.eigentelwelkomwav,
+            gespreksopname: waarneemgroepen.gespreksopname,
             eigentelwelkomlocatie: waarneemgroepen.eigentelwelkomlocatie,
             gebruiktVoicemail: waarneemgroepen.gebruiktVoicemail,
             abomaatschapplanner: waarneemgroepen.abomaatschapplanner,
@@ -189,6 +191,13 @@ export default async function handler(
       const n = Number(v);
       return Number.isFinite(n) && n > 0 ? n : null;
     };
+    const opname = (v: unknown): 0 | 1 | null => {
+      if (v === null || v === undefined || v === '') return null;
+      if (typeof v === 'boolean') return v ? 1 : 0;
+      const n = Number(v);
+      if (n === 0 || n === 1) return n;
+      throw new Error('Gesprekken opnemen moet 0 of 1 zijn.');
+    };
 
     const update: Partial<typeof waarneemgroepen.$inferInsert> = {};
     if ('naam' in body) update.naam = str(body.naam, 50);
@@ -207,6 +216,7 @@ export default async function handler(
     if ('telnrconference' in body) update.telnrconference = normalizePhoneField(body.telnrconference, 'Telnr conference');
     if ('afgemeld' in body) update.afgemeld = !!body.afgemeld;
     if ('smsdienstbegin' in body) update.smsdienstbegin = !!body.smsdienstbegin;
+    if ('gespreksopname' in body) update.gespreksopname = opname(body.gespreksopname);
     if ('eigentelwelkomwav' in body) update.eigentelwelkomwav = !!body.eigentelwelkomwav;
     if ('gebruiktVoicemail' in body) update.gebruiktVoicemail = !!body.gebruiktVoicemail;
     if ('abomaatschapplanner' in body) update.abomaatschapplanner = !!body.abomaatschapplanner;
@@ -257,7 +267,10 @@ export default async function handler(
 
     return res.status(200).json({ success: true });
   } catch (err) {
-    if (err instanceof Error && err.message.includes('is ongeldig')) {
+    if (
+      err instanceof Error &&
+      (err.message.includes('is ongeldig') || err.message.includes('moet 0 of 1 zijn'))
+    ) {
       return res.status(400).json({ error: err.message });
     }
     console.error('PUT /api/waarneemgroep-wijzigen/[id] error', err);

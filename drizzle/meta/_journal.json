@@ -5,22 +5,36 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1773652989297,
-      "tag": "0000_goofy_unicorn",
+      "when": 1778843653910,
+      "tag": "0000_familiar_vapor",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1742140800000,
-      "tag": "0001_add_better_auth_columns_to_deelnemers",
+      "when": 1778848739048,
+      "tag": "0001_robust_wild_child",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "7",
-      "when": 1778580623002,
-      "tag": "0002_huge_siren",
+      "when": 1778849539667,
+      "tag": "0002_bright_tiger_shark",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778851071084,
+      "tag": "0003_gifted_wallop",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778851430432,
+      "tag": "0004_freezing_black_bolt",
       "breakpoints": true
     }
   ]

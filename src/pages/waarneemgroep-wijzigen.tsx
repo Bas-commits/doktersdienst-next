@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Upload, RefreshCw, Loader2 } from 'lucide-react';
 import Head from 'next/head';
 import { authClient } from '@/lib/auth-client';
@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import type { WaarneemgroepWijzigenOptions } from './api/waarneemgroep-wijzigen/index';
 import type { WaarneemgroepDetail, DeelnemerItem, WaarneemgroepWijzigenShowResponse } from './api/waarneemgroep-wijzigen/[id]';
+import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 
 function deelnemerLabel(d: DeelnemerItem): string {
   const tussen = d.voorletterstussenvoegsel ? ` ${d.voorletterstussenvoegsel} ` : ' ';
@@ -37,6 +38,7 @@ type FormData = {
   telnrconference: string;
   afgemeld: boolean;
   smsdienstbegin: boolean;
+  gespreksopname: boolean;
   eigentelwelkomwav: boolean;
   gebruiktVoicemail: boolean;
   abomaatschapplanner: boolean;
@@ -62,6 +64,7 @@ function wgToForm(wg: WaarneemgroepDetail): FormData {
     telnrconference: wg.telnrconference ?? '',
     afgemeld: wg.afgemeld === true,
     smsdienstbegin: wg.smsdienstbegin === true,
+    gespreksopname: wg.gespreksopname !== 0,
     eigentelwelkomwav: wg.eigentelwelkomwav === true,
     gebruiktVoicemail: wg.gebruiktVoicemail === true,
     abomaatschapplanner: wg.abomaatschapplanner === true,
@@ -93,6 +96,7 @@ const formSectionClass =
 
 export default function WaarneemgroepWijzigenPage() {
   const { data: session, isPending } = authClient.useSession();
+  const { activeWaarneemgroepId, loading: waarneemgroepLoading } = useWaarneemgroep();
 
   const [options, setOptions] = useState<WaarneemgroepWijzigenOptions | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(true);
@@ -126,7 +130,7 @@ export default function WaarneemgroepWijzigenPage() {
       .finally(() => setOptionsLoading(false));
   }, [session?.user]);
 
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     setSelectedId(null);
     setSelectedWg(null);
     setFormData(null);
@@ -136,9 +140,9 @@ export default function WaarneemgroepWijzigenPage() {
     setSubmitError(null);
     setWelkomWavPresent(false);
     setWelkomUploadError(null);
-  };
+  }, []);
 
-  const loadSelected = (id: number) => {
+  const loadSelected = useCallback((id: number) => {
     setSelectedId(id);
     setSelectedWg(null);
     setFormData(null);
@@ -158,7 +162,43 @@ export default function WaarneemgroepWijzigenPage() {
       })
       .catch((err) => setSelectedError(err instanceof Error ? err.message : 'Laden mislukt'))
       .finally(() => setSelectedLoading(false));
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!options || optionsLoading || waarneemgroepLoading) return;
+
+    if (!activeWaarneemgroepId) {
+      clearSelection();
+      setSelectedError('Geen waarneemgroep geselecteerd in de header.');
+      return;
+    }
+
+    const id = Number(activeWaarneemgroepId);
+    if (!Number.isFinite(id) || id <= 0) {
+      clearSelection();
+      setSelectedError('Ongeldige waarneemgroep in de header.');
+      return;
+    }
+
+    const hasAccessToSelected = options.waarneemgroepen.some((wg) => wg.id === id);
+    if (!hasAccessToSelected) {
+      clearSelection();
+      setSelectedError('Geen toegang tot de geselecteerde waarneemgroep.');
+      return;
+    }
+
+    if (selectedId !== id) {
+      loadSelected(id);
+    }
+  }, [
+    activeWaarneemgroepId,
+    clearSelection,
+    loadSelected,
+    options,
+    optionsLoading,
+    selectedId,
+    waarneemgroepLoading,
+  ]);
 
   const uploadWelkomWav = async (file: File) => {
     if (!selectedId) return;
@@ -236,6 +276,7 @@ export default function WaarneemgroepWijzigenPage() {
       telnrconference: formData.telnrconference.trim() || null,
       afgemeld: formData.afgemeld,
       smsdienstbegin: formData.smsdienstbegin,
+      gespreksopname: formData.gespreksopname ? 1 : 0,
       eigentelwelkomwav: formData.eigentelwelkomwav,
       gebruiktVoicemail: formData.gebruiktVoicemail,
       abomaatschapplanner: formData.abomaatschapplanner,
@@ -299,7 +340,7 @@ export default function WaarneemgroepWijzigenPage() {
               <h1 className="text-2xl font-semibold tracking-tight">Waarneemgroep wijzigen</h1>
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Kies een waarneemgroep waarvoor u secretaris bent en pas de gegevens aan.
+              Pas de gegevens aan van de waarneemgroep die bovenin in de header is geselecteerd.
             </p>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
@@ -308,40 +349,11 @@ export default function WaarneemgroepWijzigenPage() {
 
             {options && (
               <>
-                <div className={formSectionClass}>
-                  <div className="flex max-w-md flex-col gap-1.5">
-                    <Label htmlFor="wg-kiezen">Waarneemgroep</Label>
-                    {options.waarneemgroepen.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Geen waarneemgroepen gevonden waarvoor u secretaris bent.
-                      </p>
-                    ) : (
-                      <select
-                        id="wg-kiezen"
-                        className={selectClass}
-                        value={selectedId != null ? String(selectedId) : ''}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (!v) {
-                            clearSelection();
-                            return;
-                          }
-                          loadSelected(Number(v));
-                        }}
-                        disabled={selectedLoading}
-                        aria-label="Waarneemgroep kiezen"
-                      >
-                        <option value="">— Kies waarneemgroep —</option>
-                        {options.waarneemgroepen.map((wg) => (
-                          <option key={wg.id} value={String(wg.id)}>
-                            {wg.naam}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                </div>
-
+                {options.waarneemgroepen.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Geen waarneemgroepen gevonden waarvoor u secretaris bent.
+                  </p>
+                )}
                 {selectedLoading && (
                   <p className="text-sm text-muted-foreground">Gegevens laden…</p>
                 )}
@@ -508,6 +520,7 @@ export default function WaarneemgroepWijzigenPage() {
                         {(
                           [
                             ['smsdienstbegin', 'Bericht begin dienst'],
+                            ['gespreksopname', 'Gesprekken opnemen'],
 
                             // ['abomaatschapplanner', 'Praktijkplanner abonnement'],
                           ] as [keyof FormData, string][]

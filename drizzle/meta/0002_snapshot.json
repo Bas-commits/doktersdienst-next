@@ -1,30 +1,139 @@
 {
-  "id": "c9f550ca-32b1-4895-8e90-7e3a88b8e490",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "34c8f010-eedc-442e-b5f7-12fff4fdc68d",
+  "prevId": "69cc0c9f-610d-4fb6-8235-463dd18a27c9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.deelnemerexpertises": {
-      "name": "deelnemerexpertises",
+    "public.account": {
+      "name": "account",
       "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "integer",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "accountId": {
+          "name": "accountId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "providerId": {
+          "name": "providerId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "accessToken": {
+          "name": "accessToken",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "iddeelnemer": {
-          "name": "iddeelnemer",
-          "type": "integer",
+        "refreshToken": {
+          "name": "refreshToken",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "idexpertise": {
-          "name": "idexpertise",
-          "type": "integer",
+        "idToken": {
+          "name": "idToken",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "accessTokenExpiresAt": {
+          "name": "accessTokenExpiresAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refreshTokenExpiresAt": {
+          "name": "refreshTokenExpiresAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.auth_verification": {
+      "name": "auth_verification",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "identifier": {
+          "name": "identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {},
@@ -740,19 +849,22 @@
               "expression": "idwaarneemgroep",
               "isExpression": false,
               "asc": true,
-              "nulls": "last"
+              "nulls": "last",
+              "opclass": "int4_ops"
             },
             {
               "expression": "van",
               "isExpression": false,
               "asc": true,
-              "nulls": "last"
+              "nulls": "last",
+              "opclass": "int4_ops"
             },
             {
               "expression": "tot",
               "isExpression": false,
               "asc": true,
-              "nulls": "last"
+              "nulls": "last",
+              "opclass": "int4_ops"
             }
           ],
           "isUnique": false,
@@ -761,157 +873,6 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.diensten_new_old": {
-      "name": "diensten_new_old",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idwaarneemgroep": {
-          "name": "idwaarneemgroep",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idpraktijk": {
-          "name": "idpraktijk",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "van": {
-          "name": "van",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tot": {
-          "name": "tot",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "iddeelnemer": {
-          "name": "iddeelnemer",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rol": {
-          "name": "rol",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "iddienstherhalen": {
-          "name": "iddienstherhalen",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idaantekening": {
-          "name": "idaantekening",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "iddeelnovern": {
-          "name": "iddeelnovern",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "iddienstovern": {
-          "name": "iddienstovern",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "type": {
-          "name": "type",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idshift": {
-          "name": "idshift",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idtarief": {
-          "name": "idtarief",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idkamer": {
-          "name": "idkamer",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idtelnr": {
-          "name": "idtelnr",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idlocatie": {
-          "name": "idlocatie",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "iddeelnemer2": {
-          "name": "iddeelnemer2",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idtaaktype": {
-          "name": "idtaaktype",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "curr_date": {
-          "name": "curr_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "next_date": {
-          "name": "next_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sender_id": {
-          "name": "sender_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "delete_request": {
-          "name": "delete_request",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -956,49 +917,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.expertises": {
-      "name": "expertises",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "afkorting": {
-          "name": "afkorting",
-          "type": "varchar(10)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "omschrijving": {
-          "name": "omschrijving",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idspecialisme": {
-          "name": "idspecialisme",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "verwijderd": {
-          "name": "verwijderd",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.gesprekken": {
       "name": "gesprekken",
       "schema": "",
@@ -1006,8 +924,9 @@
         "id": {
           "name": "id",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false
+          "primaryKey": true,
+          "notNull": true,
+          "default": "nextval('gesprekken_id_seq'::regclass)"
         },
         "vannummer": {
           "name": "vannummer",
@@ -1670,571 +1589,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.migrations": {
-      "name": "migrations",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "migration": {
-          "name": "migration",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "batch": {
-          "name": "batch",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.new_activity": {
-      "name": "new_activity",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "team": {
-          "name": "team",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "expertisecompetences_id": {
-          "name": "expertisecompetences_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "namelong": {
-          "name": "namelong",
-          "type": "varchar(25)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "nameshort": {
-          "name": "nameshort",
-          "type": "varchar(14)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "backgrndcolor": {
-          "name": "backgrndcolor",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "icon": {
-          "name": "icon",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.new_chipsdaypart": {
-      "name": "new_chipsdaypart",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "date": {
-          "name": "date",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "daypart_with_date": {
-          "name": "daypart_with_date",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "doctor": {
-          "name": "doctor",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "team": {
-          "name": "team",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "grabsence": {
-          "name": "grabsence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "grlocation": {
-          "name": "grlocation",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gractivity": {
-          "name": "gractivity",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "grspec": {
-          "name": "grspec",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "grtask1": {
-          "name": "grtask1",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "grtask2": {
-          "name": "grtask2",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "grtask3": {
-          "name": "grtask3",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "repetition": {
-          "name": "repetition",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "fte": {
-          "name": "fte",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_updated_userid": {
-          "name": "last_updated_userid",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tplocation": {
-          "name": "tplocation",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tpactivity": {
-          "name": "tpactivity",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tpspec": {
-          "name": "tpspec",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tptask1": {
-          "name": "tptask1",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tptask2": {
-          "name": "tptask2",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tptask3": {
-          "name": "tptask3",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tpabsence": {
-          "name": "tpabsence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tplastedited": {
-          "name": "tplastedited",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tplastdateedited": {
-          "name": "tplastdateedited",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.new_dagdelen": {
-      "name": "new_dagdelen",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "daypart_with_date": {
-          "name": "daypart_with_date",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "doctor": {
-          "name": "doctor",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "team": {
-          "name": "team",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "maandag": {
-          "name": "maandag",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "dinsdag": {
-          "name": "dinsdag",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "woensdag": {
-          "name": "woensdag",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "donderdag": {
-          "name": "donderdag",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "vrijdag": {
-          "name": "vrijdag",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "zaterdag": {
-          "name": "zaterdag",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "zondag": {
-          "name": "zondag",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.pagehit": {
-      "name": "pagehit",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "datetime": {
-          "name": "datetime",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "visitor": {
-          "name": "visitor",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "useraccount": {
-          "name": "useraccount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "request_method": {
-          "name": "request_method",
-          "type": "varchar(5)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "query_string": {
-          "name": "query_string",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pageid": {
-          "name": "pageid",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pagename": {
-          "name": "pagename",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refererid": {
-          "name": "refererid",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "referername": {
-          "name": "referername",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.praktijkdeelnemers": {
-      "name": "praktijkdeelnemers",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idpraktijk": {
-          "name": "idpraktijk",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "iddeelnemer": {
-          "name": "iddeelnemer",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rowguid": {
-          "name": "rowguid",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.praktijken": {
-      "name": "praktijken",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "naam": {
-          "name": "naam",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idspecialisme": {
-          "name": "idspecialisme",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "email": {
-          "name": "email",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "password": {
-          "name": "password",
-          "type": "varchar(16)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "straatnr": {
-          "name": "straatnr",
-          "type": "varchar(30)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "postcode": {
-          "name": "postcode",
-          "type": "varchar(7)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "plaats": {
-          "name": "plaats",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "telnr": {
-          "name": "telnr",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "dagbegin": {
-          "name": "dagbegin",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "dageind": {
-          "name": "dageind",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "eigenrooster": {
-          "name": "eigenrooster",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idsecretaris": {
-          "name": "idsecretaris",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rowguid": {
-          "name": "rowguid",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.regios": {
       "name": "regios",
       "schema": "",
@@ -2293,6 +1647,67 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.session": {
+      "name": "session",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ipAddress": {
+          "name": "ipAddress",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "userAgent": {
+          "name": "userAgent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {},
@@ -2598,12 +2013,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "deelnemer2Mogelijk": {
-          "name": "deelnemer2Mogelijk",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
         "defaultplanningseenheid": {
           "name": "defaultplanningseenheid",
           "type": "integer",
@@ -2636,6 +2045,12 @@
         },
         "niet_locatie_gebonden": {
           "name": "niet_locatie_gebonden",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deelnemer2Mogelijk": {
+          "name": "deelnemer2Mogelijk",
           "type": "boolean",
           "primaryKey": false,
           "notNull": false
@@ -3101,15 +2516,27 @@
           "primaryKey": false,
           "notNull": false
         },
-        "eigentelwelkomlocatie": {
-          "name": "eigentelwelkomlocatie",
-          "type": "varchar(512)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "abomaatschapplanner": {
           "name": "abomaatschapplanner",
           "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gebruikt_voicemail": {
+          "name": "gebruikt_voicemail",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gespreksopname": {
+          "name": "gespreksopname",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eigentelwelkomlocatie": {
+          "name": "eigentelwelkomlocatie",
+          "type": "varchar(512)",
           "primaryKey": false,
           "notNull": false
         },
@@ -3128,86 +2555,6 @@
         "laasts_afgemeld_doktersidenst": {
           "name": "laasts_afgemeld_doktersidenst",
           "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gebruikt_voicemail": {
-          "name": "gebruikt_voicemail",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gespreksopname": {
-          "name": "gespreksopname",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.waarneemgroeplocaties": {
-      "name": "waarneemgroeplocaties",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idlocatie": {
-          "name": "idlocatie",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idwaarneemgroep": {
-          "name": "idwaarneemgroep",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rowguid": {
-          "name": "rowguid",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.waarneemgroepvakantieregios": {
-      "name": "waarneemgroepvakantieregios",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idwaarneemgroep": {
-          "name": "idwaarneemgroep",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idvakantieregio": {
-          "name": "idvakantieregio",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false
         }

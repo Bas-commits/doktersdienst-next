@@ -12,7 +12,7 @@
           "--access-mode=restricted"
         ],
         "env": {
-          "DATABASE_URI": "postgresql://postgres:qrcaro17y0drleoi@204.168.234.122:5432/doktersdienst-dev"
+          "DATABASE_URI": "postgresql://doktersdienst:8q8S2MbVOyWMRC9Bsx2e@178.104.239.107:5433/doktersdienst"
         }
       }
     }

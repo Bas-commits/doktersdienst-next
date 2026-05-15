@@ -5,6 +5,7 @@ import { pool } from '@/lib/db';
 import { legacyMD5Hash } from '@/lib/legacy-password';
 import { getAuthenticatedUser } from '@/lib/api-auth';
 import { hasDelegatedProfileAccess } from '@/lib/mijn-gegevens-access';
+import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
 import type {
   MijnGegevensProfile,
   MijnGegevensLookup,
@@ -32,8 +33,6 @@ function normaliseLocatieId(raw: number): number {
   return raw >= 1_000_000_000 ? raw - 1_000_000_000 : raw;
 }
 
-/** Validate a Dutch-style phone number (lenient: >=7 digit-like chars, starts with + or digit) */
-const TELNR_VALID = /^\+?[0-9][0-9\s\-]{5,18}[0-9]$/;
 const GELDIGE_WAARNEEMGROEP_FUNCTIES = new Set([1, 2, 3, 4]);
 
 export default async function handler(
@@ -435,6 +434,16 @@ export default async function handler(
 
     const str = (v: unknown, max: number): string | undefined =>
       typeof v === 'string' ? v.slice(0, max) : undefined;
+    const normalizeOptionalPhone = (value: unknown, fieldLabel: string): string | null => {
+      if (typeof value !== 'string') return null;
+      const clipped = value.slice(0, TEL_MAX).trim();
+      if (!clipped) return null;
+      const normalized = normalizeDutchPhoneToIntl(clipped);
+      if (!normalized) {
+        throw new Error(`${fieldLabel} is ongeldig. Gebruik bijvoorbeeld 0612345678, 31612345678 of +31612345678.`);
+      }
+      return normalized;
+    };
     const update: Record<string, unknown> = {};
 
     if (color !== undefined) update.color = color;
@@ -451,10 +460,12 @@ export default async function handler(
       update.huisadrpostcode = str(body.huisadrpostcode, POSTCODE_MAX) ?? null;
     if (body.huisadrplaats !== undefined)
       update.huisadrplaats = str(body.huisadrplaats, PLAATS_MAX) ?? null;
-    if (body.huisadrtelnr !== undefined)
-      update.huisadrtelnr = str(body.huisadrtelnr, TEL_MAX) ?? null;
-    if (body.huisadrfax !== undefined)
-      update.huisadrfax = str(body.huisadrfax, TEL_MAX) ?? null;
+    if (body.huisadrtelnr !== undefined) {
+      update.huisadrtelnr = normalizeOptionalPhone(body.huisadrtelnr, 'Telefoonnummer');
+    }
+    if (body.huisadrfax !== undefined) {
+      update.huisadrfax = normalizeOptionalPhone(body.huisadrfax, 'Faxnummer');
+    }
     let loginUpdated = false;
     if (body.huisemail !== undefined) {
       const rawEmail = str(body.huisemail, STRING_MAX)?.trim() ?? '';
@@ -579,12 +590,13 @@ export default async function handler(
         if (!slot || typeof slot !== 'object') {
           return res.status(400).json({ error: `Slot ${i + 1} is ongeldig` });
         }
-        const telnr = (slot.telnr ?? '').trim();
-        if (!telnr) {
+        const telnrRaw = typeof slot.telnr === 'string' ? slot.telnr.trim() : '';
+        if (!telnrRaw) {
           return res.status(400).json({ error: `Telefoonnummer ${i + 1} mag niet leeg zijn` });
         }
-        if (!TELNR_VALID.test(telnr)) {
-          return res.status(400).json({ error: `Telefoonnummer ${i + 1} is ongeldig: "${telnr}"` });
+        const normalized = normalizeDutchPhoneToIntl(telnrRaw);
+        if (!normalized) {
+          return res.status(400).json({ error: `Telefoonnummer ${i + 1} is ongeldig: "${telnrRaw}"` });
         }
         if (typeof slot.idlocatietelnr !== 'number' || slot.idlocatietelnr <= 0) {
           return res.status(400).json({ error: `Locatie voor telefoonnummer ${i + 1} is ongeldig` });
@@ -598,7 +610,7 @@ export default async function handler(
       const sSet: Record<string, unknown> = {};
       for (let n = 1; n <= 5; n++) {
         const slot = rawSlots[n - 1];
-        sSet[`telnr${n}`] = slot ? slot.telnr.trim().slice(0, TEL_MAX) : null;
+        sSet[`telnr${n}`] = slot ? normalizeDutchPhoneToIntl(String(slot.telnr).trim()) : null;
         sSet[`smsontvanger${n}`] = slot ? !!slot.smsontvanger : null;
         sSet[`idlocatietelnr${n}`] = slot ? slot.idlocatietelnr : null;
         sSet[`idomschrtelnr${n}`] = slot ? slot.idomschrtelnr : null;
@@ -675,6 +687,11 @@ export default async function handler(
 
     return res.status(200).json({ success: true, loginUpdated });
   } catch (err) {
+    if (err instanceof Error && err.message.includes('is ongeldig')) {
+      return res.status(400).json({
+        error: err.message,
+      });
+    }
     console.error('PATCH /api/mijn-gegevens error', err);
     return res.status(500).json({
       error: err instanceof Error ? err.message : 'Internal server error',

@@ -4,8 +4,8 @@ import { db, schema } from '@/db';
 import { getAuthenticatedUser } from '@/lib/api-auth';
 import {
   normalizeTelnrRingaandKey,
-  TELNR_RINGAAND_REGEX,
 } from '@/lib/waarneemgroep-telnringaand';
+import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
 
 const { waarneemgroepen, specialismen, regios, instellingen } = schema;
 
@@ -30,9 +30,6 @@ export type WaarneemgroepToevoegenOptions = {
   waarneemgroepen: WaarneemgroepListItem[];
   waarneemgroepenTable: WaarneemgroepTableItem[];
 };
-
-/** @deprecated use TELNR_RINGAAND_REGEX from @/lib/waarneemgroep-telnringaand */
-export const TELNR_REGEX = TELNR_RINGAAND_REGEX;
 
 export default async function handler(
   req: NextApiRequest,
@@ -125,39 +122,53 @@ export default async function handler(
       return res.status(400).json({ error: 'Naam mag maximaal 50 tekens zijn.' });
     }
 
-    const telnronzecentrale =
-      typeof body.telnronzecentrale === 'string' ? body.telnronzecentrale.trim() || null : null;
-    const telnronzecentrale2 = telnronzecentrale ? normalizeTelnrRingaandKey(telnronzecentrale) : null;
-
-    // Validate phone format
-    if (telnronzecentrale && !TELNR_RINGAAND_REGEX.test(telnronzecentrale)) {
-      return res.status(400).json({
-        error: 'Het telefoonnummer moet het formaat 08800264XX of 318800264XX hebben.',
-      });
-    }
-
-    // Check phone uniqueness (088… and 3188… are the same line)
-    if (telnronzecentrale) {
-      const canonicalKey = normalizeTelnrRingaandKey(telnronzecentrale);
-      if (!canonicalKey) {
-        return res.status(400).json({
-          error: 'Het telefoonnummer moet het formaat 08800264XX of 318800264XX hebben.',
-        });
+    const normalizePhoneField = (value: unknown, fieldLabel: string): string | null => {
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const normalized = normalizeDutchPhoneToIntl(trimmed);
+      if (!normalized) {
+        throw new Error(`${fieldLabel} is ongeldig. Gebruik bijvoorbeeld 0887732752, 31887732752 of +31887732752.`);
       }
+      return normalized;
+    };
+
+    const selectedTelnronzecentrale =
+      typeof body.telnronzecentrale2 === 'string'
+        ? body.telnronzecentrale2.trim() || null
+        : typeof body.telnronzecentrale === 'string'
+          ? body.telnronzecentrale.trim() || null
+          : null;
+    const telnronzecentrale2 = selectedTelnronzecentrale
+      ? normalizePhoneField(selectedTelnronzecentrale, 'Telnr onze centrale')
+      : null;
+    const telnronzecentrale = telnronzecentrale2;
+    const telnringaand = normalizePhoneField(body.telnringaand, 'Telefoonnummer naar doktersdienst centrale');
+    const telnrnietopgenomen = normalizePhoneField(body.telnrnietopgenomen, 'Telefoonnummer achtervang');
+    const telnrconference = normalizePhoneField(body.telnrconference, 'Telnr conference');
+
+    // Check phone uniqueness across common stored formats.
+    if (telnronzecentrale2) {
+      const canonicalKey = telnronzecentrale2!;
       const nationalForm = `0${canonicalKey.slice(2)}`;
+      const plusForm = `+${canonicalKey}`;
+      const legacyRingaandKey = normalizeTelnrRingaandKey(telnronzecentrale2);
       const existing = await db
         .select({ id: waarneemgroepen.id })
         .from(waarneemgroepen)
         .where(
           or(
+            eq(waarneemgroepen.telnronzecentrale2, canonicalKey),
             eq(waarneemgroepen.telnronzecentrale, canonicalKey),
-            eq(waarneemgroepen.telnronzecentrale, nationalForm)
+            eq(waarneemgroepen.telnronzecentrale, nationalForm),
+            eq(waarneemgroepen.telnronzecentrale, plusForm),
+            ...(legacyRingaandKey ? [eq(waarneemgroepen.telnronzecentrale2, legacyRingaandKey)] : [])
           )
         )
         .limit(1);
       if (existing.length > 0) {
         return res.status(400).json({
-          error: `Telefoonnummer ${telnronzecentrale} is al in gebruik door een andere waarneemgroep.`,
+          error: `Telefoonnummer ${telnronzecentrale2} is al in gebruik door een andere waarneemgroep.`,
         });
       }
     }
@@ -180,12 +191,12 @@ export default async function handler(
       idregio: num(body.idregio),
       idinstelling: num(body.idinstelling),
       regiobeschrijving: str(body.regiobeschrijving, 1024),
-      telnringaand: str(body.telnringaand, 50),
-      telnrnietopgenomen: str(body.telnrnietopgenomen, 50),
+      telnringaand,
+      telnrnietopgenomen,
       idinvoegendewaarneemgroep: num(body.idinvoegendewaarneemgroep),
       telnronzecentrale,
       telnronzecentrale2,
-      telnrconference: str(body.telnrconference, 50),
+      telnrconference,
       afgemeld: false,
       smsdienstbegin: !!body.smsdienstbegin,
       eigentelwelkomwav: !!body.eigentelwelkomwav,
@@ -195,6 +206,9 @@ export default async function handler(
 
     return res.status(201).json({ success: true, id: newId });
   } catch (err) {
+    if (err instanceof Error && err.message.includes('is ongeldig')) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('POST /api/waarneemgroep-toevoegen error', err);
     return res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' });
   }

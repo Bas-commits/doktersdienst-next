@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, asc, eq } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { GROEP_ADMINISTRATOR, getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
-import { normalizeTelnrRingaandKey } from '@/lib/waarneemgroep-telnringaand';
+import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
 import { getWelkomWavBucket, welkomWelkomstFilePresent } from '@/lib/welkom-wav-s3';
 
 const { waarneemgroepen, deelnemers, waarneemgroepdeelnemers } = schema;
@@ -175,6 +175,15 @@ export default async function handler(
 
     const str = (v: unknown, max: number): string | null =>
       typeof v === 'string' ? v.slice(0, max) || null : null;
+    const normalizePhoneField = (value: unknown, fieldLabel: string): string | null => {
+      const raw = str(value, 50);
+      if (!raw) return null;
+      const normalized = normalizeDutchPhoneToIntl(raw);
+      if (!normalized) {
+        throw new Error(`${fieldLabel} is ongeldig. Gebruik bijvoorbeeld 0887732752, 31887732752 of +31887732752.`);
+      }
+      return normalized;
+    };
     const num = (v: unknown): number | null => {
       if (v === null || v === undefined || v === '' || v === 0) return null;
       const n = Number(v);
@@ -187,15 +196,15 @@ export default async function handler(
     if ('idregio' in body) update.idregio = num(body.idregio);
     if ('idinstelling' in body) update.idinstelling = num(body.idinstelling);
     if ('regiobeschrijving' in body) update.regiobeschrijving = str(body.regiobeschrijving, 1024);
-    if ('telnringaand' in body) update.telnringaand = str(body.telnringaand, 50);
-    if ('telnrnietopgenomen' in body) update.telnrnietopgenomen = str(body.telnrnietopgenomen, 50);
+    if ('telnringaand' in body) update.telnringaand = normalizePhoneField(body.telnringaand, 'Telefoonnummer naar doktersdienst centrale');
+    if ('telnrnietopgenomen' in body) update.telnrnietopgenomen = normalizePhoneField(body.telnrnietopgenomen, 'Telefoonnummer achtervang');
     if ('idinvoegendewaarneemgroep' in body) update.idinvoegendewaarneemgroep = num(body.idinvoegendewaarneemgroep);
     if ('telnronzecentrale' in body) {
-      const telnronzecentrale = str(body.telnronzecentrale, 50);
+      const telnronzecentrale = normalizePhoneField(body.telnronzecentrale, 'Telnr onze centrale');
       update.telnronzecentrale = telnronzecentrale;
-      update.telnronzecentrale2 = telnronzecentrale ? normalizeTelnrRingaandKey(telnronzecentrale) : null;
+      update.telnronzecentrale2 = telnronzecentrale;
     }
-    if ('telnrconference' in body) update.telnrconference = str(body.telnrconference, 50);
+    if ('telnrconference' in body) update.telnrconference = normalizePhoneField(body.telnrconference, 'Telnr conference');
     if ('afgemeld' in body) update.afgemeld = !!body.afgemeld;
     if ('smsdienstbegin' in body) update.smsdienstbegin = !!body.smsdienstbegin;
     if ('eigentelwelkomwav' in body) update.eigentelwelkomwav = !!body.eigentelwelkomwav;
@@ -248,6 +257,9 @@ export default async function handler(
 
     return res.status(200).json({ success: true });
   } catch (err) {
+    if (err instanceof Error && err.message.includes('is ongeldig')) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('PUT /api/waarneemgroep-wijzigen/[id] error', err);
     return res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' });
   }

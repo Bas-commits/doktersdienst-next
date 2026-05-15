@@ -9,6 +9,7 @@ import {
 } from '@/lib/deelnemer-nieuw';
 import { resolveInviteEmailAuthApiBase } from '@/lib/better-auth-url';
 import { sendVerificationEmailViaResendWithProof } from '@/lib/resend-email';
+import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
 
 const { deelnemers, waarneemgroepdeelnemers } = schema;
 
@@ -117,7 +118,13 @@ export default async function handler(
   );
   const achternaam = clip((typeof b.achternaam === 'string' ? b.achternaam : '').trim(), MAX_NAME_FIELD);
   const initialen = clip((typeof b.initialen === 'string' ? b.initialen : '').trim(), MAX_NAME_FIELD);
-  const mobil = clip((typeof b.huisadrtelnr === 'string' ? b.huisadrtelnr : '').trim(), MAX_NAME_FIELD);
+  const mobilInput = clip((typeof b.huisadrtelnr === 'string' ? b.huisadrtelnr : '').trim(), MAX_NAME_FIELD);
+  const mobil = mobilInput ? normalizeDutchPhoneToIntl(mobilInput) : null;
+  if (mobilInput && !mobil) {
+    return res.status(400).json({
+      error: 'Telefoonnummer is ongeldig. Gebruik bijvoorbeeld 0612345678, 31612345678 of +31612345678.',
+    });
+  }
 
   const [existingDeelnemer] = await db
     .select({ id: deelnemers.id })
@@ -282,7 +289,7 @@ export default async function handler(
           login: emailRaw,
           email: emailRaw,
           huisemail: emailRaw,
-          huisadrtelnr: mobil || null,
+          huisadrtelnr: mobil,
           idgroep,
           idwaarneemgroep,
           abonnementdd: true,

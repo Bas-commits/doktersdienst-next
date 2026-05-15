@@ -170,4 +170,48 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
     expect(res._json).toEqual({ success: true, loginUpdated: false });
     expect(mockUpdate).toHaveBeenCalledTimes(1);
   });
+
+  it('rejects invalid phone fields on PATCH', async () => {
+    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
+    const res = makeRes();
+
+    await handler(
+      makeReq('PATCH', {
+        body: { huisadrtelnr: 'invalid-phone' },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({
+      error: 'Telefoonnummer is ongeldig. Gebruik bijvoorbeeld 0612345678, 31612345678 of +31612345678.',
+    });
+  });
+
+  it('normalizes telnrSlots before storing them', async () => {
+    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
+    const res = makeRes();
+    selectQueue.push([{ idsettelnrdienst: 42 }]);
+
+    await handler(
+      makeReq('PATCH', {
+        body: {
+          telnrSlots: [
+            {
+              telnr: '06 12 34 56 78',
+              idlocatietelnr: 1001,
+              idomschrtelnr: 2,
+              smsontvanger: false,
+            },
+          ],
+        },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(200);
+    expect(mockPoolQuery).toHaveBeenCalled();
+    const params = mockPoolQuery.mock.calls[0]?.[1] as unknown[];
+    expect(params[0]).toBe('31612345678');
+  });
 });

@@ -151,7 +151,7 @@ export default function WaarneemgroepToevoegenPage() {
         regiobeschrijving: formData.regiobeschrijving.trim() || null,
         telnrnietopgenomen: formData.telnrnietopgenomen.trim() || null,
         idinvoegendewaarneemgroep: toNum(formData.idinvoegendewaarneemgroep),
-        telnronzecentrale: formData.telnronzecentrale.trim() || null,
+        telnronzecentrale2: formData.telnronzecentrale.trim() || null,
         telnrconference: formData.telnrconference.trim() || null,
         smsdienstbegin: formData.smsdienstbegin,
         eigentelwelkomwav: formData.eigentelwelkomwav,

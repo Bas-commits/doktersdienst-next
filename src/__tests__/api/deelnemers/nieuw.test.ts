@@ -19,6 +19,9 @@ vi.mock('@/lib/resend-email', async (importOriginal) => {
 });
 
 const mockDupLimit = vi.fn(() => Promise.resolve([]));
+const mockDbInsertValues = vi.fn(() => Promise.resolve(undefined));
+const mockDbUpdateWhere = vi.fn(() => Promise.resolve(undefined));
+const mockDbUpdateSet = vi.fn(() => ({ where: mockDbUpdateWhere }));
 
 const mockSelect = vi.fn(() => ({
   from: vi.fn(() => ({
@@ -75,6 +78,8 @@ vi.mock('@/db', () => ({
   db: {
     select: (...args: unknown[]) => mockSelect(...args),
     transaction: (...args: unknown[]) => mockTransaction(...args),
+    insert: vi.fn(() => ({ values: mockDbInsertValues })),
+    update: vi.fn(() => ({ set: mockDbUpdateSet })),
   },
   schema: {
     deelnemers: {},
@@ -93,6 +98,7 @@ vi.mock('@/lib/deelnemer-nieuw', () => ({
 }));
 
 vi.mock('drizzle-orm', () => ({
+  and: vi.fn((...args: unknown[]) => args),
   eq: vi.fn((a: unknown, b: unknown) => [a, b]),
   or: vi.fn((...args: unknown[]) => args),
   sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values })),
@@ -213,15 +219,19 @@ describe('POST /api/deelnemers/nieuw', () => {
     });
   });
 
-  it('returns 422 bij bestaande login/e-mail (pre-check)', async () => {
+  it('links existing participant by e-mail when found', async () => {
     mockDupLimit.mockResolvedValueOnce([{ id: 1 }]);
 
     const { default: handler } = await import('@/pages/api/deelnemers/nieuw/index');
     const res = makeRes();
     await handler(makeReq(), res);
 
-    expect(res._status).toBe(422);
-    expect((res._json as { error: string }).error).toMatch(/e‑mailadres/i);
+    expect(res._status).toBe(200);
+    expect(res._json).toMatchObject({
+      ok: true,
+      iddeelnemer: 1,
+      outcome: 'linked',
+    });
     expect(mockSendVerificationWithProof).not.toHaveBeenCalled();
     expect(mockTransaction).not.toHaveBeenCalled();
   });
@@ -253,6 +263,24 @@ describe('POST /api/deelnemers/nieuw', () => {
     expect(res._status).toBe(400);
     expect((res._json as { error: string }).error).toMatch(/komt niet overeen/);
     expect(mockSendVerificationWithProof).not.toHaveBeenCalled();
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for invalid huisadrtelnr input', async () => {
+    const { default: handler } = await import('@/pages/api/deelnemers/nieuw/index');
+    const res = makeRes();
+    await handler(
+      makeReq({
+        body: {
+          ...(makeReq().body as Record<string, unknown>),
+          huisadrtelnr: 'invalid-phone',
+        },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(400);
+    expect((res._json as { error: string }).error).toMatch(/telefoonnummer is ongeldig/i);
     expect(mockTransaction).not.toHaveBeenCalled();
   });
 

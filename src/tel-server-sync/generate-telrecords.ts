@@ -11,13 +11,29 @@ import {
 } from './diensten-voor-telsrv';
 import type { query as dbQuery } from '@/lib/db';
 
-/** PBX TXT output dir: `TEL_RECORDS_DIR` or `telrecords/` next to this module. */
+/** PBX TXT output dir, with repo-local dev fallback for easy inspection. */
 export function getTelRecordsDir(): URL {
   const raw = typeof process.env.TEL_RECORDS_DIR === 'string' ? process.env.TEL_RECORDS_DIR.trim() : '';
-  if (raw !== '') {
-    const abs = resolve(raw);
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const localDevDir = resolve(process.cwd(), 'data', 'telrecords');
+
+  const toDirUrl = (dirPath: string): URL => {
+    const abs = resolve(dirPath);
     return pathToFileURL(abs.endsWith('/') ? abs : `${abs}/`);
+  };
+
+  if (raw !== '') {
+    // In local development we remap Docker-style /data mounts into the repo.
+    if (isDevelopment && (raw === '/data' || raw.startsWith('/data/'))) {
+      return toDirUrl(localDevDir);
+    }
+    return toDirUrl(raw);
   }
+
+  if (isDevelopment) {
+    return toDirUrl(localDevDir);
+  }
+
   return new URL('telrecords/', new URL('.', import.meta.url));
 }
 

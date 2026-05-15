@@ -46,7 +46,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.mcp.json
+mcp.json
+.cursor/mcp.json
+.cursor/commands/
+.cursor/mcp.json
 /packages/web-app/node_modules
 
 

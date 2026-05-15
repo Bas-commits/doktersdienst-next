@@ -10,6 +10,7 @@ const mockUpdateSet = vi.fn();
 let selectQueue: Array<() => unknown> = [];
 
 vi.mock('@/lib/api-auth', () => ({
+  GROEP_ADMINISTRATOR: 999,
   getAuthenticatedUser: (...args: unknown[]) => mockGetAuthenticatedUser(...args),
   hasGroupManagementAccess: (...args: unknown[]) => mockHasGroupManagementAccess(...args),
 }));
@@ -160,7 +161,55 @@ describe('waarneemgroep centrale telefoonnummer persistence', () => {
     expect(res._status).toBe(201);
     expect(mockInsertValues).toHaveBeenCalledWith(
       expect.objectContaining({
-        telnronzecentrale: '0880026453',
+        telnronzecentrale: '31880026453',
+        telnronzecentrale2: '31880026453',
+      })
+    );
+  });
+
+  it('stores normalized telnronzecentrale2 from formatted international input', async () => {
+    selectQueue = [() => selectDuplicateRows([]), () => selectRows([{ maxId: 76 }])];
+
+    const { default: handler } = await import('@/pages/api/waarneemgroep-toevoegen/index');
+    const res = makeRes();
+    await handler(
+      makeReq({
+        body: {
+          naam: 'Bas Test 01',
+          telnronzecentrale: '+31 88 773 27 52',
+        },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(201);
+    expect(mockInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telnronzecentrale: '31887732752',
+        telnronzecentrale2: '31887732752',
+      })
+    );
+  });
+
+  it('stores selected central number sent as telnronzecentrale2 during create', async () => {
+    selectQueue = [() => selectDuplicateRows([]), () => selectRows([{ maxId: 76 }])];
+
+    const { default: handler } = await import('@/pages/api/waarneemgroep-toevoegen/index');
+    const res = makeRes();
+    await handler(
+      makeReq({
+        body: {
+          naam: 'Bas Test 01',
+          telnronzecentrale2: '0880026453',
+        },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(201);
+    expect(mockInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telnronzecentrale: '31880026453',
         telnronzecentrale2: '31880026453',
       })
     );
@@ -182,6 +231,24 @@ describe('waarneemgroep centrale telefoonnummer persistence', () => {
     );
   });
 
+  it('rejects invalid phone values when creating a waarneemgroep', async () => {
+    const { default: handler } = await import('@/pages/api/waarneemgroep-toevoegen/index');
+    const res = makeRes();
+    await handler(
+      makeReq({
+        body: {
+          naam: 'Bas Test 01',
+          telnronzecentrale: '0880026453',
+          telnringaand: 'invalid-phone',
+        },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(400);
+    expect(mockInsertValues).not.toHaveBeenCalled();
+  });
+
   it('updates telnronzecentrale2 alongside the displayed central number', async () => {
     selectQueue = [() => selectCurrentWaarneemgroep()];
 
@@ -192,9 +259,56 @@ describe('waarneemgroep centrale telefoonnummer persistence', () => {
     expect(res._status).toBe(200);
     expect(mockUpdateSet).toHaveBeenCalledWith(
       expect.objectContaining({
-        telnronzecentrale: '0880026453',
+        telnronzecentrale: '31880026453',
         telnronzecentrale2: '31880026453',
       })
     );
+  });
+
+  it('normalizes additional waarneemgroep phone fields on update', async () => {
+    selectQueue = [() => selectCurrentWaarneemgroep()];
+
+    const { default: handler } = await import('@/pages/api/waarneemgroep-wijzigen/[id]');
+    const res = makeRes();
+    await handler(
+      makeReq({
+        method: 'PUT',
+        body: {
+          naam: 'Bas Test 01',
+          telnronzecentrale: '0880026453',
+          telnringaand: '06 12 34 56 78',
+          telnrnietopgenomen: '+31 88 773 27 52',
+        },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(200);
+    expect(mockUpdateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telnringaand: '31612345678',
+        telnrnietopgenomen: '31887732752',
+      })
+    );
+  });
+
+  it('rejects invalid telnronzecentrale values when updating', async () => {
+    selectQueue = [() => selectCurrentWaarneemgroep()];
+
+    const { default: handler } = await import('@/pages/api/waarneemgroep-wijzigen/[id]');
+    const res = makeRes();
+    await handler(
+      makeReq({
+        method: 'PUT',
+        body: {
+          naam: 'Bas Test 01',
+          telnronzecentrale: 'abc',
+        },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(400);
+    expect(mockUpdateSet).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
+import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
 
 const { waarneemgroepen } = schema;
 
@@ -78,11 +79,25 @@ export default async function handler(
   }
 
   try {
+    const normalizePhoneField = (value: unknown, fieldLabel: string): string | null => {
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const normalized = normalizeDutchPhoneToIntl(trimmed);
+      if (!normalized) {
+        throw new Error(`${fieldLabel} is ongeldig. Gebruik bijvoorbeeld 0887732752, 31887732752 of +31887732752.`);
+      }
+      return normalized;
+    };
     const update: Record<string, unknown> = {};
     if (body.naam !== undefined) update.naam = String(body.naam).slice(0, 50) || null;
     if (body.regiobeschrijving !== undefined) update.regiobeschrijving = String(body.regiobeschrijving).slice(0, 1024) || null;
-    if (body.telnringaand !== undefined) update.telnringaand = String(body.telnringaand).slice(0, 50) || null;
-    if (body.telnrnietopgenomen !== undefined) update.telnrnietopgenomen = String(body.telnrnietopgenomen).slice(0, 50) || null;
+    if (body.telnringaand !== undefined) {
+      update.telnringaand = normalizePhoneField(body.telnringaand, 'Telefoonnummer doorgerouteerd naar diensdoende');
+    }
+    if (body.telnrnietopgenomen !== undefined) {
+      update.telnrnietopgenomen = normalizePhoneField(body.telnrnietopgenomen, 'Telefoonnummer achtervang');
+    }
     if (body.smsdienstbegin !== undefined) update.smsdienstbegin = !!body.smsdienstbegin;
     if (body.gebruiktVoicemail !== undefined) update.gebruiktVoicemail = !!body.gebruiktVoicemail;
     if (body.eigentelwelkomwav !== undefined) update.eigentelwelkomwav = !!body.eigentelwelkomwav;
@@ -94,6 +109,9 @@ export default async function handler(
 
     return res.status(200).json({ success: true });
   } catch (err) {
+    if (err instanceof Error && err.message.includes('is ongeldig')) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('PATCH /api/waarneemgroep-gegevens error', err);
     return res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' });
   }

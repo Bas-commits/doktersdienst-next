@@ -233,7 +233,6 @@ export default function WaarneemgroepWijzigenPage() {
       telnringaand: formData.telnringaand.trim() || null,
       telnrnietopgenomen: formData.telnrnietopgenomen.trim() || null,
       idinvoegendewaarneemgroep: toNum(formData.idinvoegendewaarneemgroep),
-      telnronzecentrale: formData.telnronzecentrale.trim() || null,
       telnrconference: formData.telnrconference.trim() || null,
       afgemeld: formData.afgemeld,
       smsdienstbegin: formData.smsdienstbegin,

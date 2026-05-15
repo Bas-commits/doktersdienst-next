@@ -140,7 +140,7 @@ export default async function handler(
           ? body.telnronzecentrale.trim() || null
           : null;
     const telnronzecentrale2 = selectedTelnronzecentrale
-      ? normalizePhoneField(selectedTelnronzecentrale, 'Telnr onze centrale')
+      ? normalizePhoneField(selectedTelnronzecentrale, 'Telefoonnummer centrale')
       : null;
     const telnronzecentrale = telnronzecentrale2;
     const telnringaand = normalizePhoneField(body.telnringaand, 'Telefoonnummer naar doktersdienst centrale');

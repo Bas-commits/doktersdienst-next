@@ -493,7 +493,7 @@ export default function WaarneemgroepWijzigenPage() {
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="flex flex-col gap-1">
-                          <Label htmlFor="wg-telnronzecentrale">Telnr onze centrale</Label>
+                          <Label htmlFor="wg-telnronzecentrale">Telefoonnummer centrale</Label>
                           <Input
                             id="wg-telnronzecentrale"
                             value={formData.telnronzecentrale}

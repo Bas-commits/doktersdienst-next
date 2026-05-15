@@ -184,7 +184,7 @@ export default function WaarneemgroepGegevensPage() {
 
                 {gegevens.telnronzecentrale && (
                   <div className="flex flex-col gap-1">
-                    <Label>Telnr onze centrale</Label>
+                    <Label>Telefoonnummer centrale</Label>
                     <p className="text-sm text-muted-foreground">{gegevens.telnronzecentrale}</p>
                   </div>
                 )}

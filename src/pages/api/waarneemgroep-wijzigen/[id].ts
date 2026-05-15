@@ -209,7 +209,7 @@ export default async function handler(
     if ('telnrnietopgenomen' in body) update.telnrnietopgenomen = normalizePhoneField(body.telnrnietopgenomen, 'Telefoonnummer achtervang');
     if ('idinvoegendewaarneemgroep' in body) update.idinvoegendewaarneemgroep = num(body.idinvoegendewaarneemgroep);
     if ('telnronzecentrale' in body) {
-      const telnronzecentrale = normalizePhoneField(body.telnronzecentrale, 'Telnr onze centrale');
+      const telnronzecentrale = normalizePhoneField(body.telnronzecentrale, 'Telefoonnummer centrale');
       update.telnronzecentrale = telnronzecentrale;
       update.telnronzecentrale2 = telnronzecentrale;
     }

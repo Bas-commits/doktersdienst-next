@@ -39,7 +39,7 @@ const BOTTOM_ASSIGNMENT_TYPES = [11] as const;
  *
  * Behaviour:
  *   - If an assignment record of the target type already exists → update iddeelnemer
- *   - Otherwise → insert a new record, copying idpraktijk/idshift/currentDate/nextDate
+ *   - Otherwise → insert a new record, copying idpraktijk/idshift/currDate/nextDate
  *     from the type=1 base record.
  *   - If iddeelnemer is null (unassign) → delete the assignment record if it exists.
  *   - Middle (Standaard): legacy rows may span a wider interval than the type=1 chunk; match
@@ -85,7 +85,7 @@ export default async function handler(
           id: dienstenTable.id,
           idpraktijk: dienstenTable.idpraktijk,
           idshift: dienstenTable.idshift,
-          currentDate: dienstenTable.currentDate,
+          currDate: dienstenTable.currDate,
           nextDate: dienstenTable.nextDate,
         })
         .from(dienstenTable)
@@ -136,7 +136,7 @@ export default async function handler(
         iddeelnemer: iddeelnemer as number,
         idpraktijk: base?.idpraktijk ?? null,
         idshift: base?.idshift ?? null,
-        currentDate: base?.currentDate ?? null,
+        currDate: base?.currDate ?? null,
         nextDate: base?.nextDate ?? null,
       });
     });

@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PasswordChangeModal } from '@/components/mijn-gegevens/PasswordChangeModal';
+import { UnsavedChangesModal } from '@/components/mijn-gegevens/UnsavedChangesModal';
+import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import type { MijnGegevensProfile, MijnGegevensLookup, MijnGegevensUpdateBody, TelnrSlot } from '@/types/mijn-gegevens';
 import { ROL_LABELS } from '@/lib/rol-labels';
 
@@ -166,8 +168,6 @@ export default function MijnGegevensPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState<FormSnapshot | null>(null);
-  const [pendingNavUrl, setPendingNavUrl] = useState<string | null>(null);
-  const allowNavRef = useRef(false);
 
   // Form state – initialised from profile when loaded
   const [login, setLogin] = useState('');
@@ -354,29 +354,12 @@ export default function MijnGegevensPage() {
     functieByWaarneemgroepId,
   ]);
 
-  useEffect(() => {
-    const handleRouteChangeStart = (url: string) => {
-      if (isDirty && !allowNavRef.current) {
-        setPendingNavUrl(url);
-        router.events.emit('routeChangeError');
-        throw 'routeChange aborted.';
-      }
-      allowNavRef.current = false;
-    };
-    router.events.on('routeChangeStart', handleRouteChangeStart);
-    return () => router.events.off('routeChangeStart', handleRouteChangeStart);
-  }, [isDirty, router.events]);
-
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [isDirty]);
+  const {
+    pendingNavUrl,
+    cancelNavigation,
+    proceedWithoutSaving,
+    proceedAfterSave,
+  } = useUnsavedChangesGuard(isDirty);
 
   const locatieOptionsBinnen = useMemo(() => {
     if (!lookup || locatieIdInstellingtype === -1) return [];
@@ -540,22 +523,8 @@ export default function MijnGegevensPage() {
     await doSave();
   }
 
-  async function handleSaveAndLeave() {
-    const ok = await doSave();
-    if (ok && pendingNavUrl) {
-      const url = pendingNavUrl;
-      setPendingNavUrl(null);
-      allowNavRef.current = true;
-      router.push(url);
-    }
-  }
-
-  function handleLeaveWithoutSaving() {
-    if (!pendingNavUrl) return;
-    const url = pendingNavUrl;
-    setPendingNavUrl(null);
-    allowNavRef.current = true;
-    router.push(url);
+  function handleSaveAndLeave() {
+    void proceedAfterSave(doSave);
   }
 
   if (isPending || !session?.user) {
@@ -571,54 +540,13 @@ export default function MijnGegevensPage() {
         open={passwordModalOpen}
         onClose={() => setPasswordModalOpen(false)}
       />
-      {pendingNavUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
-            <h2 className="mb-2 text-lg font-semibold tracking-tight">Niet-opgeslagen wijzigingen</h2>
-            <p className="mb-6 text-sm text-muted-foreground">
-              U heeft niet-opgeslagen wijzigingen. Wilt u deze opslaan voordat u verder gaat?
-            </p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPendingNavUrl(null)}
-                disabled={isSubmitting}
-              >
-                Annuleren
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleLeaveWithoutSaving}
-                disabled={isSubmitting}
-              >
-                Verlaten
-              </Button>
-              <Button
-                type="button"
-                onClick={handleSaveAndLeave}
-                disabled={isSubmitting}
-                className="font-bold text-white"
-                style={{
-                  background: 'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)',
-                  transition: 'background 0.2s',
-                }}
-                onMouseOver={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    'linear-gradient(90deg, rgb(56, 19, 108) 0%, rgb(45, 34, 69) 100%)';
-                }}
-                onMouseOut={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)';
-                }}
-              >
-                {isSubmitting ? 'Opslaan…' : 'Opslaan en verlaten'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <UnsavedChangesModal
+        open={pendingNavUrl != null}
+        isSubmitting={isSubmitting}
+        onCancel={cancelNavigation}
+        onLeaveWithoutSaving={proceedWithoutSaving}
+        onSaveAndLeave={handleSaveAndLeave}
+      />
       <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
         <Card>
           <CardHeader className="flex flex-col gap-4 border-b border-border/80 pb-4 sm:flex-row sm:items-start sm:justify-between">

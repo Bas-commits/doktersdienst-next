@@ -218,5 +218,6 @@ describe('DoktersdienstHeader', () => {
     expect(popover.textContent ?? '').toContain('Tot:');
     expect(popover.textContent ?? '').toContain('maandag 1 januari');
     expect(popover.textContent ?? '').toContain('dinsdag 2 januari');
+    expect(popover.textContent ?? '').toContain('Groep A');
   });
 });

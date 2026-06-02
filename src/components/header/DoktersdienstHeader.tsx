@@ -461,6 +461,10 @@ export function DoktersdienstHeader({
                       </div>
                     </div>
 
+                    <p className="mb-2 text-center text-sm font-medium text-gray-700">
+                      {v.waarneemgroep}
+                    </p>
+
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <p className="text-s font-bold ">{overnameTypeLabel}</p>
                       {/* {isDeclined && (

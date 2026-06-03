@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { WaarneemgroepToevoegenOptions, WaarneemgroepTableItem } from './api/waarneemgroep-toevoegen/index';
 import {
-  normalizeTelnrRingaandKey,
+  normalizeTelnrOnzeCentraleKey,
   suggestAvailableRingaandNummers,
   takenTelnrRingaandKeys,
   TELNR_RINGAAND_REGEX,
@@ -96,7 +96,7 @@ export default function WaarneemgroepToevoegenPage() {
   const takenTelnrKeys = useMemo(
     () =>
       takenTelnrRingaandKeys(
-        options?.waarneemgroepenTable.map((wg) => wg.telnronzecentrale) ?? []
+        options?.waarneemgroepenTable.flatMap((wg) => [wg.telnronzecentrale, wg.telnronzecentrale2]) ?? []
       ),
     [options?.waarneemgroepenTable]
   );
@@ -113,7 +113,7 @@ export default function WaarneemgroepToevoegenPage() {
       if (!TELNR_RINGAAND_REGEX.test(trimmed)) {
         return 'Kies een geldig telefoonnummer.';
       }
-      const key = normalizeTelnrRingaandKey(trimmed);
+      const key = normalizeTelnrOnzeCentraleKey(trimmed);
       if (key && takenTelnrKeys.has(key)) {
         return `Telefoonnummer ${trimmed} is al in gebruik door een andere waarneemgroep.`;
       }

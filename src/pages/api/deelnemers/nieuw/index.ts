@@ -28,6 +28,7 @@ type PostBody = {
   voorletterstussenvoegsel?: unknown;
   achternaam?: unknown;
   initialen?: unknown;
+  geslacht?: unknown;
   huisadrtelnr?: unknown;
   idgroep?: unknown;
   idwaarneemgroep?: unknown;
@@ -217,6 +218,18 @@ export default async function handler(
     return res.status(400).json({ error: 'Voornaam, achternaam en initialen zijn verplicht.' });
   }
 
+  const geslachtRaw = b.geslacht;
+  if (
+    geslachtRaw !== undefined &&
+    geslachtRaw !== 0 &&
+    geslachtRaw !== 1 &&
+    geslachtRaw !== null
+  ) {
+    return res.status(400).json({ error: 'Ongeldige waarde voor geslacht' });
+  }
+  const geslachtDb =
+    geslachtRaw === undefined ? null : geslachtRaw === null ? null : geslachtRaw === 1;
+
   const displayName = clip(
     [voornaam, tussen, achternaam].filter(Boolean).join(' '),
     MAX_NAME_FIELD
@@ -285,6 +298,7 @@ export default async function handler(
           voorletterstussenvoegsel: tussen || null,
           achternaam,
           initialen,
+          geslacht: geslachtDb,
           name: displayName,
           login: emailRaw,
           email: emailRaw,

@@ -337,7 +337,7 @@ export default function WaarneemgroepWijzigenPage() {
         <Card>
           <CardHeader className="space-y-1 border-b border-border/80 pb-4">
             <CardTitle>
-              <h1 className="text-2xl font-semibold tracking-tight">Waarneemgroep wijzigen</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Deze waarneemgroep</h1>
             </CardTitle>
             <p className="text-sm text-muted-foreground">
               Pas de gegevens aan van de waarneemgroep die bovenin in de header is geselecteerd.

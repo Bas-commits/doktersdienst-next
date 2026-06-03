@@ -102,16 +102,6 @@ function makeRes(): NextApiResponse & { _status: number; _json: unknown } {
   return res as unknown as NextApiResponse & { _status: number; _json: unknown };
 }
 
-function selectDuplicateRows(rows: unknown[]) {
-  return {
-    from: vi.fn(() => ({
-      where: vi.fn(() => ({
-        limit: vi.fn(() => Promise.resolve(rows)),
-      })),
-    })),
-  };
-}
-
 function selectRows(rows: unknown[]) {
   return {
     from: vi.fn(() => Promise.resolve(rows)),
@@ -152,7 +142,10 @@ describe('waarneemgroep centrale telefoonnummer persistence', () => {
   });
 
   it('stores normalized telnronzecentrale2 when creating a waarneemgroep', async () => {
-    selectQueue = [() => selectDuplicateRows([]), () => selectRows([{ maxId: 76 }])];
+    selectQueue = [
+      () => selectRows([]),
+      () => selectRows([{ maxId: 76 }]),
+    ];
 
     const { default: handler } = await import('@/pages/api/waarneemgroep-toevoegen/index');
     const res = makeRes();
@@ -168,7 +161,10 @@ describe('waarneemgroep centrale telefoonnummer persistence', () => {
   });
 
   it('stores normalized telnronzecentrale2 from formatted international input', async () => {
-    selectQueue = [() => selectDuplicateRows([]), () => selectRows([{ maxId: 76 }])];
+    selectQueue = [
+      () => selectRows([]),
+      () => selectRows([{ maxId: 76 }]),
+    ];
 
     const { default: handler } = await import('@/pages/api/waarneemgroep-toevoegen/index');
     const res = makeRes();
@@ -192,7 +188,10 @@ describe('waarneemgroep centrale telefoonnummer persistence', () => {
   });
 
   it('stores selected central number sent as telnronzecentrale2 during create', async () => {
-    selectQueue = [() => selectDuplicateRows([]), () => selectRows([{ maxId: 76 }])];
+    selectQueue = [
+      () => selectRows([]),
+      () => selectRows([{ maxId: 76 }]),
+    ];
 
     const { default: handler } = await import('@/pages/api/waarneemgroep-toevoegen/index');
     const res = makeRes();
@@ -246,6 +245,36 @@ describe('waarneemgroep centrale telefoonnummer persistence', () => {
     );
 
     expect(res._status).toBe(400);
+    expect(mockInsertValues).not.toHaveBeenCalled();
+  });
+
+  it('rejects central numbers already in use in another stored format', async () => {
+    selectQueue = [
+      () =>
+        selectRows([
+          {
+            telnronzecentrale: '088 - 7732752',
+            telnronzecentrale2: null,
+          },
+        ]),
+    ];
+
+    const { default: handler } = await import('@/pages/api/waarneemgroep-toevoegen/index');
+    const res = makeRes();
+    await handler(
+      makeReq({
+        body: {
+          naam: 'Bas Test 01',
+          telnronzecentrale2: '31887732752',
+        },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({
+      error: 'Telefoonnummer 31887732752 is al in gebruik door een andere waarneemgroep.',
+    });
     expect(mockInsertValues).not.toHaveBeenCalled();
   });
 

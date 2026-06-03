@@ -266,6 +266,24 @@ describe('POST /api/deelnemers/nieuw', () => {
     expect(mockTransaction).not.toHaveBeenCalled();
   });
 
+  it('returns 400 for invalid geslacht', async () => {
+    const { default: handler } = await import('@/pages/api/deelnemers/nieuw/index');
+    const res = makeRes();
+    await handler(
+      makeReq({
+        body: {
+          ...(makeReq().body as Record<string, unknown>),
+          geslacht: 2,
+        },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(400);
+    expect((res._json as { error: string }).error).toMatch(/geslacht/i);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
   it('returns 400 for invalid huisadrtelnr input', async () => {
     const { default: handler } = await import('@/pages/api/deelnemers/nieuw/index');
     const res = makeRes();

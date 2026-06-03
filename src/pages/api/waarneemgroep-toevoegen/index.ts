@@ -1,10 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { asc, eq, max, or } from 'drizzle-orm';
+import { asc, eq, max } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser } from '@/lib/api-auth';
-import {
-  normalizeTelnrRingaandKey,
-} from '@/lib/waarneemgroep-telnringaand';
+import { isTelnrOnzeCentraleTaken } from '@/lib/waarneemgroep-telnringaand';
 import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
 
 const { waarneemgroepen, specialismen, regios, instellingen } = schema;
@@ -20,6 +18,7 @@ export type WaarneemgroepTableItem = {
   specialisme: string | null;
   regio: string | null;
   telnronzecentrale: string | null;
+  telnronzecentrale2: string | null;
   idfacturering: number | null;
 };
 
@@ -68,6 +67,7 @@ export default async function handler(
             id: waarneemgroepen.id,
             naam: waarneemgroepen.naam,
             telnronzecentrale: waarneemgroepen.telnronzecentrale,
+            telnronzecentrale2: waarneemgroepen.telnronzecentrale2,
             idfacturering: waarneemgroepen.idfacturering,
             specialismeOmschrijving: specialismen.omschrijving,
             regioNaam: regios.naam,
@@ -98,6 +98,7 @@ export default async function handler(
           specialisme: r.specialismeOmschrijving ?? null,
           regio: r.regioNaam ?? null,
           telnronzecentrale: r.telnronzecentrale ?? null,
+          telnronzecentrale2: r.telnronzecentrale2 ?? null,
           idfacturering: r.idfacturering ?? null,
         })),
       });
@@ -147,26 +148,15 @@ export default async function handler(
     const telnrnietopgenomen = normalizePhoneField(body.telnrnietopgenomen, 'Telefoonnummer achtervang');
     const telnrconference = normalizePhoneField(body.telnrconference, 'Telnr conference');
 
-    // Check phone uniqueness across common stored formats.
     if (telnronzecentrale2) {
-      const canonicalKey = telnronzecentrale2!;
-      const nationalForm = `0${canonicalKey.slice(2)}`;
-      const plusForm = `+${canonicalKey}`;
-      const legacyRingaandKey = normalizeTelnrRingaandKey(telnronzecentrale2);
-      const existing = await db
-        .select({ id: waarneemgroepen.id })
-        .from(waarneemgroepen)
-        .where(
-          or(
-            eq(waarneemgroepen.telnronzecentrale2, canonicalKey),
-            eq(waarneemgroepen.telnronzecentrale, canonicalKey),
-            eq(waarneemgroepen.telnronzecentrale, nationalForm),
-            eq(waarneemgroepen.telnronzecentrale, plusForm),
-            ...(legacyRingaandKey ? [eq(waarneemgroepen.telnronzecentrale2, legacyRingaandKey)] : [])
-          )
-        )
-        .limit(1);
-      if (existing.length > 0) {
+      const existingRows = await db
+        .select({
+          telnronzecentrale: waarneemgroepen.telnronzecentrale,
+          telnronzecentrale2: waarneemgroepen.telnronzecentrale2,
+        })
+        .from(waarneemgroepen);
+      const existingNumbers = existingRows.flatMap((row) => [row.telnronzecentrale, row.telnronzecentrale2]);
+      if (isTelnrOnzeCentraleTaken(telnronzecentrale2, existingNumbers)) {
         return res.status(400).json({
           error: `Telefoonnummer ${telnronzecentrale2} is al in gebruik door een andere waarneemgroep.`,
         });

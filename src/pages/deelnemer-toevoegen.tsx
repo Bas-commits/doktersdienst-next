@@ -71,6 +71,7 @@ export default function DeelnemerToevoegenPage() {
   const [tussen, setTussen] = useState('');
   const [achternaam, setAchternaam] = useState('');
   const [initialen, setInitialen] = useState('');
+  const [geslacht, setGeslacht] = useState<0 | 1 | null>(null);
   const [idgroep, setIdgroep] = useState('');
   const [bestaatInAndereWaarneemgroep, setBestaatInAndereWaarneemgroep] = useState(false);
 
@@ -432,6 +433,7 @@ export default function DeelnemerToevoegenPage() {
           voorletterstussenvoegsel: tussen.trim(),
           achternaam: achternaam.trim(),
           initialen: initialen.trim(),
+          geslacht: geslacht ?? null,
           idgroep: idRol,
           idwaarneemgroep: idWG,
           bestaatInAndereWaarneemgroep,
@@ -462,6 +464,7 @@ export default function DeelnemerToevoegenPage() {
       setTussen('');
       setAchternaam('');
       setInitialen('');
+      setGeslacht(null);
       setIdgroep('');
       setBestaatInAndereWaarneemgroep(false);
       setIsAddModalOpen(false);
@@ -577,8 +580,8 @@ export default function DeelnemerToevoegenPage() {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        title="Nieuwe Deelnemers beheren"
-                        aria-label="Nieuwe Deelnemers beheren"
+                        title="Nieuwe deelnemer"
+                        aria-label="Nieuwe deelnemer"
                         className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-destructive text-destructive-foreground transition-colors hover:bg-destructive/90"
                         onClick={() => setIsAddModalOpen(true)}
                       >
@@ -823,7 +826,7 @@ export default function DeelnemerToevoegenPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           role="dialog"
           aria-modal="true"
-          aria-label="Nieuwe Deelnemers beheren"
+          aria-label="Nieuwe deelnemer"
           onClick={() => {
             if (!submitting) setIsAddModalOpen(false);
           }}
@@ -833,7 +836,7 @@ export default function DeelnemerToevoegenPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold tracking-tight">Nieuwe Deelnemers beheren</h2>
+              <h2 className="text-lg font-semibold tracking-tight">Nieuwe deelnemer</h2>
               <Button
                 type="button"
                 variant="ghost"
@@ -910,6 +913,44 @@ export default function DeelnemerToevoegenPage() {
 
               {!bestaatInAndereWaarneemgroep && (
                 <>
+                  <div className="grid gap-2">
+                    <Label>Geslacht</Label>
+                    <div className="flex gap-4">
+                      <label className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="geslacht-add"
+                          checked={geslacht === 0}
+                          onChange={() => setGeslacht(0)}
+                          disabled={submitting}
+                          className="accent-primary"
+                        />
+                        man
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="geslacht-add"
+                          checked={geslacht === 1}
+                          onChange={() => setGeslacht(1)}
+                          disabled={submitting}
+                          className="accent-primary"
+                        />
+                        vrouw
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="geslacht-add"
+                          checked={geslacht === null}
+                          onChange={() => setGeslacht(null)}
+                          disabled={submitting}
+                          className="accent-primary"
+                        />
+                        X
+                      </label>
+                    </div>
+                  </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <Label htmlFor="vn">
@@ -921,6 +962,17 @@ export default function DeelnemerToevoegenPage() {
                         onChange={(e) => setVoornaam(e.target.value)}
                         required={!bestaatInAndereWaarneemgroep}
                         maxLength={50}
+                        disabled={submitting}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="voorletterstussenvoegsel">voorletters & tussenvoegsel</Label>
+                      <Input
+                        id="voorletterstussenvoegsel"
+                        value={tussen}
+                        onChange={(e) => setTussen(e.target.value)}
+                        maxLength={50}
+                        disabled={submitting}
                       />
                     </div>
                   </div>
@@ -935,6 +987,7 @@ export default function DeelnemerToevoegenPage() {
                         onChange={(e) => setAchternaam(e.target.value)}
                         required={!bestaatInAndereWaarneemgroep}
                         maxLength={50}
+                        disabled={submitting}
                       />
                     </div>
                     <div className="grid gap-2">
@@ -947,6 +1000,7 @@ export default function DeelnemerToevoegenPage() {
                         onChange={(e) => setInitialen(e.target.value)}
                         required={!bestaatInAndereWaarneemgroep}
                         maxLength={50}
+                        disabled={submitting}
                       />
                     </div>
                   </div>

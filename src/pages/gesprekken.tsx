@@ -105,6 +105,38 @@ function formatDuration(seconds: number): string {
   return `${minutes}:${pad(secs)}`;
 }
 
+const TARIEF_XX6 = 0.22;
+const TARIEF_DEFAULT = 0.05;
+const STARTTARIEF = 0.05;
+
+function phoneDigits(number: string | null): string {
+  return (number ?? '').replace(/\D/g, '');
+}
+
+/** Tarief €0,22 when the destination number matches XX6 (third digit is 6). */
+function isXx6Number(number: string | null): boolean {
+  const digits = phoneDigits(number);
+  return digits.length >= 3 && digits[2] === '6';
+}
+
+function getTariefForNumber(number: string | null): number {
+  return isXx6Number(number) ? TARIEF_XX6 : TARIEF_DEFAULT;
+}
+
+function computeKosten(seconds: number, tariefPerMinute: number, starttarief: number): number {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+  return starttarief + (seconds / 60) * tariefPerMinute;
+}
+
+function formatEuro(amount: number): string {
+  return amount.toLocaleString('nl-NL', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 const GESPREKKEN_ACTION_GRADIENT =
   'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)';
 const GESPREKKEN_ACTION_GRADIENT_HOVER =
@@ -140,6 +172,17 @@ export default function GesprekkenPage() {
     const wg = (waarneemgroepen ?? []).find((g) => g.ID === selectedGroupId);
     return (wg?.naam ?? 'waarneemgroep').replace(/[^\w\-]+/g, '-');
   }, [selectedGroupId, waarneemgroepen]);
+
+  const gesprekTotals = useMemo(() => {
+    let totalDurationSec = 0;
+    let totalKosten = 0;
+    for (const gesprek of gesprekken) {
+      const tarief = getTariefForNumber(gesprek.naarnummer);
+      totalDurationSec += gesprek.talkDurationSec;
+      totalKosten += computeKosten(gesprek.talkDurationSec, tarief, STARTTARIEF);
+    }
+    return { totalDurationSec, totalKosten };
+  }, [gesprekken]);
 
   const loadGesprekken = useCallback(
     async (params: { idwaarneemgroep: number; van: string; tot: string; deelnemerQ: string }) => {
@@ -224,14 +267,26 @@ export default function GesprekkenPage() {
         filename,
         van: responseVan,
         tot: responseTot,
-        rows: gesprekken.map((gesprek) => ({
-          deelnemerNaam: formatDeelnemerLabel(gesprek),
-          van: formatUnixDateTime(gesprek.van),
-          tot: formatUnixDateTime(gesprek.tot),
-          duur: formatDuration(gesprek.talkDurationSec),
-          vannummer: gesprek.vannummer || '—',
-          naarnummer: gesprek.naarnummer || '—',
-        })),
+        rows: gesprekken.map((gesprek) => {
+          const tarief = getTariefForNumber(gesprek.naarnummer);
+          const kosten = computeKosten(gesprek.talkDurationSec, tarief, STARTTARIEF);
+
+          return {
+            deelnemerNaam: formatDeelnemerLabel(gesprek),
+            van: formatUnixDateTime(gesprek.van),
+            tot: formatUnixDateTime(gesprek.tot),
+            vannummer: gesprek.vannummer || '—',
+            naarnummer: gesprek.naarnummer || '—',
+            duur: formatDuration(gesprek.talkDurationSec),
+            tarief: formatEuro(tarief),
+            starttarief: formatEuro(STARTTARIEF),
+            kosten: formatEuro(kosten),
+          };
+        }),
+        totals: {
+          duur: formatDuration(gesprekTotals.totalDurationSec),
+          kosten: formatEuro(gesprekTotals.totalKosten),
+        },
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kon Excel-bestand niet downloaden');
@@ -352,39 +407,67 @@ export default function GesprekkenPage() {
                       <th className="pb-2 pr-4 font-medium">Deelnemer</th>
                       <th className="pb-2 pr-4 font-medium">Van</th>
                       <th className="pb-2 pr-4 font-medium">Tot</th>
-                      <th className="pb-2 pr-4 font-medium">Duur</th>
                       <th className="pb-2 pr-4 font-medium">Van nummer</th>
                       <th className="pb-2 pr-4 font-medium">Naar nummer</th>
+                      <th className="pb-2 pr-4 font-medium text-right">Duur</th>
+                      <th className="pb-2 pr-4 font-medium text-right">Tarief p/min</th>
+                      <th className="pb-2 pr-4 font-medium text-right">Starttarief</th>
+                      <th className="pb-2 pr-4 font-medium text-right">Kosten</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {gesprekken.map((gesprek) => (
-                      <tr
-                        key={gesprek.id ?? `${gesprek.van}-${gesprek.vannummer}-${gesprek.naarnummer}`}
-                        className="border-b last:border-0 even:bg-muted/70"
-                      >
-                        <td className="py-2.5 pr-4 font-medium">
-                          {gesprek.deelnemer ? (
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
-                                style={{ backgroundColor: gesprek.deelnemer.color }}
-                              >
-                                {gesprek.deelnemer.initials}
-                              </span>
-                              <span>{formatDeelnemerLabel(gesprek)}</span>
-                            </div>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td className="py-2.5 pr-4">{formatUnixDateTime(gesprek.van)}</td>
-                        <td className="py-2.5 pr-4">{formatUnixDateTime(gesprek.tot)}</td>
-                        <td className="py-2.5 pr-4">{formatDuration(gesprek.talkDurationSec)}</td>
-                        <td className="py-2.5 pr-4">{gesprek.vannummer || '—'}</td>
-                        <td className="py-2.5 pr-4">{gesprek.naarnummer || '—'}</td>
-                      </tr>
-                    ))}
+                    {gesprekken.map((gesprek) => {
+                      const tarief = getTariefForNumber(gesprek.naarnummer);
+                      const kosten = computeKosten(gesprek.talkDurationSec, tarief, STARTTARIEF);
+
+                      return (
+                        <tr
+                          key={gesprek.id ?? `${gesprek.van}-${gesprek.vannummer}-${gesprek.naarnummer}`}
+                          className="border-b even:bg-muted/70"
+                        >
+                          <td className="py-2.5 pr-4 font-medium">
+                            {gesprek.deelnemer ? (
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
+                                  style={{ backgroundColor: gesprek.deelnemer.color }}
+                                >
+                                  {gesprek.deelnemer.initials}
+                                </span>
+                                <span>{formatDeelnemerLabel(gesprek)}</span>
+                              </div>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="py-2.5 pr-4">{formatUnixDateTime(gesprek.van)}</td>
+                          <td className="py-2.5 pr-4">{formatUnixDateTime(gesprek.tot)}</td>
+                          <td className="py-2.5 pr-4">{gesprek.vannummer || '—'}</td>
+                          <td className="py-2.5 pr-4">{gesprek.naarnummer || '—'}</td>
+                          <td className="py-2.5 pr-4 text-right tabular-nums">
+                            {formatDuration(gesprek.talkDurationSec)}
+                          </td>
+                          <td className="py-2.5 pr-4 text-right tabular-nums">{formatEuro(tarief)}</td>
+                          <td className="py-2.5 pr-4 text-right tabular-nums">{formatEuro(STARTTARIEF)}</td>
+                          <td className="py-2.5 pr-4 text-right tabular-nums">{formatEuro(kosten)}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="border-t-2 font-medium">
+                      <td className="py-2.5 pr-4">Totaal</td>
+                      <td className="py-2.5 pr-4">—</td>
+                      <td className="py-2.5 pr-4">—</td>
+                      <td className="py-2.5 pr-4">—</td>
+                      <td className="py-2.5 pr-4">—</td>
+                      <td className="py-2.5 pr-4 text-right tabular-nums">
+                        {formatDuration(gesprekTotals.totalDurationSec)}
+                      </td>
+                      <td className="py-2.5 pr-4 text-right">—</td>
+                      <td className="py-2.5 pr-4 text-right">—</td>
+                      <td className="py-2.5 pr-4 text-right tabular-nums">
+                        {formatEuro(gesprekTotals.totalKosten)}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>

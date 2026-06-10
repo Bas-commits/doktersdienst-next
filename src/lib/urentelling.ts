@@ -53,6 +53,7 @@ export type UrentellingDetailRow = {
   iddeelnemer: number;
   naam: string;
   categorie: string;
+  idaantekening: number;
   aantekening: string;
   van: number;
   tot: number;
@@ -360,6 +361,7 @@ export function collectUrentellingDetails(
           iddeelnemer: original,
           naam: memberNameById(members, original),
           categorie: 'Dienst (overname afgegeven)',
+          idaantekening,
           aantekening,
           van: interval.van,
           tot: interval.tot,
@@ -371,6 +373,7 @@ export function collectUrentellingDetails(
           iddeelnemer: target,
           naam: memberNameById(members, target),
           categorie: 'Dienst (overname ontvangen)',
+          idaantekening,
           aantekening,
           van: interval.van,
           tot: interval.tot,
@@ -387,6 +390,7 @@ export function collectUrentellingDetails(
       iddeelnemer,
       naam: memberNameById(members, iddeelnemer),
       categorie: CATEGORY_LABELS[category],
+      idaantekening,
       aantekening,
       van: interval.van,
       tot: interval.tot,

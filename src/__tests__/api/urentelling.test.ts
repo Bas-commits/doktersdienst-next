@@ -180,6 +180,7 @@ describe('GET /api/urentelling', () => {
     expect(body.details[0]).toMatchObject({
       naam: 'Jansen, Anna',
       categorie: 'Dienst',
+      idaantekening: 10,
       aantekening: 'Huisartsenpost',
       uren: 1,
     });

@@ -60,7 +60,7 @@ function fromDateTimeLocal(value: string): number {
 
 function defaultFrom(): string {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0);
+  const from = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate(), 0, 0, 0);
   return toDateTimeLocal(Math.floor(from.getTime() / 1000));
 }
 

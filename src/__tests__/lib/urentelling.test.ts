@@ -318,21 +318,25 @@ describe('aggregateUrentelling', () => {
     expect(details[0]).toMatchObject({
       naam: 'Jansen, Anna',
       categorie: 'Dienst',
+      idaantekening: 10,
       aantekening: 'Huisartsenpost',
       uren: 4,
     });
     expect(details.find((d) => d.categorie === 'Dienst (overname afgegeven)')).toMatchObject({
       naam: 'Jansen, Anna',
+      idaantekening: 10,
       aantekening: 'Huisartsenpost',
       uren: -1,
     });
     expect(details.find((d) => d.categorie === 'Dienst (overname ontvangen)')).toMatchObject({
       naam: 'Pietersen, Bert, van',
+      idaantekening: 10,
       aantekening: 'Huisartsenpost',
       uren: 1,
     });
     expect(details.find((d) => d.categorie === 'Achterwacht')).toMatchObject({
       naam: 'Pietersen, Bert, van',
+      idaantekening: 10,
       aantekening: 'Huisartsenpost',
       uren: 2,
     });

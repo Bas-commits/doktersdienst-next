@@ -3,6 +3,8 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { BsCalculator } from 'react-icons/bs';
 import { authClient } from '@/lib/auth-client';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -56,6 +58,29 @@ function formatDateForFilename(unix: number): string {
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
 }
 
+function formatUnixDateTime(unix: number): string {
+  return new Date(unix * 1000).toLocaleString('nl-NL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function detailHoursForColumn(detail: UrentellingDetailRow, columnId: number): string {
+  return columnId === detail.idaantekening ? formatDecimalHours(detail.uren) : '';
+}
+
+function formatDetailLabel(detail: UrentellingDetailRow): string {
+  return `${detail.categorie} · ${formatUnixDateTime(detail.van)} – ${formatUnixDateTime(detail.tot)}`;
+}
+
+const URENTELLING_ACTION_GRADIENT =
+  'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)';
+const URENTELLING_ACTION_GRADIENT_HOVER =
+  'linear-gradient(90deg, rgb(56, 19, 108) 0%, rgb(45, 34, 69) 100%)';
+
 export default function UrentellingPage() {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
@@ -74,6 +99,7 @@ export default function UrentellingPage() {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedDeelnemerIds, setExpandedDeelnemerIds] = useState<Set<number>>(new Set());
 
   const selectedGroupId = useMemo(() => {
     if (!activeWaarneemgroepId) return null;
@@ -86,6 +112,16 @@ export default function UrentellingPage() {
     const wg = (waarneemgroepen ?? []).find((g) => g.ID === selectedGroupId);
     return (wg?.naam ?? 'waarneemgroep').replace(/[^\w\-]+/g, '-');
   }, [selectedGroupId, waarneemgroepen]);
+
+  const detailsByDeelnemer = useMemo(() => {
+    const grouped = new Map<number, UrentellingDetailRow[]>();
+    for (const detail of details) {
+      const existing = grouped.get(detail.iddeelnemer) ?? [];
+      existing.push(detail);
+      grouped.set(detail.iddeelnemer, existing);
+    }
+    return grouped;
+  }, [details]);
 
   const loadUrentelling = useCallback(
     async (params: { idwaarneemgroep: number; van: string; tot: string }) => {
@@ -123,6 +159,7 @@ export default function UrentellingPage() {
         setColumns(data.columns ?? []);
         setRows(data.rows ?? []);
         setDetails(data.details ?? []);
+        setExpandedDeelnemerIds(new Set());
         setResponseVan(data.van ?? vanGte);
         setResponseTot(data.tot ?? totLte);
       } catch (err) {
@@ -156,6 +193,18 @@ export default function UrentellingPage() {
 
   function openDeelnemerGegevens(deelnemerId: number) {
     void router.push(`/mijn-gegevens?deelnemerId=${deelnemerId}`);
+  }
+
+  function toggleDeelnemerDetails(deelnemerId: number) {
+    setExpandedDeelnemerIds((current) => {
+      const next = new Set(current);
+      if (next.has(deelnemerId)) {
+        next.delete(deelnemerId);
+      } else {
+        next.add(deelnemerId);
+      }
+      return next;
+    });
   }
 
   async function handleDownloadExcel() {
@@ -216,7 +265,32 @@ export default function UrentellingPage() {
                 onChange={(event) => setQueryTot(event.target.value)}
                 aria-label="Tot datum en tijd"
               />
-              <Button type="submit">Zoeken</Button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="max-w-20 inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg px-3.5 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                style={{
+                  background: URENTELLING_ACTION_GRADIENT,
+                  transition: 'background 0.2s',
+                }}
+                title="Hercalculatie"
+                aria-label="Hercalculatie"
+                onMouseOver={(event) => {
+                  if (loading) return;
+                  (event.currentTarget as HTMLButtonElement).style.background =
+                    URENTELLING_ACTION_GRADIENT_HOVER;
+                }}
+                onMouseOut={(event) => {
+                  (event.currentTarget as HTMLButtonElement).style.background =
+                    URENTELLING_ACTION_GRADIENT;
+                }}
+              >
+                {/* <FaSync
+                  className={`size-4 ${loading ? 'animate-spin' : ''}`}
+                  aria-hidden
+                /> */}
+                <BsCalculator className="size-5" aria-hidden />
+              </button>
               <Button
                 type="button"
                 variant="outline"
@@ -253,33 +327,50 @@ export default function UrentellingPage() {
                   <tbody>
                     {rows.map((row, rowIndex) => {
                       const hasAchterwacht = row.totaalAchterwacht > 0;
+                      const rowDetails = detailsByDeelnemer.get(row.iddeelnemer) ?? [];
+                      const isExpanded = expandedDeelnemerIds.has(row.iddeelnemer);
                       const rowGroupClass =
                         rowIndex % 2 === 1 ? 'bg-muted/70' : undefined;
 
                       return (
                         <Fragment key={row.iddeelnemer}>
                           <tr
-                            className={`cursor-pointer border-b hover:bg-muted/50 ${rowGroupClass ?? ''} ${hasAchterwacht ? '' : 'last:border-0'}`}
-                            onClick={() => openDeelnemerGegevens(row.iddeelnemer)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                openDeelnemerGegevens(row.iddeelnemer);
-                              }
-                            }}
-                            role="button"
-                            tabIndex={0}
-                            title="Open gegevens van deze deelnemer"
+                            className={`border-b hover:bg-muted/50 ${rowGroupClass ?? ''} ${hasAchterwacht || isExpanded ? '' : 'last:border-0'}`}
                           >
                             <td className="py-2.5 pr-4 font-medium">
                               <div className="flex items-center gap-2">
-                                <span
-                                  className="inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
-                                  style={{ backgroundColor: row.color }}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleDeelnemerDetails(row.iddeelnemer)}
+                                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                                  aria-expanded={isExpanded}
+                                  aria-label={
+                                    isExpanded
+                                      ? `Verberg diensten van ${row.naam}`
+                                      : `Toon diensten van ${row.naam}`
+                                  }
+                                  title={isExpanded ? 'Verberg diensten' : 'Toon diensten'}
                                 >
-                                  {row.initials}
-                                </span>
-                                <span>{row.naam}</span>
+                                  {isExpanded ? (
+                                    <ChevronDown className="size-4" aria-hidden />
+                                  ) : (
+                                    <ChevronRight className="size-4" aria-hidden />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openDeelnemerGegevens(row.iddeelnemer)}
+                                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left hover:underline"
+                                  title="Open gegevens van deze deelnemer"
+                                >
+                                  <span
+                                    className="inline-flex h-8 min-w-10 shrink-0 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
+                                    style={{ backgroundColor: row.color }}
+                                  >
+                                    {row.initials}
+                                  </span>
+                                  <span className="truncate">{row.naam}</span>
+                                </button>
                               </div>
                             </td>
                             {row.urenPerAantekening.map((uren, index) => (
@@ -296,7 +387,7 @@ export default function UrentellingPage() {
                           </tr>
                           {hasAchterwacht && (
                             <tr
-                              className={`border-b text-muted-foreground last:border-0 ${rowGroupClass ?? ''}`}
+                              className={`border-b text-muted-foreground ${rowGroupClass ?? ''} ${isExpanded ? '' : 'last:border-0'}`}
                             >
                               <td className="py-1.5 pr-4 pl-12 text-sm italic">als achterwacht</td>
                               {row.achterwachtPerAantekening.map((uren, index) => (
@@ -312,6 +403,37 @@ export default function UrentellingPage() {
                               </td>
                             </tr>
                           )}
+                          {isExpanded && rowDetails.length === 0 && (
+                            <tr className={`border-b text-xs text-muted-foreground last:border-0 ${rowGroupClass ?? ''}`}>
+                              <td className="py-1.5 pr-4 pl-12">Geen diensten in deze periode.</td>
+                              {columns.map((column) => (
+                                <td key={`${row.iddeelnemer}-empty-${column.id}`} className="py-1.5 pr-4" />
+                              ))}
+                              <td className="py-1.5 pr-4" />
+                            </tr>
+                          )}
+                          {isExpanded &&
+                            rowDetails.map((detail, detailIndex) => (
+                              <tr
+                                key={`${row.iddeelnemer}-detail-${detail.van}-${detail.tot}-${detail.categorie}-${detailIndex}`}
+                                className={`border-b text-xs text-muted-foreground ${rowGroupClass ?? ''} ${
+                                  detailIndex === rowDetails.length - 1 ? 'last:border-0' : ''
+                                }`}
+                              >
+                                <td className="py-1.5 pr-4 pl-12 whitespace-nowrap">
+                                  {formatDetailLabel(detail)}
+                                </td>
+                                {columns.map((column) => (
+                                  <td
+                                    key={`${row.iddeelnemer}-detail-${detailIndex}-${column.id}`}
+                                    className="py-1.5 pr-4 text-right tabular-nums"
+                                  >
+                                    {detailHoursForColumn(detail, column.id)}
+                                  </td>
+                                ))}
+                                <td className="py-1.5 pr-4" />
+                              </tr>
+                            ))}
                         </Fragment>
                       );
                     })}

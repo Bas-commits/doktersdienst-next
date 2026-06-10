@@ -41,7 +41,7 @@ export async function findDeelnemerBySessionEmail(email: string): Promise<Deelne
     .limit(1);
 
   if (!row || row.id === null) return null;
-  return row;
+  return { id: row.id, idgroep: row.idgroep };
 }
 
 /**

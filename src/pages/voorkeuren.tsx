@@ -4,6 +4,7 @@ import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Info } from 'lucide-react';
 import { toast } from 'sonner';
+import { authClient } from '@/lib/auth-client';
 import { useDeelnemerDisplayName } from '@/contexts/DeelnemerProfileContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -86,6 +87,7 @@ function InfoPopover() {
 }
 
 export default function VoorkeurenPage() {
+  const { data: session } = authClient.useSession();
   const name = useDeelnemerDisplayName();
 
   const { activeWaarneemgroepId, activeWaarneemgroep, loading: waarneemgroepContextLoading, error: waarneemgroepContextError } = useWaarneemgroep();

@@ -2,6 +2,7 @@
 
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,14 +59,28 @@ function fromDateTimeLocal(value: string): number {
   return Math.floor(new Date(value).getTime() / 1000);
 }
 
+function wholeMonthRange(year: number, month0: number): { van: string; tot: string } {
+  const from = new Date(year, month0, 1, 0, 0, 0);
+  const to = new Date(year, month0 + 1, 0, 23, 59, 59);
+  return {
+    van: toDateTimeLocal(Math.floor(from.getTime() / 1000)),
+    tot: toDateTimeLocal(Math.floor(to.getTime() / 1000)),
+  };
+}
+
 function defaultFrom(): string {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate(), 0, 0, 0);
-  return toDateTimeLocal(Math.floor(from.getTime() / 1000));
+  return wholeMonthRange(now.getFullYear(), now.getMonth() - 1).van;
 }
 
 function defaultTo(): string {
-  return toDateTimeLocal(Math.floor(Date.now() / 1000));
+  const now = new Date();
+  return wholeMonthRange(now.getFullYear(), now.getMonth() - 1).tot;
+}
+
+function shiftMonthRange(fromValue: string, offset: number): { van: string; tot: string } {
+  const anchor = new Date(fromValue);
+  return wholeMonthRange(anchor.getFullYear(), anchor.getMonth() + offset);
 }
 
 function formatDateForFilename(unix: number): string {
@@ -89,6 +104,11 @@ function formatDuration(seconds: number): string {
   }
   return `${minutes}:${pad(secs)}`;
 }
+
+const GESPREKKEN_ACTION_GRADIENT =
+  'linear-gradient(90deg, rgb(79, 27, 153) 0%, rgb(45, 34, 69) 100%)';
+const GESPREKKEN_ACTION_GRADIENT_HOVER =
+  'linear-gradient(90deg, rgb(56, 19, 108) 0%, rgb(45, 34, 69) 100%)';
 
 export default function GesprekkenPage() {
   const { data: session, isPending } = authClient.useSession();
@@ -187,6 +207,14 @@ export default function GesprekkenPage() {
     setSearchTot(queryTot);
   }
 
+  function handleShiftMonth(offset: number) {
+    const range = shiftMonthRange(queryVan, offset);
+    setQueryVan(range.van);
+    setQueryTot(range.tot);
+    setSearchVan(range.van);
+    setSearchTot(range.tot);
+  }
+
   async function handleDownloadExcel() {
     if (gesprekken.length === 0 || responseVan == null || responseTot == null) return;
     const filename = `gesprekken-${activeGroupName}-${formatDateForFilename(responseVan)}-${formatDateForFilename(responseTot)}.xlsx`;
@@ -236,7 +264,7 @@ export default function GesprekkenPage() {
           <CardContent className="space-y-4">
             <form
               onSubmit={handleSubmit}
-              className="grid gap-3 md:grid-cols-[1fr_220px_220px_auto_auto]"
+              className="grid gap-3 md:grid-cols-[1fr_auto_220px_220px_auto_auto_auto]"
             >
               <Input
                 type="search"
@@ -245,6 +273,15 @@ export default function GesprekkenPage() {
                 placeholder="Zoek deelnemer..."
                 aria-label="Zoek op deelnemer"
               />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => handleShiftMonth(-1)}
+                aria-label="Vorige maand"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
               <Input
                 type="datetime-local"
                 value={queryVan}
@@ -257,7 +294,35 @@ export default function GesprekkenPage() {
                 onChange={(event) => setQueryTot(event.target.value)}
                 aria-label="Tot datum en tijd"
               />
-              <Button type="submit">Zoeken</Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => handleShiftMonth(1)}
+                aria-label="Volgende maand"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg px-3.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                style={{
+                  background: GESPREKKEN_ACTION_GRADIENT,
+                  transition: 'background 0.2s',
+                }}
+                onMouseOver={(event) => {
+                  if (loading) return;
+                  (event.currentTarget as HTMLButtonElement).style.background =
+                    GESPREKKEN_ACTION_GRADIENT_HOVER;
+                }}
+                onMouseOut={(event) => {
+                  (event.currentTarget as HTMLButtonElement).style.background =
+                    GESPREKKEN_ACTION_GRADIENT;
+                }}
+              >
+                Zoeken
+              </button>
               <Button
                 type="button"
                 variant="outline"

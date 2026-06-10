@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { authClient } from '@/lib/auth-client';
 import { DoktersdienstHeader } from '@/components/header/DoktersdienstHeader';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { DeelnemerProfileProvider } from '@/contexts/DeelnemerProfileContext';
 import { useWaarneemgroep, WaarneemgroepProvider } from '@/contexts/WaarneemgroepContext';
 import {
   DEFAULT_ASSET_URLS,
@@ -31,6 +32,7 @@ export interface AuthenticatedLayoutProps {
 
 type RoleApiResponse = {
   idgroep?: number | null;
+  displayName?: string;
 };
 
 type AuthenticatedLayoutShellProps = {
@@ -112,10 +114,11 @@ export function AuthenticatedLayout({ children, headerProps }: AuthenticatedLayo
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
   const [globalIdgroep, setGlobalIdgroep] = useState<number | null | undefined>(undefined);
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   const headerUser = useMemo(
-    () => headerUserFromSession(session?.user ?? null),
-    [session?.user]
+    () => headerUserFromSession(session?.user ?? null, { displayName }),
+    [session?.user, displayName]
   );
 
   const fallbackWaarneemgroepen = headerProps?.waarneemgroepen ?? EMPTY_WAARNEMGROEPEN;
@@ -142,6 +145,9 @@ export function AuthenticatedLayout({ children, headerProps }: AuthenticatedLayo
         }
         const data = (await response.json()) as RoleApiResponse;
         setGlobalIdgroep(data.idgroep ?? null);
+        if (data.displayName?.trim()) {
+          setDisplayName(data.displayName.trim());
+        }
       })
       .catch(() => {
         if (!abortController.signal.aborted) {
@@ -168,16 +174,24 @@ export function AuthenticatedLayout({ children, headerProps }: AuthenticatedLayo
     return null;
   }
 
+  const resolvedDisplayName =
+    displayName?.trim() ||
+    session.user.name?.trim() ||
+    session.user.email?.trim() ||
+    'Gebruiker';
+
   return (
-    <WaarneemgroepProvider>
-      <AuthenticatedLayoutShell
-        headerUser={headerUser}
-        fallbackWaarneemgroepen={fallbackWaarneemgroepen}
-        routeName={headerProps?.routeName ?? null}
-        globalIdgroep={globalIdgroep ?? null}
-      >
-        {children}
-      </AuthenticatedLayoutShell>
-    </WaarneemgroepProvider>
+    <DeelnemerProfileProvider displayName={resolvedDisplayName}>
+      <WaarneemgroepProvider>
+        <AuthenticatedLayoutShell
+          headerUser={headerUser}
+          fallbackWaarneemgroepen={fallbackWaarneemgroepen}
+          routeName={headerProps?.routeName ?? null}
+          globalIdgroep={globalIdgroep ?? null}
+        >
+          {children}
+        </AuthenticatedLayoutShell>
+      </WaarneemgroepProvider>
+    </DeelnemerProfileProvider>
   );
 }

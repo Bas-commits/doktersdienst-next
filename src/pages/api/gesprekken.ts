@@ -1,27 +1,75 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, desc, eq, gte, ilike, lte, or, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, ilike, isNotNull, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 
 const { gesprekken, deelnemers } = schema;
 
+/** Minimum seconds to count as a real call for legacy rows (no talk_duration_sec). */
+const MIN_CALL_DURATION_SEC = 5;
+/** Upper bound for legacy span-based duration to ignore corrupt tot/van values. */
+const MAX_LEGACY_CALL_DURATION_SEC = 7200;
+
 type GesprekDto = {
   id: number | null;
   iddeelnemer: number | null;
   van: number;
+  tot: number;
   vannummer: string | null;
   naarnummer: string | null;
-  recordingShow: number | null;
-  recordingFilename: string | null;
-  wasBridged: boolean;
   talkDurationSec: number;
   deelnemer: {
     id: number;
+    naam: string;
+    initials: string;
+    color: string;
     voornaam: string | null;
     achternaam: string | null;
     voorletterstussenvoegsel: string | null;
   } | null;
 };
+
+function formatDeelnemerNaam(fields: {
+  achternaam: string | null;
+  voornaam: string | null;
+  voorletterstussenvoegsel: string | null;
+}): string {
+  return [fields.achternaam, fields.voornaam, fields.voorletterstussenvoegsel]
+    .filter(Boolean)
+    .join(', ');
+}
+
+function formatDeelnemerInitials(fields: {
+  voornaam: string | null;
+  achternaam: string | null;
+}): string {
+  const fallback = [fields.voornaam, fields.achternaam]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .map((value) => value.trim().charAt(0).toUpperCase())
+    .join('');
+  return fallback.slice(0, 3) || '—';
+}
+
+function resolveTalkDurationSec(talkDurationSec: number | null, van: number, tot: number): number {
+  if (talkDurationSec != null && talkDurationSec > 0) return talkDurationSec;
+  const span = tot - van;
+  if (span >= MIN_CALL_DURATION_SEC && span <= MAX_LEGACY_CALL_DURATION_SEC) return span;
+  return 0;
+}
+
+/** Real calls: new rows use talk_duration_sec; legacy rows use tot-van when dialstatus is absent. */
+function isRealCallCondition(): SQL {
+  const spanSeconds = sql<number>`(${gesprekken.tot} - ${gesprekken.van})`;
+  return or(
+    gt(gesprekken.talkDurationSec, 0),
+    and(
+      isNull(gesprekken.dialstatus),
+      isNotNull(gesprekken.iddeelnemer),
+      gte(spanSeconds, MIN_CALL_DURATION_SEC),
+      lte(spanSeconds, MAX_LEGACY_CALL_DURATION_SEC),
+    ),
+  )!;
+}
 
 type Data = { gesprekken: GesprekDto[] } | { error: string };
 
@@ -69,7 +117,10 @@ export default async function handler(
     : req.query.deelnemerQ;
   const deelnemerQ = deelnemerQRaw?.trim() ?? '';
 
-  const whereConditions: SQL[] = [eq(gesprekken.idwaarneemgroep, idwaarneemgroep)];
+  const whereConditions: SQL[] = [
+    eq(gesprekken.idwaarneemgroep, idwaarneemgroep),
+    isRealCallCondition(),
+  ];
 
   if (vanGte != null && vanLte != null) {
     whereConditions.push(gte(gesprekken.van, vanGte));
@@ -93,16 +144,15 @@ export default async function handler(
         id: gesprekken.id,
         iddeelnemer: gesprekken.iddeelnemer,
         van: gesprekken.van,
+        tot: gesprekken.tot,
         vannummer: gesprekken.vannummer,
         naarnummer: gesprekken.naarnummer,
-        recordingShow: gesprekken.recordingShow,
-        recordingFilename: gesprekken.recordingFilename,
-        wasBridged: gesprekken.wasBridged,
         talkDurationSec: gesprekken.talkDurationSec,
         deelnemerId: deelnemers.id,
         deelnemerVoornaam: deelnemers.voornaam,
         deelnemerAchternaam: deelnemers.achternaam,
         deelnemerTussenvoegsel: deelnemers.voorletterstussenvoegsel,
+        deelnemerColor: deelnemers.color,
       })
       .from(gesprekken)
       .leftJoin(deelnemers, eq(gesprekken.iddeelnemer, deelnemers.id))
@@ -110,26 +160,40 @@ export default async function handler(
       .orderBy(desc(gesprekken.van))
       .limit(500);
 
-    const payload: GesprekDto[] = rows.map((row) => ({
-      id: row.id,
-      iddeelnemer: row.iddeelnemer,
-      van: Number(row.van ?? 0),
-      vannummer: row.vannummer,
-      naarnummer: row.naarnummer,
-      recordingShow: row.recordingShow,
-      recordingFilename: row.recordingFilename,
-      wasBridged: row.wasBridged ?? false,
-      talkDurationSec: row.talkDurationSec ?? 0,
-      deelnemer:
-        row.deelnemerId != null
-          ? {
-              id: row.deelnemerId,
-              voornaam: row.deelnemerVoornaam,
-              achternaam: row.deelnemerAchternaam,
-              voorletterstussenvoegsel: row.deelnemerTussenvoegsel,
-            }
-          : null,
-    }));
+    const payload: GesprekDto[] = rows.map((row) => {
+      const van = Number(row.van ?? 0);
+      const tot = Number(row.tot ?? 0);
+      const talkDurationSec = resolveTalkDurationSec(row.talkDurationSec, van, tot);
+
+      return {
+        id: row.id,
+        iddeelnemer: row.iddeelnemer,
+        van,
+        tot,
+        vannummer: row.vannummer,
+        naarnummer: row.naarnummer,
+        talkDurationSec,
+        deelnemer:
+          row.deelnemerId != null
+            ? {
+                id: row.deelnemerId,
+                naam: formatDeelnemerNaam({
+                  achternaam: row.deelnemerAchternaam,
+                  voornaam: row.deelnemerVoornaam,
+                  voorletterstussenvoegsel: row.deelnemerTussenvoegsel,
+                }),
+                initials: formatDeelnemerInitials({
+                  voornaam: row.deelnemerVoornaam,
+                  achternaam: row.deelnemerAchternaam,
+                }),
+                color: row.deelnemerColor?.trim() || '#cccccc',
+                voornaam: row.deelnemerVoornaam,
+                achternaam: row.deelnemerAchternaam,
+                voorletterstussenvoegsel: row.deelnemerTussenvoegsel,
+              }
+            : null,
+      };
+    });
 
     return res.status(200).json({ gesprekken: payload });
   } catch (error) {

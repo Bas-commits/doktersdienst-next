@@ -7,19 +7,21 @@ import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { downloadGesprekkenWorkbook } from '@/lib/gesprekken-export';
 
 type GesprekItem = {
   id: number | null;
   iddeelnemer: number | null;
   van: number;
+  tot: number;
   vannummer: string | null;
   naarnummer: string | null;
-  recordingShow: number | null;
-  recordingFilename: string | null;
-  wasBridged: boolean;
   talkDurationSec: number;
   deelnemer: {
     id: number;
+    naam: string;
+    initials: string;
+    color: string;
     voornaam: string | null;
     achternaam: string | null;
     voorletterstussenvoegsel: string | null;
@@ -66,14 +68,14 @@ function defaultTo(): string {
   return toDateTimeLocal(Math.floor(Date.now() / 1000));
 }
 
-function formatDeelnemer(gesprek: GesprekItem): string {
+function formatDateForFilename(unix: number): string {
+  const d = new Date(unix * 1000);
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+}
+
+function formatDeelnemerLabel(gesprek: GesprekItem): string {
   if (!gesprek.deelnemer) return '—';
-  const parts = [
-    gesprek.deelnemer.achternaam,
-    gesprek.deelnemer.voorletterstussenvoegsel,
-    gesprek.deelnemer.voornaam,
-  ].filter(Boolean);
-  return parts.join(' ').trim() || `#${gesprek.deelnemer.id}`;
+  return gesprek.deelnemer.naam || `#${gesprek.deelnemer.id}`;
 }
 
 function formatDuration(seconds: number): string {
@@ -90,7 +92,7 @@ function formatDuration(seconds: number): string {
 
 export default function GesprekkenPage() {
   const { data: session, isPending } = authClient.useSession();
-  const { activeWaarneemgroepId } = useWaarneemgroep();
+  const { activeWaarneemgroepId, waarneemgroepen } = useWaarneemgroep();
 
   const [queryDeelnemer, setQueryDeelnemer] = useState('');
   const [queryVan, setQueryVan] = useState(defaultFrom);
@@ -101,7 +103,10 @@ export default function GesprekkenPage() {
   const [searchTot, setSearchTot] = useState(defaultTo);
 
   const [gesprekken, setGesprekken] = useState<GesprekItem[]>([]);
+  const [responseVan, setResponseVan] = useState<number | null>(null);
+  const [responseTot, setResponseTot] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selectedGroupId = useMemo(() => {
@@ -109,6 +114,12 @@ export default function GesprekkenPage() {
     const parsed = Number(activeWaarneemgroepId);
     return Number.isNaN(parsed) ? null : parsed;
   }, [activeWaarneemgroepId]);
+
+  const activeGroupName = useMemo(() => {
+    if (selectedGroupId == null) return 'waarneemgroep';
+    const wg = (waarneemgroepen ?? []).find((g) => g.ID === selectedGroupId);
+    return (wg?.naam ?? 'waarneemgroep').replace(/[^\w\-]+/g, '-');
+  }, [selectedGroupId, waarneemgroepen]);
 
   const loadGesprekken = useCallback(
     async (params: { idwaarneemgroep: number; van: string; tot: string; deelnemerQ: string }) => {
@@ -145,9 +156,13 @@ export default function GesprekkenPage() {
           throw new Error(data.error ?? 'Kon gesprekken niet laden');
         }
         setGesprekken(data.gesprekken ?? []);
+        setResponseVan(vanGte);
+        setResponseTot(vanLte);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Kon gesprekken niet laden');
         setGesprekken([]);
+        setResponseVan(null);
+        setResponseTot(null);
       } finally {
         setLoading(false);
       }
@@ -172,6 +187,31 @@ export default function GesprekkenPage() {
     setSearchTot(queryTot);
   }
 
+  async function handleDownloadExcel() {
+    if (gesprekken.length === 0 || responseVan == null || responseTot == null) return;
+    const filename = `gesprekken-${activeGroupName}-${formatDateForFilename(responseVan)}-${formatDateForFilename(responseTot)}.xlsx`;
+    setDownloading(true);
+    try {
+      await downloadGesprekkenWorkbook({
+        filename,
+        van: responseVan,
+        tot: responseTot,
+        rows: gesprekken.map((gesprek) => ({
+          deelnemerNaam: formatDeelnemerLabel(gesprek),
+          van: formatUnixDateTime(gesprek.van),
+          tot: formatUnixDateTime(gesprek.tot),
+          duur: formatDuration(gesprek.talkDurationSec),
+          vannummer: gesprek.vannummer || '—',
+          naarnummer: gesprek.naarnummer || '—',
+        })),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kon Excel-bestand niet downloaden');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   if (isPending) {
     return <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-muted-foreground">Laden…</div>;
   }
@@ -194,7 +234,10 @@ export default function GesprekkenPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-[1fr_220px_220px_auto]">
+            <form
+              onSubmit={handleSubmit}
+              className="grid gap-3 md:grid-cols-[1fr_220px_220px_auto_auto]"
+            >
               <Input
                 type="search"
                 value={queryDeelnemer}
@@ -215,6 +258,14 @@ export default function GesprekkenPage() {
                 aria-label="Tot datum en tijd"
               />
               <Button type="submit">Zoeken</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleDownloadExcel()}
+                disabled={loading || downloading || gesprekken.length === 0}
+              >
+                {downloading ? 'Downloaden…' : 'Download Excel'}
+              </Button>
             </form>
 
             {selectedGroupId == null && (
@@ -222,8 +273,10 @@ export default function GesprekkenPage() {
             )}
             {loading && <p className="text-sm text-muted-foreground">Gesprekken laden…</p>}
             {error && <p className="text-sm text-destructive">{error}</p>}
-            {!loading && !error && geselecteerdeResultatenLeeg(gesprekken) && (
-              <p className="text-sm text-muted-foreground">Geen gesprekken gevonden voor deze filters.</p>
+            {!loading && !error && selectedGroupId != null && gesprekken.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Geen gesprekken met gespreksduur gevonden voor deze filters.
+              </p>
             )}
 
             {!loading && !error && gesprekken.length > 0 && (
@@ -231,27 +284,40 @@ export default function GesprekkenPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
-                      <th className="pb-2 pr-4 font-medium">Datum en tijd</th>
+                      <th className="pb-2 pr-4 font-medium">Deelnemer</th>
+                      <th className="pb-2 pr-4 font-medium">Van</th>
+                      <th className="pb-2 pr-4 font-medium">Tot</th>
+                      <th className="pb-2 pr-4 font-medium">Duur</th>
                       <th className="pb-2 pr-4 font-medium">Van nummer</th>
                       <th className="pb-2 pr-4 font-medium">Naar nummer</th>
-                      <th className="pb-2 pr-4 font-medium">Deelnemer</th>
-                      <th className="pb-2 pr-4 font-medium">Opgenomen</th>
-                      <th className="pb-2 pr-4 font-medium">Recording filename</th>
-                      <th className="pb-2 pr-4 font-medium">Heeft overgenomen</th>
-                      <th className="pb-2 pr-4 font-medium">Gespreksduur</th>
                     </tr>
                   </thead>
                   <tbody>
                     {gesprekken.map((gesprek) => (
-                      <tr key={gesprek.id ?? `${gesprek.van}-${gesprek.vannummer}-${gesprek.naarnummer}`} className="border-b last:border-0 even:bg-muted/70">
+                      <tr
+                        key={gesprek.id ?? `${gesprek.van}-${gesprek.vannummer}-${gesprek.naarnummer}`}
+                        className="border-b last:border-0 even:bg-muted/70"
+                      >
+                        <td className="py-2.5 pr-4 font-medium">
+                          {gesprek.deelnemer ? (
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
+                                style={{ backgroundColor: gesprek.deelnemer.color }}
+                              >
+                                {gesprek.deelnemer.initials}
+                              </span>
+                              <span>{formatDeelnemerLabel(gesprek)}</span>
+                            </div>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
                         <td className="py-2.5 pr-4">{formatUnixDateTime(gesprek.van)}</td>
+                        <td className="py-2.5 pr-4">{formatUnixDateTime(gesprek.tot)}</td>
+                        <td className="py-2.5 pr-4">{formatDuration(gesprek.talkDurationSec)}</td>
                         <td className="py-2.5 pr-4">{gesprek.vannummer || '—'}</td>
                         <td className="py-2.5 pr-4">{gesprek.naarnummer || '—'}</td>
-                        <td className="py-2.5 pr-4">{formatDeelnemer(gesprek)}</td>
-                        <td className="py-2.5 pr-4">{gesprek.recordingShow === 1 ? 'Ja' : 'Nee'}</td>
-                        <td className="py-2.5 pr-4">{gesprek.recordingFilename || '—'}</td>
-                        <td className="py-2.5 pr-4">{gesprek.wasBridged ? 'Ja' : 'Nee'}</td>
-                        <td className="py-2.5 pr-4">{formatDuration(gesprek.talkDurationSec)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -263,8 +329,4 @@ export default function GesprekkenPage() {
       </div>
     </>
   );
-}
-
-function geselecteerdeResultatenLeeg(gesprekken: GesprekItem[]): boolean {
-  return gesprekken.length === 0;
 }

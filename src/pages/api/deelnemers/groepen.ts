@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 
@@ -73,7 +73,7 @@ export default async function handler(
         idwaarneemgroep: deelnemers.idwaarneemgroep,
       })
       .from(deelnemers)
-      .where(eq(deelnemers.email, email))
+      .where(or(eq(deelnemers.login, email), eq(deelnemers.email, email)))
       .limit(1);
 
     if (!currentUser) {

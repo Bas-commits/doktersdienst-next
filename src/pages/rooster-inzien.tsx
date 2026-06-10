@@ -3,7 +3,7 @@
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FaFilter } from 'react-icons/fa';
-import { authClient } from '@/lib/auth-client';
+import { useDeelnemerDisplayName } from '@/contexts/DeelnemerProfileContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -110,8 +110,7 @@ function FilterPopover({
 }
 
 export default function RoosterInzienPage() {
-  const { data: session } = authClient.useSession();
-  const name = session?.user?.name ?? session?.user?.email ?? 'daar';
+  const name = useDeelnemerDisplayName();
   const { activeWaarneemgroepId, waarneemgroepen, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
 
   const now = useMemo(() => new Date(), []);

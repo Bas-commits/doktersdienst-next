@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
-import { GROEP_ADMINISTRATOR } from '@/lib/api-auth';
+import { findDeelnemerBySessionEmail, GROEP_ADMINISTRATOR } from '@/lib/api-auth';
 
 const { waarneemgroepen, waarneemgroepdeelnemers, deelnemers } = schema;
 
@@ -57,11 +57,7 @@ export default async function handler(
     }
 
     const t1 = Date.now();
-    const [deelnemer] = await db
-      .select({ id: deelnemers.id, idgroep: deelnemers.idgroep })
-      .from(deelnemers)
-      .where(eq(deelnemers.email, email))
-      .limit(1);
+    const deelnemer = await findDeelnemerBySessionEmail(email);
     const tDeelnemer = Date.now() - t1;
 
     const idDeelnemer = deelnemer?.id ?? null;

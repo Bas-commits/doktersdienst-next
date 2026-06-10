@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, inArray, ne, isNotNull } from 'drizzle-orm';
+import { findDeelnemerBySessionEmail } from '@/lib/api-auth';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 
@@ -64,13 +65,9 @@ export default async function handler(
       return res.status(403).json({ error: 'No email on session' });
     }
 
-    const [currentDeelnemer] = await db
-      .select({ id: deelnemers.id, idgroep: deelnemers.idgroep })
-      .from(deelnemers)
-      .where(eq(deelnemers.email, email))
-      .limit(1);
+    const currentDeelnemer = await findDeelnemerBySessionEmail(email);
 
-    if (!currentDeelnemer || currentDeelnemer.id === null) {
+    if (!currentDeelnemer) {
       return res.status(403).json({ error: 'Deelnemer not found' });
     }
 

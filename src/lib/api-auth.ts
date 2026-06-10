@@ -1,5 +1,5 @@
 import type { NextApiRequest } from 'next';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { GROEP_ADMINISTRATOR, GROEP_SECRETARIS } from '@/lib/roles';
@@ -24,6 +24,26 @@ export type AuthenticatedUser = {
   isAdmin: boolean;
 };
 
+type DeelnemerIdentity = {
+  id: number;
+  idgroep: number | null;
+};
+
+/**
+ * Resolves a deelnemer from Better Auth session.user.email.
+ * Better Auth maps that value to deelnemers.login; also match email for legacy rows.
+ */
+export async function findDeelnemerBySessionEmail(email: string): Promise<DeelnemerIdentity | null> {
+  const [row] = await db
+    .select({ id: deelnemers.id, idgroep: deelnemers.idgroep })
+    .from(deelnemers)
+    .where(or(eq(deelnemers.login, email), eq(deelnemers.email, email)))
+    .limit(1);
+
+  if (!row || row.id === null) return null;
+  return row;
+}
+
 /**
  * Resolves the current session and looks up the deelnemer record.
  * Returns null if unauthenticated or deelnemer not found.
@@ -35,13 +55,8 @@ export async function getAuthenticatedUser(req: NextApiRequest): Promise<Authent
   const email = session.user.email;
   if (!email) return null;
 
-  const [row] = await db
-    .select({ id: deelnemers.id, idgroep: deelnemers.idgroep })
-    .from(deelnemers)
-    .where(eq(deelnemers.email, email))
-    .limit(1);
-
-  if (!row || row.id === null) return null;
+  const row = await findDeelnemerBySessionEmail(email);
+  if (!row) return null;
 
   return {
     id: row.id,

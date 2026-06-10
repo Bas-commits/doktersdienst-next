@@ -16,6 +16,7 @@ import {
   Shield,
   Trash2,
   PhoneCall,
+  Clock,
 } from 'lucide-react';
 import { FaCalendarPlus } from 'react-icons/fa';
 import { DEFAULT_ROUTES } from '@/lib/header-defaults';
@@ -76,6 +77,12 @@ const SECRETARIS_NAV_ITEMS: NavItem[] = [
     label: 'Gesprekken',
     href: '/gesprekken',
     icon: <PhoneCall className="size-4 shrink-0" />,
+  },
+  {
+    id: 'urentelling',
+    label: 'Urentelling',
+    href: '/urentelling',
+    icon: <Clock className="size-4 shrink-0" />,
   },
 ];
 

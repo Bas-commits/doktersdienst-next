@@ -1,15 +1,14 @@
 'use client';
 
 import Head from 'next/head';
-import { authClient } from '@/lib/auth-client';
+import { useDeelnemerDisplayName } from '@/contexts/DeelnemerProfileContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
 import { waarneemgroepRows } from '@/components/CalandarGrid/CalendarGrid.fixtures';
 
 
 export default function RoosterInzienPage() {
-  const { data: session } = authClient.useSession();
-  const name = session?.user?.name ?? session?.user?.email ?? 'daar';
+  const name = useDeelnemerDisplayName();
 
   return (
     <>

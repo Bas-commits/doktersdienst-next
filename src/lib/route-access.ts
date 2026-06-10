@@ -21,6 +21,7 @@ export const SECRETARIS_ROUTES = [
   '/bestaande-toevoegen',
   '/lijst-deelnemers',
   '/gesprekken',
+  '/urentelling',
 ] as const;
 
 export const ADMIN_ROUTES = [

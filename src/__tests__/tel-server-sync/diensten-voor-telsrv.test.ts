@@ -57,7 +57,15 @@ describe('tel-server-sync diensten payload', () => {
     expect(buildTelServerText(wg, rows, '31880026499')).toBe(
       [
         'v3',
-        '100;200;welkom-dn-7_gsm;1;31612345678;31687654321~300;400;welkom-wg-10_gsm;;31880026406~0;2274396699;31611111111~31880026499~welkom-wg-10_gsm',
+        '100;200;welkom-dn-7_gsm;1;31612345678;31687654321',
+        '~',
+        '300;400;welkom-wg-10_gsm;;31880026406',
+        '~',
+        '0;2274396699;31611111111',
+        '~',
+        '31880026499',
+        '~',
+        'welkom-wg-10_gsm',
       ].join('\n'),
     );
   });

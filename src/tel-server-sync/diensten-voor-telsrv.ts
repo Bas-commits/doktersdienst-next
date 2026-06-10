@@ -94,7 +94,15 @@ export function buildTelServerText(
   const avdienstentext = nr ? `0;2274396699;${nr}` : '';
   const welkomwav = wg.eigentelwelkomwav ? `welkom-wg-${phpString(wg.id)}_gsm` : '';
 
-  return `v3\n${diensten.join('\n')}~${awdiensten.join('\n')}~${avdienstentext}~${invoegendTelnr}~${welkomwav}`;
+  const sections = [
+    diensten.join('\n'),
+    awdiensten.join('\n'),
+    avdienstentext,
+    invoegendTelnr,
+    welkomwav,
+  ];
+
+  return `v3\n${sections.join('\n~\n')}`;
 }
 
 async function getInvoegendTelnr(

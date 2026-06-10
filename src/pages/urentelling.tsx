@@ -2,18 +2,19 @@
 
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { downloadUrentellingWorkbook } from '@/lib/urentelling-export';
-import type { UrentellingDetailRow, UrentellingRow } from '@/lib/urentelling';
+import type { UrentellingColumn, UrentellingDetailRow, UrentellingRow } from '@/lib/urentelling';
 
 type UrentellingApiResponse = {
   van?: number;
   tot?: number;
+  columns?: UrentellingColumn[];
   rows?: UrentellingRow[];
   details?: UrentellingDetailRow[];
   error?: string;
@@ -65,6 +66,7 @@ export default function UrentellingPage() {
   const [searchVan, setSearchVan] = useState(defaultFrom);
   const [searchTot, setSearchTot] = useState(defaultTo);
 
+  const [columns, setColumns] = useState<UrentellingColumn[]>([]);
   const [rows, setRows] = useState<UrentellingRow[]>([]);
   const [details, setDetails] = useState<UrentellingDetailRow[]>([]);
   const [responseVan, setResponseVan] = useState<number | null>(null);
@@ -91,11 +93,13 @@ export default function UrentellingPage() {
       const totLte = fromDateTimeLocal(params.tot);
       if (!vanGte || !totLte) {
         setError('Vul een geldige datum/tijd range in.');
+        setColumns([]);
         setRows([]);
         return;
       }
       if (totLte < vanGte) {
         setError('Tot moet na Van liggen.');
+        setColumns([]);
         setRows([]);
         return;
       }
@@ -116,12 +120,14 @@ export default function UrentellingPage() {
         if (!response.ok || data.error) {
           throw new Error(data.error ?? 'Kon urentelling niet laden');
         }
+        setColumns(data.columns ?? []);
         setRows(data.rows ?? []);
         setDetails(data.details ?? []);
         setResponseVan(data.van ?? vanGte);
         setResponseTot(data.tot ?? totLte);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Kon urentelling niet laden');
+        setColumns([]);
         setRows([]);
         setDetails([]);
         setResponseVan(null);
@@ -161,6 +167,7 @@ export default function UrentellingPage() {
         filename,
         van: responseVan,
         tot: responseTot,
+        columns,
         rows,
         details,
       });
@@ -235,53 +242,79 @@ export default function UrentellingPage() {
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="pb-2 pr-4 font-medium">Naam</th>
-                      <th className="pb-2 pr-4 font-medium text-right">Achterwacht</th>
-                      <th className="pb-2 pr-4 font-medium text-right">Dienst</th>
-                      <th className="pb-2 pr-4 font-medium text-right">Extra dokter</th>
+                      {columns.map((column) => (
+                        <th key={column.id} className="pb-2 pr-4 font-medium text-right">
+                          {column.tekst}
+                        </th>
+                      ))}
                       <th className="pb-2 pr-4 font-medium text-right">Totaal</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row) => (
-                      <tr
-                        key={row.iddeelnemer}
-                        className="cursor-pointer border-b last:border-0 even:bg-muted/70 hover:bg-muted/50"
-                        onClick={() => openDeelnemerGegevens(row.iddeelnemer)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            openDeelnemerGegevens(row.iddeelnemer);
-                          }
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        title="Open gegevens van deze deelnemer"
-                      >
-                        <td className="py-2.5 pr-4 font-medium">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
-                              style={{ backgroundColor: row.color }}
+                    {rows.map((row, rowIndex) => {
+                      const hasAchterwacht = row.totaalAchterwacht > 0;
+                      const rowGroupClass =
+                        rowIndex % 2 === 1 ? 'bg-muted/70' : undefined;
+
+                      return (
+                        <Fragment key={row.iddeelnemer}>
+                          <tr
+                            className={`cursor-pointer border-b hover:bg-muted/50 ${rowGroupClass ?? ''} ${hasAchterwacht ? '' : 'last:border-0'}`}
+                            onClick={() => openDeelnemerGegevens(row.iddeelnemer)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                openDeelnemerGegevens(row.iddeelnemer);
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            title="Open gegevens van deze deelnemer"
+                          >
+                            <td className="py-2.5 pr-4 font-medium">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
+                                  style={{ backgroundColor: row.color }}
+                                >
+                                  {row.initials}
+                                </span>
+                                <span>{row.naam}</span>
+                              </div>
+                            </td>
+                            {row.urenPerAantekening.map((uren, index) => (
+                              <td
+                                key={`${row.iddeelnemer}-dienst-${columns[index]?.id ?? index}`}
+                                className="py-2.5 pr-4 text-right tabular-nums"
+                              >
+                                {formatDecimalHours(uren)}
+                              </td>
+                            ))}
+                            <td className="py-2.5 pr-4 text-right tabular-nums font-medium">
+                              {formatDecimalHours(row.totaalDienst)}
+                            </td>
+                          </tr>
+                          {hasAchterwacht && (
+                            <tr
+                              className={`border-b text-muted-foreground last:border-0 ${rowGroupClass ?? ''}`}
                             >
-                              {row.initials}
-                            </span>
-                            <span>{row.naam}</span>
-                          </div>
-                        </td>
-                        <td className="py-2.5 pr-4 text-right tabular-nums">
-                          {formatDecimalHours(row.achterwacht)}
-                        </td>
-                        <td className="py-2.5 pr-4 text-right tabular-nums">
-                          {formatDecimalHours(row.dienst)}
-                        </td>
-                        <td className="py-2.5 pr-4 text-right tabular-nums">
-                          {formatDecimalHours(row.extraDokter)}
-                        </td>
-                        <td className="py-2.5 pr-4 text-right tabular-nums">
-                          {formatDecimalHours(row.totaal)}
-                        </td>
-                      </tr>
-                    ))}
+                              <td className="py-1.5 pr-4 pl-12 text-sm italic">als achterwacht</td>
+                              {row.achterwachtPerAantekening.map((uren, index) => (
+                                <td
+                                  key={`${row.iddeelnemer}-achterwacht-${columns[index]?.id ?? index}`}
+                                  className="py-1.5 pr-4 text-right tabular-nums"
+                                >
+                                  {formatDecimalHours(uren)}
+                                </td>
+                              ))}
+                              <td className="py-1.5 pr-4 text-right tabular-nums">
+                                {formatDecimalHours(row.totaalAchterwacht)}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -72,6 +72,7 @@ export interface MijnGegevensPageData {
   profile: MijnGegevensProfile;
   lookup: MijnGegevensLookup;
   isDelegatedEdit?: boolean;
+  canEditEchtedeelnemer?: boolean;
   targetDeelnemerId?: number;
   actingDeelnemerId?: number;
 }

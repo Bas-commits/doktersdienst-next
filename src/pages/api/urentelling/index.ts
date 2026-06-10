@@ -1,18 +1,30 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, asc, eq, gt, lt } from 'drizzle-orm';
+import { and, asc, eq, gt, isNull, lt, or } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 import {
   aggregateUrentelling,
   collectUrentellingDetails,
+  type UrentellingColumn,
   type UrentellingDetailRow,
   type UrentellingRow,
 } from '@/lib/urentelling';
 
-const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
+const {
+  diensten: dienstenTable,
+  deelnemers,
+  waarneemgroepdeelnemers,
+  dienstaantekening,
+} = schema;
 
 type Data =
-  | { van: number; tot: number; rows: UrentellingRow[]; details: UrentellingDetailRow[] }
+  | {
+      van: number;
+      tot: number;
+      columns: UrentellingColumn[];
+      rows: UrentellingRow[];
+      details: UrentellingDetailRow[];
+    }
   | { error: string };
 
 function parseSingleNumber(value: string | string[] | undefined): number | null {
@@ -68,6 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         achternaam: deelnemers.achternaam,
         voornaam: deelnemers.voornaam,
         voorletterstussenvoegsel: deelnemers.voorletterstussenvoegsel,
+        initialen: deelnemers.initialen,
         color: deelnemers.color,
       })
       .from(waarneemgroepdeelnemers)
@@ -87,8 +100,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         achternaam: row.achternaam,
         voornaam: row.voornaam,
         voorletterstussenvoegsel: row.voorletterstussenvoegsel,
+        initialen: row.initialen,
         color: row.color,
       }));
+
+    const aantekeningRows = await db
+      .select({
+        id: dienstaantekening.id,
+        tekst: dienstaantekening.tekst,
+        prio: dienstaantekening.prio,
+      })
+      .from(dienstaantekening)
+      .where(
+        and(
+          eq(dienstaantekening.idwaarneemgroep, idwaarneemgroep),
+          or(
+            isNull(dienstaantekening.verwijderd),
+            eq(dienstaantekening.verwijderd, false),
+          ),
+        ),
+      );
+
+    const aantekeningen = aantekeningRows
+      .filter((row) => row.id != null)
+      .map((row) => ({
+        id: row.id!,
+        tekst: row.tekst,
+        prio: row.prio,
+      }));
+
+    const baseSlotRows = await db
+      .select({
+        van: dienstenTable.van,
+        tot: dienstenTable.tot,
+        idaantekening: dienstenTable.idaantekening,
+      })
+      .from(dienstenTable)
+      .where(
+        and(
+          eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+          eq(dienstenTable.type, 1),
+          lt(dienstenTable.van, totLte),
+          gt(dienstenTable.tot, vanGte),
+        ),
+      );
+
+    const baseSlots = baseSlotRows.map((row) => ({
+      van: Number(row.van ?? 0),
+      tot: Number(row.tot ?? 0),
+      idaantekening: row.idaantekening,
+    }));
 
     const dienstRows = await db
       .select({
@@ -120,10 +181,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           : null,
     }));
 
-    const rows = aggregateUrentelling(diensten, members, vanGte, totLte);
-    const details = collectUrentellingDetails(diensten, members, vanGte, totLte);
+    const { columns, rows } = aggregateUrentelling(
+      diensten,
+      members,
+      vanGte,
+      totLte,
+      baseSlots,
+      aantekeningen,
+    );
+    const details = collectUrentellingDetails(
+      diensten,
+      members,
+      vanGte,
+      totLte,
+      baseSlots,
+      aantekeningen,
+    );
 
-    return res.status(200).json({ van: vanGte, tot: totLte, rows, details });
+    return res.status(200).json({ van: vanGte, tot: totLte, columns, rows, details });
   } catch (err) {
     console.error('[api/urentelling]', err);
     return res.status(500).json({

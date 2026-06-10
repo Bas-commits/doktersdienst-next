@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, desc, eq, gt, gte, ilike, isNotNull, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 
 const { gesprekken, deelnemers } = schema;
 
@@ -37,17 +38,6 @@ function formatDeelnemerNaam(fields: {
   return [fields.achternaam, fields.voornaam, fields.voorletterstussenvoegsel]
     .filter(Boolean)
     .join(', ');
-}
-
-function formatDeelnemerInitials(fields: {
-  voornaam: string | null;
-  achternaam: string | null;
-}): string {
-  const fallback = [fields.voornaam, fields.achternaam]
-    .filter((value): value is string => Boolean(value && value.trim()))
-    .map((value) => value.trim().charAt(0).toUpperCase())
-    .join('');
-  return fallback.slice(0, 3) || '—';
 }
 
 function resolveTalkDurationSec(talkDurationSec: number | null, van: number, tot: number): number {
@@ -152,6 +142,7 @@ export default async function handler(
         deelnemerVoornaam: deelnemers.voornaam,
         deelnemerAchternaam: deelnemers.achternaam,
         deelnemerTussenvoegsel: deelnemers.voorletterstussenvoegsel,
+        deelnemerInitialen: deelnemers.initialen,
         deelnemerColor: deelnemers.color,
       })
       .from(gesprekken)
@@ -182,10 +173,14 @@ export default async function handler(
                   voornaam: row.deelnemerVoornaam,
                   voorletterstussenvoegsel: row.deelnemerTussenvoegsel,
                 }),
-                initials: formatDeelnemerInitials({
-                  voornaam: row.deelnemerVoornaam,
-                  achternaam: row.deelnemerAchternaam,
-                }),
+                initials: deelnemerChipInitials(
+                  {
+                    initialen: row.deelnemerInitialen,
+                    voornaam: row.deelnemerVoornaam,
+                    achternaam: row.deelnemerAchternaam,
+                  },
+                  { maxFallbackLength: 3, fallback: '—' }
+                ),
                 color: row.deelnemerColor?.trim() || '#cccccc',
                 voornaam: row.deelnemerVoornaam,
                 achternaam: row.deelnemerAchternaam,

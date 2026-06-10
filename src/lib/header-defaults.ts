@@ -1,5 +1,5 @@
 import type { WaarneemgroepItem, HeaderUser, AssetUrls } from '@/components/header/DoktersdienstHeader';
-import { deelnemerInitialsFromDisplayName } from '@/lib/deelnemer-display';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 
 /** Root-relative paths (`/…`) so assets resolve from the site origin on every route. */
 export const DEFAULT_ASSET_URLS: AssetUrls = {
@@ -41,7 +41,7 @@ export const DEFAULT_ROUTES: Record<string, string> = {
 
 export function headerUserFromSession(
   user: { name?: string | null; email?: string | null; role?: string } | null,
-  options?: { displayName?: string | null }
+  options?: { displayName?: string | null; initialen?: string | null }
 ): HeaderUser {
   if (!user) {
     return {
@@ -55,14 +55,23 @@ export function headerUserFromSession(
     user.name?.trim() ||
     user.email?.trim() ||
     'Gebruiker';
-  const shortName = options?.displayName?.trim()
-    ? deelnemerInitialsFromDisplayName(options.displayName)
-    : user.name
-        ?.split(/\s+/)
-        .map((s) => s[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2) || user.email?.slice(0, 2).toUpperCase() || '?';
+  const shortName = deelnemerChipInitials(
+    {
+      initialen: options?.initialen,
+      name: options?.displayName || user.name || user.email,
+    },
+    {
+      fallback:
+        user.name
+          ?.split(/\s+/)
+          .map((s) => s[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2) ||
+        user.email?.slice(0, 2).toUpperCase() ||
+        '?',
+    }
+  );
   return {
     UserName: name,
     ShortName: shortName,

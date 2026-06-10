@@ -4,7 +4,7 @@ import { db, schema } from '@/db';
 import { pool } from '@/lib/db';
 import { legacyMD5Hash } from '@/lib/legacy-password';
 import { getAuthenticatedUser } from '@/lib/api-auth';
-import { hasDelegatedProfileAccess } from '@/lib/mijn-gegevens-access';
+import { hasDelegatedProfileAccess, canEditEchtedeelnemer } from '@/lib/mijn-gegevens-access';
 import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
 import type {
   MijnGegevensProfile,
@@ -63,6 +63,8 @@ export default async function handler(
       return res.status(403).json({ error: 'Geen toegang tot deze deelnemer' });
     }
   }
+
+  const mayEditEchtedeelnemer = await canEditEchtedeelnemer(actor, targetDeelnemerId, isDelegatedEdit);
 
   if (req.method === 'GET') {
     try {
@@ -383,6 +385,7 @@ export default async function handler(
         profile,
         lookup,
         isDelegatedEdit,
+        canEditEchtedeelnemer: mayEditEchtedeelnemer,
         targetDeelnemerId,
         actingDeelnemerId: actor.id,
       };
@@ -494,7 +497,9 @@ export default async function handler(
         }
       }
     }
-    if (body.echtedeelnemer !== undefined) update.echtedeelnemer = !!body.echtedeelnemer;
+    if (body.echtedeelnemer !== undefined && mayEditEchtedeelnemer) {
+      update.echtedeelnemer = !!body.echtedeelnemer;
+    }
     if (body.smsdienstbegin !== undefined) update.smsdienstbegin = !!body.smsdienstbegin;
     if (body.callRecording !== undefined) update.callRecording = !!body.callRecording;
 

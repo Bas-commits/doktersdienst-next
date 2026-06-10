@@ -13,20 +13,24 @@ export type UseDienstenSubscriptionResult = {
   refreshKey?: number;
 };
 
+type ApiDienstDeelnemer = {
+  id: number | null;
+  voornaam: string | null;
+  achternaam: string | null;
+  initialen?: string | null;
+  color: string | null;
+};
+
 /** API returns diensten with van/tot as number and diensten_deelnemers; normalize to our type. */
-function toDienstenResponse(diensten: Array<{
+export function toDienstenResponse(diensten: Array<{
   id: number | null;
   iddeelnemer: number | null;
   van: number;
   tot: number;
   type: number | null;
   idwaarneemgroep: number | null;
-  diensten_deelnemers: {
-    id: number | null;
-    voornaam: string | null;
-    achternaam: string | null;
-    color: string | null;
-  } | null;
+  diensten_deelnemers: ApiDienstDeelnemer | null;
+  target_deelnemers?: ApiDienstDeelnemer | null;
 }>): DienstenResponse {
   const list: Dienst[] = diensten.map((d: Record<string, unknown> & (typeof diensten)[number]) => ({
     id: d.id ?? 0,
@@ -47,13 +51,20 @@ function toDienstenResponse(diensten: Array<{
           id: d.diensten_deelnemers.id ?? 0,
           voornaam: d.diensten_deelnemers.voornaam ?? '',
           achternaam: d.diensten_deelnemers.achternaam ?? '',
+          initialen: d.diensten_deelnemers.initialen ?? null,
           color: d.diensten_deelnemers.color ?? '',
         }
       : null,
     target_deelnemers: (() => {
-      const td = (d as unknown as { target_deelnemers?: typeof d.diensten_deelnemers }).target_deelnemers;
+      const td = (d as unknown as { target_deelnemers?: ApiDienstDeelnemer | null }).target_deelnemers;
       return td
-        ? { id: td.id ?? 0, voornaam: td.voornaam ?? '', achternaam: td.achternaam ?? '', color: td.color ?? '' }
+        ? {
+            id: td.id ?? 0,
+            voornaam: td.voornaam ?? '',
+            achternaam: td.achternaam ?? '',
+            initialen: td.initialen ?? null,
+            color: td.color ?? '',
+          }
         : null;
     })(),
   }));

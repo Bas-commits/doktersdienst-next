@@ -66,6 +66,18 @@ describe('toDoctorInfo', () => {
     });
   });
 
+  it('prefers initialen from mijn-gegevens for shortName', () => {
+    const deelnemer = makeDeelnemer({
+      id: 42,
+      voornaam: 'Anna',
+      achternaam: 'Berg',
+      initialen: 'A.B.',
+      color: '#ff0000',
+    });
+    const dienst = makeDienst({ type: 0, diensten_deelnemers: deelnemer, iddeelnemer: 42 });
+    expect(toDoctorInfo(dienst)!.shortName).toBe('A.B.');
+  });
+
   it('returns null when diensten_deelnemers is null', () => {
     const dienst = makeDienst({ type: 0, diensten_deelnemers: null });
     expect(toDoctorInfo(dienst)).toBeNull();

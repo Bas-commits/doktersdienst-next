@@ -8,7 +8,13 @@ import { normalizeRoleTier, type RoleTier } from '@/lib/roles';
 const { deelnemers } = schema;
 
 type Data =
-  | { isAdmin: boolean; idgroep: number | null; roleTier: RoleTier; displayName: string }
+  | {
+      isAdmin: boolean;
+      idgroep: number | null;
+      roleTier: RoleTier;
+      displayName: string;
+      initialen: string | null;
+    }
   | { error: string };
 
 /**
@@ -32,6 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       voornaam: deelnemers.voornaam,
       voorletterstussenvoegsel: deelnemers.voorletterstussenvoegsel,
       achternaam: deelnemers.achternaam,
+      initialen: deelnemers.initialen,
     })
     .from(deelnemers)
     .where(eq(deelnemers.id, user.id))
@@ -44,5 +51,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     idgroep: user.idgroep,
     roleTier: normalizeRoleTier(user.idgroep),
     displayName,
+    initialen: profile?.initialen?.trim() || null,
   });
 }

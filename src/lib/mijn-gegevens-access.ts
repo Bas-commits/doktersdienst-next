@@ -44,3 +44,30 @@ export async function hasDelegatedProfileAccess(
 
   return !!targetMembership;
 }
+
+export async function isSecretarisSomewhere(deelnemerId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: waarneemgroepdeelnemers.id })
+    .from(waarneemgroepdeelnemers)
+    .where(
+      and(
+        eq(waarneemgroepdeelnemers.iddeelnemer, deelnemerId),
+        eq(waarneemgroepdeelnemers.idgroep, GROEP_SECRETARIS),
+        eq(waarneemgroepdeelnemers.aangemeld, true)
+      )
+    )
+    .limit(1);
+  return !!row;
+}
+
+/** Who may toggle deelnemers.echtedeelnemer on this profile form. */
+export async function canEditEchtedeelnemer(
+  actor: AuthenticatedUser,
+  targetDeelnemerId: number,
+  isDelegatedEdit: boolean
+): Promise<boolean> {
+  if (actor.isAdmin) return true;
+  if (isDelegatedEdit) return hasDelegatedProfileAccess(actor, targetDeelnemerId);
+  if (targetDeelnemerId === actor.id) return isSecretarisSomewhere(actor.id);
+  return false;
+}

@@ -1,18 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, GROEP_ADMINISTRATOR } from '@/lib/api-auth';
+import { deleteDeelnemerCompletely, isPgFkViolation } from '@/lib/deelnemer-delete';
 
 const { deelnemers, waarneemgroepdeelnemers } = schema;
 
 type Data = { ok: true } | { error: string };
-
-function isPgFkViolation(err: unknown): boolean {
-  if (err && typeof err === 'object' && 'code' in err) {
-    return (err as { code?: string }).code === '23503';
-  }
-  return false;
-}
 
 /**
  * POST /api/deelnemers/verwijderen
@@ -80,19 +74,8 @@ export default async function handler(
       });
     }
 
-    const userIdText = String(iddeelnemer);
-    const loginTrim = target.login?.trim() ?? '';
-
     await db.transaction(async (tx) => {
-      await tx.delete(waarneemgroepdeelnemers).where(eq(waarneemgroepdeelnemers.iddeelnemer, iddeelnemer));
-      await tx.execute(sql`DELETE FROM session WHERE "userId" = ${userIdText}`);
-      await tx.execute(sql`DELETE FROM account WHERE "userId" = ${userIdText}`);
-      if (loginTrim) {
-        await tx.execute(
-          sql`DELETE FROM auth_verification WHERE LOWER(TRIM(identifier)) = LOWER(${loginTrim})`
-        );
-      }
-      await tx.delete(deelnemers).where(eq(deelnemers.id, iddeelnemer));
+      await deleteDeelnemerCompletely(tx, iddeelnemer, target.login);
     });
 
     return res.status(200).json({ ok: true });

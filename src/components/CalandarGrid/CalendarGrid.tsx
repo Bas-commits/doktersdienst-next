@@ -12,6 +12,7 @@ import {
   shouldApplyPreferencePaintEnter,
 } from '@/types/voorkeuren';
 import { getWeek, monthWeekCount, getDateRangeOfWeek, getWeekNumber } from '@/utils/calendarUtils';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { ShiftBlock } from '@/components/ShiftBlock/ShiftBlock';
 import { MonthNavigation } from './MonthNavigation';
 
@@ -255,7 +256,11 @@ function computeWeekVoorkeurLayout(
     const d = vks[0].deelnemer;
     userInitials.set(
       userId,
-      ((d?.voornaam?.[0] ?? '') + (d?.achternaam?.[0] ?? '')).toUpperCase(),
+      deelnemerChipInitials({
+        initialen: d?.initialen,
+        voornaam: d?.voornaam,
+        achternaam: d?.achternaam,
+      }),
     );
 
     const sorted = [...vks].sort((a, b) => a.van - b.van);
@@ -358,7 +363,11 @@ function voorkeurToShiftBlockView(vk: VoorkeurItem): ShiftBlockView {
   const p2 = (n: number) => n.toString().padStart(2, '0');
   const fmtDate = (dt: Date) =>
     `${dt.getFullYear()}-${p2(dt.getMonth() + 1)}-${p2(dt.getDate())} ${p2(dt.getHours())}:${p2(dt.getMinutes())}:00`;
-  const initials = ((d?.voornaam?.[0] ?? '') + (d?.achternaam?.[0] ?? '')).toUpperCase();
+  const initials = deelnemerChipInitials({
+    initialen: d?.initialen,
+    voornaam: d?.voornaam,
+    achternaam: d?.achternaam,
+  });
   const fullName = [d?.voornaam, d?.achternaam].filter(Boolean).join(' ');
   return {
     id: vk.id ?? 0,

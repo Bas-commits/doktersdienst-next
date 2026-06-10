@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { DienstenResponse, ShiftBlockView, Dienst, DienstDeelnemer, DoctorInfo } from '@/types/diensten';
 import type { CalendarGridRow } from '@/components/CalandarGrid/CalendarGrid';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 
 function formatTwoDigits(n: number): string {
   return n.toString().padStart(2, '0');
@@ -26,12 +27,14 @@ export function toDoctorInfo(dienst: Dienst): DoctorInfo | null {
 
 export function toDoctorInfoFromDeelnemer(d: DienstDeelnemer): DoctorInfo {
   const fullName = `${d.voornaam} ${d.achternaam}`.trim();
-  const shortName =
-    (d.voornaam?.[0] ?? '').toUpperCase() + (d.achternaam?.[0] ?? '').toUpperCase();
+  const shortName = deelnemerChipInitials(
+    { initialen: d.initialen, voornaam: d.voornaam, achternaam: d.achternaam },
+    { fallback: `#${d.id}` }
+  );
   return {
     id: d.id,
     name: fullName || `Doctor ${d.id}`,
-    shortName: shortName || `#${d.id}`,
+    shortName,
     color: d.color || '#c686fd',
   };
 }

@@ -3,6 +3,12 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 let selectCall = 0;
 
+vi.mock('@/lib/api-auth', () => ({
+  findDeelnemerBySessionEmail: vi.fn(() =>
+    Promise.resolve({ id: 1, idgroep: 2 })
+  ),
+}));
+
 vi.mock('@/db', () => ({
   db: {
     select: vi.fn(() => {
@@ -10,15 +16,60 @@ vi.mock('@/db', () => ({
       if (selectCall === 1) {
         return {
           from: vi.fn(() => ({
+            where: vi.fn(() => Promise.resolve([{ idwaarneemgroep: 9 }])),
+          })),
+        };
+      }
+      if (selectCall === 2) {
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => Promise.resolve([{ iddeelnemer: 10 }])),
+          })),
+        };
+      }
+      if (selectCall === 3) {
+        return {
+          from: vi.fn(() => ({
             where: vi.fn(() => ({
-              limit: vi.fn(() => Promise.resolve([{ id: 1, idgroep: 2 }])),
+              orderBy: vi.fn(() =>
+                Promise.resolve([
+                  {
+                    id: 10,
+                    voornaam: 'Jan',
+                    achternaam: 'Jansen',
+                    login: 'jan@test.nl',
+                    emailVerified: true,
+                    echtedeelnemer: false,
+                  },
+                ])
+              ),
+            })),
+          })),
+        };
+      }
+      if (selectCall === 4) {
+        return {
+          from: vi.fn(() => ({
+            leftJoin: vi.fn(() => ({
+              where: vi.fn(() =>
+                Promise.resolve([
+                  {
+                    iddeelnemer: 10,
+                    idwaarneemgroep: 9,
+                    aangemeld: false,
+                    idgroep: 1,
+                    idfunctie: null,
+                    naam: 'Groep A',
+                  },
+                ])
+              ),
             })),
           })),
         };
       }
       return {
         from: vi.fn(() => ({
-          where: vi.fn(() => Promise.resolve([{ idwaarneemgroep: 9 }])),
+          where: vi.fn(() => Promise.resolve([{ iddeelnemer: 10 }])),
         })),
       };
     }),
@@ -88,5 +139,24 @@ describe('GET /api/deelnemers', () => {
 
     expect(res._status).toBe(403);
     expect((res._json as { error: string }).error).toMatch(/waarneemgroep/i);
+  });
+
+  it('includes afgemelde memberships and membershipCount in beheer mode', async () => {
+    selectCall = 0;
+    const { default: handler } = await import('@/pages/api/deelnemers/index');
+    const res = makeRes();
+    await handler(makeReq({ idwaarneemgroep: '9', beheer: '1' }), res);
+
+    expect(res._status).toBe(200);
+    const body = res._json as {
+      deelnemers: {
+        id: number;
+        membershipCount?: number;
+        waarneemgroepen: { aangemeld: boolean }[];
+      }[];
+    };
+    expect(body.deelnemers).toHaveLength(1);
+    expect(body.deelnemers[0]?.membershipCount).toBe(1);
+    expect(body.deelnemers[0]?.waarneemgroepen[0]?.aangemeld).toBe(false);
   });
 });

@@ -135,6 +135,7 @@ export interface VoorkeurItem {
     id: number | null;
     voornaam: string | null;
     achternaam: string | null;
+    initialen?: string | null;
     color: string | null;
   } | null;
 }

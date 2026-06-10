@@ -3,6 +3,7 @@ import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { alias } from 'drizzle-orm/pg-core';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers, waarneemgroepen } = schema;
 const GROEP_SECRETARIS = 2;
@@ -114,9 +115,11 @@ export default async function handler(
       senderId: dienstenTable.senderId,
       originalVoornaam: originalDeelnemer.voornaam,
       originalAchternaam: originalDeelnemer.achternaam,
+      originalInitialen: originalDeelnemer.initialen,
       originalColor: originalDeelnemer.color,
       targetVoornaam: targetDeelnemer.voornaam,
       targetAchternaam: targetDeelnemer.achternaam,
+      targetInitialen: targetDeelnemer.initialen,
       targetColor: targetDeelnemer.color,
       waarneemgroepNaam: waarneemgroepen.naam,
     })
@@ -148,11 +151,23 @@ export default async function handler(
       (d.getTime() - new Date(d.getFullYear(), 0, 4).getTime()) / 86400000 / 7 + 1
     );
 
-    const originalInitialen =
-      ((r.originalVoornaam?.[0] ?? '') + (r.originalAchternaam?.[0] ?? '')).toUpperCase() || '??';
+    const originalInitialen = deelnemerChipInitials(
+      {
+        initialen: r.originalInitialen,
+        voornaam: r.originalVoornaam,
+        achternaam: r.originalAchternaam,
+      },
+      { fallback: '??' }
+    );
     const originalNaam = `${r.originalVoornaam ?? ''} ${r.originalAchternaam ?? ''}`.trim() || 'Onbekend';
-    const targetInitialen =
-      ((r.targetVoornaam?.[0] ?? '') + (r.targetAchternaam?.[0] ?? '')).toUpperCase() || '??';
+    const targetInitialen = deelnemerChipInitials(
+      {
+        initialen: r.targetInitialen,
+        voornaam: r.targetVoornaam,
+        achternaam: r.targetAchternaam,
+      },
+      { fallback: '??' }
+    );
     const targetNaam = `${r.targetVoornaam ?? ''} ${r.targetAchternaam ?? ''}`.trim() || 'Onbekend';
     const isPartial =
       r.originalVan == null || r.originalTot == null

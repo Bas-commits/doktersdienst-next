@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 const mockGetAuthenticatedUser = vi.fn();
 const mockHasDelegatedProfileAccess = vi.fn();
+const mockCanEditEchtedeelnemer = vi.fn();
 const mockPoolQuery = vi.fn();
 
 const selectQueue: unknown[][] = [];
@@ -28,6 +29,7 @@ vi.mock('@/lib/api-auth', () => ({
 
 vi.mock('@/lib/mijn-gegevens-access', () => ({
   hasDelegatedProfileAccess: (...args: unknown[]) => mockHasDelegatedProfileAccess(...args),
+  canEditEchtedeelnemer: (...args: unknown[]) => mockCanEditEchtedeelnemer(...args),
 }));
 
 vi.mock('@/db', () => ({
@@ -107,6 +109,7 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
       isAdmin: false,
     });
     mockHasDelegatedProfileAccess.mockResolvedValue(true);
+    mockCanEditEchtedeelnemer.mockResolvedValue(true);
   });
 
   it('blocks delegated GET when secretaris has no access to target participant', async () => {

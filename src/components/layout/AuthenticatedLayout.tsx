@@ -33,6 +33,7 @@ export interface AuthenticatedLayoutProps {
 type RoleApiResponse = {
   idgroep?: number | null;
   displayName?: string;
+  initialen?: string | null;
 };
 
 type AuthenticatedLayoutShellProps = {
@@ -115,10 +116,11 @@ export function AuthenticatedLayout({ children, headerProps }: AuthenticatedLayo
   const { data: session, isPending } = authClient.useSession();
   const [globalIdgroep, setGlobalIdgroep] = useState<number | null | undefined>(undefined);
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [initialen, setInitialen] = useState<string | null>(null);
 
   const headerUser = useMemo(
-    () => headerUserFromSession(session?.user ?? null, { displayName }),
-    [session?.user, displayName]
+    () => headerUserFromSession(session?.user ?? null, { displayName, initialen }),
+    [session?.user, displayName, initialen]
   );
 
   const fallbackWaarneemgroepen = headerProps?.waarneemgroepen ?? EMPTY_WAARNEMGROEPEN;
@@ -147,6 +149,9 @@ export function AuthenticatedLayout({ children, headerProps }: AuthenticatedLayo
         setGlobalIdgroep(data.idgroep ?? null);
         if (data.displayName?.trim()) {
           setDisplayName(data.displayName.trim());
+        }
+        if (data.initialen?.trim()) {
+          setInitialen(data.initialen.trim());
         }
       })
       .catch(() => {

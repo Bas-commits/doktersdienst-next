@@ -164,6 +164,7 @@ export default function MijnGegevensPage() {
   const [profile, setProfile] = useState<MijnGegevensProfile | null>(null);
   const [lookup, setLookup] = useState<MijnGegevensLookup | null>(null);
   const [isDelegatedEdit, setIsDelegatedEdit] = useState(false);
+  const [canEditEchtedeelnemer, setCanEditEchtedeelnemer] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -230,6 +231,7 @@ export default function MijnGegevensPage() {
         }
         const { profile: profileRes, lookup: lookupRes } = data;
         setIsDelegatedEdit(data.isDelegatedEdit === true);
+        setCanEditEchtedeelnemer(data.canEditEchtedeelnemer === true);
         setProfile(profileRes);
         setLookup(lookupRes);
         setLogin(profileRes.deelnemer.login ?? '');
@@ -296,11 +298,6 @@ export default function MijnGegevensPage() {
       cancelled = true;
     };
   }, [session?.user, router.isReady, delegatedDeelnemerId, apiPath]);
-
-  const showEchtedeelnemer = useMemo(() => {
-    const id = profile?.groep?.id;
-    return id === 2 || id === 3;
-  }, [profile?.groep?.id]);
 
   const totalWaarneemFte = useMemo(() => {
     if (!profile?.waarneemgroepen?.length) return null;
@@ -446,7 +443,7 @@ export default function MijnGegevensPage() {
       huisadrplaats: huisadrplaats.trim() || undefined,
       huisadrtelnr: huisadrtelnr.trim() || undefined,
       huisadrfax: huisadrfax.trim() || undefined,
-      echtedeelnemer: showEchtedeelnemer ? echtedeelnemer : undefined,
+      echtedeelnemer: canEditEchtedeelnemer ? echtedeelnemer : undefined,
       smsdienstbegin,
       callRecording,
       telnrSlots: telnrSlots
@@ -718,6 +715,19 @@ export default function MijnGegevensPage() {
                       </div>
                     </div>
                   </div>
+                  {canEditEchtedeelnemer && (
+                    <div className="flex items-center gap-2 border-t border-border/60 pt-4">
+                      <Checkbox
+                        id="echtedeelnemer"
+                        checked={echtedeelnemer}
+                        onCheckedChange={(c) => setEchtedeelnemer(!!c)}
+                        disabled={isSubmitting}
+                      />
+                      <Label htmlFor="echtedeelnemer" className="cursor-pointer text-sm">
+                        Ingeroosterd (zichtbaar op rooster maken secretaris)
+                      </Label>
+                    </div>
+                  )}
                   <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
                   
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:min-w-[140px]">
@@ -886,19 +896,6 @@ export default function MijnGegevensPage() {
                     )}
                   </div>
                   <div className="mt-2 flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:gap-6">
-                    {showEchtedeelnemer && (
-                      <div className="flex min-w-0 flex-1 items-center gap-2 pt-0.5">
-                        <Checkbox
-                          id="echtedeelnemer"
-                          checked={echtedeelnemer}
-                          onCheckedChange={(c) => setEchtedeelnemer(!!c)}
-                          disabled={isSubmitting}
-                        />
-                        <Label htmlFor="echtedeelnemer" className="cursor-pointer text-sm">
-                          Voor secretaris - Wordt wel ingeroosterd
-                        </Label>
-                      </div>
-                    )}
                     <div className="flex min-w-0 flex-1 items-center gap-2 pt-0.5">
                       <Checkbox
                         id="smsdienstbegin"

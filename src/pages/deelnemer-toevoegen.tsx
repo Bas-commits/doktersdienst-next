@@ -4,20 +4,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { toast } from 'sonner';
-import { Loader2, UserPlus, X } from 'lucide-react';
+import { Loader2, Trash2, UserPlus, X } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { DeelnemerNieuwOptiesResponse } from './api/deelnemers/nieuw/opties';
 import type { DeelnemerWithGroepen } from './api/deelnemers/index';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { ROL_LABELS } from '@/lib/rol-labels';
 
 /** Zelfde als rooster-maken-secretaris: rol `groepen.id` voor secretaris in een waarneemgroep. */
 const GROEP_SECRETARIS = 2;
 const GROEP_ADMINISTRATOR = 5;
+const BRAND = '#c91b23';
 
 const selectClass =
   'h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50';
@@ -39,14 +42,6 @@ function toOpties(data: unknown): DeelnemerNieuwOptiesResponse | null {
 
 function formatNaam(d: DeelnemerWithGroepen): string {
   return [d.achternaam, d.voornaam, d.voorletterstussenvoegsel].filter(Boolean).join(', ');
-}
-
-function getDisplayInitials(d: DeelnemerWithGroepen): string {
-  const fallback = [d.voornaam, d.achternaam]
-    .filter((value): value is string => Boolean(value && value.trim()))
-    .map((value) => value.trim().charAt(0).toUpperCase())
-    .join('');
-  return fallback.slice(0, 3) || '—';
 }
 
 export default function DeelnemerToevoegenPage() {
@@ -83,9 +78,14 @@ export default function DeelnemerToevoegenPage() {
   const [ledenError, setLedenError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
+  const [registeringId, setRegisteringId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [confirmDeleteIsLast, setConfirmDeleteIsLast] = useState(false);
+  const [deletingMembershipId, setDeletingMembershipId] = useState<number | null>(null);
   const [resendingVerificationId, setResendingVerificationId] = useState<number | null>(null);
   const [updatingRolId, setUpdatingRolId] = useState<number | null>(null);
   const [updatingFunctieId, setUpdatingFunctieId] = useState<number | null>(null);
+  const [updatingEchtedeelnemerId, setUpdatingEchtedeelnemerId] = useState<number | null>(null);
 
   const colorInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
 
@@ -129,7 +129,7 @@ export default function DeelnemerToevoegenPage() {
     setLedenLoading(true);
     setLedenError(null);
     try {
-      const res = await fetch(`/api/deelnemers?idwaarneemgroep=${wgId}`, { credentials: 'include' });
+      const res = await fetch(`/api/deelnemers?idwaarneemgroep=${wgId}&beheer=1`, { credentials: 'include' });
       const data = await res.json();
       if (data.error) {
         setLedenError(data.error);
@@ -263,6 +263,107 @@ export default function DeelnemerToevoegenPage() {
     }
   }
 
+  async function handleRegisterInWg(deelnemerId: number) {
+    const wg = activeWaarneemgroepId != null ? Number(activeWaarneemgroepId) : NaN;
+    if (!Number.isFinite(wg)) return;
+    setRegisteringId(deelnemerId);
+    try {
+      const res = await fetch('/api/deelnemers/registratie', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actie: 'aanmelden',
+          IDdeelnemer: deelnemerId,
+          IDwaarneemgroep: wg,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        toast.error(typeof data.error === 'string' ? data.error : 'Aanmelden mislukt');
+        return;
+      }
+      toast.success('Deelnemer opnieuw aangemeld in deze groep.');
+      void loadLeden(wg);
+    } catch {
+      toast.error('Aanmelden mislukt');
+    } finally {
+      setRegisteringId(null);
+    }
+  }
+
+  async function handleDeleteMembership(deelnemerId: number, isLastMembership: boolean) {
+    const wg = activeWaarneemgroepId != null ? Number(activeWaarneemgroepId) : NaN;
+    if (!Number.isFinite(wg)) return;
+    setDeletingMembershipId(deelnemerId);
+    try {
+      const res = await fetch('/api/deelnemers/lidmaatschap', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          iddeelnemer: deelnemerId,
+          idwaarneemgroep: wg,
+          bevestigVolledigeVerwijdering: isLastMembership ? true : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        toast.error(typeof data.error === 'string' ? data.error : 'Verwijderen mislukt');
+        return;
+      }
+      toast.success(
+        data.volledigVerwijderd === true
+          ? 'Deelnemer volledig uit het systeem verwijderd.'
+          : 'Lidmaatschap verwijderd.'
+      );
+      void loadLeden(wg);
+    } catch {
+      toast.error('Verwijderen mislukt');
+    } finally {
+      setDeletingMembershipId(null);
+      setConfirmDeleteId(null);
+      setConfirmDeleteIsLast(false);
+    }
+  }
+
+  async function handleEchtedeelnemerChange(deelnemerId: number, nextValue: boolean, wgId: number) {
+    let prevValue = false;
+    setLeden((prev) =>
+      prev.map((d) => {
+        if (d.id !== deelnemerId) return d;
+        prevValue = d.echtedeelnemer === true;
+        return { ...d, echtedeelnemer: nextValue };
+      })
+    );
+
+    setUpdatingEchtedeelnemerId(deelnemerId);
+    try {
+      const res = await fetch('/api/deelnemers/echtedeelnemer', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: deelnemerId,
+          echtedeelnemer: nextValue,
+          idwaarneemgroep: wgId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Inroosteren wijzigen mislukt');
+      }
+      toast.success(nextValue ? 'Deelnemer wordt ingeroosterd.' : 'Deelnemer wordt niet ingeroosterd.');
+    } catch (error) {
+      setLeden((prev) =>
+        prev.map((d) => (d.id === deelnemerId ? { ...d, echtedeelnemer: prevValue } : d))
+      );
+      toast.error(error instanceof Error ? error.message : 'Inroosteren wijzigen mislukt');
+    } finally {
+      setUpdatingEchtedeelnemerId(null);
+    }
+  }
+
   async function handleRolInGroepChange(deelnemerId: number, nextRolId: number, wgId: number) {
     let prevRolInWg: number | null = null;
     setLeden((prev) =>
@@ -363,6 +464,11 @@ export default function DeelnemerToevoegenPage() {
 
   function requestRemoveFromWg(deelnemerId: number) {
     setConfirmRemoveId(deelnemerId);
+  }
+
+  function requestDeleteMembership(deelnemerId: number, membershipCount: number) {
+    setConfirmDeleteId(deelnemerId);
+    setConfirmDeleteIsLast(membershipCount === 1);
   }
 
   async function handleResendVerification(d: DeelnemerWithGroepen) {
@@ -613,7 +719,9 @@ export default function DeelnemerToevoegenPage() {
                           <th className="w-[6rem] pb-2 pr-4 font-medium">Kleur</th>
                           <th className="pb-2 pr-4 font-medium">Rol in groep</th>
                           <th className="pb-2 pr-4 font-medium">Functie</th>
-                          <th className="pb-2 font-medium w-25" />
+                          <th className="pb-2 pr-4 font-medium">Ingeroosterd</th>
+                          <th className="pb-2 pr-4 font-medium w-28">Registratie</th>
+                          <th className="pb-2 font-medium w-12" aria-label="Verwijderen" />
                         </tr>
                       </thead>
                       <tbody>
@@ -621,20 +729,13 @@ export default function DeelnemerToevoegenPage() {
                           const membershipInWg = d.waarneemgroepen.find((wg) => wg.id === wgNumeric);
                           const rolInWg = membershipInWg?.idgroep ?? null;
                           const functieInWg = membershipInWg?.idfunctie ?? null;
+                          const isAangemeld = membershipInWg?.aangemeld === true;
+                          const isSelf = Number.isFinite(myDeelnemerId) && d.id === myDeelnemerId;
+                          const membershipCount = d.membershipCount ?? d.waarneemgroepen.length;
                           return (
                             <tr
                               key={d.id}
-                              className="cursor-pointer border-b last:border-0 even:bg-muted/80 hover:bg-muted/50"
-                              onClick={() => openDeelnemerGegevens(d.id)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  openDeelnemerGegevens(d.id);
-                                }
-                              }}
-                              role="button"
-                              tabIndex={0}
-                              title="Open gegevens van deze deelnemer"
+                              className={`border-b last:border-0 even:bg-muted/80 ${!isAangemeld ? 'opacity-70' : ''}`}
                             >
                               <td className="py-2.5 pr-4 font-medium">
                                 <div className="flex items-center gap-2">
@@ -642,12 +743,32 @@ export default function DeelnemerToevoegenPage() {
                                     className="inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
                                     style={{ backgroundColor: d.color || '#cccccc' }}
                                   >
-                                    {getDisplayInitials(d)}
+                                    {deelnemerChipInitials(d, { maxFallbackLength: 3, fallback: '—' })}
                                   </span>
-                                  <span>{formatNaam(d)}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => openDeelnemerGegevens(d.id)}
+                                    className="text-left font-medium hover:underline"
+                                    title="Open gegevens van deze deelnemer"
+                                  >
+                                    {formatNaam(d)}
+                                  </button>
                                 </div>
                               </td>
-                              <td className="py-2.5 pr-4 text-muted-foreground">{d.login ?? '—'}</td>
+                              <td className="py-2.5 pr-4">
+                                {d.login ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openDeelnemerGegevens(d.id)}
+                                    className="text-left text-muted-foreground hover:underline"
+                                    title="Open gegevens van deze deelnemer"
+                                  >
+                                    {d.login}
+                                  </button>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </td>
                               <td className="py-2.5 pr-4">
                                 <div className="flex flex-col gap-1">
                                   <span
@@ -705,7 +826,7 @@ export default function DeelnemerToevoegenPage() {
                                 <select
                                   className="h-8 min-w-[7rem] rounded-md border border-input bg-background px-2 text-xs"
                                   value={rolInWg != null ? String(rolInWg) : ''}
-                                  disabled={updatingRolId === d.id}
+                                  disabled={!isAangemeld || updatingRolId === d.id}
                                   onClick={(e) => e.stopPropagation()}
                                   onKeyDown={(e) => e.stopPropagation()}
                                   onChange={(e) => {
@@ -729,7 +850,7 @@ export default function DeelnemerToevoegenPage() {
                                 <select
                                   className="h-8 min-w-[7rem] rounded-md border border-input bg-background px-2 text-xs"
                                   value={functieInWg != null ? String(functieInWg) : ''}
-                                  disabled={updatingFunctieId === d.id}
+                                  disabled={!isAangemeld || updatingFunctieId === d.id}
                                   onClick={(e) => e.stopPropagation()}
                                   onKeyDown={(e) => e.stopPropagation()}
                                   onChange={(e) => {
@@ -749,27 +870,77 @@ export default function DeelnemerToevoegenPage() {
                                   ))}
                                 </select>
                               </td>
-                              <td className="">
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="sm"
-                                  className="h-8 text-xs"
-                                  disabled={
-                                    removingId === d.id ||
-                                    (Number.isFinite(myDeelnemerId) && d.id === myDeelnemerId)
-                                  }
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    requestRemoveFromWg(d.id);
-                                  }}
+                              <td className="py-2.5 pr-4">
+                                <div
+                                  className="flex items-center gap-2"
+                                  title="Wordt wel ingeroosterd (zichtbaar op rooster maken secretaris)"
                                 >
-                                  {removingId === d.id
-                                    ? 'Bezig…'
-                                    : Number.isFinite(myDeelnemerId) && d.id === myDeelnemerId
-                                      ? '—'
-                                      : 'Afmelden'}
-                                </Button>
+                                  <Checkbox
+                                    checked={d.echtedeelnemer === true}
+                                    disabled={!isAangemeld || updatingEchtedeelnemerId === d.id}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                    onCheckedChange={(checked) => {
+                                      void handleEchtedeelnemerChange(d.id, checked === true, wgNumeric);
+                                    }}
+                                  />
+                                  <span className="text-xs text-muted-foreground">Rooster</span>
+                                </div>
+                              </td>
+                              <td className="py-2.5 pr-4">
+                                {!isAangemeld && (
+                                  <span className="mb-1 block text-xs text-muted-foreground">Afgemeld</span>
+                                )}
+                                {isSelf ? (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                ) : isAangemeld ? (
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    className="h-8 text-xs"
+                                    disabled={removingId === d.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      requestRemoveFromWg(d.id);
+                                    }}
+                                  >
+                                    {removingId === d.id ? 'Bezig…' : 'Afmelden'}
+                                  </Button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={registeringId === d.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void handleRegisterInWg(d.id);
+                                    }}
+                                    className="inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-xs font-medium text-white transition-all disabled:pointer-events-none disabled:opacity-50"
+                                    style={{ backgroundColor: BRAND }}
+                                  >
+                                    {registeringId === d.id ? 'Bezig…' : 'Aanmelden'}
+                                  </button>
+                                )}
+                              </td>
+                              <td className="py-2.5">
+                                {isSelf ? (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    disabled={deletingMembershipId === d.id}
+                                    title="Lidmaatschap verwijderen"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      requestDeleteMembership(d.id, membershipCount);
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
                               </td>
                             </tr>
                           );
@@ -798,7 +969,8 @@ export default function DeelnemerToevoegenPage() {
           >
             <h2 className="text-lg font-semibold tracking-tight">Deelnemer afmelden</h2>
             <p className="mt-3 text-sm text-muted-foreground">
-              Weet u zeker dat u deze deelnemer uit deze waarneemgroep wilt afmelden?
+              Weet u zeker dat u deze deelnemer uit deze waarneemgroep wilt afmelden? De deelnemer blijft
+              zichtbaar in de lijst en kan later opnieuw worden aangemeld.
             </p>
             <div className="mt-6 flex justify-end gap-2">
               <Button
@@ -816,6 +988,59 @@ export default function DeelnemerToevoegenPage() {
                 onClick={() => void handleRemoveFromWg(confirmRemoveId)}
               >
                 {removingId != null ? 'Bezig…' : 'Ja, afmelden'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmDeleteId != null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Bevestig verwijderen lidmaatschap"
+          onClick={() => {
+            if (deletingMembershipId == null) {
+              setConfirmDeleteId(null);
+              setConfirmDeleteIsLast(false);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border bg-card p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold tracking-tight">
+              {confirmDeleteIsLast ? 'Deelnemer volledig verwijderen' : 'Lidmaatschap verwijderen'}
+            </h2>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {confirmDeleteIsLast
+                ? 'Dit is het laatste lidmaatschap van deze deelnemer. De deelnemer wordt volledig uit het systeem verwijderd, inclusief login en gegevens.'
+                : 'Weet u zeker dat u dit lidmaatschap uit deze waarneemgroep wilt verwijderen? De deelnemer blijft lid van andere waarneemgroepen.'}
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={deletingMembershipId != null}
+                onClick={() => {
+                  setConfirmDeleteId(null);
+                  setConfirmDeleteIsLast(false);
+                }}
+              >
+                Annuleren
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={deletingMembershipId != null}
+                onClick={() => void handleDeleteMembership(confirmDeleteId, confirmDeleteIsLast)}
+              >
+                {deletingMembershipId != null
+                  ? 'Bezig…'
+                  : confirmDeleteIsLast
+                    ? 'Ja, volledig verwijderen'
+                    : 'Ja, verwijderen'}
               </Button>
             </div>
           </div>

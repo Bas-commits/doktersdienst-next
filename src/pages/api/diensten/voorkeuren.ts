@@ -18,6 +18,7 @@ type Voorkeur = {
     id: number | null;
     voornaam: string | null;
     achternaam: string | null;
+    initialen: string | null;
     color: string | null;
   } | null;
 };
@@ -100,6 +101,7 @@ export default async function handler(
         deelnemerId: deelnemers.id,
         voornaam: deelnemers.voornaam,
         achternaam: deelnemers.achternaam,
+        initialen: deelnemers.initialen,
         color: deelnemers.color,
       })
       .from(dienstenTable)
@@ -139,6 +141,7 @@ export default async function handler(
               id: r.deelnemerId,
               voornaam: r.voornaam,
               achternaam: r.achternaam,
+              initialen: r.initialen,
               color: r.color,
             }
           : null,

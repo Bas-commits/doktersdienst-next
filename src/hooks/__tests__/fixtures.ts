@@ -15,6 +15,7 @@ export function makeDeelnemer(overrides: Partial<DienstDeelnemer> = {}): DienstD
     id: overrides.id ?? nextAutoId(),
     voornaam: overrides.voornaam ?? 'Jan',
     achternaam: overrides.achternaam ?? 'Dokter',
+    initialen: overrides.initialen ?? null,
     color: overrides.color ?? '#3b82f6',
   };
 }

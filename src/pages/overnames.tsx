@@ -18,6 +18,7 @@ import { OvernameModal } from '@/components/OvernameModal';
 import { OvernameDetailModal } from '@/components/OvernameDetailModal';
 import type { OvernameDoctor } from '@/components/OvernameModal';
 import type { ShiftBlockView } from '@/types/diensten';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -167,6 +168,7 @@ export default function OvernamesPage() {
           id: number;
           voornaam: string | null;
           achternaam: string | null;
+          initialen: string | null;
           color?: string | null;
           waarneemgroepen: { id: number; naam: string | null; aangemeld: boolean }[];
         }>;
@@ -177,7 +179,7 @@ export default function OvernamesPage() {
               id: d.id,
               voornaam: d.voornaam ?? '',
               achternaam: d.achternaam ?? '',
-              initialen: (d.voornaam?.[0] ?? '').toUpperCase() + (d.achternaam?.[0] ?? '').toUpperCase(),
+              initialen: deelnemerChipInitials(d),
               color: d.color ?? undefined,
               waarneemgroepIds: d.waarneemgroepen
                 .filter((wg) => wg.aangemeld)

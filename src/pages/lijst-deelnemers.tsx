@@ -7,18 +7,11 @@ import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { DeelnemerWithGroepen } from './api/deelnemers/index';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { ROL_LABELS } from '@/lib/rol-labels';
 
 function formatNaam(d: DeelnemerWithGroepen): string {
   return [d.achternaam, d.voornaam, d.voorletterstussenvoegsel].filter(Boolean).join(', ');
-}
-
-function getDisplayInitials(d: DeelnemerWithGroepen): string {
-  const fallback = [d.voornaam, d.achternaam]
-    .filter((value): value is string => Boolean(value && value.trim()))
-    .map((value) => value.trim().charAt(0).toUpperCase())
-    .join('');
-  return fallback.slice(0, 3) || '—';
 }
 
 export default function LijstDeelnemersPage() {
@@ -190,7 +183,7 @@ export default function LijstDeelnemersPage() {
                                 className="inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
                                 style={{ backgroundColor: d.color || '#cccccc' }}
                               >
-                                {getDisplayInitials(d)}
+                                {deelnemerChipInitials(d, { maxFallbackLength: 3, fallback: '—' })}
                               </span>
                               <span>{formatNaam(d)}</span>
                             </div>

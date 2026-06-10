@@ -20,6 +20,7 @@ import type { ShiftBlockView, DoctorInfo } from '@/types/diensten';
 import { shiftKeyFromBlock } from '@/types/voorkeuren';
 import { shiftBlockToastDescription } from '@/utils/shiftToastContext';
 import type { CalendarGridRow } from '@/components/CalandarGrid/CalendarGrid';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -41,9 +42,6 @@ interface Doctor {
   waarneemgroepIds: number[];
 }
 
-function toInitials(voornaam: string | null, achternaam: string | null): string {
-  return ((voornaam?.[0] ?? '') + (achternaam?.[0] ?? '')).toUpperCase();
-}
 
 function toFullName(voornaam: string | null, achternaam: string | null): string {
   return [voornaam, achternaam].filter(Boolean).join(' ') || 'Onbekend';
@@ -409,6 +407,7 @@ export default function RoosterMakenSecretarisPage() {
           id: number;
           voornaam: string | null;
           achternaam: string | null;
+          initialen: string | null;
           color: string | null;
           waarneemgroepen: { id: number; naam: string | null; aangemeld: boolean }[];
         }>
@@ -420,7 +419,7 @@ export default function RoosterMakenSecretarisPage() {
               voornaam: d.voornaam,
               achternaam: d.achternaam,
               color: d.color,
-              initials: toInitials(d.voornaam, d.achternaam),
+              initials: deelnemerChipInitials(d),
               fullName: toFullName(d.voornaam, d.achternaam),
               waarneemgroepIds: d.waarneemgroepen
                 .filter((wg) => wg.aangemeld)

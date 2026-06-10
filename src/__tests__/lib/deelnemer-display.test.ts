@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  deelnemerChipInitials,
   deelnemerInitialsFromDisplayName,
   formatDeelnemerDisplayName,
 } from '@/lib/deelnemer-display';
+import { headerUserFromSession } from '@/lib/header-defaults';
 
 describe('formatDeelnemerDisplayName', () => {
   it('prefers name column when set', () => {
@@ -34,5 +36,44 @@ describe('formatDeelnemerDisplayName', () => {
 describe('deelnemerInitialsFromDisplayName', () => {
   it('uses first letters of each word', () => {
     expect(deelnemerInitialsFromDisplayName('Bas van Veltenaar')).toBe('BV');
+  });
+});
+
+describe('deelnemerChipInitials', () => {
+  it('prefers initialen from mijn-gegevens', () => {
+    expect(
+      deelnemerChipInitials({
+        initialen: 'B.V.',
+        voornaam: 'Bas',
+        achternaam: 'Veltenaar',
+      })
+    ).toBe('B.V.');
+  });
+
+  it('falls back to voornaam and achternaam when initialen is empty', () => {
+    expect(
+      deelnemerChipInitials({
+        voornaam: 'Anna',
+        achternaam: 'Jansen',
+      })
+    ).toBe('AJ');
+  });
+});
+
+describe('headerUserFromSession', () => {
+  it('prefers initialen from mijn-gegevens over derived initials', () => {
+    const headerUser = headerUserFromSession(
+      { name: 'Bas van Veltenaar', email: 'bas@example.com', role: 'user' },
+      { displayName: 'Bas van Veltenaar', initialen: 'B.V.' }
+    );
+    expect(headerUser.ShortName).toBe('B.V.');
+  });
+
+  it('falls back to derived initials when initialen is empty', () => {
+    const headerUser = headerUserFromSession(
+      { name: 'Bas van Veltenaar', email: 'bas@example.com', role: 'user' },
+      { displayName: 'Bas van Veltenaar', initialen: null }
+    );
+    expect(headerUser.ShortName).toBe('BV');
   });
 });

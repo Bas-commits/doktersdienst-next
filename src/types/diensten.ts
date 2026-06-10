@@ -2,6 +2,7 @@ export interface DienstDeelnemer {
   id: number;
   voornaam: string;
   achternaam: string;
+  initialen?: string | null;
   color: string;
 }
 

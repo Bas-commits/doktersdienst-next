@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { downloadUrentellingWorkbook } from '@/lib/urentelling-export';
 import type { UrentellingColumn, UrentellingDetailRow, UrentellingRow } from '@/lib/urentelling';
+import { getContrastTextColor } from '@/utils/contrastTextColor';
 
 type UrentellingApiResponse = {
   van?: number;
@@ -364,8 +365,11 @@ export default function UrentellingPage() {
                                   title="Open gegevens van deze deelnemer"
                                 >
                                   <span
-                                    className="inline-flex h-8 min-w-10 shrink-0 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
-                                    style={{ backgroundColor: row.color }}
+                                    className="inline-flex h-8 min-w-10 shrink-0 items-center justify-center rounded-md px-2 text-xs font-semibold"
+                                    style={{
+                                      backgroundColor: row.color,
+                                      color: getContrastTextColor(row.color),
+                                    }}
                                   >
                                     {row.initials}
                                   </span>

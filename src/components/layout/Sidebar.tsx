@@ -49,7 +49,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
 const SECRETARIS_NAV_ITEMS: NavItem[] = [
   {
     id: 'waarneemgroep-wijzigen',
-    label: 'Waarneemgroep wijzigen',
+    label: 'Deze waarneemgroep',
     href: DEFAULT_ROUTES.waarneemgroep_wijzigen,
     icon: <PencilLine className="size-4 shrink-0" />,
   },

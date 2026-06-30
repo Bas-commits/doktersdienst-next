@@ -12,6 +12,7 @@ export const MAIN_ROUTES = [
   '/voorkeuren',
   '/rooster-maken-secretaris',
   '/overnames',
+  '/urentelling',
 ] as const;
 
 export const SECRETARIS_ROUTES = [
@@ -21,7 +22,6 @@ export const SECRETARIS_ROUTES = [
   '/bestaande-toevoegen',
   '/lijst-deelnemers',
   '/gesprekken',
-  '/urentelling',
 ] as const;
 
 export const ADMIN_ROUTES = [

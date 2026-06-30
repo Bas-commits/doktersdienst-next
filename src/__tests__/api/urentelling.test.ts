@@ -74,11 +74,11 @@ vi.mock('@/db', () => ({
 }));
 
 const mockGetAuthenticatedUser = vi.fn();
-const mockHasGroupManagementAccess = vi.fn();
+const mockIsUserInWaarneemgroep = vi.fn();
 
 vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedUser: (...args: unknown[]) => mockGetAuthenticatedUser(...args),
-  hasGroupManagementAccess: (...args: unknown[]) => mockHasGroupManagementAccess(...args),
+  isUserInWaarneemgroep: (...args: unknown[]) => mockIsUserInWaarneemgroep(...args),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -125,7 +125,7 @@ describe('GET /api/urentelling', () => {
       idgroep: 2,
       isAdmin: false,
     });
-    mockHasGroupManagementAccess.mockResolvedValue(true);
+    mockIsUserInWaarneemgroep.mockResolvedValue(true);
     vi.resetModules();
   });
 
@@ -138,8 +138,8 @@ describe('GET /api/urentelling', () => {
     expect(res._status).toBe(401);
   });
 
-  it('returns 403 when user lacks group management access', async () => {
-    mockHasGroupManagementAccess.mockResolvedValue(false);
+  it('returns 403 when user is not a member of the waarneemgroep', async () => {
+    mockIsUserInWaarneemgroep.mockResolvedValue(false);
     const { default: handler } = await import('@/pages/api/urentelling/index');
     const res = makeRes();
     await handler(makeReq({ idwaarneemgroep: '1', vanGte: '1000', totLte: '5000' }), res);

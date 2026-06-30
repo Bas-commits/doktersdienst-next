@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, asc, eq, gt, isNull, lt, or } from 'drizzle-orm';
 import { db, schema } from '@/db';
-import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
+import { getAuthenticatedUser, isUserInWaarneemgroep } from '@/lib/api-auth';
 import {
   aggregateUrentelling,
   collectUrentellingDetails,
@@ -66,11 +66,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     return res.status(400).json({ error: 'totLte moet na vanGte liggen' });
   }
 
-  if (!user.isAdmin) {
-    const hasAccess = await hasGroupManagementAccess(user, idwaarneemgroep);
-    if (!hasAccess) {
-      return res.status(403).json({ error: 'Geen toegang tot deze waarneemgroep' });
-    }
+  if (!user.isAdmin && !(await isUserInWaarneemgroep(user.id, idwaarneemgroep))) {
+    return res.status(403).json({ error: 'Geen toegang tot deze waarneemgroep' });
   }
 
   try {

@@ -38,6 +38,12 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { id: 'rooster_inzien', label: 'Rooster', href: '/rooster-inzien', icon: <Calendar className="size-4 shrink-0" /> },
   { id: 'voorkeuren', label: 'Voorkeuren', href: '/voorkeuren', icon: <Check className="size-4 shrink-0" /> },
   { id: 'overnames', label: 'Overnames', href: '/overnames', icon: <ArrowLeftRight className="size-4 shrink-0" /> },
+  {
+    id: 'urentelling',
+    label: 'Urentelling',
+    href: '/urentelling',
+    icon: <Clock className="size-4 shrink-0" />,
+  },
 ];
 
 const SECRETARIS_NAV_ITEMS: NavItem[] = [
@@ -77,12 +83,6 @@ const SECRETARIS_NAV_ITEMS: NavItem[] = [
     label: 'Gesprekken',
     href: '/gesprekken',
     icon: <PhoneCall className="size-4 shrink-0" />,
-  },
-  {
-    id: 'urentelling',
-    label: 'Urentelling',
-    href: '/urentelling',
-    icon: <Clock className="size-4 shrink-0" />,
   },
 ];
 

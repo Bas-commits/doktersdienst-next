@@ -137,3 +137,28 @@ export async function hasGroupManagementAccess(
   if (user.isAdmin) return true;
   return isSecretarisInWaarneemgroep(user.id, idwaarneemgroep);
 }
+
+/**
+ * Checks if a user may change a participant's color.
+ * Allowed for self, admin, or secretaris in a shared waarneemgroep.
+ */
+export async function canChangeDeelnemerColor(
+  user: AuthenticatedUser,
+  targetDeelnemerId: number,
+  idwaarneemgroep?: number
+): Promise<boolean> {
+  if (targetDeelnemerId === user.id) return true;
+  if (user.isAdmin) return true;
+
+  if (idwaarneemgroep !== undefined) {
+    if (!(await hasGroupManagementAccess(user, idwaarneemgroep))) return false;
+    return isUserInWaarneemgroep(targetDeelnemerId, idwaarneemgroep);
+  }
+
+  const userWgIds = await getUserWaarneemgroepIds(user.id);
+  for (const wgId of userWgIds) {
+    if (!(await hasGroupManagementAccess(user, wgId))) continue;
+    if (await isUserInWaarneemgroep(targetDeelnemerId, wgId)) return true;
+  }
+  return false;
+}

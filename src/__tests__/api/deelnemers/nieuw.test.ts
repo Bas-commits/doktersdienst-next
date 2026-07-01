@@ -266,6 +266,42 @@ describe('POST /api/deelnemers/nieuw', () => {
     expect(mockTransaction).not.toHaveBeenCalled();
   });
 
+  it('returns 400 for invalid fte', async () => {
+    const { default: handler } = await import('@/pages/api/deelnemers/nieuw/index');
+    const res = makeRes();
+    await handler(
+      makeReq({
+        body: {
+          ...(makeReq().body as Record<string, unknown>),
+          fte: 3,
+        },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(400);
+    expect((res._json as { error: string }).error).toMatch(/fte/i);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for invalid idfunctie', async () => {
+    const { default: handler } = await import('@/pages/api/deelnemers/nieuw/index');
+    const res = makeRes();
+    await handler(
+      makeReq({
+        body: {
+          ...(makeReq().body as Record<string, unknown>),
+          idfunctie: 9,
+        },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(400);
+    expect((res._json as { error: string }).error).toMatch(/functie/i);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
   it('returns 400 for invalid geslacht', async () => {
     const { default: handler } = await import('@/pages/api/deelnemers/nieuw/index');
     const res = makeRes();

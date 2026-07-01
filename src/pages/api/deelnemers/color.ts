@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '@/db';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { canChangeDeelnemerColor, getAuthenticatedUser } from '@/lib/api-auth';
 
 const { deelnemers } = schema;
 
@@ -13,7 +13,7 @@ type Data = { ok: true } | { error: string };
  * Updates the color field for a participant.
  * Body: { uid: number, color: string }
  *
- * Only the user themselves or an admin can change a participant's color.
+ * The user themselves, an admin, or a secretaris in a shared waarneemgroep may change a participant's color.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -29,13 +29,28 @@ export default async function handler(
   }
 
   try {
-    const { uid, color } = req.body as { uid: unknown; color: unknown };
+    const { uid, color, idwaarneemgroep } = req.body as {
+      uid: unknown;
+      color: unknown;
+      idwaarneemgroep?: unknown;
+    };
 
     if (typeof uid !== 'number' || typeof color !== 'string') {
       return res.status(400).json({ error: 'Invalid body: uid (number) and color (string) required' });
     }
 
-    if (uid !== user.id && !user.isAdmin) {
+    const scopedWgId =
+      idwaarneemgroep === undefined
+        ? undefined
+        : typeof idwaarneemgroep === 'number'
+          ? idwaarneemgroep
+          : null;
+
+    if (scopedWgId === null) {
+      return res.status(400).json({ error: 'Invalid body: idwaarneemgroep must be a number' });
+    }
+
+    if (!(await canChangeDeelnemerColor(user, uid, scopedWgId))) {
       return res.status(403).json({ error: 'Geen toegang om de kleur van een andere deelnemer te wijzigen.' });
     }
 

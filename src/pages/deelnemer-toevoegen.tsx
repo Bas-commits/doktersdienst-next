@@ -35,6 +35,43 @@ const functieChoices = [
   { id: 4, label: 'Toa' },
 ] as const;
 
+const FTE_DECIMAL_PLACES = 2;
+
+function formatFteDisplay(n: number): string {
+  const rounded =
+    Math.round(n * 10 ** FTE_DECIMAL_PLACES) / 10 ** FTE_DECIMAL_PLACES;
+  return new Intl.NumberFormat('nl-NL', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: FTE_DECIMAL_PLACES,
+    useGrouping: false,
+  }).format(rounded);
+}
+
+function sanitizeFteInputString(raw: string): string {
+  let s = raw.replace(/\./g, ',');
+  s = s.replace(/[^\d,]/g, '');
+  const firstComma = s.indexOf(',');
+  if (firstComma === -1) return s;
+  const intPart = s.slice(0, firstComma);
+  let frac = s.slice(firstComma + 1).replace(/,/g, '');
+  if (frac.length > FTE_DECIMAL_PLACES) frac = frac.slice(0, FTE_DECIMAL_PLACES);
+  return intPart + ',' + frac;
+}
+
+function parseFteInputToNumber(s: string): number | null {
+  const t = s.trim().replace(/\./g, ',');
+  if (t === '' || t === ',') return null;
+  const normalized = t.replace(',', '.');
+  const n = parseFloat(normalized);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
+function commitFteNumber(n: number): number {
+  const clamped = Math.min(2, Math.max(0, n));
+  return Math.round(clamped * 10 ** FTE_DECIMAL_PLACES) / 10 ** FTE_DECIMAL_PLACES;
+}
+
 function toOpties(data: unknown): DeelnemerNieuwOptiesResponse | null {
   if (!data || typeof data !== 'object') return null;
   return data as DeelnemerNieuwOptiesResponse;
@@ -68,6 +105,9 @@ export default function DeelnemerToevoegenPage() {
   const [initialen, setInitialen] = useState('');
   const [geslacht, setGeslacht] = useState<0 | 1 | null>(null);
   const [idgroep, setIdgroep] = useState('');
+  const [idfunctie, setIdfunctie] = useState('');
+  const [fte, setFte] = useState(1);
+  const [fteDraft, setFteDraft] = useState<string | undefined>(undefined);
   const [bestaatInAndereWaarneemgroep, setBestaatInAndereWaarneemgroep] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -129,7 +169,10 @@ export default function DeelnemerToevoegenPage() {
     setLedenLoading(true);
     setLedenError(null);
     try {
-      const res = await fetch(`/api/deelnemers?idwaarneemgroep=${wgId}&beheer=1`, { credentials: 'include' });
+      const res = await fetch(`/api/deelnemers?idwaarneemgroep=${wgId}&beheer=1`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
       const data = await res.json();
       if (data.error) {
         setLedenError(data.error);
@@ -214,22 +257,53 @@ export default function DeelnemerToevoegenPage() {
     if (isActiveGroupForbidden) {
       return 'U bent geen secretaris voor de gekozen waarneemgroep.';
     }
+    const fteRaw = fteDraft !== undefined ? fteDraft : formatFteDisplay(fte);
+    const fteNum = parseFteInputToNumber(fteRaw);
+    if (fteNum === null || fteNum < 0 || fteNum > 2) {
+      return 'FTE moet tussen 0 en 2 liggen.';
+    }
+    if (idfunctie !== '') {
+      const parsedFunctie = Number(idfunctie);
+      if (!Number.isInteger(parsedFunctie) || parsedFunctie < 1 || parsedFunctie > 4) {
+        return 'Selecteer een geldige functie.';
+      }
+    }
     return null;
   };
 
   async function handleColorChange(deelnemerId: number, color: string) {
-    setLeden((prev) => prev.map((d) => (d.id === deelnemerId ? { ...d, color } : d)));
+    let prevColor = '';
+    setLeden((prev) =>
+      prev.map((d) => {
+        if (d.id !== deelnemerId) return d;
+        prevColor = d.color ?? '';
+        return { ...d, color };
+      })
+    );
+
+    const wg = activeWaarneemgroepId != null ? Number(activeWaarneemgroepId) : NaN;
+    const body: { uid: number; color: string; idwaarneemgroep?: number } = { uid: deelnemerId, color };
+    if (Number.isFinite(wg)) body.idwaarneemgroep = wg;
+
     try {
       const res = await fetch('/api/deelnemers/color', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ uid: deelnemerId, color }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (data.error) toast.error(`Kleur opslaan mislukt: ${data.error}`);
-    } catch {
-      toast.error('Kleur opslaan mislukt');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Kleur opslaan mislukt');
+      }
+      toast.success('Kleur opgeslagen.');
+    } catch (error) {
+      setLeden((prev) =>
+        prev.map((d) => (d.id === deelnemerId ? { ...d, color: prevColor } : d))
+      );
+      toast.error(
+        error instanceof Error ? `Kleur opslaan mislukt: ${error.message}` : 'Kleur opslaan mislukt'
+      );
     }
   }
 
@@ -529,6 +603,17 @@ export default function DeelnemerToevoegenPage() {
 
     setSubmitting(true);
     try {
+      const fteRaw = fteDraft !== undefined ? fteDraft : formatFteDisplay(fte);
+      let fteCommitted = parseFteInputToNumber(fteRaw);
+      if (fteCommitted === null) fteCommitted = fte;
+      fteCommitted = commitFteNumber(fteCommitted);
+
+      const parsedFunctie = idfunctie === '' ? null : Number(idfunctie);
+      const idfunctiePayload =
+        parsedFunctie === 1 || parsedFunctie === 2 || parsedFunctie === 3 || parsedFunctie === 4
+          ? parsedFunctie
+          : null;
+
       const res = await fetch('/api/deelnemers/nieuw', {
         method: 'POST',
         credentials: 'include',
@@ -543,6 +628,8 @@ export default function DeelnemerToevoegenPage() {
           idgroep: idRol,
           idwaarneemgroep: idWG,
           bestaatInAndereWaarneemgroep,
+          fte: fteCommitted,
+          idfunctie: idfunctiePayload,
           inviteInitiatedOrigin:
             typeof window !== 'undefined' ? window.location.origin : undefined,
         }),
@@ -572,6 +659,9 @@ export default function DeelnemerToevoegenPage() {
       setInitialen('');
       setGeslacht(null);
       setIdgroep('');
+      setIdfunctie('');
+      setFte(1);
+      setFteDraft(undefined);
       setBestaatInAndereWaarneemgroep(false);
       setIsAddModalOpen(false);
       void loadOpties(activeWaarneemgroepId);
@@ -1133,6 +1223,50 @@ export default function DeelnemerToevoegenPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="functie-add">Functie</Label>
+                  <select
+                    id="functie-add"
+                    className={selectClass}
+                    value={idfunctie}
+                    onChange={(e) => setIdfunctie(e.target.value)}
+                    disabled={submitting}
+                  >
+                    <option value="">— Geen —</option>
+                    {functieChoices.map((choice) => (
+                      <option key={choice.id} value={String(choice.id)}>
+                        {choice.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="fte-add">FTE (0–2)</Label>
+                  <Input
+                    id="fte-add"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={fteDraft !== undefined ? fteDraft : formatFteDisplay(fte)}
+                    onChange={(e) => {
+                      const sanitized = sanitizeFteInputString(e.target.value);
+                      setFteDraft(sanitized);
+                      const n = parseFteInputToNumber(sanitized);
+                      if (n !== null) {
+                        setFte(Math.min(2, Math.max(0, n)));
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const raw = e.target.value;
+                      let n = parseFteInputToNumber(raw);
+                      if (n === null) n = fte;
+                      const committed = commitFteNumber(n);
+                      setFte(committed);
+                      setFteDraft(undefined);
+                    }}
+                    disabled={submitting}
+                  />
                 </div>
               </div>
 

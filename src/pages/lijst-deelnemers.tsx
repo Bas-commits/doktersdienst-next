@@ -58,18 +58,37 @@ export default function LijstDeelnemersPage() {
   }
 
   async function handleColorChange(deelnemerId: number, color: string) {
-    setDeelnemers((prev) => prev.map((d) => (d.id === deelnemerId ? { ...d, color } : d)));
+    let prevColor = '';
+    setDeelnemers((prev) =>
+      prev.map((d) => {
+        if (d.id !== deelnemerId) return d;
+        prevColor = d.color ?? '';
+        return { ...d, color };
+      })
+    );
+
+    const body: { uid: number; color: string; idwaarneemgroep?: number } = { uid: deelnemerId, color };
+    if (filterWgId !== '') body.idwaarneemgroep = filterWgId;
+
     try {
       const res = await fetch('/api/deelnemers/color', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ uid: deelnemerId, color }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (data.error) toast.error(`Kleur opslaan mislukt: ${data.error}`);
-    } catch {
-      toast.error('Kleur opslaan mislukt');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Kleur opslaan mislukt');
+      }
+      toast.success('Kleur opgeslagen.');
+    } catch (error) {
+      setDeelnemers((prev) =>
+        prev.map((d) => (d.id === deelnemerId ? { ...d, color: prevColor } : d))
+      );
+      toast.error(
+        error instanceof Error ? `Kleur opslaan mislukt: ${error.message}` : 'Kleur opslaan mislukt'
+      );
     }
   }
 

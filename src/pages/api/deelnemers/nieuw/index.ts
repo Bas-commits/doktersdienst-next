@@ -16,6 +16,13 @@ const { deelnemers, waarneemgroepdeelnemers } = schema;
 const MAX_LOGIN_EMAIL = 50;
 const MAX_NAME_FIELD = 50;
 const EMAIL_VERIFICATION_TTL_SEC = 3600;
+const GELDIGE_WAARNEEMGROEP_FUNCTIES = new Set([1, 2, 3, 4]);
+const DEFAULT_MEMBERSHIP_FTE = 1;
+
+type WaarneemgroepMembershipExtras = {
+  fte: number;
+  idfunctie: 1 | 2 | 3 | 4 | null;
+};
 
 function getAuthSecret(): string | null {
   const s = process.env.BETTER_AUTH_SECRET?.trim() || process.env.AUTH_SECRET?.trim();
@@ -33,6 +40,10 @@ type PostBody = {
   idgroep?: unknown;
   idwaarneemgroep?: unknown;
   bestaatInAndereWaarneemgroep?: unknown;
+  /** FTE for this waarneemgroep membership (0–2); stored on waarneemgroepdeelnemers.fte */
+  fte?: unknown;
+  /** Functie for this waarneemgroep membership; stored on waarneemgroepdeelnemers.idfunctie */
+  idfunctie?: unknown;
   /** Browser `window.location.origin`; must agree with server's Host/Forwarded/Origin (`Origin` matches on POST). */
   inviteInitiatedOrigin?: unknown;
 };
@@ -96,6 +107,11 @@ export default async function handler(
   const groepIds = new Set(groepChoices.map((g) => g.id));
   if (!groepIds.has(idgroep)) {
     return res.status(400).json({ error: 'Geen geldige rol (idgroep) voor uw account gekozen.' });
+  }
+
+  const membershipExtras = parseWaarneemgroepMembershipExtras(b);
+  if ('error' in membershipExtras) {
+    return res.status(400).json({ error: membershipExtras.error });
   }
 
   const emailRaw = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
@@ -163,7 +179,12 @@ export default async function handler(
 
         await db
           .update(waarneemgroepdeelnemers)
-          .set({ aangemeld: true, idgroep })
+          .set({
+            aangemeld: true,
+            idgroep,
+            fte: membershipExtras.fte,
+            idfunctie: membershipExtras.idfunctie,
+          })
           .where(eq(waarneemgroepdeelnemers.id, existingMembership.id));
 
         return res.status(200).json({
@@ -179,6 +200,8 @@ export default async function handler(
         idwaarneemgroep,
         idgroep,
         aangemeld: true,
+        fte: membershipExtras.fte,
+        idfunctie: membershipExtras.idfunctie,
       });
 
       return res.status(200).json({
@@ -335,6 +358,8 @@ export default async function handler(
         idwaarneemgroep,
         idgroep,
         aangemeld: true,
+        fte: membershipExtras.fte,
+        idfunctie: membershipExtras.idfunctie,
       });
       return id;
     });
@@ -368,4 +393,34 @@ export default async function handler(
 function clip(s: string, max: number): string {
   if (s.length <= max) return s;
   return s.slice(0, max);
+}
+
+function parseWaarneemgroepMembershipExtras(
+  b: PostBody
+): WaarneemgroepMembershipExtras | { error: string } {
+  let fte = DEFAULT_MEMBERSHIP_FTE;
+  if (b.fte !== undefined && b.fte !== null && b.fte !== '') {
+    const raw =
+      typeof b.fte === 'number'
+        ? b.fte
+        : typeof b.fte === 'string'
+          ? Number(b.fte.trim().replace(',', '.'))
+          : Number.NaN;
+    if (!Number.isFinite(raw) || raw < 0 || raw > 2) {
+      return { error: 'FTE moet tussen 0 en 2 liggen.' };
+    }
+    fte = Math.round(Math.min(2, Math.max(0, raw)) * 100) / 100;
+  }
+
+  let idfunctie: 1 | 2 | 3 | 4 | null = null;
+  if (b.idfunctie !== undefined && b.idfunctie !== null && b.idfunctie !== '') {
+    const raw =
+      typeof b.idfunctie === 'number' ? b.idfunctie : Number(String(b.idfunctie).trim());
+    if (!Number.isInteger(raw) || !GELDIGE_WAARNEEMGROEP_FUNCTIES.has(raw)) {
+      return { error: 'Functie moet een van de toegestane waarden zijn.' };
+    }
+    idfunctie = raw as 1 | 2 | 3 | 4;
+  }
+
+  return { fte, idfunctie };
 }

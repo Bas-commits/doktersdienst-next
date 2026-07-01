@@ -151,12 +151,25 @@ describe('GET /api/deelnemers', () => {
     const body = res._json as {
       deelnemers: {
         id: number;
+        echtedeelnemer?: boolean | null;
         membershipCount?: number;
         waarneemgroepen: { aangemeld: boolean }[];
       }[];
     };
     expect(body.deelnemers).toHaveLength(1);
+    expect(body.deelnemers[0]?.echtedeelnemer).toBe(false);
     expect(body.deelnemers[0]?.membershipCount).toBe(1);
     expect(body.deelnemers[0]?.waarneemgroepen[0]?.aangemeld).toBe(false);
+  });
+
+  it('accepts beheer=true for deelnemersbeheer mode', async () => {
+    selectCall = 0;
+    const { default: handler } = await import('@/pages/api/deelnemers/index');
+    const res = makeRes();
+    await handler(makeReq({ idwaarneemgroep: '9', beheer: 'true' }), res);
+
+    expect(res._status).toBe(200);
+    const body = res._json as { deelnemers: { id: number }[] };
+    expect(body.deelnemers).toHaveLength(1);
   });
 });

@@ -36,6 +36,25 @@ export type UrentellingMember = {
   voorletterstussenvoegsel: string | null;
   initialen: string | null;
   color: string | null;
+  fte: number;
+};
+
+export type CommitmentLevel = 'green' | 'orange' | 'red' | 'none';
+
+export type UrentellingCommitmentCell = {
+  ratio: number | null;
+  level: CommitmentLevel;
+  expectedHours: number | null;
+};
+
+export type UrentellingCommitmentMember = {
+  iddeelnemer: number;
+  fte: number;
+};
+
+export type UrentellingCommitmentResult = {
+  totalFte: number;
+  perRow: UrentellingCommitmentCell[][];
 };
 
 export type UrentellingRow = {
@@ -43,6 +62,7 @@ export type UrentellingRow = {
   naam: string;
   initials: string;
   color: string;
+  fte: number;
   urenPerAantekening: number[];
   achterwachtPerAantekening: number[];
   totaalDienst: number;
@@ -321,6 +341,7 @@ export function aggregateUrentelling(
       naam: formatDeelnemerNaam(member),
       initials: formatDeelnemerInitials(member),
       color: member.color?.trim() || '#cccccc',
+      fte: member.fte,
       urenPerAantekening,
       achterwachtPerAantekening,
       totaalDienst: sumDecimalHours(urenPerAantekening),
@@ -404,4 +425,69 @@ export function collectUrentellingDetails(
     if (naamCmp !== 0) return naamCmp;
     return a.categorie.localeCompare(b.categorie, 'nl');
   });
+}
+
+export function commitmentLevelFromRatio(ratio: number): CommitmentLevel {
+  if (ratio < 0.8) return 'green';
+  if (ratio <= 1) return 'orange';
+  return 'red';
+}
+
+export function computeCommitmentCell(
+  rosteredHours: number,
+  totalHours: number,
+  totalFte: number,
+  memberFte: number,
+): UrentellingCommitmentCell {
+  if (totalFte <= 0 || memberFte <= 0) {
+    return { ratio: null, level: 'none', expectedHours: null };
+  }
+
+  const expectedHours = Math.round((totalHours / totalFte) * memberFte * 100) / 100;
+  if (expectedHours <= 0) {
+    return { ratio: null, level: 'none', expectedHours: 0 };
+  }
+
+  const ratio = Math.round((rosteredHours / expectedHours) * 1000) / 1000;
+  return {
+    ratio,
+    level: commitmentLevelFromRatio(ratio),
+    expectedHours,
+  };
+}
+
+export function computeUrentellingCommitment(
+  columns: UrentellingColumn[],
+  rows: UrentellingRow[],
+  members: UrentellingCommitmentMember[],
+): UrentellingCommitmentResult {
+  const fteByMember = new Map(members.map((member) => [member.iddeelnemer, member.fte]));
+  const totalFte = Math.round(members.reduce((sum, member) => sum + member.fte, 0) * 100) / 100;
+
+  const totalHoursPerColumn = columns.map((_, columnIndex) =>
+    Math.round(
+      rows.reduce((sum, row) => sum + (row.urenPerAantekening[columnIndex] ?? 0), 0) * 100,
+    ) / 100,
+  );
+  const totalHoursAll = Math.round(
+    totalHoursPerColumn.reduce((sum, hours) => sum + hours, 0) * 100,
+  ) / 100;
+
+  const perRow = rows.map((row) => {
+    const memberFte = fteByMember.get(row.iddeelnemer) ?? 0;
+    const columnCells = columns.map((_, columnIndex) =>
+      computeCommitmentCell(
+        row.urenPerAantekening[columnIndex] ?? 0,
+        totalHoursPerColumn[columnIndex] ?? 0,
+        totalFte,
+        memberFte,
+      ),
+    );
+    columnCells.push(
+      computeCommitmentCell(row.totaalDienst, totalHoursAll, totalFte, memberFte),
+    );
+    return columnCells;
+  });
+
+  return { totalFte, perRow };
 }

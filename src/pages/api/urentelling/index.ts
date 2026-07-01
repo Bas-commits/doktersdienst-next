@@ -5,7 +5,9 @@ import { getAuthenticatedUser, isUserInWaarneemgroep } from '@/lib/api-auth';
 import {
   aggregateUrentelling,
   collectUrentellingDetails,
+  computeUrentellingCommitment,
   type UrentellingColumn,
+  type UrentellingCommitmentCell,
   type UrentellingDetailRow,
   type UrentellingRow,
 } from '@/lib/urentelling';
@@ -24,8 +26,17 @@ type Data =
       columns: UrentellingColumn[];
       rows: UrentellingRow[];
       details: UrentellingDetailRow[];
+      commitment: {
+        totalFte: number;
+        perRow: UrentellingCommitmentCell[][];
+      };
     }
   | { error: string };
+
+function normalizeMemberFte(fte: number | null | undefined): number {
+  if (fte == null || Number.isNaN(fte)) return 1;
+  return fte;
+}
 
 function parseSingleNumber(value: string | string[] | undefined): number | null {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -79,6 +90,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         voorletterstussenvoegsel: deelnemers.voorletterstussenvoegsel,
         initialen: deelnemers.initialen,
         color: deelnemers.color,
+        echtedeelnemer: deelnemers.echtedeelnemer,
+        fte: waarneemgroepdeelnemers.fte,
       })
       .from(waarneemgroepdeelnemers)
       .innerJoin(deelnemers, eq(waarneemgroepdeelnemers.iddeelnemer, deelnemers.id))
@@ -86,6 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         and(
           eq(waarneemgroepdeelnemers.idwaarneemgroep, idwaarneemgroep),
           eq(waarneemgroepdeelnemers.aangemeld, true),
+          eq(deelnemers.echtedeelnemer, true),
         ),
       )
       .orderBy(asc(deelnemers.achternaam), asc(deelnemers.voornaam));
@@ -99,6 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         voorletterstussenvoegsel: row.voorletterstussenvoegsel,
         initialen: row.initialen,
         color: row.color,
+        fte: normalizeMemberFte(row.fte),
       }));
 
     const aantekeningRows = await db
@@ -194,8 +209,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       baseSlots,
       aantekeningen,
     );
+    const commitment = computeUrentellingCommitment(
+      columns,
+      rows,
+      members.map((member) => ({
+        iddeelnemer: member.iddeelnemer,
+        fte: member.fte,
+      })),
+    );
 
-    return res.status(200).json({ van: vanGte, tot: totLte, columns, rows, details });
+    return res.status(200).json({ van: vanGte, tot: totLte, columns, rows, details, commitment });
   } catch (err) {
     console.error('[api/urentelling]', err);
     return res.status(500).json({

@@ -65,6 +65,8 @@ export interface CalendarGridProps {
   showPreferences?: boolean;
   /** When set, renders voorkeur blocks per user below the shift lane (secretaris view). */
   voorkeuren?: VoorkeurItem[];
+  /** When set, matching user voorkeur row bands get a highlight background (secretaris roster view). */
+  highlightedVoorkeurUserIds?: ReadonlySet<number> | null;
   /**
    * When true, main shift blocks hide doctor initials inside filled preference styling
    * (icon-only middle). Does not affect the secretaris voorkeuren band below the grid.
@@ -410,6 +412,7 @@ export function CalendarGrid({
   getChipByCode = getChipByCodeFromTypes,
   showPreferences = true,
   voorkeuren,
+  highlightedVoorkeurUserIds,
   hidePreferenceFillInitialsOnShiftBlocks = false,
   enablePreferencePaintAssign = false,
   onPreferencePaintSessionStart,
@@ -715,8 +718,14 @@ export function CalendarGrid({
                             // Per-user band: same structure for every day in the week.
                             weekVoorkeurLayout.users.map((slot, slotIdx) => {
                               const dayLanes = weekVoorkeurLayout.byDay.get(dateKey)?.[slotIdx] ?? [];
+                              const isHighlighted =
+                                highlightedVoorkeurUserIds != null &&
+                                highlightedVoorkeurUserIds.has(slot.userId);
                               return (
-                                <div key={slot.userId} className="mb-px">
+                                <div
+                                  key={slot.userId}
+                                  className={`mb-px rounded-sm ${isHighlighted ? 'bg-gray-200' : ''}`}
+                                >
                                   {/* Render slot.numLanes lanes; empty lanes keep the height stable. */}
                                   {Array.from({ length: slot.numLanes }).map((_, laneIdx) => {
                                     const lane = dayLanes[laneIdx] ?? [];

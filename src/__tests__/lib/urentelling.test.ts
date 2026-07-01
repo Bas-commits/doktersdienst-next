@@ -15,9 +15,9 @@ import {
 const HOUR = 3600;
 
 const members: UrentellingMember[] = [
-  { iddeelnemer: 1, achternaam: 'Jansen', voornaam: 'Anna', voorletterstussenvoegsel: null, initialen: null, color: '#ff0000' },
-  { iddeelnemer: 2, achternaam: 'Pietersen', voornaam: 'Bert', voorletterstussenvoegsel: 'van', initialen: null, color: '#00ff00' },
-  { iddeelnemer: 3, achternaam: 'Smit', voornaam: 'Chris', voorletterstussenvoegsel: null, initialen: null, color: null },
+  { iddeelnemer: 1, achternaam: 'Jansen', voornaam: 'Anna', voorletterstussenvoegsel: null, initialen: null, color: '#ff0000', fte: 1 },
+  { iddeelnemer: 2, achternaam: 'Pietersen', voornaam: 'Bert', voorletterstussenvoegsel: 'van', initialen: null, color: '#00ff00', fte: 1 },
+  { iddeelnemer: 3, achternaam: 'Smit', voornaam: 'Chris', voorletterstussenvoegsel: null, initialen: null, color: null, fte: 1 },
 ];
 
 const aantekeningen: UrentellingAantekening[] = [

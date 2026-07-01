@@ -11,7 +11,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { downloadUrentellingWorkbook } from '@/lib/urentelling-export';
-import type { UrentellingColumn, UrentellingDetailRow, UrentellingRow } from '@/lib/urentelling';
+import type {
+  UrentellingColumn,
+  UrentellingCommitmentCell,
+  UrentellingDetailRow,
+  UrentellingRow,
+} from '@/lib/urentelling';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
 
 type UrentellingApiResponse = {
@@ -20,6 +25,10 @@ type UrentellingApiResponse = {
   columns?: UrentellingColumn[];
   rows?: UrentellingRow[];
   details?: UrentellingDetailRow[];
+  commitment?: {
+    totalFte: number;
+    perRow: UrentellingCommitmentCell[][];
+  };
   error?: string;
 };
 
@@ -54,6 +63,13 @@ function formatDecimalHours(value: number): string {
   });
 }
 
+function formatFte(value: number): string {
+  return value.toLocaleString('nl-NL', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
 function formatDateForFilename(unix: number): string {
   const d = new Date(unix * 1000);
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
@@ -82,6 +98,54 @@ const URENTELLING_ACTION_GRADIENT =
 const URENTELLING_ACTION_GRADIENT_HOVER =
   'linear-gradient(90deg, rgb(56, 19, 108) 0%, rgb(45, 34, 69) 100%)';
 
+const COMMITMENT_DOT_CLASS: Record<
+  Exclude<UrentellingCommitmentCell['level'], 'none'>,
+  string
+> = {
+  green: 'bg-green-500',
+  orange: 'bg-orange-500',
+  red: 'bg-red-500',
+};
+
+function formatCommitmentPercent(ratio: number): string {
+  return `${Math.round(ratio * 100)}%`;
+}
+
+function formatCommitmentTooltip(cell: UrentellingCommitmentCell): string {
+  if (cell.level === 'none' || cell.ratio == null || cell.expectedHours == null) {
+    return '';
+  }
+  return `${formatCommitmentPercent(cell.ratio)} van verwachte ${formatDecimalHours(cell.expectedHours)} uur`;
+}
+
+function CommitmentDot({ cell }: { cell: UrentellingCommitmentCell | undefined }) {
+  if (!cell || cell.level === 'none') return null;
+
+  const tooltip = formatCommitmentTooltip(cell);
+  return (
+    <span
+      className={`inline-block size-2.5 shrink-0 rounded-full ${COMMITMENT_DOT_CLASS[cell.level]}`}
+      title={tooltip}
+      aria-label={tooltip}
+    />
+  );
+}
+
+function HoursWithCommitment({
+  hours,
+  cell,
+}: {
+  hours: number;
+  cell: UrentellingCommitmentCell | undefined;
+}) {
+  return (
+    <span className="inline-flex items-center justify-end gap-1.5">
+      {formatDecimalHours(hours)}
+      <CommitmentDot cell={cell} />
+    </span>
+  );
+}
+
 export default function UrentellingPage() {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
@@ -95,6 +159,7 @@ export default function UrentellingPage() {
   const [columns, setColumns] = useState<UrentellingColumn[]>([]);
   const [rows, setRows] = useState<UrentellingRow[]>([]);
   const [details, setDetails] = useState<UrentellingDetailRow[]>([]);
+  const [commitmentPerRow, setCommitmentPerRow] = useState<UrentellingCommitmentCell[][]>([]);
   const [responseVan, setResponseVan] = useState<number | null>(null);
   const [responseTot, setResponseTot] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -160,6 +225,7 @@ export default function UrentellingPage() {
         setColumns(data.columns ?? []);
         setRows(data.rows ?? []);
         setDetails(data.details ?? []);
+        setCommitmentPerRow(data.commitment?.perRow ?? []);
         setExpandedDeelnemerIds(new Set());
         setResponseVan(data.van ?? vanGte);
         setResponseTot(data.tot ?? totLte);
@@ -168,6 +234,7 @@ export default function UrentellingPage() {
         setColumns([]);
         setRows([]);
         setDetails([]);
+        setCommitmentPerRow([]);
         setResponseVan(null);
         setResponseTot(null);
       } finally {
@@ -308,15 +375,37 @@ export default function UrentellingPage() {
             {loading && <p className="text-sm text-muted-foreground">Urentelling laden…</p>}
             {error && <p className="text-sm text-destructive">{error}</p>}
             {!loading && !error && selectedGroupId != null && rows.length === 0 && (
-              <p className="text-sm text-muted-foreground">Geen deelnemers gevonden voor deze waarneemgroep.</p>
+              <p className="text-sm text-muted-foreground">
+                Geen echte deelnemers gevonden voor deze waarneemgroep.
+              </p>
             )}
 
             {!loading && !error && rows.length > 0 && (
-              <div className="overflow-x-auto">
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Alleen echte deelnemers worden getoond. De gekleurde cirkel geeft de voortgang
+                  t.o.v. de FTE-verdeelde urenverplichting in de geselecteerde periode.
+                </p>
+                <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block size-2.5 rounded-full bg-green-500" aria-hidden />
+                    Minder dan 80%
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block size-2.5 rounded-full bg-orange-500" aria-hidden />
+                    80% – 100%
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block size-2.5 rounded-full bg-red-500" aria-hidden />
+                    Meer dan 100%
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="pb-2 pr-4 font-medium">Naam</th>
+                      <th className="pb-2 pr-4 font-medium text-right">FTE</th>
                       {columns.map((column) => (
                         <th key={column.id} className="pb-2 pr-4 font-medium text-right">
                           {column.tekst}
@@ -330,6 +419,7 @@ export default function UrentellingPage() {
                       const hasAchterwacht = row.totaalAchterwacht > 0;
                       const rowDetails = detailsByDeelnemer.get(row.iddeelnemer) ?? [];
                       const isExpanded = expandedDeelnemerIds.has(row.iddeelnemer);
+                      const rowCommitment = commitmentPerRow[rowIndex] ?? [];
                       const rowGroupClass =
                         rowIndex % 2 === 1 ? 'bg-muted/70' : undefined;
 
@@ -377,16 +467,25 @@ export default function UrentellingPage() {
                                 </button>
                               </div>
                             </td>
+                            <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
+                              {formatFte(row.fte)}
+                            </td>
                             {row.urenPerAantekening.map((uren, index) => (
                               <td
                                 key={`${row.iddeelnemer}-dienst-${columns[index]?.id ?? index}`}
                                 className="py-2.5 pr-4 text-right tabular-nums"
                               >
-                                {formatDecimalHours(uren)}
+                                <HoursWithCommitment
+                                  hours={uren}
+                                  cell={rowCommitment[index]}
+                                />
                               </td>
                             ))}
                             <td className="py-2.5 pr-4 text-right tabular-nums font-medium">
-                              {formatDecimalHours(row.totaalDienst)}
+                              <HoursWithCommitment
+                                hours={row.totaalDienst}
+                                cell={rowCommitment[columns.length]}
+                              />
                             </td>
                           </tr>
                           {hasAchterwacht && (
@@ -394,6 +493,7 @@ export default function UrentellingPage() {
                               className={`border-b text-muted-foreground ${rowGroupClass ?? ''} ${isExpanded ? '' : 'last:border-0'}`}
                             >
                               <td className="py-1.5 pr-4 pl-12 text-sm italic">als achterwacht</td>
+                              <td className="py-1.5 pr-4" />
                               {row.achterwachtPerAantekening.map((uren, index) => (
                                 <td
                                   key={`${row.iddeelnemer}-achterwacht-${columns[index]?.id ?? index}`}
@@ -410,6 +510,7 @@ export default function UrentellingPage() {
                           {isExpanded && rowDetails.length === 0 && (
                             <tr className={`border-b text-xs text-muted-foreground last:border-0 ${rowGroupClass ?? ''}`}>
                               <td className="py-1.5 pr-4 pl-12">Geen diensten in deze periode.</td>
+                              <td className="py-1.5 pr-4" />
                               {columns.map((column) => (
                                 <td key={`${row.iddeelnemer}-empty-${column.id}`} className="py-1.5 pr-4" />
                               ))}
@@ -427,6 +528,7 @@ export default function UrentellingPage() {
                                 <td className="py-1.5 pr-4 pl-12 whitespace-nowrap">
                                   {formatDetailLabel(detail)}
                                 </td>
+                                <td className="py-1.5 pr-4" />
                                 {columns.map((column) => (
                                   <td
                                     key={`${row.iddeelnemer}-detail-${detailIndex}-${column.id}`}
@@ -443,6 +545,7 @@ export default function UrentellingPage() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </CardContent>

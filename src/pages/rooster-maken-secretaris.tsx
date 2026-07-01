@@ -18,6 +18,7 @@ import { useVoorkeurenSubscription } from '@/hooks/useVoorkeurenSubscription';
 import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
 import type { ShiftBlockView, DoctorInfo } from '@/types/diensten';
 import { shiftKeyFromBlock } from '@/types/voorkeuren';
+import type { VoorkeurItem } from '@/types/voorkeuren';
 import { shiftBlockToastDescription } from '@/utils/shiftToastContext';
 import type { CalendarGridRow } from '@/components/CalandarGrid/CalendarGrid';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
@@ -45,6 +46,25 @@ interface Doctor {
 
 function toFullName(voornaam: string | null, achternaam: string | null): string {
   return [voornaam, achternaam].filter(Boolean).join(' ') || 'Onbekend';
+}
+
+/** Resolve sidebar doctor id + preference iddeelnemer ids (handles duplicate deelnemer records). */
+function buildHighlightedVoorkeurUserIds(
+  selectedDoctor: Doctor | null,
+  voorkeuren: VoorkeurItem[] | null | undefined,
+): ReadonlySet<number> | null {
+  if (!selectedDoctor) return null;
+  const ids = new Set<number>([selectedDoctor.id]);
+  for (const vk of voorkeuren ?? []) {
+    if (vk.iddeelnemer == null) continue;
+    const d = vk.deelnemer;
+    if (!d) continue;
+    const name = [d.voornaam, d.achternaam].filter(Boolean).join(' ');
+    if (name === selectedDoctor.fullName) {
+      ids.add(vk.iddeelnemer);
+    }
+  }
+  return ids;
 }
 
 function InfoPopover() {
@@ -316,11 +336,12 @@ export default function RoosterMakenSecretarisPage() {
     [waarneemgroepen]
   );
 
-  /** Only groups where the current user is a secretaris. Used to filter the popover. */
-  const secretarisWaarneemgroepen = useMemo(
-    () => (waarneemgroepen ?? []).filter((wg) => wg.idgroep === GROEP_SECRETARIS),
-    [waarneemgroepen]
-  );
+  /** Groups shown in the calendar filter popover (all groups for admin, secretaris-only otherwise). */
+  const filterWaarneemgroepen = useMemo(() => {
+    const all = waarneemgroepen ?? [];
+    if (isAdmin) return all;
+    return all.filter((wg) => wg.idgroep === GROEP_SECRETARIS);
+  }, [isAdmin, waarneemgroepen]);
 
   /** True when the active group exists but the user is not a secretaris for it. */
   const isActiveGroupForbidden = useMemo(() => {
@@ -347,6 +368,17 @@ export default function RoosterMakenSecretarisPage() {
   const vanGte = useMemo(() => vanGteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
   const totLte = useMemo(() => totLteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
 
+  const idsToShow = useMemo(
+    () => (selectedIds !== null ? selectedIds : defaultSelectedIds(activeWaarneemgroepId, waarneemgroepIds)),
+    [selectedIds, activeWaarneemgroepId, waarneemgroepIds]
+  );
+
+  /** Fetch diensten only for visible groups (avoids huge admin queries; refetches when filter changes). */
+  const dienstenWaarneemgroepIds = useMemo(
+    () => Array.from(idsToShow).sort((a, b) => a - b),
+    [idsToShow]
+  );
+
   // Only fetch assignment types — exclude preference types (2, 3, 9, 10, 5001)
   // so vakantie preferences never leak into the shift block stripes.
   const ASSIGNMENT_TYPES = useMemo(() => [0, 1, 4, 5, 6, 11], []);
@@ -354,7 +386,7 @@ export default function RoosterMakenSecretarisPage() {
   const { data: dienstenResponse, loading: dienstenLoading, error: dienstenError } = useDienstenSubscription(
     vanGte,
     totLte,
-    waarneemgroepIds,
+    dienstenWaarneemgroepIds,
     ASSIGNMENT_TYPES,
     undefined,
     refreshKey
@@ -364,11 +396,6 @@ export default function RoosterMakenSecretarisPage() {
     const blocks = dienstenToShiftBlocks(dienstenResponse ?? null);
     return groupShiftBlocksByWaarneemgroep(blocks);
   }, [dienstenResponse]);
-
-  const idsToShow = useMemo(
-    () => (selectedIds !== null ? selectedIds : defaultSelectedIds(activeWaarneemgroepId, waarneemgroepIds)),
-    [selectedIds, activeWaarneemgroepId, waarneemgroepIds]
-  );
 
   const toggleWaarneemgroep = useCallback(
     (wgId: number, checked: boolean) => {
@@ -402,6 +429,11 @@ export default function RoosterMakenSecretarisPage() {
 
   const selectedWaarneemgroepIds = useMemo(() => Array.from(idsToShow), [idsToShow]);
   const { data: voorkeuren } = useVoorkeurenSubscription(vanGte, totLte, selectedWaarneemgroepIds);
+
+  const highlightedVoorkeurUserIds = useMemo(
+    () => buildHighlightedVoorkeurUserIds(selectedDoctor, voorkeuren),
+    [selectedDoctor, voorkeuren]
+  );
 
   // Fetch doctors (full DeelnemerWithGroepen) once on mount / when groups change
   useEffect(() => {
@@ -611,7 +643,7 @@ export default function RoosterMakenSecretarisPage() {
     [selectedDoctor, deleteMode, callAssign]
   );
 
-  const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
+  const loading = waarneemgroepenLoading || (dienstenWaarneemgroepIds.length > 0 && dienstenLoading);
   const error = waarneemgroepenError ?? dienstenError;
 
   return (
@@ -674,10 +706,10 @@ export default function RoosterMakenSecretarisPage() {
             <CardTitle>
               <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
                 <FilterPopover
-                  waarneemgroepen={secretarisWaarneemgroepen}
+                  waarneemgroepen={filterWaarneemgroepen}
                   loading={waarneemgroepenLoading}
                   idsToShow={idsToShow}
-                  totalCount={secretarisWaarneemgroepen.length}
+                  totalCount={filterWaarneemgroepen.length}
                   onToggle={toggleWaarneemgroep}
                 />
                 Rooster maken <InfoPopover />
@@ -844,6 +876,7 @@ export default function RoosterMakenSecretarisPage() {
                     setViewYear(year);
                   }}
                   voorkeuren={voorkeuren ?? undefined}
+                  highlightedVoorkeurUserIds={highlightedVoorkeurUserIds}
                   onSectionShiftClick={handleSectionShiftClick}
                   vakanties={calendarVakanties}
                 />

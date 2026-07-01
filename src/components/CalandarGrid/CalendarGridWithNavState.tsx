@@ -38,6 +38,8 @@ export interface CalendarGridWithNavStateProps {
   showPreferences?: boolean;
   /** When set, renders voorkeur blocks per user below the shift lane (secretaris view). */
   voorkeuren?: VoorkeurItem[];
+  /** When set, matching user voorkeur row bands get a highlight background (secretaris roster view). */
+  highlightedVoorkeurUserIds?: ReadonlySet<number> | null;
   /** When true, main shift blocks use icon-only filled preference styling (see CalendarGrid). */
   hidePreferenceFillInitialsOnShiftBlocks?: boolean;
   /** Click-and-drag preference assign on middle strips (see CalendarGrid). */
@@ -84,6 +86,7 @@ export function CalendarGridWithNavState({
   getChipByCode,
   showPreferences,
   voorkeuren,
+  highlightedVoorkeurUserIds,
   hidePreferenceFillInitialsOnShiftBlocks,
   enablePreferencePaintAssign,
   onPreferencePaintSessionStart,
@@ -130,6 +133,7 @@ export function CalendarGridWithNavState({
       getChipByCode={getChipByCode}
       showPreferences={showPreferences}
       voorkeuren={voorkeuren}
+      highlightedVoorkeurUserIds={highlightedVoorkeurUserIds}
       hidePreferenceFillInitialsOnShiftBlocks={hidePreferenceFillInitialsOnShiftBlocks}
       enablePreferencePaintAssign={enablePreferencePaintAssign}
       onPreferencePaintSessionStart={onPreferencePaintSessionStart}

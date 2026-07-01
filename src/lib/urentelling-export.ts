@@ -33,13 +33,13 @@ export async function downloadUrentellingWorkbook(params: {
   const XLSX = await import('xlsx');
   const workbook = XLSX.utils.book_new();
 
-  const summaryHeader = ['Naam', ...params.columns.map((column) => column.tekst), 'Totaal'];
+  const summaryHeader = ['Naam', 'FTE', ...params.columns.map((column) => column.tekst), 'Totaal'];
   const summaryRows: Array<Array<string | number>> = [];
 
   for (const row of params.rows) {
-    summaryRows.push([row.naam, ...row.urenPerAantekening, row.totaalDienst]);
+    summaryRows.push([row.naam, row.fte, ...row.urenPerAantekening, row.totaalDienst]);
     if (row.totaalAchterwacht > 0) {
-      summaryRows.push(['als achterwacht', ...row.achterwachtPerAantekening, row.totaalAchterwacht]);
+      summaryRows.push(['als achterwacht', '', ...row.achterwachtPerAantekening, row.totaalAchterwacht]);
     }
   }
 
@@ -51,6 +51,7 @@ export async function downloadUrentellingWorkbook(params: {
   ]);
   summarySheet['!cols'] = [
     { wch: 36 },
+    { wch: 8 },
     ...params.columns.map(() => ({ wch: 14 })),
     { wch: 12 },
   ];

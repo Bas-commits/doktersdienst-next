@@ -11,6 +11,8 @@ const memberRows = [
     voorletterstussenvoegsel: null,
     initialen: null,
     color: '#336699',
+    echtedeelnemer: true,
+    fte: 1,
   },
 ];
 
@@ -164,8 +166,13 @@ describe('GET /api/urentelling', () => {
         color: string;
         urenPerAantekening: number[];
         totaalDienst: number;
+        fte: number;
       }>;
       details: Array<{ naam: string; categorie: string; aantekening: string; uren: number }>;
+      commitment: {
+        totalFte: number;
+        perRow: Array<Array<{ level: string; ratio: number | null; expectedHours: number | null }>>;
+      };
     };
     expect(body.van).toBe(1000);
     expect(body.tot).toBe(5000);
@@ -176,6 +183,7 @@ describe('GET /api/urentelling', () => {
     expect(body.rows[0].color).toBe('#336699');
     expect(body.rows[0].urenPerAantekening).toEqual([1]);
     expect(body.rows[0].totaalDienst).toBe(1);
+    expect(body.rows[0].fte).toBe(1);
     expect(body.details).toHaveLength(1);
     expect(body.details[0]).toMatchObject({
       naam: 'Jansen, Anna',
@@ -183,6 +191,19 @@ describe('GET /api/urentelling', () => {
       idaantekening: 10,
       aantekening: 'Huisartsenpost',
       uren: 1,
+    });
+    expect(body.commitment.totalFte).toBe(1);
+    expect(body.commitment.perRow).toHaveLength(1);
+    expect(body.commitment.perRow[0]).toHaveLength(2);
+    expect(body.commitment.perRow[0][0]).toMatchObject({
+      level: 'orange',
+      ratio: 1,
+      expectedHours: 1,
+    });
+    expect(body.commitment.perRow[0][1]).toMatchObject({
+      level: 'orange',
+      ratio: 1,
+      expectedHours: 1,
     });
   });
 

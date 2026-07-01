@@ -173,7 +173,8 @@ export default async function handler(
             ok: true,
             iddeelnemer: existingDeelnemerId,
             outcome: 'already-linked',
-            message: 'gebruiker al toegewezen aan deze waarneemgroep',
+            message:
+              'Deze deelnemer zit al in deze waarneemgroep en kan daarom niet worden toegevoegd.',
           });
         }
 
@@ -223,7 +224,8 @@ export default async function handler(
           ok: true,
           iddeelnemer: existingDeelnemerId,
           outcome: 'already-linked',
-          message: 'gebruiker al toegewezen aan deze waarneemgroep',
+          message:
+            'Deze deelnemer zit al in deze waarneemgroep en kan daarom niet worden toegevoegd.',
         });
       }
       const msg = err instanceof Error ? err.message : 'Koppelen deelnemer aan waarneemgroep mislukt.';

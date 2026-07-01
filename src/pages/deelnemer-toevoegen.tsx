@@ -21,6 +21,8 @@ import { ROL_LABELS } from '@/lib/rol-labels';
 const GROEP_SECRETARIS = 2;
 const GROEP_ADMINISTRATOR = 5;
 const BRAND = '#c91b23';
+const ALREADY_IN_WG_ERROR =
+  'Deze deelnemer zit al in deze waarneemgroep en kan daarom niet worden toegevoegd.';
 
 const selectClass =
   'h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50';
@@ -111,6 +113,7 @@ export default function DeelnemerToevoegenPage() {
   const [bestaatInAndereWaarneemgroep, setBestaatInAndereWaarneemgroep] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const [leden, setLeden] = useState<DeelnemerWithGroepen[]>([]);
@@ -239,6 +242,22 @@ export default function DeelnemerToevoegenPage() {
 
   const selectedWgLabel = activeWaarneemgroep?.naam;
 
+  const sortedLeden = useMemo(() => {
+    const wgId =
+      activeWaarneemgroepId != null && activeWaarneemgroepId !== ''
+        ? Number(activeWaarneemgroepId)
+        : NaN;
+    if (!Number.isFinite(wgId) || wgId <= 0) return leden;
+    return [...leden].sort((a, b) => {
+      const aAangemeld =
+        a.waarneemgroepen.find((wg) => wg.id === wgId)?.aangemeld === true;
+      const bAangemeld =
+        b.waarneemgroepen.find((wg) => wg.id === wgId)?.aangemeld === true;
+      if (aAangemeld === bAangemeld) return 0;
+      return aAangemeld ? -1 : 1;
+    });
+  }, [leden, activeWaarneemgroepId]);
+
   const validateClient = (): string | null => {
     const em = email.trim().toLowerCase();
     if (!em) return 'Vul een e-mailadres in.';
@@ -267,6 +286,15 @@ export default function DeelnemerToevoegenPage() {
       if (!Number.isInteger(parsedFunctie) || parsedFunctie < 1 || parsedFunctie > 4) {
         return 'Selecteer een geldige functie.';
       }
+    }
+    if (Number.isFinite(wg) && wg > 0) {
+      const alreadyInWg = leden.some((d) => {
+        const memberEmail = (d.login ?? '').trim().toLowerCase();
+        if (memberEmail !== em) return false;
+        const membership = d.waarneemgroepen.find((w) => w.id === wg);
+        return membership?.aangemeld === true;
+      });
+      if (alreadyInWg) return ALREADY_IN_WG_ERROR;
     }
     return null;
   };
@@ -555,7 +583,7 @@ export default function DeelnemerToevoegenPage() {
 
     setResendingVerificationId(d.id);
     try {
-      const res = await fetch('/api/deelnemers/E-mail verificatie-opnieuw', {
+      const res = await fetch('/api/deelnemers/verificatie-opnieuw', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -582,10 +610,17 @@ export default function DeelnemerToevoegenPage() {
     }
   }
 
+  function openAddModal() {
+    setSubmitError(null);
+    setIsAddModalOpen(true);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSubmitError(null);
     const msg = validateClient();
     if (msg) {
+      setSubmitError(msg);
       toast.error(msg);
       return;
     }
@@ -636,7 +671,10 @@ export default function DeelnemerToevoegenPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(typeof body?.error === 'string' ? body.error : `Fout (${res.status})`);
+        const errMsg =
+          typeof body?.error === 'string' ? body.error : `Fout (${res.status})`;
+        setSubmitError(errMsg);
+        toast.error(errMsg);
         return;
       }
       const outcome =
@@ -644,7 +682,12 @@ export default function DeelnemerToevoegenPage() {
           ? (body as { outcome: string }).outcome
           : 'created';
       if (outcome === 'already-linked') {
-        toast.info('gebruiker al toegewezen aan deze waarneemgroep');
+        const errMsg =
+          typeof (body as { message?: string }).message === 'string'
+            ? (body as { message: string }).message
+            : ALREADY_IN_WG_ERROR;
+        setSubmitError(errMsg);
+        toast.error(errMsg);
         return;
       }
       const okMsg =
@@ -663,6 +706,7 @@ export default function DeelnemerToevoegenPage() {
       setFte(1);
       setFteDraft(undefined);
       setBestaatInAndereWaarneemgroep(false);
+      setSubmitError(null);
       setIsAddModalOpen(false);
       void loadOpties(activeWaarneemgroepId);
       void loadLeden(idWG);
@@ -728,7 +772,7 @@ export default function DeelnemerToevoegenPage() {
               </div>
             )}
 
-            {mayCreate && isActiveGroupForbidden && (
+            {mayCreate && !isAdmin && isActiveGroupForbidden && (
               <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-800" role="alert">
                 U bent geen secretaris voor deze waarneemgroep, kies een andere waarneemgroep.
               </div>
@@ -779,7 +823,7 @@ export default function DeelnemerToevoegenPage() {
                         title="Nieuwe deelnemer"
                         aria-label="Nieuwe deelnemer"
                         className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-destructive text-destructive-foreground transition-colors hover:bg-destructive/90"
-                        onClick={() => setIsAddModalOpen(true)}
+                        onClick={openAddModal}
                       >
                         <UserPlus className="h-5 w-5 text-white" />
                       </button>
@@ -815,7 +859,7 @@ export default function DeelnemerToevoegenPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {leden.map((d) => {
+                        {sortedLeden.map((d) => {
                           const membershipInWg = d.waarneemgroepen.find((wg) => wg.id === wgNumeric);
                           const rolInWg = membershipInWg?.idgroep ?? null;
                           const functieInWg = membershipInWg?.idfunctie ?? null;
@@ -1143,7 +1187,10 @@ export default function DeelnemerToevoegenPage() {
           aria-modal="true"
           aria-label="Nieuwe deelnemer"
           onClick={() => {
-            if (!submitting) setIsAddModalOpen(false);
+            if (!submitting) {
+              setSubmitError(null);
+              setIsAddModalOpen(false);
+            }
           }}
         >
           <div
@@ -1156,7 +1203,10 @@ export default function DeelnemerToevoegenPage() {
                 type="button"
                 variant="ghost"
                 size="icon"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => {
+                  setSubmitError(null);
+                  setIsAddModalOpen(false);
+                }}
                 disabled={submitting}
                 aria-label="Sluit toevoegen deelnemer"
               >
@@ -1173,7 +1223,10 @@ export default function DeelnemerToevoegenPage() {
                   type="email"
                   autoComplete="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (submitError) setSubmitError(null);
+                  }}
                   required
                   maxLength={50}
                   className="w-full"
@@ -1364,6 +1417,12 @@ export default function DeelnemerToevoegenPage() {
                     </div>
                   </div>
                 </>
+              )}
+
+              {submitError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {submitError}
+                </p>
               )}
 
               <Button

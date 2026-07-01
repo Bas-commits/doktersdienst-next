@@ -178,6 +178,7 @@ function FilterPopover({
 }
 
 const GROEP_SECRETARIS = 2;
+const GROEP_ADMINISTRATOR = 5;
 
 /** Section label for toast messages. */
 const SECTION_LABEL: Record<string, string> = {
@@ -310,6 +311,11 @@ export default function RoosterMakenSecretarisPage() {
   /** When null, effective selection is "only header-selected". When set, user has toggled checkboxes. */
   const [selectedIds, setSelectedIds] = useState<Set<number> | null>(null);
 
+  const isAdmin = useMemo(
+    () => (waarneemgroepen ?? []).some((wg) => wg.idgroep === GROEP_ADMINISTRATOR),
+    [waarneemgroepen]
+  );
+
   /** Only groups where the current user is a secretaris. Used to filter the popover. */
   const secretarisWaarneemgroepen = useMemo(
     () => (waarneemgroepen ?? []).filter((wg) => wg.idgroep === GROEP_SECRETARIS),
@@ -318,6 +324,7 @@ export default function RoosterMakenSecretarisPage() {
 
   /** True when the active group exists but the user is not a secretaris for it. */
   const isActiveGroupForbidden = useMemo(() => {
+    if (isAdmin) return false;
     if (!activeWaarneemgroepId) return false;
     const n = Number(activeWaarneemgroepId);
     if (Number.isNaN(n)) return false;
@@ -325,7 +332,7 @@ export default function RoosterMakenSecretarisPage() {
     // Only show the banner once the groups have loaded (otherwise we'd flash it on every mount)
     if (!activeWg && waarneemgroepenLoading) return false;
     return activeWg ? activeWg.idgroep !== GROEP_SECRETARIS : false;
-  }, [activeWaarneemgroepId, waarneemgroepen, waarneemgroepenLoading]);
+  }, [activeWaarneemgroepId, isAdmin, waarneemgroepen, waarneemgroepenLoading]);
 
   const waarneemgroepIds = useMemo(() => {
     if (!waarneemgroepen?.length) return [];

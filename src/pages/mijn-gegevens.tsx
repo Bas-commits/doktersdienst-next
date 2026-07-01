@@ -165,6 +165,9 @@ export default function MijnGegevensPage() {
   const [lookup, setLookup] = useState<MijnGegevensLookup | null>(null);
   const [isDelegatedEdit, setIsDelegatedEdit] = useState(false);
   const [canEditEchtedeelnemer, setCanEditEchtedeelnemer] = useState(false);
+  const [canAdminEditEmail, setCanAdminEditEmail] = useState(false);
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
+  const [pendingEmailChange, setPendingEmailChange] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -232,6 +235,9 @@ export default function MijnGegevensPage() {
         const { profile: profileRes, lookup: lookupRes } = data;
         setIsDelegatedEdit(data.isDelegatedEdit === true);
         setCanEditEchtedeelnemer(data.canEditEchtedeelnemer === true);
+        setCanAdminEditEmail(data.canAdminEditEmail === true);
+        setEmailVerified(data.emailVerified ?? null);
+        setPendingEmailChange(null);
         setProfile(profileRes);
         setLookup(lookupRes);
         setLogin(profileRes.deelnemer.login ?? '');
@@ -430,6 +436,32 @@ export default function MijnGegevensPage() {
       }
     }
 
+    const trimmedEmail = huisemail.trim();
+    const savedEmail = savedSnapshot?.huisemail.trim() ?? '';
+    const emailChanged = trimmedEmail.toLowerCase() !== savedEmail.toLowerCase();
+    const useVerifiedEmailChangeFlow =
+      !isDelegatedEdit && emailVerified === true && emailChanged;
+
+    if (useVerifiedEmailChangeFlow) {
+      const emailRes = await fetch('/api/account/email-wijziging-aanvragen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ newEmail: trimmedEmail }),
+      });
+      const emailData = await emailRes.json();
+      if (!emailRes.ok) {
+        setIsSubmitting(false);
+        toast.error(emailData.error ?? 'E-mailwijziging aanvragen mislukt');
+        return false;
+      }
+      setPendingEmailChange(trimmedEmail);
+      toast.success(
+        emailData.message ??
+          `Verificatiemail verstuurd naar ${trimmedEmail}. Uw login wijzigt pas na bevestiging.`
+      );
+    }
+
     const body: MijnGegevensUpdateBody = {
       color,
       achternaam: achternaam.trim() || undefined,
@@ -463,8 +495,10 @@ export default function MijnGegevensPage() {
             }))
           : undefined,
     };
-    if (!isDelegatedEdit) {
-      body.huisemail = huisemail.trim() || undefined;
+    if (!isDelegatedEdit && !useVerifiedEmailChangeFlow) {
+      body.huisemail = trimmedEmail || undefined;
+    } else if (isDelegatedEdit && canAdminEditEmail) {
+      body.huisemail = trimmedEmail || undefined;
     }
 
     const res = await fetch(apiPath, {
@@ -482,9 +516,9 @@ export default function MijnGegevensPage() {
     }
 
     if (!isDelegatedEdit && data.loginUpdated) {
-      setLogin(huisemail.trim());
+      setLogin(trimmedEmail);
       toast.success('Gegevens opgeslagen. Uw loginnaam is bijgewerkt naar uw e-mailadres.');
-    } else {
+    } else if (!useVerifiedEmailChangeFlow) {
       toast.success('Gegevens opgeslagen.');
     }
 
@@ -504,7 +538,7 @@ export default function MijnGegevensPage() {
       huisadrplaats,
       huisadrtelnr,
       huisadrfax,
-      huisemail,
+      huisemail: useVerifiedEmailChangeFlow ? savedEmail : trimmedEmail,
       echtedeelnemer,
       smsdienstbegin,
       callRecording,
@@ -591,7 +625,7 @@ export default function MijnGegevensPage() {
                 
 
                 <div className={formSectionClass}>
-                  {!isDelegatedEdit ? (
+                  {!isDelegatedEdit || canAdminEditEmail ? (
                     <>
                       <div className="flex flex-col gap-4 sm:flex-row">
                         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -604,39 +638,60 @@ export default function MijnGegevensPage() {
                             required
                             disabled={isSubmitting}
                           />
-                        </div>
-                        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                          <Label htmlFor="login" className="text-muted-foreground">
-                            Loginnaam
-                          </Label>
-                          <Input
-                            id="login"
-                            type="text"
-                            value={login}
-                            autoComplete="username"
-                            disabled
-                            className="text-muted-foreground"
-                          />
-                          {login !== huisemail && login !== '' && (
+                          {!isDelegatedEdit && emailVerified === true && (
                             <p className="text-xs text-muted-foreground">
-                              Uw loginnaam verschilt van uw e-mailadres en wordt automatisch bijgewerkt bij het opslaan.
+                              Wijzigingen aan uw e-mailadres vereisen bevestiging via een link in uw inbox.
+                              Uw wachtwoord blijft hetzelfde.
+                            </p>
+                          )}
+                          {pendingEmailChange && (
+                            <p className="text-xs text-amber-800 dark:text-amber-200" role="status">
+                              Verificatiemail verstuurd naar {pendingEmailChange}. Uw login wijzigt pas na
+                              bevestiging.
                             </p>
                           )}
                         </div>
+                        {!isDelegatedEdit && (
+                          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                            <Label htmlFor="login" className="text-muted-foreground">
+                              Loginnaam
+                            </Label>
+                            <Input
+                              id="login"
+                              type="text"
+                              value={login}
+                              autoComplete="username"
+                              disabled
+                              className="text-muted-foreground"
+                            />
+                            {login !== huisemail && login !== '' && (
+                              <p className="text-xs text-muted-foreground">
+                                Uw loginnaam verschilt van uw e-mailadres en wordt automatisch bijgewerkt na
+                                e-mailbevestiging.
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex flex-col gap-1.5 border-t border-border/60 pt-4">
-                        <Label>Wachtwoord</Label>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-fit"
-                          onClick={() => setPasswordModalOpen(true)}
-                          disabled={isSubmitting}
-                        >
-                          Wijzig wachtwoord
-                        </Button>
-                      </div>
+                      {!isDelegatedEdit ? (
+                        <div className="flex flex-col gap-1.5 border-t border-border/60 pt-4">
+                          <Label>Wachtwoord</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-fit"
+                            onClick={() => setPasswordModalOpen(true)}
+                            disabled={isSubmitting}
+                          >
+                            Wijzig wachtwoord
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Als administrator kunt u het e-mailadres direct wijzigen zonder verificatie.
+                        </p>
+                      )}
                     </>
                   ) : (
                     <p className="text-sm text-muted-foreground">

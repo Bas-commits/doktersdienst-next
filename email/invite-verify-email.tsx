@@ -7,7 +7,7 @@ import {
   paragraphStyle,
 } from './components/doktersdienst-shell';
 
-export type VerifyEmailVariant = 'invite' | 'signup';
+export type VerifyEmailVariant = 'invite' | 'signup' | 'email_change';
 
 export type InviteVerifyEmailProps = {
   verifyUrl?: string;
@@ -61,6 +61,36 @@ export default function InviteVerifyEmail({
         </Text>
 
         <PrimaryButton href={verifyUrl}>E-mailadres bevestigen</PrimaryButton>
+
+        <LinkFallback actionUrl={verifyUrl} />
+      </DoktersdienstShell>
+    );
+  }
+
+  if (variant === 'email_change') {
+    const name = accountName?.trim();
+    const greetingLead = name ? `Hallo ${name},` : 'Hallo,';
+    return (
+      <DoktersdienstShell
+        previewText="Bevestig uw nieuwe e-mailadres voor De Doktersdienst"
+        siteUrl={siteUrl}
+        logoSrc={logoSrc}
+      >
+        <Heading as="h1" style={headingStyle}>
+          Bevestig uw nieuwe e-mailadres
+        </Heading>
+        <Text style={paragraphStyle}>{greetingLead}</Text>
+        <Text style={paragraphStyle}>
+          U heeft een wijziging van uw e-mailadres aangevraagd bij De Doktersdienst.
+          Bevestig via de knop hieronder dat dit nieuwe adres van u is.
+        </Text>
+        <Text style={paragraphStyle}>
+          Na bevestiging wordt uw loginnaam bijgewerkt. Uw wachtwoord blijft hetzelfde.
+          De link is maar korte tijd geldig. Heeft u deze wijziging niet aangevraagd?
+          Negeer dan deze e-mail.
+        </Text>
+
+        <PrimaryButton href={verifyUrl}>Nieuw e-mailadres bevestigen</PrimaryButton>
 
         <LinkFallback actionUrl={verifyUrl} />
       </DoktersdienstShell>

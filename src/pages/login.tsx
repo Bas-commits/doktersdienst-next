@@ -154,8 +154,6 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [magicLinkLoading, setMagicLinkLoading] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
-  const [verifyResending, setVerifyResending] = useState(false);
-  const [verifyResentHint, setVerifyResentHint] = useState(false);
 
   const afterLoginUrl = useMemo(() => {
     const raw = router.query.callbackUrl;
@@ -170,6 +168,10 @@ export default function LoginPage() {
   }, [router.query.callbackUrl]);
 
   const passwordResetDone = router.isReady && router.query.reset === 'ok';
+  const emailChangedDone = router.isReady && router.query.emailChanged === 'ok';
+  const emailChangedInvalid =
+    router.isReady &&
+    (router.query.emailChanged === 'invalid' || router.query.emailChanged === 'taken');
 
   async function handleMagicLink() {
     setError(null);
@@ -196,7 +198,6 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoginErrorCode(null);
-    setVerifyResentHint(false);
     setIsLoading(true);
 
     const { data, error: signInError } = await authClient.signIn.email(
@@ -223,10 +224,7 @@ export default function LoginPage() {
         typeof errUnknown.message === 'string' && errUnknown.message.trim() !== ''
           ? errUnknown.message
           : 'Inloggen mislukt';
-      if (code === 'EMAIL_NOT_VERIFIED' || msg.toLowerCase().includes('verified')) {
-        msg =
-          'Dit account is nog niet geverifieerd. Open de uitnodiging in uw inbox of vraag onderaan een nieuwe verificatie-aan uw e‑mail adres.';
-      } else if (code === 'PASSWORD_NOT_SET') {
+      if (code === 'PASSWORD_NOT_SET') {
         msg =
           'U heeft nog geen wachtwoord ingesteld. Open de uitnodigingsmail en voltooi de stappen, of gebruik hieronder „Wachtwoord vergeten” om een instellink te ontvangen.';
       }
@@ -237,37 +235,6 @@ export default function LoginPage() {
 
     if (data) {
       router.push(afterLoginUrl);
-    }
-  }
-
-  async function handleResendVerification() {
-    setError(null);
-    setVerifyResentHint(false);
-    const em = email.trim().toLowerCase();
-    if (!em.includes('@')) {
-      setError('Vul eerst uw e-mailadres hierboven in.');
-      return;
-    }
-    setVerifyResending(true);
-    try {
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const r = await fetch(`${origin}/api/auth/send-verification-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email: em, callbackURL: afterLoginUrl }),
-      });
-      if (!r.ok) {
-        setError(
-          `Verificatie opnieuw sturen lukte niet${r.status === 429 ? ' (te vaak).' : '.'}`
-        );
-        return;
-      }
-      setVerifyResentHint(true);
-    } catch {
-      setError('Verificatie opnieuw sturen mislukt. Probeer het later opnieuw.');
-    } finally {
-      setVerifyResending(false);
     }
   }
 
@@ -306,15 +273,21 @@ export default function LoginPage() {
                   Uw wachtwoord is bijgewerkt. U kunt nu inloggen.
                 </p>
               )}
+              {emailChangedDone && (
+                <p className="text-sm text-green-700" role="status">
+                  Uw e-mailadres is gewijzigd. Log in met uw nieuwe e-mailadres.
+                </p>
+              )}
+              {emailChangedInvalid && (
+                <p className="text-sm text-destructive" role="alert">
+                  {router.query.emailChanged === 'taken'
+                    ? 'Dit e-mailadres is inmiddels door iemand anders in gebruik. Vraag opnieuw een wijziging aan.'
+                    : 'De bevestigingslink is ongeldig of verlopen. Vraag opnieuw een e-mailwijziging aan.'}
+                </p>
+              )}
               {magicLinkSent && (
                 <p className="text-sm text-neutral-800" role="status">
                   Als dit e-mailadres bij ons bekend is, is er een inloglink naar u verstuurd. Controleer uw inbox.
-                </p>
-              )}
-              {verifyResentHint && (
-                <p className="text-sm text-green-700" role="status">
-                  Als dit adres bij ons bekend en nog niet bevestigd is, wordt er een nieuwe verificatielink
-                  naar u toe gestuurd. Controleer uw inbox en spam-folder.
                 </p>
               )}
               {error && (
@@ -326,20 +299,8 @@ export default function LoginPage() {
                   >
                     {error}
                   </p>
-                  {(loginErrorCode === 'PASSWORD_NOT_SET' ||
-                    loginErrorCode === 'EMAIL_NOT_VERIFIED') && (
+                  {(loginErrorCode === 'PASSWORD_NOT_SET') && (
                     <div className="flex flex-col gap-2 text-sm">
-                      {loginErrorCode === 'EMAIL_NOT_VERIFIED' && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="mx-auto min-w-[200px]"
-                          disabled={verifyResending}
-                          onClick={handleResendVerification}
-                        >
-                          {verifyResending ? 'Bezig…' : 'Verificatiemail opnieuw sturen'}
-                        </Button>
-                      )}
                       {loginErrorCode === 'PASSWORD_NOT_SET' && (
                         <p className="text-center text-neutral-700">
                           <Link

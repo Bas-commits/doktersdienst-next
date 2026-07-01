@@ -117,6 +117,7 @@ export function AuthenticatedLayout({ children, headerProps }: AuthenticatedLayo
   const [globalIdgroep, setGlobalIdgroep] = useState<number | null | undefined>(undefined);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [initialen, setInitialen] = useState<string | null>(null);
+  const [accountGateReady, setAccountGateReady] = useState(false);
 
   const headerUser = useMemo(
     () => headerUserFromSession(session?.user ?? null, { displayName, initialen }),
@@ -165,9 +166,44 @@ export function AuthenticatedLayout({ children, headerProps }: AuthenticatedLayo
     };
   }, [session?.user, isPending, globalIdgroep]);
 
-  const isGlobalRoleLoading = !isPending && !!session?.user && globalIdgroep === undefined;
+  useEffect(() => {
+    if (isPending || !session?.user) return;
 
-  if (isPending || isGlobalRoleLoading) {
+    const abortController = new AbortController();
+
+    fetch('/api/account/status', {
+      credentials: 'include',
+      signal: abortController.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          setAccountGateReady(true);
+          return;
+        }
+        const data = (await response.json()) as {
+          needsEmailOnboarding?: boolean;
+        };
+        if (data.needsEmailOnboarding === true) {
+          router.replace('/account/email-instellen');
+          return;
+        }
+        setAccountGateReady(true);
+      })
+      .catch(() => {
+        if (!abortController.signal.aborted) {
+          setAccountGateReady(true);
+        }
+      });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [session?.user, isPending, router]);
+
+  const isGlobalRoleLoading = !isPending && !!session?.user && globalIdgroep === undefined;
+  const isAccountGateLoading = !isPending && !!session?.user && !accountGateReady;
+
+  if (isPending || isGlobalRoleLoading || isAccountGateLoading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4" role="status" aria-label="Laden">
         <p className="text-muted-foreground">Laden…</p>

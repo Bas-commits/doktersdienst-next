@@ -24,8 +24,11 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/forgot-password') ||
     pathname.startsWith('/reset-password') ||
     pathname.startsWith('/signup') ||
+    pathname.startsWith('/account/email-instellen') ||
+    pathname.startsWith('/account/wachtwoord-instellen') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/invite/') ||
+    pathname.startsWith('/api/account/') ||
     pathname === '/api/health' ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/static') ||

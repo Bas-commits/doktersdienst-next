@@ -37,7 +37,11 @@ const GELDIGE_WAARNEEMGROEP_FUNCTIES = new Set([1, 2, 3, 4]);
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<MijnGegevensPageData | { success: true; loginUpdated: boolean } | { error: string }>
+  res: NextApiResponse<
+    | MijnGegevensPageData
+    | { success: true; loginUpdated: boolean }
+    | { error: string; code?: string }
+  >
 ) {
   if (req.method !== 'GET' && req.method !== 'PATCH') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -93,6 +97,7 @@ export default async function handler(
             smsdienstbegin: deelnemers.smsdienstbegin,
             callRecording: deelnemers.callRecording,
             idsettelnrdienst: deelnemers.idsettelnrdienst,
+            emailVerified: deelnemers.emailVerified,
           })
           .from(deelnemers)
           .where(eq(deelnemers.id, targetDeelnemerId))
@@ -386,6 +391,8 @@ export default async function handler(
         lookup,
         isDelegatedEdit,
         canEditEchtedeelnemer: mayEditEchtedeelnemer,
+        canAdminEditEmail: isDelegatedEdit && actor.isAdmin,
+        emailVerified: deelnemer.emailVerified ?? null,
         targetDeelnemerId,
         actingDeelnemerId: actor.id,
       };
@@ -406,7 +413,12 @@ export default async function handler(
 
   try {
     if (isDelegatedEdit) {
-      if (body.huisemail !== undefined || body.passa !== undefined || body.passb !== undefined) {
+      if (body.passa !== undefined || body.passb !== undefined) {
+        return res.status(403).json({
+          error: 'Wachtwoord kan niet worden aangepast voor deze deelnemer',
+        });
+      }
+      if (body.huisemail !== undefined && !actor.isAdmin) {
         return res.status(403).json({
           error: 'E-mail en wachtwoord kunnen niet worden aangepast voor deze deelnemer',
         });
@@ -476,13 +488,32 @@ export default async function handler(
         return res.status(400).json({ error: 'Ongeldig e-mailadres' });
       }
       const newEmail = rawEmail || null;
+
+      const [currentDeelnemer] = await db
+        .select({
+          login: deelnemers.login,
+          huisemail: deelnemers.huisemail,
+          emailVerified: deelnemers.emailVerified,
+        })
+        .from(deelnemers)
+        .where(eq(deelnemers.id, targetDeelnemerId))
+        .limit(1);
+
+      if (!isDelegatedEdit && currentDeelnemer?.emailVerified === true) {
+        const currentLogin = (currentDeelnemer.login || '').trim().toLowerCase();
+        const currentHuisemail = (currentDeelnemer.huisemail || '').trim().toLowerCase();
+        const normalizedNew = (newEmail || '').trim().toLowerCase();
+        if (normalizedNew !== currentLogin && normalizedNew !== currentHuisemail) {
+          return res.status(400).json({
+            error:
+              'E-mailwijzigingen vereisen bevestiging via een verificatielink. Gebruik het aparte e-mailwijzigingsproces.',
+            code: 'EMAIL_CHANGE_REQUIRES_VERIFICATION',
+          });
+        }
+      }
+
       update.huisemail = newEmail;
       if (newEmail) {
-        const [currentDeelnemer] = await db
-          .select({ login: deelnemers.login })
-          .from(deelnemers)
-          .where(eq(deelnemers.id, targetDeelnemerId))
-          .limit(1);
         if (currentDeelnemer && currentDeelnemer.login !== newEmail) {
           const [dupe] = await db
             .select({ id: deelnemers.id })
@@ -493,7 +524,11 @@ export default async function handler(
             return res.status(400).json({ error: 'Dit e-mailadres is al in gebruik als loginnaam' });
           }
           update.login = newEmail;
+          update.email = newEmail;
           loginUpdated = true;
+          if (isDelegatedEdit && actor.isAdmin) {
+            update.emailVerified = true;
+          }
         }
       }
     }

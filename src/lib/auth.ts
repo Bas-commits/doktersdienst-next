@@ -1,12 +1,17 @@
-import { APIError, BASE_ERROR_CODES } from '@better-auth/core/error';
+import { APIError } from '@better-auth/core/error';
 import { betterAuth } from 'better-auth';
 import { createAuthMiddleware } from 'better-auth/api';
 import { magicLink } from 'better-auth/plugins';
 import { Pool } from 'pg';
-import { legacyMD5Hash, legacyMD5Verify } from '@/lib/legacy-password';
+import { legacyMD5Hash } from '@/lib/legacy-password';
+import {
+  resolveStoredCredentialHash,
+  verifyStoredCredentialHash,
+} from '@/lib/legacy-credential';
 import { pool as appPool } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { assertStrongPasswordOrThrow } from '@/lib/password-policy';
+import { PASSWORD_UPGRADED_MARKER } from '@/lib/account-password-upgrade';
 import {
   sendMagicLinkEmailViaResend,
   sendPasswordResetEmailViaResend,
@@ -92,10 +97,10 @@ async function syncDeelnemerPasswordFromAccount(userId: string): Promise<void> {
       log.warn({ userId }, 'onPasswordReset: no credential account password found');
       return;
     }
-    await client.query('UPDATE public.deelnemers SET encrypted_password = $1 WHERE id = $2::int', [
-      hash,
-      userId,
-    ]);
+    await client.query(
+      'UPDATE public.deelnemers SET encrypted_password = $1, password = $2 WHERE id = $3::int',
+      [hash, PASSWORD_UPGRADED_MARKER, userId]
+    );
     log.info({ userId }, 'deelnemers.encrypted_password synced after password reset');
   } finally {
     client.release();
@@ -152,7 +157,7 @@ export const auth = betterAuth({
     password: {
       hash: async (password: string) => legacyMD5Hash(password),
       verify: async ({ hash, password }) => {
-        const result = await legacyMD5Verify(hash, password);
+        const result = await verifyStoredCredentialHash(hash, password);
         log.info({ hashPrefix: hash?.slice(0, 6), result }, 'password verify');
         return result;
       },
@@ -207,10 +212,11 @@ export const auth = betterAuth({
           const deelnemerRes = await client.query<{
             id: number;
             encrypted_password: string | null;
+            password: string | null;
             name: string | null;
             email_verified: boolean | null;
           }>(
-            'SELECT id, encrypted_password, name, email_verified FROM deelnemers WHERE LOWER(TRIM(login)) = $1 LIMIT 1',
+            'SELECT id, encrypted_password, password, name, email_verified FROM deelnemers WHERE LOWER(TRIM(login)) = $1 LIMIT 1',
             [emailNorm]
           );
           log.info(
@@ -218,27 +224,22 @@ export const auth = betterAuth({
             'raw deelnemers query result'
           );
           const row = deelnemerRes.rows?.[0];
-          const hasPwdHash = !!(row?.encrypted_password && String(row.encrypted_password).trim() !== '');
+          const credentialHash = row ? resolveStoredCredentialHash(row) : null;
+          const passwordUpgraded = row?.password === PASSWORD_UPGRADED_MARKER;
           log.info(
             {
               email: ctx.body.email,
               found: !!row,
               id: row?.id,
-              hasPassword: hasPwdHash,
+              hasPassword: !!credentialHash,
+              passwordUpgraded,
               name: row?.name,
               emailVerified: row?.email_verified,
             },
             'deelnemers lookup result'
           );
 
-          if (row?.id != null && row.email_verified !== true) {
-            throw APIError.from('FORBIDDEN', {
-              message:
-                'Dit e-mailadres is nog niet bevestigd. Open de link in de uitnodiging om uw account te verifiëren.',
-              code: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED.code,
-            });
-          }
-          if (row?.id != null && row.email_verified === true && !hasPwdHash) {
+          if (row?.id != null && row.email_verified === true && passwordUpgraded && !credentialHash) {
             throw APIError.from('FORBIDDEN', {
               message:
                 'U heeft nog geen wachtwoord ingesteld. Open de link in uw uitnodigingsmail om uw wachtwoord te kiezen, of gebruik “wachtwoord vergeten” om een nieuwe link aan te vragen.',
@@ -246,7 +247,7 @@ export const auth = betterAuth({
             });
           }
 
-          if (row?.id != null && row?.encrypted_password) {
+          if (row?.id != null && credentialHash) {
             const userId = String(row.id);
             const accountId = `credential-${userId}`;
             // Debug: check constraints from app's perspective
@@ -259,11 +260,14 @@ export const auth = betterAuth({
               `INSERT INTO public.account (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt")
                VALUES ($1, $2, $2, 'credential', $3, now(), now())
                ON CONFLICT ON CONSTRAINT account_pkey DO UPDATE SET password = EXCLUDED.password, "updatedAt" = now()`,
-              [accountId, userId, row.encrypted_password]
+              [accountId, userId, credentialHash]
             );
             log.info({ userId, accountId }, 'account upserted');
           } else {
-            log.warn({ email: ctx.body.email, id: row?.id, hasPassword: !!row?.encrypted_password }, 'skipped account upsert — missing id or password');
+            log.warn(
+              { email: ctx.body.email, id: row?.id, hasPassword: !!credentialHash },
+              'skipped account upsert — missing id or password'
+            );
           }
         } catch (err) {
           log.error({ err, email: ctx.body.email }, 'error in sign-in hook');

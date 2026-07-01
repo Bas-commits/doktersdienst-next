@@ -208,6 +208,28 @@ export async function sendVerificationEmailViaResendWithProof(params: {
   });
 }
 
+export async function sendEmailChangeConfirmationEmailViaResend(params: {
+  to: string;
+  url: string;
+  userName: string | null;
+}): Promise<{ resendEmailId: string }> {
+  const { html, text } = await renderVerificationBodies({
+    url: params.url,
+    variant: 'email_change',
+    userName: params.userName,
+  });
+  const subject = 'Bevestig uw nieuwe e-mailadres — De Doktersdienst';
+
+  return sendRenderedEmailRequireResendDelivery({
+    to: params.to,
+    subject,
+    html,
+    text,
+    devLogPayload: { to: params.to, subject, url: params.url, flow: 'email-change-strict' },
+    errorLabel: 'Resend email change confirmation failed',
+  });
+}
+
 export async function sendInvitationVerifyEmailViaResend(params: {
   to: string;
   url: string;

@@ -73,6 +73,8 @@ export interface MijnGegevensPageData {
   lookup: MijnGegevensLookup;
   isDelegatedEdit?: boolean;
   canEditEchtedeelnemer?: boolean;
+  canAdminEditEmail?: boolean;
+  emailVerified?: boolean | null;
   targetDeelnemerId?: number;
   actingDeelnemerId?: number;
 }

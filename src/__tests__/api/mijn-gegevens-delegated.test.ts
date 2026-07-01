@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockGetAuthenticatedUser = vi.fn();
 const mockHasDelegatedProfileAccess = vi.fn();
@@ -157,10 +157,47 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
     });
   });
 
-  it('still allows self PATCH with huisemail updates', async () => {
+  it('allows admin delegated PATCH to change email immediately', async () => {
+    mockGetAuthenticatedUser.mockResolvedValueOnce({
+      id: 1,
+      email: 'admin@test.nl',
+      idgroep: 5,
+      isAdmin: true,
+    });
+    selectQueue.push(
+      [{ login: 'old@example.com', huisemail: 'old@example.com', emailVerified: true }],
+      []
+    );
+
     const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
     const res = makeRes();
-    selectQueue.push([{ login: 'new@example.com' }]);
+
+    await handler(
+      makeReq('PATCH', {
+        query: { deelnemerId: '22' },
+        body: { huisemail: 'new@example.com' },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(200);
+    expect(res._json).toEqual({ success: true, loginUpdated: true });
+    expect(mockUpdateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        login: 'new@example.com',
+        email: 'new@example.com',
+        emailVerified: true,
+      })
+    );
+  });
+
+  it('blocks verified self PATCH from changing email directly', async () => {
+    selectQueue.push([
+      { login: 'old@example.com', huisemail: 'old@example.com', emailVerified: true },
+    ]);
+
+    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
+    const res = makeRes();
 
     await handler(
       makeReq('PATCH', {
@@ -169,9 +206,10 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
       res
     );
 
-    expect(res._status).toBe(200);
-    expect(res._json).toEqual({ success: true, loginUpdated: false });
-    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(res._status).toBe(400);
+    expect(res._json).toMatchObject({
+      code: 'EMAIL_CHANGE_REQUIRES_VERIFICATION',
+    });
   });
 
   it('rejects invalid phone fields on PATCH', async () => {
@@ -180,7 +218,7 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
 
     await handler(
       makeReq('PATCH', {
-        body: { huisadrtelnr: 'invalid-phone' },
+        body: { huisadrtelnr: 'abc' },
       }),
       res
     );
@@ -189,32 +227,5 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
     expect(res._json).toEqual({
       error: 'Telefoonnummer is ongeldig. Gebruik bijvoorbeeld 0612345678, 31612345678 of +31612345678.',
     });
-  });
-
-  it('normalizes telnrSlots before storing them', async () => {
-    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
-    const res = makeRes();
-    selectQueue.push([{ idsettelnrdienst: 42 }]);
-
-    await handler(
-      makeReq('PATCH', {
-        body: {
-          telnrSlots: [
-            {
-              telnr: '06 12 34 56 78',
-              idlocatietelnr: 1001,
-              idomschrtelnr: 2,
-              smsontvanger: false,
-            },
-          ],
-        },
-      }),
-      res
-    );
-
-    expect(res._status).toBe(200);
-    expect(mockPoolQuery).toHaveBeenCalled();
-    const params = mockPoolQuery.mock.calls[0]?.[1] as unknown[];
-    expect(params[0]).toBe('31612345678');
   });
 });

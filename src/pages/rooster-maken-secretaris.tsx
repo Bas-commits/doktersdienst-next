@@ -22,6 +22,7 @@ import type { VoorkeurItem } from '@/types/voorkeuren';
 import { shiftBlockToastDescription } from '@/utils/shiftToastContext';
 import type { CalendarGridRow } from '@/components/CalandarGrid/CalendarGrid';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { getContrastTextColor } from '@/utils/contrastTextColor';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -689,7 +690,7 @@ export default function RoosterMakenSecretarisPage() {
             padding: '4px 10px',
             borderRadius: 6,
             backgroundColor: selectedDoctor.color ?? '#6b7280',
-            color: '#fff',
+            color: getContrastTextColor(selectedDoctor.color ?? '#6b7280'),
             fontWeight: 'bold',
             fontSize: 13,
             whiteSpace: 'nowrap',
@@ -786,8 +787,11 @@ export default function RoosterMakenSecretarisPage() {
                       style={isSelected ? { outline: `2px solid ${doctor.color ?? '#6b7280'}`, outlineOffset: '1px' } : undefined}
                     >
                       <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[11px] font-bold text-white"
-                        style={{ backgroundColor: doctor.color ?? '#6b7280' }}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[11px] font-bold"
+                        style={{
+                          backgroundColor: doctor.color ?? '#6b7280',
+                          color: getContrastTextColor(doctor.color ?? '#6b7280'),
+                        }}
                       >
                         {doctor.initials}
                       </span>

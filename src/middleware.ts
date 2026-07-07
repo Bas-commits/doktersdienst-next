@@ -37,7 +37,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for Better Auth session cookie
+  // Check for Better Auth session cookie. Browser/web traffic uses this path.
   const sessionCookie =
     request.cookies.get('better-auth.session_token') ||
     request.cookies.get('__Secure-better-auth.session_token');
@@ -45,6 +45,13 @@ export function middleware(request: NextRequest) {
   if (!sessionCookie?.value) {
     // API routes: return 401
     if (pathname.startsWith('/api/')) {
+      // React Native cannot rely on browser cookie handling. The mobile app
+      // sends Better Auth's bearer token; API handlers still validate it via
+      // auth.api.getSession, so middleware should not reject it first.
+      const authHeader = request.headers.get('authorization') ?? '';
+      if (authHeader.toLowerCase().startsWith('bearer ')) {
+        return NextResponse.next();
+      }
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     // Pages: redirect to login

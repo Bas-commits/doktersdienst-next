@@ -1,7 +1,7 @@
 import { APIError } from '@better-auth/core/error';
 import { betterAuth } from 'better-auth';
 import { createAuthMiddleware } from 'better-auth/api';
-import { magicLink } from 'better-auth/plugins';
+import { bearer, magicLink } from 'better-auth/plugins';
 import { Pool } from 'pg';
 import { legacyMD5Hash } from '@/lib/legacy-password';
 import {
@@ -107,7 +107,7 @@ async function syncDeelnemerPasswordFromAccount(userId: string): Promise<void> {
   }
 }
 
-const _authBaseURL = process.env.BETTER_AUTH_URL || 'http://localhost:3000';
+const _authBaseURL = process.env.BETTER_AUTH_URL || 'http://localhost:3005';
 export const auth = betterAuth({
   database: authDbPool,
   baseURL: _authBaseURL,
@@ -115,6 +115,8 @@ export const auth = betterAuth({
   trustedOrigins: [
     'http://localhost:3005',
     'http://127.0.0.1:3005',
+    // Android emulator reaches the host machine at 10.0.2.2
+    'http://10.0.2.2:3005',
     ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL] : []),
   ],
   plugins: [
@@ -126,6 +128,7 @@ export const auth = betterAuth({
         );
       },
     }),
+    bearer(),
   ],
   user: {
     modelName: 'deelnemers',

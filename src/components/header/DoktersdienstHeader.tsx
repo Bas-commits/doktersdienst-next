@@ -86,6 +86,8 @@ export function DoktersdienstHeader({
     iddeelnovern?: number | null;
     iddeelnemer?: number | null;
     senderId?: number | null;
+    overnameVanUnix?: number;
+    overnameTotUnix?: number;
     datum: string;
     datumVan?: string;
     datumTot?: string;
@@ -101,6 +103,31 @@ export function DoktersdienstHeader({
   const [verzoekPopoverOpen, setVerzoekPopoverOpen] = useState(false);
   const [verzoekIndex, setVerzoekIndex] = useState(0);
   const verzoekRef = useRef<HTMLLIElement>(null);
+
+  const buildRespondPayload = useCallback(
+    (v: OvernameVerzoek, action: 'accept' | 'decline' | 'delete') => {
+      const iddienstovern = Number(v.iddienstovern ?? 0);
+      const overnameId = Number(v.overnameId ?? 0);
+
+      return {
+        action,
+        iddienstovern: Number.isFinite(iddienstovern) ? iddienstovern : 0,
+        ...(Number.isFinite(overnameId) && overnameId > 0 ? { overnameId } : {}),
+        ...(Number.isFinite(Number(v.overnameVanUnix)) && Number(v.overnameVanUnix) > 0
+          ? { van: Number(v.overnameVanUnix) }
+          : {}),
+        ...(Number.isFinite(Number(v.overnameTotUnix)) && Number(v.overnameTotUnix) > 0
+          ? { tot: Number(v.overnameTotUnix) }
+          : {}),
+        ...(v.idwaarneemgroep != null && v.idwaarneemgroep > 0
+          ? { idwaarneemgroep: v.idwaarneemgroep }
+          : {}),
+        ...(v.iddeelnemer != null && v.iddeelnemer > 0 ? { iddeelnemer: v.iddeelnemer } : {}),
+        ...(v.iddeelnovern != null && v.iddeelnovern > 0 ? { iddeelnovern: v.iddeelnovern } : {}),
+      };
+    },
+    []
+  );
 
   const { data: session } = authClient.useSession();
   const [globalIdgroep, setGlobalIdgroep] = useState<number | null | undefined>(undefined);
@@ -216,7 +243,7 @@ export function DoktersdienstHeader({
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ iddienstovern: v.iddienstovern, action }),
+        body: JSON.stringify(buildRespondPayload(v, action)),
       });
       fetchVerzoeken();
       setVerzoekIndex(0);
@@ -227,7 +254,7 @@ export function DoktersdienstHeader({
         else toast.error('Verwijderen mislukt');
       }
     },
-    [verzoeken, verzoekIndex, fetchVerzoeken, router, session?.user?.id, globalIdgroep, roleTier]
+    [verzoeken, verzoekIndex, fetchVerzoeken, router, session?.user?.id, globalIdgroep, roleTier, buildRespondPayload]
   );
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);

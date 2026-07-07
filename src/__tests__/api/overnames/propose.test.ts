@@ -156,6 +156,25 @@ describe('POST /api/overnames/propose', () => {
     expect(res._json).toEqual({ error: 'Missing required fields' });
   });
 
+  it('creates proposal when iddienstovern is 0 but van/tot/idwaarneemgroep match a type=1 slot', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [{ id: 500, type: 1, van: VAN, tot: TOT, iddeelnemer: 0, idwaarneemgroep: WG }],
+      [{ id: null, type: 0, van: VAN, tot: TOT, iddeelnemer: 1305, idwaarneemgroep: WG }],
+      [{ iddeelnemer: TARGET_ID }],
+      [],
+    ];
+    const res = makeRes();
+    await handler(makeReq({ iddienstovern: 0 }), res);
+    expect(res._status).toBe(201);
+    expect(res._json).toEqual({ success: true });
+    expect(lastInsertValues).toMatchObject({
+      iddienstovern: 500,
+      iddeelnemer: 1305,
+      iddeelnovern: TARGET_ID,
+    });
+  });
+
   it('returns 400 when van >= tot', async () => {
     const res = makeRes();
     await handler(makeReq({ van: TOT, tot: VAN }), res);

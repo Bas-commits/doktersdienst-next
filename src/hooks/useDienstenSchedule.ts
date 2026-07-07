@@ -311,6 +311,8 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
       idwaarneemgroep: dienst.idwaarneemgroep,
       overnameType,
       iddienstovern: dienst.iddienstovern,
+      iddeelnemer: dienst.iddeelnemer,
+      iddeelnovern: dienst.iddeelnovern,
       senderId: dienst.senderId,
       isPartial,
       originalDoctor,

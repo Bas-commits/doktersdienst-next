@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, desc, eq, gt, gte, ilike, isNotNull, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import { db, schema } from '@/db';
-import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
+import { getAuthenticatedUser, hasGroupManagementAccess, isUserInWaarneemgroep } from '@/lib/api-auth';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 
 const { gesprekken, deelnemers } = schema;
@@ -88,6 +88,11 @@ export default async function handler(
     return res.status(400).json({ error: 'Missing or invalid idwaarneemgroep' });
   }
 
+  const iddeelnemer = parseSingleNumber(req.query.iddeelnemer);
+  if (req.query.iddeelnemer != null && iddeelnemer == null) {
+    return res.status(400).json({ error: 'Invalid iddeelnemer' });
+  }
+
   const vanGte = parseSingleNumber(req.query.vanGte);
   const vanLte = parseSingleNumber(req.query.vanLte);
   const hasRangeInput = req.query.vanGte != null || req.query.vanLte != null;
@@ -96,7 +101,10 @@ export default async function handler(
   }
 
   if (!user.isAdmin) {
-    const hasAccess = await hasGroupManagementAccess(user, idwaarneemgroep);
+    const hasAccess =
+      iddeelnemer === user.id
+        ? await isUserInWaarneemgroep(user.id, idwaarneemgroep)
+        : await hasGroupManagementAccess(user, idwaarneemgroep);
     if (!hasAccess) {
       return res.status(403).json({ error: 'Geen toegang tot deze waarneemgroep' });
     }
@@ -111,6 +119,10 @@ export default async function handler(
     eq(gesprekken.idwaarneemgroep, idwaarneemgroep),
     isRealCallCondition(),
   ];
+
+  if (iddeelnemer != null) {
+    whereConditions.push(eq(gesprekken.iddeelnemer, iddeelnemer));
+  }
 
   if (vanGte != null && vanLte != null) {
     whereConditions.push(gte(gesprekken.van, vanGte));

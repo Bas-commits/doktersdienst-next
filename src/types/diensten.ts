@@ -86,6 +86,10 @@ export interface ShiftBlockView {
   overnameType?: 'overname' | 'voorstelOvername' | 'vraagtekenOvername';
   /** ID of the original dienst being taken over (overname records only). */
   iddienstovern?: number;
+  /** ID of the doctor whose shift is being taken over (overname records only). */
+  iddeelnemer?: number;
+  /** ID of the target doctor for the overname (overname records only). */
+  iddeelnovern?: number;
   /** ID of the doctor who created the overname proposal. */
   senderId?: number;
   /** Whether this overname block is partial compared to the original dienst. */

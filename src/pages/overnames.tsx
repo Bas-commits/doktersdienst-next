@@ -40,6 +40,27 @@ function timeFromUnix(unixSeconds: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function buildOvernameRespondPayload(
+  block: ShiftBlockView,
+  action: 'accept' | 'decline' | 'delete'
+) {
+  const iddienstovern = Number(block.iddienstovern ?? 0);
+  const overnameId = Number(block.id);
+  const iddeelnemer = Number(block.iddeelnemer ?? block.originalDoctor?.id ?? 0);
+  const iddeelnovern = Number(block.iddeelnovern ?? block.middle?.id ?? 0);
+
+  return {
+    action,
+    iddienstovern: Number.isFinite(iddienstovern) ? iddienstovern : 0,
+    ...(Number.isFinite(overnameId) && overnameId > 0 ? { overnameId } : {}),
+    van: block.van,
+    tot: block.tot,
+    ...(block.idwaarneemgroep != null ? { idwaarneemgroep: block.idwaarneemgroep } : {}),
+    ...(Number.isFinite(iddeelnemer) && iddeelnemer > 0 ? { iddeelnemer } : {}),
+    ...(Number.isFinite(iddeelnovern) && iddeelnovern > 0 ? { iddeelnovern } : {}),
+  };
+}
+
 export default function OvernamesPage() {
   const { data: session } = authClient.useSession();
 
@@ -249,6 +270,8 @@ export default function OvernamesPage() {
         toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
         return;
       }
+      // Match mobile: prefer assigned type=0 id, else type=1 slot id, else 0 and let the API
+      // resolve via van/tot/idwaarneemgroep (legacy rows may have NULL ids).
       const resolvedDienstOvernId =
         (selectedShift.assignedDienstId != null && selectedShift.assignedDienstId > 0)
           ? selectedShift.assignedDienstId
@@ -258,10 +281,6 @@ export default function OvernamesPage() {
       setSubmitError(null);
 
       try {
-        if (!resolvedDienstOvernId || resolvedDienstOvernId <= 0) {
-          setSubmitError('Kon de originele dienst niet bepalen');
-          return;
-        }
         const res = await fetch('/api/overnames/propose', {
           method: 'POST',
           credentials: 'include',
@@ -316,7 +335,7 @@ export default function OvernamesPage() {
 
   const handleOvernameRespond = useCallback(
     async (action: 'accept' | 'decline' | 'delete') => {
-      if (!selectedOvernameBlock?.iddienstovern) return;
+      if (!selectedOvernameBlock) return;
 
       if (Number.isFinite(currentDeelnemerId)) {
         const caps = computeOvernameCaps({
@@ -349,7 +368,7 @@ export default function OvernamesPage() {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ iddienstovern: selectedOvernameBlock.iddienstovern, action }),
+          body: JSON.stringify(buildOvernameRespondPayload(selectedOvernameBlock, action)),
         });
         const result = await res.json();
         if (!res.ok) {

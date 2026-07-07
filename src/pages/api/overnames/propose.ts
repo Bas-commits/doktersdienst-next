@@ -17,6 +17,79 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
   return h;
 }
 
+type DienstRow = {
+  id: number | null;
+  type: number | null;
+  van: number | null;
+  tot: number | null;
+  iddeelnemer: number | null;
+  idwaarneemgroep: number | null;
+};
+
+const dienstSelect = {
+  id: dienstenTable.id,
+  type: dienstenTable.type,
+  van: dienstenTable.van,
+  tot: dienstenTable.tot,
+  iddeelnemer: dienstenTable.iddeelnemer,
+  idwaarneemgroep: dienstenTable.idwaarneemgroep,
+};
+
+async function findType1SlotRows(
+  idwaarneemgroep: number,
+  rangeVan: number,
+  rangeTot: number,
+  exact: boolean,
+): Promise<DienstRow[]> {
+  if (exact) {
+    return db
+      .select(dienstSelect)
+      .from(dienstenTable)
+      .where(
+        and(
+          eq(dienstenTable.type, 1),
+          eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+          eq(dienstenTable.van, rangeVan),
+          eq(dienstenTable.tot, rangeTot),
+        ),
+      )
+      .limit(1);
+  }
+
+  return db
+    .select(dienstSelect)
+    .from(dienstenTable)
+    .where(
+      and(
+        eq(dienstenTable.type, 1),
+        eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+        lt(dienstenTable.van, rangeTot),
+        gt(dienstenTable.tot, rangeVan),
+      ),
+    )
+    .limit(20);
+}
+
+function pickPositiveId(rows: Array<{ id: number | null }>): number | null {
+  const match = rows.find(row => row.id != null && row.id > 0);
+  return match?.id ?? null;
+}
+
+async function resolveType1SlotId(
+  idwaarneemgroep: number,
+  rangeVan: number,
+  rangeTot: number,
+): Promise<number | null> {
+  const exactRows = await findType1SlotRows(idwaarneemgroep, rangeVan, rangeTot, true);
+  const exactId = pickPositiveId(exactRows);
+  if (exactId != null) {
+    return exactId;
+  }
+
+  const overlapRows = await findType1SlotRows(idwaarneemgroep, rangeVan, rangeTot, false);
+  return pickPositiveId(overlapRows);
+}
+
 /**
  * POST /api/overnames/propose
  *
@@ -47,39 +120,45 @@ export default async function handler(
   try {
     const { iddienstovern, iddeelnovern, van, tot, idwaarneemgroep } = req.body;
 
-    if (!iddienstovern || !iddeelnovern || !van || !tot || !idwaarneemgroep) {
+    const numVan = Number(van);
+    const numTot = Number(tot);
+    const numIdWaarneemgroep = Number(idwaarneemgroep);
+    const numIdDienstOvern = Number(iddienstovern) || 0;
+    const numIdDeelnOvern = Number(iddeelnovern);
+
+    if (!numIdDeelnOvern || !numVan || !numTot || !numIdWaarneemgroep) {
       logger.warn({
         msg: 'overname-propose:validation',
         reason: 'missing-required-fields',
         has: {
-          iddienstovern: !!iddienstovern,
-          iddeelnovern: !!iddeelnovern,
-          van: van != null,
-          tot: tot != null,
-          idwaarneemgroep: !!idwaarneemgroep,
+          iddienstovern: numIdDienstOvern > 0,
+          iddeelnovern: !!numIdDeelnOvern,
+          van: !!numVan,
+          tot: !!numTot,
+          idwaarneemgroep: !!numIdWaarneemgroep,
         },
       });
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    if (van >= tot) {
+    if (numVan >= numTot) {
       logger.warn({
         msg: 'overname-propose:validation',
         reason: 'invalid-time-range',
-        van,
-        tot,
-        iddienstovern,
+        van: numVan,
+        tot: numTot,
+        iddienstovern: numIdDienstOvern,
       });
       return res.status(400).json({ error: 'Invalid time range' });
     }
 
     logger.info({
       msg: 'overname-propose:request',
-      iddienstovern,
-      iddeelnovern,
-      van,
-      tot,
-      idwaarneemgroep,
+      iddienstovern: numIdDienstOvern,
+      iddeelnovern: numIdDeelnOvern,
+      van: numVan,
+      tot: numTot,
+      idwaarneemgroep: numIdWaarneemgroep,
     });
 
     // Get the proposing doctor's deelnemer ID from session
@@ -93,7 +172,7 @@ export default async function handler(
       logger.warn({
         msg: 'overname-propose:validation',
         reason: 'proposing-doctor-not-found',
-        iddienstovern,
+        iddienstovern: numIdDienstOvern,
         authUserId: session.user.id,
       });
       return res.status(400).json({ error: 'Proposing doctor not found' });
@@ -101,31 +180,75 @@ export default async function handler(
 
     const senderId = proposingDoctor[0].id;
 
-    // Verify original dienst exists and is type=0 (assigned shift)
-    const originalDienst = await db
-      .select({
-        id: dienstenTable.id,
-        type: dienstenTable.type,
-        van: dienstenTable.van,
-        tot: dienstenTable.tot,
-        iddeelnemer: dienstenTable.iddeelnemer,
-        idwaarneemgroep: dienstenTable.idwaarneemgroep,
-      })
-      .from(dienstenTable)
-      .where(eq(dienstenTable.id, iddienstovern))
-      .limit(1);
+    let originalDienstRows: DienstRow[] = [];
 
-    if (!originalDienst.length) {
+    if (numIdDienstOvern > 0) {
+      originalDienstRows = await db
+        .select(dienstSelect)
+        .from(dienstenTable)
+        .where(eq(dienstenTable.id, numIdDienstOvern))
+        .limit(1);
+    }
+
+    if (!originalDienstRows.length) {
+      originalDienstRows = await findType1SlotRows(
+        numIdWaarneemgroep,
+        numVan,
+        numTot,
+        true,
+      );
+    }
+
+    if (!originalDienstRows.length) {
+      originalDienstRows = await findType1SlotRows(
+        numIdWaarneemgroep,
+        numVan,
+        numTot,
+        false,
+      );
+    }
+
+    if (!originalDienstRows.length) {
+      const overlapCandidates = await db
+        .select(dienstSelect)
+        .from(dienstenTable)
+        .where(
+          and(
+            eq(dienstenTable.type, 0),
+            eq(dienstenTable.idwaarneemgroep, numIdWaarneemgroep),
+            lt(dienstenTable.van, numTot),
+            gt(dienstenTable.tot, numVan),
+          ),
+        )
+        .limit(20);
+
+      const mappedAssigned = overlapCandidates
+        .slice()
+        .sort((a, b) => {
+          const aSpan = Number(a.tot ?? 0) - Number(a.van ?? 0);
+          const bSpan = Number(b.tot ?? 0) - Number(b.van ?? 0);
+          return aSpan - bSpan;
+        })[0];
+
+      if (mappedAssigned) {
+        originalDienstRows = [mappedAssigned];
+      }
+    }
+
+    if (!originalDienstRows.length) {
       logger.warn({
         msg: 'overname-propose:not-found',
         reason: 'dienst-missing',
-        iddienstovern,
+        iddienstovern: numIdDienstOvern,
+        van: numVan,
+        tot: numTot,
+        idwaarneemgroep: numIdWaarneemgroep,
         senderId,
       });
       return res.status(404).json({ error: 'Dienst not found' });
     }
 
-    const original = originalDienst[0];
+    const original = originalDienstRows[0];
     logger.info({
       msg: 'overname-propose:original-dienst',
       id: original.id,
@@ -161,9 +284,9 @@ export default async function handler(
           and(
             eq(dienstenTable.type, 0),
             eq(dienstenTable.idwaarneemgroep, original.idwaarneemgroep ?? 0),
-            lt(dienstenTable.van, tot),
-            gt(dienstenTable.tot, van)
-          )
+            lt(dienstenTable.van, numTot),
+            gt(dienstenTable.tot, numVan),
+          ),
         )
         .limit(20);
 
@@ -208,26 +331,24 @@ export default async function handler(
         msg: 'overname-propose:validation',
         reason: 'no-type0-assignment',
         originalType: original.type,
-        iddienstovern,
+        iddienstovern: numIdDienstOvern,
         senderId,
       });
       return res.status(400).json({ error: 'Only assigned shifts (type=0) can be taken over' });
     }
 
-    if (!resolvedOriginalId || resolvedOriginalId <= 0) {
-      logger.warn({
-        msg: 'overname-propose:validation',
-        reason: 'unresolved-dienst-ref',
-        originalType: original.type,
-        iddienstovern,
-        senderId,
-      });
-      return res.status(400).json({ error: 'Could not resolve dienst reference' });
+    if ((!resolvedOriginalId || resolvedOriginalId <= 0) && foundAssignment) {
+      const slotId = await resolveType1SlotId(
+        original.idwaarneemgroep ?? numIdWaarneemgroep,
+        assignmentVan,
+        assignmentTot,
+      );
+      if (slotId != null) {
+        resolvedOriginalId = slotId;
+      }
     }
 
     // Clamp van/tot to the resolved type=0 bounds (the type=1 slot may have wider times)
-    const numVan = Number(van);
-    const numTot = Number(tot);
     const clampedVan = Math.max(numVan, assignmentVan);
     const clampedTot = Math.min(numTot, assignmentTot);
     if (clampedVan >= clampedTot) {
@@ -244,6 +365,19 @@ export default async function handler(
         senderId,
       });
       return res.status(400).json({ error: 'Invalid time range' });
+    }
+
+    if (!resolvedOriginalId || resolvedOriginalId <= 0) {
+      // Legacy PHP rows may have NULL ids on both type=1 slots and type=0 assignments.
+      resolvedOriginalId = 0;
+      logger.info({
+        msg: 'overname-propose:legacy-null-id-fallback',
+        assignmentVan,
+        assignmentTot,
+        assignedDeelnemerId,
+        idwaarneemgroep: numIdWaarneemgroep,
+        senderId,
+      });
     }
 
     logger.info({
@@ -264,8 +398,8 @@ export default async function handler(
       .from(waarneemgroepdeelnemers)
       .where(
         and(
-          eq(waarneemgroepdeelnemers.idwaarneemgroep, idwaarneemgroep),
-          eq(waarneemgroepdeelnemers.iddeelnemer, iddeelnovern)
+          eq(waarneemgroepdeelnemers.idwaarneemgroep, numIdWaarneemgroep),
+          eq(waarneemgroepdeelnemers.iddeelnemer, numIdDeelnOvern),
         )
       )
       .limit(1);
@@ -286,11 +420,20 @@ export default async function handler(
       .select({ iddienstovern: dienstenTable.iddienstovern })
       .from(dienstenTable)
       .where(
-        and(
-          eq(dienstenTable.type, 4),
-          eq(dienstenTable.status, 'pending'),
-          eq(dienstenTable.iddienstovern, resolvedOriginalId)
-        )
+        resolvedOriginalId > 0
+          ? and(
+              eq(dienstenTable.type, 4),
+              eq(dienstenTable.status, 'pending'),
+              eq(dienstenTable.iddienstovern, resolvedOriginalId),
+            )
+          : and(
+              eq(dienstenTable.type, 4),
+              eq(dienstenTable.status, 'pending'),
+              eq(dienstenTable.idwaarneemgroep, numIdWaarneemgroep),
+              eq(dienstenTable.iddeelnemer, assignedDeelnemerId),
+              eq(dienstenTable.van, clampedVan),
+              eq(dienstenTable.tot, clampedTot),
+            ),
       )
       .limit(1);
 
@@ -312,13 +455,13 @@ export default async function handler(
       .values({
         type: 4,
         status: 'pending',
-        iddeelnovern,
+        iddeelnovern: numIdDeelnOvern,
         iddienstovern: resolvedOriginalId,
         iddeelnemer: assignedDeelnemerId,
         senderId,
         van: clampedVan,
         tot: clampedTot,
-        idwaarneemgroep,
+        idwaarneemgroep: numIdWaarneemgroep,
         idpraktijk: 0,
         rol: 0,
         iddienstherhalen: 0,
@@ -336,12 +479,12 @@ export default async function handler(
     logger.info({
       msg: 'overname-propose:created',
       resolvedOriginalId,
-      iddienstovernRequested: iddienstovern,
+      iddienstovernRequested: numIdDienstOvern,
       senderId,
-      iddeelnovern,
+      iddeelnovern: numIdDeelnOvern,
       clampedVan,
       clampedTot,
-      idwaarneemgroep,
+      idwaarneemgroep: numIdWaarneemgroep,
       assignedDeelnemerId,
     });
 

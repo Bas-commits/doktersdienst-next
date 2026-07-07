@@ -43,24 +43,47 @@ export default async function handler(
   }
 
   try {
-    const { iddienstovern, overnameId, deleteStatus, action } = req.body;
+    const { iddienstovern, overnameId, deleteStatus, action, van, tot, idwaarneemgroep, iddeelnemer, iddeelnovern } = req.body;
     const iddienstovernNum = Number(iddienstovern);
     const overnameIdNum =
       overnameId == null ? null : Number(overnameId);
+    const numVan = van == null ? null : Number(van);
+    const numTot = tot == null ? null : Number(tot);
+    const numIdWaarneemgroep =
+      idwaarneemgroep == null ? null : Number(idwaarneemgroep);
+    const numIdDeelnemer =
+      iddeelnemer == null ? null : Number(iddeelnemer);
+    const numIdDeelnOvern =
+      iddeelnovern == null ? null : Number(iddeelnovern);
+
+    const hasOvernameId =
+      overnameIdNum != null && Number.isFinite(overnameIdNum) && overnameIdNum > 0;
+    const hasDienstOvernId =
+      Number.isFinite(iddienstovernNum) && iddienstovernNum > 0;
+    const hasCompositeKey =
+      numVan != null &&
+      numTot != null &&
+      numVan > 0 &&
+      numTot > 0 &&
+      numIdWaarneemgroep != null &&
+      numIdWaarneemgroep > 0;
 
     if (action !== 'accept' && action !== 'decline' && action !== 'delete') {
       return res.status(400).json({ error: 'Invalid action' });
     }
     if (
       (action === 'accept' || action === 'decline') &&
-      (!Number.isFinite(iddienstovernNum) || iddienstovernNum <= 0)
+      !hasOvernameId &&
+      !hasDienstOvernId &&
+      !hasCompositeKey
     ) {
       return res.status(400).json({ error: 'Invalid iddienstovern' });
     }
     if (
       action === 'delete' &&
-      (!Number.isFinite(overnameIdNum ?? NaN) || (overnameIdNum ?? 0) <= 0) &&
-      (!Number.isFinite(iddienstovernNum) || iddienstovernNum <= 0)
+      !hasOvernameId &&
+      !hasDienstOvernId &&
+      !hasCompositeKey
     ) {
       return res.status(400).json({ error: 'Invalid delete target' });
     }
@@ -101,27 +124,48 @@ export default async function handler(
                 and(eq(dienstenTable.type, 4), or(eq(dienstenTable.status, 'pending'), eq(dienstenTable.status, 'declined'))),
                 and(eq(dienstenTable.type, 6), eq(dienstenTable.status, 'accepted'))
               );
+    const pendingStateCondition = and(
+      eq(dienstenTable.type, 4),
+      eq(dienstenTable.status, 'pending'),
+    );
+
+    const buildTargetCondition = () => {
+      if (hasOvernameId) {
+        return eq(dienstenTable.id, overnameIdNum as number);
+      }
+      if (hasDienstOvernId) {
+        return eq(dienstenTable.iddienstovern, iddienstovernNum);
+      }
+      const legacyConditions = [
+        eq(dienstenTable.iddienstovern, 0),
+        eq(dienstenTable.idwaarneemgroep, numIdWaarneemgroep as number),
+        eq(dienstenTable.van, numVan as number),
+        eq(dienstenTable.tot, numTot as number),
+      ];
+      if (numIdDeelnemer != null && numIdDeelnemer > 0) {
+        legacyConditions.push(eq(dienstenTable.iddeelnemer, numIdDeelnemer));
+      }
+      if (numIdDeelnOvern != null && numIdDeelnOvern > 0) {
+        legacyConditions.push(eq(dienstenTable.iddeelnovern, numIdDeelnOvern));
+      }
+      return and(...legacyConditions);
+    };
+
     const lookupCondition = action === 'delete'
-      ? and(
-          overnameIdNum != null && Number.isFinite(overnameIdNum) && overnameIdNum > 0
-            ? eq(dienstenTable.id, overnameIdNum)
-            : eq(dienstenTable.iddienstovern, iddienstovernNum),
-          deleteStateCondition
-        )
-      : and(
-          eq(dienstenTable.iddienstovern, iddienstovernNum),
-          eq(dienstenTable.type, 4),
-          eq(dienstenTable.status, 'pending')
-        );
+      ? and(buildTargetCondition(), deleteStateCondition)
+      : and(buildTargetCondition(), pendingStateCondition);
 
     const proposal = await db
       .select({
         id: dienstenTable.id,
         iddienstovern: dienstenTable.iddienstovern,
         iddeelnovern: dienstenTable.iddeelnovern,
+        iddeelnemer: dienstenTable.iddeelnemer,
         senderId: dienstenTable.senderId,
         idwaarneemgroep: dienstenTable.idwaarneemgroep,
         status: dienstenTable.status,
+        van: dienstenTable.van,
+        tot: dienstenTable.tot,
       })
       .from(dienstenTable)
       .where(lookupCondition)
@@ -131,16 +175,44 @@ export default async function handler(
       return res.status(404).json({ error: 'Proposal not found' });
     }
 
-    const { id: proposalId, iddienstovern: proposalDienstOvernId, iddeelnovern, senderId, idwaarneemgroep } = proposal[0];
+    const {
+      id: proposalId,
+      iddienstovern: proposalDienstOvernId,
+      iddeelnovern: proposalDeelnOvern,
+      senderId,
+      idwaarneemgroep: proposalWaarneemgroep,
+      van: proposalVan,
+      tot: proposalTot,
+      iddeelnemer: proposalDeelnemer,
+    } = proposal[0];
+
+    const buildMutateCondition = () => {
+      if (proposalId != null && proposalId > 0) {
+        return eq(dienstenTable.id, proposalId);
+      }
+      const legacyConditions = [
+        eq(dienstenTable.iddienstovern, proposalDienstOvernId ?? 0),
+        eq(dienstenTable.idwaarneemgroep, proposalWaarneemgroep ?? 0),
+        eq(dienstenTable.van, Number(proposalVan ?? 0)),
+        eq(dienstenTable.tot, Number(proposalTot ?? 0)),
+      ];
+      if (proposalDeelnemer != null && proposalDeelnemer > 0) {
+        legacyConditions.push(eq(dienstenTable.iddeelnemer, proposalDeelnemer));
+      }
+      if (proposalDeelnOvern != null && proposalDeelnOvern > 0) {
+        legacyConditions.push(eq(dienstenTable.iddeelnovern, proposalDeelnOvern));
+      }
+      return and(...legacyConditions);
+    };
 
     // Check if the current user is secretaris of this waarneemgroep
-    const isSecretaris = idwaarneemgroep != null && (await db
+    const isSecretaris = proposalWaarneemgroep != null && (await db
       .select({ idgroep: waarneemgroepdeelnemers.idgroep })
       .from(waarneemgroepdeelnemers)
       .where(
         and(
           eq(waarneemgroepdeelnemers.iddeelnemer, doctorId),
-          eq(waarneemgroepdeelnemers.idwaarneemgroep, idwaarneemgroep)
+          eq(waarneemgroepdeelnemers.idwaarneemgroep, proposalWaarneemgroep)
         )
       )
       .limit(1)
@@ -153,7 +225,7 @@ export default async function handler(
       if (senderId !== doctorId && !canManageViaRole) {
         return res.status(403).json({ error: 'Not authorized' });
       }
-      await db.delete(dienstenTable).where(lookupCondition);
+      await db.delete(dienstenTable).where(and(buildMutateCondition(), deleteStateCondition));
       logger.info({
         msg: 'overname-respond:deleted',
         proposalId,
@@ -164,10 +236,10 @@ export default async function handler(
       });
     } else {
       // Target doctor, secretaris, or administrator can accept/decline
-      if (iddeelnovern !== doctorId && !canManageViaRole) {
+      if (proposalDeelnOvern !== doctorId && !canManageViaRole) {
         return res.status(403).json({ error: 'Not authorized' });
       }
-      if (proposalDienstOvernId == null) {
+      if (proposalDienstOvernId == null && (proposalId == null || proposalId <= 0)) {
         logger.error({
           msg: 'overname-respond:missing-iddienstovern',
           proposalId,
@@ -175,12 +247,7 @@ export default async function handler(
         });
         return res.status(500).json({ error: 'Invalid proposal data' });
       }
-      // Only pending proposals can be accepted/declined (already enforced by lookupCondition)
-      const pendingCondition = and(
-        eq(dienstenTable.iddienstovern, proposalDienstOvernId),
-        eq(dienstenTable.type, 4),
-        eq(dienstenTable.status, 'pending')
-      );
+      const pendingCondition = and(buildMutateCondition(), pendingStateCondition);
       if (action === 'accept') {
         await db
           .update(dienstenTable)

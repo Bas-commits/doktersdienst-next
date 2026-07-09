@@ -346,6 +346,46 @@ describe('POST /api/overnames/propose', () => {
     expect(res._json).toEqual({ error: 'Active proposal already exists for this shift' });
   });
 
+  it('returns 409 on legacy null-id path when composite key matches (mobile iddienstovern=0)', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [],
+      [],
+      [{ id: null, type: 0, van: VAN, tot: TOT, iddeelnemer: 1305, idwaarneemgroep: WG }],
+      [],
+      [],
+      [{ iddeelnemer: TARGET_ID }],
+      [{ id: 333 }],
+    ];
+
+    const res = makeRes();
+    await handler(makeReq({ iddienstovern: 0 }), res);
+    expect(res._status).toBe(409);
+    expect(res._json).toEqual({ error: 'Active proposal already exists for this shift' });
+  });
+
+  it('creates proposal on legacy null-id path (mobile iddienstovern=0)', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [],
+      [],
+      [{ id: null, type: 0, van: VAN, tot: TOT, iddeelnemer: 1305, idwaarneemgroep: WG }],
+      [],
+      [],
+      [{ iddeelnemer: TARGET_ID }],
+      [],
+    ];
+
+    const res = makeRes();
+    await handler(makeReq({ iddienstovern: 0 }), res);
+    expect(res._status).toBe(201);
+    expect(lastInsertValues).toMatchObject({
+      iddienstovern: 0,
+      iddeelnemer: 1305,
+      iddeelnovern: TARGET_ID,
+    });
+  });
+
   it('returns 400 when proposing doctor is not found', async () => {
     selectResults = [
       [],  // proposingDoctor not found

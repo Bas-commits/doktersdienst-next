@@ -3,6 +3,7 @@ import { and, eq, gt, gte, lt, lte } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { logger } from '@/lib/logger';
+import { buildLegacyOvernameRowConditions } from '@/lib/overname-legacy-lookup';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
 
@@ -416,6 +417,17 @@ export default async function handler(
     }
 
     // Check no existing pending proposal for the same original dienst
+    const legacyProposalConditions = [
+      eq(dienstenTable.type, 4),
+      eq(dienstenTable.status, 'pending'),
+      buildLegacyOvernameRowConditions({
+        idwaarneemgroep: numIdWaarneemgroep,
+        van: clampedVan,
+        tot: clampedTot,
+        iddeelnemer: assignedDeelnemerId,
+      }),
+    ];
+
     const existingProposal = await db
       .select({ iddienstovern: dienstenTable.iddienstovern })
       .from(dienstenTable)
@@ -426,14 +438,7 @@ export default async function handler(
               eq(dienstenTable.status, 'pending'),
               eq(dienstenTable.iddienstovern, resolvedOriginalId),
             )
-          : and(
-              eq(dienstenTable.type, 4),
-              eq(dienstenTable.status, 'pending'),
-              eq(dienstenTable.idwaarneemgroep, numIdWaarneemgroep),
-              eq(dienstenTable.iddeelnemer, assignedDeelnemerId),
-              eq(dienstenTable.van, clampedVan),
-              eq(dienstenTable.tot, clampedTot),
-            ),
+          : and(...legacyProposalConditions),
       )
       .limit(1);
 

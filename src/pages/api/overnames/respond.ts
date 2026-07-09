@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { logger } from '@/lib/logger';
 import { GROEP_ADMINISTRATOR, GROEP_SECRETARIS } from '@/lib/roles';
+import { buildLegacyOvernameRowConditions } from '@/lib/overname-legacy-lookup';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
 
@@ -136,19 +137,14 @@ export default async function handler(
       if (hasDienstOvernId) {
         return eq(dienstenTable.iddienstovern, iddienstovernNum);
       }
-      const legacyConditions = [
-        eq(dienstenTable.iddienstovern, 0),
-        eq(dienstenTable.idwaarneemgroep, numIdWaarneemgroep as number),
-        eq(dienstenTable.van, numVan as number),
-        eq(dienstenTable.tot, numTot as number),
-      ];
-      if (numIdDeelnemer != null && numIdDeelnemer > 0) {
-        legacyConditions.push(eq(dienstenTable.iddeelnemer, numIdDeelnemer));
-      }
-      if (numIdDeelnOvern != null && numIdDeelnOvern > 0) {
-        legacyConditions.push(eq(dienstenTable.iddeelnovern, numIdDeelnOvern));
-      }
-      return and(...legacyConditions);
+      return buildLegacyOvernameRowConditions({
+        iddienstovern: 0,
+        idwaarneemgroep: numIdWaarneemgroep as number,
+        van: numVan as number,
+        tot: numTot as number,
+        iddeelnemer: numIdDeelnemer,
+        iddeelnovern: numIdDeelnOvern,
+      });
     };
 
     const lookupCondition = action === 'delete'
@@ -190,19 +186,14 @@ export default async function handler(
       if (proposalId != null && proposalId > 0) {
         return eq(dienstenTable.id, proposalId);
       }
-      const legacyConditions = [
-        eq(dienstenTable.iddienstovern, proposalDienstOvernId ?? 0),
-        eq(dienstenTable.idwaarneemgroep, proposalWaarneemgroep ?? 0),
-        eq(dienstenTable.van, Number(proposalVan ?? 0)),
-        eq(dienstenTable.tot, Number(proposalTot ?? 0)),
-      ];
-      if (proposalDeelnemer != null && proposalDeelnemer > 0) {
-        legacyConditions.push(eq(dienstenTable.iddeelnemer, proposalDeelnemer));
-      }
-      if (proposalDeelnOvern != null && proposalDeelnOvern > 0) {
-        legacyConditions.push(eq(dienstenTable.iddeelnovern, proposalDeelnOvern));
-      }
-      return and(...legacyConditions);
+      return buildLegacyOvernameRowConditions({
+        iddienstovern: proposalDienstOvernId ?? 0,
+        idwaarneemgroep: proposalWaarneemgroep ?? 0,
+        van: Number(proposalVan ?? 0),
+        tot: Number(proposalTot ?? 0),
+        iddeelnemer: proposalDeelnemer,
+        iddeelnovern: proposalDeelnOvern,
+      });
     };
 
     // Check if the current user is secretaris of this waarneemgroep

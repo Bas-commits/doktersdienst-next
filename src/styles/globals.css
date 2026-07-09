@@ -149,3 +149,8 @@ body {
     @apply font-sans;
   }
 }
+
+.location-marker-icon {
+  background: transparent !important;
+  border: none !important;
+}

@@ -13,6 +13,7 @@ export const MAIN_ROUTES = [
   '/rooster-maken-secretaris',
   '/overnames',
   '/urentelling',
+  '/locaties',
 ] as const;
 
 export const SECRETARIS_ROUTES = [

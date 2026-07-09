@@ -8,6 +8,7 @@ import {
   PlusSquare,
   Check,
   PencilLine,
+  MapPin,
   MapPinPlus,
   UserPlus,
   List,
@@ -43,6 +44,12 @@ const MAIN_NAV_ITEMS: NavItem[] = [
     label: 'Urentelling',
     href: '/urentelling',
     icon: <Clock className="size-4 shrink-0" />,
+  },
+  {
+    id: 'locaties',
+    label: 'Locaties',
+    href: '/locaties',
+    icon: <MapPin className="size-4 shrink-0" />,
   },
 ];
 

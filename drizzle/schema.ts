@@ -1,4 +1,4 @@
-import { pgTable, integer, varchar, uuid, doublePrecision, boolean, index, bigint, date, text, timestamp } from "drizzle-orm/pg-core"
+import { pgTable, integer, varchar, uuid, doublePrecision, boolean, index, bigint, date, text, timestamp, serial, smallint, primaryKey, unique, check } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 
@@ -88,6 +88,7 @@ export const locaties = pgTable("locaties", {
 	rowguid: uuid(),
 	kleur: varchar({ length: 50 }),
 	afkorting: varchar({ length: 50 }),
+	idwaarneemgroep: integer(),
 });
 
 export const settelnrs = pgTable("settelnrs", {
@@ -450,3 +451,60 @@ export const waarneemgroepen = pgTable("waarneemgroepen", {
 	laatstAangemeldDoktersdienst: timestamp("laatst_aangemeld_doktersdienst", { mode: 'string' }),
 	laastsAfgemeldDoktersidenst: timestamp("laasts_afgemeld_doktersidenst", { mode: 'string' }),
 });
+
+export const expertises = pgTable("expertises", {
+	id: serial().primaryKey().notNull(),
+	naam: varchar({ length: 255 }).notNull(),
+	afkorting: varchar({ length: 50 }),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+}, (table) => [
+	index("expertises_idwaarneemgroep_idx").on(table.idwaarneemgroep),
+]);
+
+export const activiteiten = pgTable("activiteiten", {
+	id: serial().primaryKey().notNull(),
+	naam: varchar({ length: 255 }).notNull(),
+	afkorting: varchar({ length: 50 }),
+	kleur: varchar({ length: 50 }),
+	icon: varchar({ length: 100 }),
+	idexpertise: integer().notNull().references(() => expertises.id),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+}, (table) => [
+	index("activiteiten_idexpertise_idx").on(table.idexpertise),
+	index("activiteiten_idwaarneemgroep_idx").on(table.idwaarneemgroep),
+]);
+
+export const dagdelen = pgTable("dagdelen", {
+	id: serial().primaryKey().notNull(),
+	naam: varchar({ length: 50 }).notNull(),
+	volgorde: integer().notNull(),
+});
+
+export const planning = pgTable("planning", {
+	id: serial().primaryKey().notNull(),
+	iddeelnemer: integer().notNull().references(() => deelnemers.id),
+	datum: date().notNull(),
+	iddagdeel: integer().notNull().references(() => dagdelen.id),
+	idactiviteit: integer().references(() => activiteiten.id),
+	idlocatie: integer().references(() => locaties.id),
+}, (table) => [
+	unique("planning_iddeelnemer_datum_iddagdeel_unique").on(table.iddeelnemer, table.datum, table.iddagdeel),
+	index("planning_datum_iddagdeel_idx").on(table.datum, table.iddagdeel),
+]);
+
+export const planningtaak = pgTable("planningtaak", {
+	idplanning: integer().notNull().references(() => planning.id),
+	idtaaktype: integer().notNull().references(() => taaktypen.id),
+	positie: smallint().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.idplanning, table.idtaaktype] }),
+	unique("planningtaak_idplanning_positie_unique").on(table.idplanning, table.positie),
+	check("planningtaak_positie_check", sql`${table.positie} >= 1 AND ${table.positie} <= 3`),
+]);
+
+export const deelnemerexpertises = pgTable("deelnemerexpertises", {
+	iddeelnemer: integer().notNull().references(() => deelnemers.id),
+	idexpertise: integer().notNull().references(() => expertises.id),
+}, (table) => [
+	primaryKey({ columns: [table.iddeelnemer, table.idexpertise] }),
+]);

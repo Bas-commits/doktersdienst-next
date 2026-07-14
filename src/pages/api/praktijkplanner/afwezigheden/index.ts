@@ -139,14 +139,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       return res.status(400).json({ error: 'Een geldig datumbereik is verplicht.' });
     }
 
-    const participantId = accessResult.access.isManager
-      ? requestedParticipantId
-      : accessResult.access.user.id;
-    if (
-      participantId != null &&
-      !(await canAccessPraktijkplannerParticipant(accessResult.access, participantId))
-    ) {
-      return res.status(403).json({ error: 'Geen toegang tot deze deelnemer.' });
+    const participantId =
+      !accessResult.access.isManager || requestedParticipantId === accessResult.access.user.id
+        ? accessResult.access.user.id
+        : requestedParticipantId;
+    const canAccessParticipant =
+      participantId == null
+        ? true
+        : await canAccessPraktijkplannerParticipant(accessResult.access, participantId);
+    if (participantId != null && !canAccessParticipant) {
+      const error =
+        participantId === accessResult.access.user.id
+          ? 'U bent geen actieve deelnemer in deze waarneemgroep.'
+          : 'Geen toegang tot deze deelnemer.';
+      return res.status(403).json({ error });
     }
 
     try {
@@ -222,6 +228,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       if (!(await canAccessPraktijkplannerParticipant(accessResult.access, mutation.iddeelnemer))) {
         throw new AbsenceRequestError('Geen toegang tot deze deelnemer.', 403);
       }
+      if (!accessResult.access.isManager && mutation.idafwezigheidstype != null && !mutation.isVoorlopig) {
+        throw new AbsenceRequestError('Alleen secretarissen en beheerders kunnen afwezigheden bevestigen.', 403);
+      }
       if (mutation.idafwezigheidstype != null) {
         const [type] = await db
           .select({ id: schema.afwezigheidstypen.id })
@@ -241,7 +250,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     await db.transaction(async (tx) => {
       for (const mutation of mutations) {
         const [existing] = await tx
-          .select({ id: schema.planningafwezigheden.id, version: schema.planningafwezigheden.version })
+          .select({
+            id: schema.planningafwezigheden.id,
+            version: schema.planningafwezigheden.version,
+            isVoorlopig: schema.planningafwezigheden.isVoorlopig,
+          })
           .from(schema.planningafwezigheden)
           .where(
             and(
@@ -257,6 +270,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           throw new AbsenceRequestError(
             'Deze afwezigheid is ondertussen gewijzigd. Vernieuw de pagina en probeer opnieuw.',
             409
+          );
+        }
+        if (!accessResult.access.isManager && existing?.isVoorlopig === false) {
+          throw new AbsenceRequestError(
+            'Deze afwezigheid is bevestigd en kan niet meer worden gewijzigd.',
+            403
           );
         }
 

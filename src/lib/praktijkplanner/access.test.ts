@@ -22,7 +22,7 @@ vi.mock('@/db', () => ({
   schema: {},
 }));
 
-import { resolvePraktijkplannerAccess } from './access';
+import { canAccessPraktijkplannerParticipant, resolvePraktijkplannerAccess } from './access';
 
 const request = {} as NextApiRequest;
 
@@ -72,6 +72,16 @@ describe('resolvePraktijkplannerAccess', () => {
         error: 'Deze actie is alleen beschikbaar voor secretarissen en beheerders.',
       },
     });
+  });
+
+  it('allows a regular participant to target only their own planner data', async () => {
+    const result = await resolvePraktijkplannerAccess(request, 9, 'afwezigheid:self');
+    if (!result.ok) throw new Error('Expected participant access.');
+
+    await expect(canAccessPraktijkplannerParticipant(result.access, 11)).resolves.toBe(true);
+    await expect(canAccessPraktijkplannerParticipant(result.access, 12)).resolves.toBe(false);
+    expect(mocks.isUserInWaarneemgroep).toHaveBeenCalledWith(11, 9);
+    expect(mocks.isUserInWaarneemgroep).not.toHaveBeenCalledWith(12, 9);
   });
 
   it('requires a global administrator for master-data management', async () => {

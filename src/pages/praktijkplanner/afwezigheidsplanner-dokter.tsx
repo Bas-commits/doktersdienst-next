@@ -10,9 +10,9 @@ export default function AfwezigheidsplannerDokterPage() {
       </Head>
       <PraktijkplannerPage
         title="Afwezigheidsplanner dokter"
-        description="Registreer uw afwezigheden per dagdeel in de maandweergave."
+        description="Geef uw voorlopige afwezigheden per dagdeel door in de maandweergave."
       >
-        {(context) => <PlannerAbsenceEditor context={context} view="month" />}
+        {(context) => <PlannerAbsenceEditor context={context} mode="doctor" />}
       </PraktijkplannerPage>
     </>
   );

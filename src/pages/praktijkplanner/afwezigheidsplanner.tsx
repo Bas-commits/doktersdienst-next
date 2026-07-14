@@ -14,7 +14,7 @@ export default function AfwezigheidsplannerPage() {
       >
         {(context) =>
           context.data.isManager ? (
-            <PlannerAbsenceEditor context={context} view="week" />
+            <PlannerAbsenceEditor context={context} mode="manager" />
           ) : (
             <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
               Deze planner is alleen beschikbaar voor secretarissen en beheerders.

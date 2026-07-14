@@ -5,6 +5,8 @@ import ResetPasswordEmail from '@email/reset-password';
 import type { ResetPasswordPurpose } from '@email/reset-password';
 import InviteVerifyEmail from '@email/invite-verify-email';
 import type { VerifyEmailVariant } from '@email/invite-verify-email';
+import PraktijkplannerScheduleEmail from '@email/praktijkplanner-schedule';
+import type { PraktijkplannerScheduleEmailProps } from '@email/praktijkplanner-schedule';
 
 /** Publieke origin voor shell (logo-fallback `{origin}/logo.png`); logo meestal via `EMAIL_LOGO_URL`. */
 export function getEmailTemplateSiteUrl(): string {
@@ -64,4 +66,11 @@ export async function renderVerificationBodies(params: {
       invitedByName={params.invitedByName}
     />
   );
+}
+
+export async function renderPraktijkplannerScheduleBodies(
+  params: Omit<PraktijkplannerScheduleEmailProps, 'siteUrl' | 'logoSrc'>
+): Promise<{ html: string; text: string }> {
+  const siteUrl = getEmailTemplateSiteUrl();
+  return toHtmlAndText(<PraktijkplannerScheduleEmail {...params} siteUrl={siteUrl} />);
 }

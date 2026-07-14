@@ -4,12 +4,21 @@ import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 /** Root-relative paths (`/…`) so assets resolve from the site origin on every route. */
 export const DEFAULT_ASSET_URLS: AssetUrls = {
   logo: '/logo.png',
-  ppLogo: '/logo.png',
+  ppLogo: '/praktijkplanner-logo.svg',
   requestIcon: '/request.svg',
 };
 
 export const DEFAULT_ROUTES: Record<string, string> = {
-  spreekuren: '/spreekuren',
+  rooster_inzien: '/rooster-inzien',
+  spreekuren: '/praktijkplanner/activiteiten',
+  praktijkplanner_activiteiten: '/praktijkplanner/activiteiten',
+  praktijkplanner_afwezigheidsplanner_dokter: '/praktijkplanner/afwezigheidsplanner-dokter',
+  praktijkplanner_dokter_activiteiten: '/praktijkplanner/dokter-activiteiten',
+  praktijkplanner_dokter_afwezigheid: '/praktijkplanner/dokter-afwezigheid',
+  praktijkplanner_afwezigheidsplanner: '/praktijkplanner/afwezigheidsplanner',
+  praktijkplanner_capaciteitsplanner: '/praktijkplanner/capaciteitsplanner',
+  praktijkplanner_capaciteitsoverzicht: '/praktijkplanner/capaciteitsoverzicht',
+  praktijkplanner_beheer: '/praktijkplanner/beheer',
   waarneemgroep_gegevens: '/waarneemgroep-gegevens',
   waarneemgroep_wissel: '/waarneemgroep-wissel',
   regio_toevoegen: '/regio-toevoegen',

@@ -27,6 +27,7 @@ import {
   hasSecretarisAccess,
   type RoleTier,
 } from '@/lib/roles';
+import type { AppSection } from '@/lib/route-access';
 
 type NavItem = {
   id: string;
@@ -132,6 +133,63 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   },
 ];
 
+const PRAKTIJKPLANNER_MAIN_NAV_ITEMS: NavItem[] = [
+  {
+    id: 'praktijkplanner-activiteiten',
+    label: 'Activiteiten planner',
+    href: '/praktijkplanner/activiteiten',
+    icon: <Calendar className="size-4 shrink-0" />,
+  },
+  {
+    id: 'praktijkplanner-afwezigheidsplanner-dokter',
+    label: 'Afwezigheidsplanner dokter',
+    href: '/praktijkplanner/afwezigheidsplanner-dokter',
+    icon: <Palmtree className="size-4 shrink-0" />,
+  },
+  {
+    id: 'praktijkplanner-dokter-activiteiten',
+    label: 'Dokter activity',
+    href: '/praktijkplanner/dokter-activiteiten',
+    icon: <List className="size-4 shrink-0" />,
+  },
+  {
+    id: 'praktijkplanner-dokter-afwezigheid',
+    label: 'Dokter absence',
+    href: '/praktijkplanner/dokter-afwezigheid',
+    icon: <Clock className="size-4 shrink-0" />,
+  },
+];
+
+const PRAKTIJKPLANNER_MANAGER_NAV_ITEMS: NavItem[] = [
+  {
+    id: 'praktijkplanner-afwezigheidsplanner',
+    label: 'Afwezigheidsplanner',
+    href: '/praktijkplanner/afwezigheidsplanner',
+    icon: <PencilLine className="size-4 shrink-0" />,
+  },
+  {
+    id: 'praktijkplanner-capaciteitsplanner',
+    label: 'Capaciteit planner',
+    href: '/praktijkplanner/capaciteitsplanner',
+    icon: <MapPin className="size-4 shrink-0" />,
+  },
+  {
+    id: 'praktijkplanner-capaciteitsoverzicht',
+    label: 'Capaciteit overzicht',
+    href: '/praktijkplanner/capaciteitsoverzicht',
+    icon: <Check className="size-4 shrink-0" />,
+  },
+];
+
+const PRAKTIJKPLANNER_ADMIN_NAV_ITEMS: NavItem[] = [
+  {
+    id: 'praktijkplanner-beheer',
+    label: 'Plannerbeheer',
+    href: '/praktijkplanner/beheer',
+    icon: <Shield className="size-4 shrink-0" />,
+  },
+];
+
 const ACTIVE_BG = '#c91b23';
 
 function NavLinkList({ items, pathname }: { items: NavItem[]; pathname: string }) {
@@ -182,32 +240,59 @@ function SectionHeading({ label }: { label: string }) {
 
 export interface SidebarProps {
   roleTier?: RoleTier;
+  section?: AppSection;
 }
 
-export function Sidebar({ roleTier = GROEP_DEELNEMER }: SidebarProps) {
+export function Sidebar({ roleTier = GROEP_DEELNEMER, section = 'doktersdienst' }: SidebarProps) {
   const router = useRouter();
   const pathname = router.pathname;
   const showSecretaris = hasSecretarisAccess(roleTier);
   const showAdmin = hasAdminAccess(roleTier);
+  const isPraktijkplanner = section === 'praktijkplanner';
 
   return (
     <aside
       className="sidebar group/sb sticky top-0 h-screen w-14 shrink-0 self-start overflow-hidden border-r border-border bg-muted/30 transition-[width] duration-200 ease-out hover:w-75"
-      aria-label="Hoofdnavigatie"
+      aria-label={isPraktijkplanner ? 'Praktijkplanner navigatie' : 'Hoofdnavigatie'}
     >
       <nav className="h-full overflow-y-auto px-2 py-4 transition-[padding] duration-200 group-hover/sb:px-4">
-        <ul className="sidebar-nav flex flex-col gap-1" role="navigation" aria-label="Hoofdnavigatie">
-          <NavLinkList items={MAIN_NAV_ITEMS} pathname={pathname} />
-          {showSecretaris && (
+        <ul
+          className="sidebar-nav flex flex-col gap-1"
+          role="navigation"
+          aria-label={isPraktijkplanner ? 'Praktijkplanner navigatie' : 'Hoofdnavigatie'}
+        >
+          {isPraktijkplanner ? (
             <>
-              <SectionHeading label="Secretaris" />
-              <NavLinkList items={SECRETARIS_NAV_ITEMS} pathname={pathname} />
+              <SectionHeading label="Praktijkplanner" />
+              <NavLinkList items={PRAKTIJKPLANNER_MAIN_NAV_ITEMS} pathname={pathname} />
+              {showSecretaris && (
+                <>
+                  <SectionHeading label="Capaciteit planner" />
+                  <NavLinkList items={PRAKTIJKPLANNER_MANAGER_NAV_ITEMS} pathname={pathname} />
+                </>
+              )}
+              {showAdmin && (
+                <>
+                  <SectionHeading label="Admin" />
+                  <NavLinkList items={PRAKTIJKPLANNER_ADMIN_NAV_ITEMS} pathname={pathname} />
+                </>
+              )}
             </>
-          )}
-          {showAdmin && (
+          ) : (
             <>
-              <SectionHeading label="Admin" />
-              <NavLinkList items={ADMIN_NAV_ITEMS} pathname={pathname} />
+              <NavLinkList items={MAIN_NAV_ITEMS} pathname={pathname} />
+              {showSecretaris && (
+                <>
+                  <SectionHeading label="Secretaris" />
+                  <NavLinkList items={SECRETARIS_NAV_ITEMS} pathname={pathname} />
+                </>
+              )}
+              {showAdmin && (
+                <>
+                  <SectionHeading label="Admin" />
+                  <NavLinkList items={ADMIN_NAV_ITEMS} pathname={pathname} />
+                </>
+              )}
             </>
           )}
         </ul>

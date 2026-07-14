@@ -457,6 +457,7 @@ export const expertises = pgTable("expertises", {
 	naam: varchar({ length: 255 }).notNull(),
 	afkorting: varchar({ length: 50 }),
 	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	actief: boolean().notNull().default(true),
 }, (table) => [
 	index("expertises_idwaarneemgroep_idx").on(table.idwaarneemgroep),
 ]);
@@ -469,6 +470,7 @@ export const activiteiten = pgTable("activiteiten", {
 	icon: varchar({ length: 100 }),
 	idexpertise: integer().notNull().references(() => expertises.id),
 	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	actief: boolean().notNull().default(true),
 }, (table) => [
 	index("activiteiten_idexpertise_idx").on(table.idexpertise),
 	index("activiteiten_idwaarneemgroep_idx").on(table.idwaarneemgroep),
@@ -480,21 +482,68 @@ export const dagdelen = pgTable("dagdelen", {
 	volgorde: integer().notNull(),
 });
 
+/**
+ * A planner location belongs to one waarneemgroep. It may optionally point at the
+ * legacy global `locaties` record, but it deliberately owns its planner labels and
+ * visual properties so Doktersdienst location data remains untouched.
+ */
+export const praktijkplannerlocaties = pgTable("praktijkplannerlocaties", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	idlocatie: integer().references(() => locaties.id),
+	naam: varchar({ length: 255 }).notNull(),
+	afkorting: varchar({ length: 50 }),
+	kleur: varchar({ length: 50 }),
+	actief: boolean().notNull().default(true),
+	createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	unique("praktijkplannerlocaties_group_naam_unique").on(table.idwaarneemgroep, table.naam),
+	index("praktijkplannerlocaties_group_idx").on(table.idwaarneemgroep),
+]);
+
+export const activiteitSpecificaties = pgTable("activiteitspecificaties", {
+	id: serial().primaryKey().notNull(),
+	idactiviteit: integer().notNull().references(() => activiteiten.id, { onDelete: "cascade" }),
+	naam: varchar({ length: 255 }).notNull(),
+	afkorting: varchar({ length: 50 }),
+	kleur: varchar({ length: 50 }),
+	actief: boolean().notNull().default(true),
+	createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	unique("activiteitspecificaties_activity_naam_unique").on(table.idactiviteit, table.naam),
+	index("activiteitspecificaties_activity_idx").on(table.idactiviteit),
+]);
+
 export const planning = pgTable("planning", {
 	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
 	iddeelnemer: integer().notNull().references(() => deelnemers.id),
 	datum: date().notNull(),
 	iddagdeel: integer().notNull().references(() => dagdelen.id),
 	idactiviteit: integer().references(() => activiteiten.id),
+	idactiviteitspecificatie: integer().references(() => activiteitSpecificaties.id),
 	idlocatie: integer().references(() => locaties.id),
+	idplannerlocatie: integer().references(() => praktijkplannerlocaties.id),
+	createdBy: integer("created_by").references(() => deelnemers.id),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+	version: integer().notNull().default(1),
 }, (table) => [
-	unique("planning_iddeelnemer_datum_iddagdeel_unique").on(table.iddeelnemer, table.datum, table.iddagdeel),
-	index("planning_datum_iddagdeel_idx").on(table.datum, table.iddagdeel),
+	unique("planning_group_participant_date_daypart_unique").on(
+		table.idwaarneemgroep,
+		table.iddeelnemer,
+		table.datum,
+		table.iddagdeel
+	),
+	index("planning_group_date_daypart_idx").on(table.idwaarneemgroep, table.datum, table.iddagdeel),
 ]);
 
 export const planningtaak = pgTable("planningtaak", {
-	idplanning: integer().notNull().references(() => planning.id),
-	idtaaktype: integer().notNull().references(() => taaktypen.id),
+	idplanning: integer().notNull().references(() => planning.id, { onDelete: "cascade" }),
+	idtaaktype: integer().notNull().references(() => taaktypen.id, { onDelete: "restrict" }),
 	positie: smallint().notNull(),
 }, (table) => [
 	primaryKey({ columns: [table.idplanning, table.idtaaktype] }),
@@ -508,3 +557,209 @@ export const deelnemerexpertises = pgTable("deelnemerexpertises", {
 }, (table) => [
 	primaryKey({ columns: [table.iddeelnemer, table.idexpertise] }),
 ]);
+
+export const beschikbaarheidstypen = pgTable("beschikbaarheidstypen", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	naam: varchar({ length: 100 }).notNull(),
+	code: varchar({ length: 50 }).notNull(),
+	kleur: varchar({ length: 50 }),
+	icon: varchar({ length: 100 }),
+	type: varchar({ length: 30 }).notNull().default("fte"),
+	actief: boolean().notNull().default(true),
+}, (table) => [
+	unique("beschikbaarheidstypen_group_code_unique").on(table.idwaarneemgroep, table.code),
+	index("beschikbaarheidstypen_group_idx").on(table.idwaarneemgroep),
+]);
+
+/** Optional FTE/availability marker layered on top of one activity planning slot. */
+export const planningbeschikbaarheid = pgTable("planningbeschikbaarheid", {
+	idplanning: integer().primaryKey().notNull().references(() => planning.id, { onDelete: "cascade" }),
+	idbeschikbaarheidstype: integer().notNull().references(() => beschikbaarheidstypen.id, { onDelete: "restrict" }),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+});
+
+export const afwezigheidstypen = pgTable("afwezigheidstypen", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	naam: varchar({ length: 100 }).notNull(),
+	code: varchar({ length: 50 }).notNull(),
+	kleur: varchar({ length: 50 }),
+	icon: varchar({ length: 100 }),
+	actief: boolean().notNull().default(true),
+}, (table) => [
+	unique("afwezigheidstypen_group_code_unique").on(table.idwaarneemgroep, table.code),
+	index("afwezigheidstypen_group_idx").on(table.idwaarneemgroep),
+]);
+
+/**
+ * Absences are a dedicated overlay rather than an activity-planning field. This
+ * allows an absence to coexist with a read-only activity history and makes annual
+ * balances derivable from confirmed absence slots.
+ */
+export const planningafwezigheden = pgTable("planningafwezigheden", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	iddeelnemer: integer().notNull().references(() => deelnemers.id),
+	datum: date().notNull(),
+	iddagdeel: integer().notNull().references(() => dagdelen.id),
+	idafwezigheidstype: integer().notNull().references(() => afwezigheidstypen.id, { onDelete: "restrict" }),
+	isVoorlopig: boolean("is_voorlopig").notNull().default(false),
+	createdBy: integer("created_by").references(() => deelnemers.id),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+	version: integer().notNull().default(1),
+}, (table) => [
+	unique("planningafwezigheden_group_participant_date_daypart_unique").on(
+		table.idwaarneemgroep,
+		table.iddeelnemer,
+		table.datum,
+		table.iddagdeel
+	),
+	index("planningafwezigheden_group_date_daypart_idx").on(table.idwaarneemgroep, table.datum, table.iddagdeel),
+]);
+
+export const afwezigheidsjaarbudgetten = pgTable("afwezigheidsjaarbudgetten", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	iddeelnemer: integer().notNull().references(() => deelnemers.id),
+	idafwezigheidstype: integer().notNull().references(() => afwezigheidstypen.id, { onDelete: "restrict" }),
+	jaar: integer().notNull(),
+	beginsaldo: integer().notNull().default(0),
+	budget: integer().notNull().default(0),
+	correctie: integer().notNull().default(0),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	unique("afwezigheidsjaarbudgetten_unique").on(
+		table.idwaarneemgroep,
+		table.iddeelnemer,
+		table.idafwezigheidstype,
+		table.jaar
+	),
+	index("afwezigheidsjaarbudgetten_group_participant_year_idx").on(
+		table.idwaarneemgroep,
+		table.iddeelnemer,
+		table.jaar
+	),
+]);
+
+export const afwezigheidsjaarnotities = pgTable("afwezigheidsjaarnotities", {
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	iddeelnemer: integer().notNull().references(() => deelnemers.id),
+	jaar: integer().notNull(),
+	notitie: text().notNull().default(""),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	primaryKey({ columns: [table.idwaarneemgroep, table.iddeelnemer, table.jaar] }),
+]);
+
+export const planningherhalingen = pgTable("planningherhalingen", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	iddeelnemer: integer().notNull().references(() => deelnemers.id),
+	startdatum: date().notNull(),
+	einddatum: date().notNull(),
+	frequentieWeken: smallint("frequentie_weken").notNull(),
+	createdBy: integer("created_by").references(() => deelnemers.id),
+	createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	check("planningherhalingen_frequency_check", sql`${table.frequentieWeken} >= 1 AND ${table.frequentieWeken} <= 3`),
+	check("planningherhalingen_range_check", sql`${table.einddatum} >= ${table.startdatum}`),
+	index("planningherhalingen_group_participant_idx").on(table.idwaarneemgroep, table.iddeelnemer),
+]);
+
+/** Links every materialized recurring slot to its recurrence series. */
+export const planningherhalingslots = pgTable("planningherhalingslots", {
+	idherhaling: integer().notNull().references(() => planningherhalingen.id, { onDelete: "cascade" }),
+	idplanning: integer().notNull().references(() => planning.id, { onDelete: "cascade" }),
+	reeksdatum: date().notNull(),
+	isBronslot: boolean("is_bronslot").notNull().default(false),
+}, (table) => [
+	primaryKey({ columns: [table.idherhaling, table.idplanning] }),
+	unique("planningherhalingslots_planning_unique").on(table.idplanning),
+]);
+
+export const capaciteitsjablonen = pgTable("capaciteitsjablonen", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	idplannerlocatie: integer().notNull().references(() => praktijkplannerlocaties.id, { onDelete: "cascade" }),
+	weekdag: smallint().notNull(),
+	iddagdeel: integer().notNull().references(() => dagdelen.id),
+	aantalDeelnemers: integer("aantal_deelnemers").notNull().default(0),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	unique("capaciteitsjablonen_group_location_weekday_daypart_unique").on(
+		table.idwaarneemgroep,
+		table.idplannerlocatie,
+		table.weekdag,
+		table.iddagdeel
+	),
+	check("capaciteitsjablonen_weekdag_check", sql`${table.weekdag} >= 1 AND ${table.weekdag} <= 7`),
+	check("capaciteitsjablonen_participants_check", sql`${table.aantalDeelnemers} >= 0`),
+	index("capaciteitsjablonen_group_location_idx").on(table.idwaarneemgroep, table.idplannerlocatie),
+]);
+
+export const capaciteitsjabloonexpertises = pgTable("capaciteitsjabloonexpertises", {
+	idcapaciteitsjabloon: integer().notNull().references(() => capaciteitsjablonen.id, { onDelete: "cascade" }),
+	idexpertise: integer().notNull().references(() => expertises.id, { onDelete: "restrict" }),
+	aantal: integer().notNull().default(0),
+}, (table) => [
+	primaryKey({ columns: [table.idcapaciteitsjabloon, table.idexpertise] }),
+	check("capaciteitsjabloonexpertises_count_check", sql`${table.aantal} >= 0`),
+]);
+
+export const capaciteitsjabloontaken = pgTable("capaciteitsjabloontaken", {
+	idcapaciteitsjabloon: integer().notNull().references(() => capaciteitsjablonen.id, { onDelete: "cascade" }),
+	idtaaktype: integer().notNull().references(() => taaktypen.id, { onDelete: "restrict" }),
+	aantal: integer().notNull().default(0),
+}, (table) => [
+	primaryKey({ columns: [table.idcapaciteitsjabloon, table.idtaaktype] }),
+	check("capaciteitsjabloontaken_count_check", sql`${table.aantal} >= 0`),
+]);
+
+export const capaciteitsjabloonactiviteiten = pgTable("capaciteitsjabloonactiviteiten", {
+	idcapaciteitsjabloon: integer().notNull().references(() => capaciteitsjablonen.id, { onDelete: "cascade" }),
+	idactiviteit: integer().notNull().references(() => activiteiten.id, { onDelete: "restrict" }),
+	aantal: integer().notNull().default(0),
+}, (table) => [
+	primaryKey({ columns: [table.idcapaciteitsjabloon, table.idactiviteit] }),
+	check("capaciteitsjabloonactiviteiten_count_check", sql`${table.aantal} >= 0`),
+]);
+
+export const capaciteitsjabloonspecificaties = pgTable("capaciteitsjabloonspecificaties", {
+	idcapaciteitsjabloon: integer().notNull().references(() => capaciteitsjablonen.id, { onDelete: "cascade" }),
+	idactiviteitspecificatie: integer().notNull().references(() => activiteitSpecificaties.id, { onDelete: "restrict" }),
+	aantal: integer().notNull().default(0),
+}, (table) => [
+	primaryKey({ columns: [table.idcapaciteitsjabloon, table.idactiviteitspecificatie] }),
+	check("capaciteitsjabloonspecificaties_count_check", sql`${table.aantal} >= 0`),
+]);
+
+export const praktijkplannerweergavevoorkeuren = pgTable("praktijkplannerweergavevoorkeuren", {
+	iddeelnemer: integer().notNull().references(() => deelnemers.id, { onDelete: "cascade" }),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id, { onDelete: "cascade" }),
+	toonDag: boolean("toon_dag").notNull().default(true),
+	toonNacht: boolean("toon_nacht").notNull().default(true),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	primaryKey({ columns: [table.iddeelnemer, table.idwaarneemgroep] }),
+]);
+
+export const praktijkplanneremaillog = pgTable("praktijkplanneremaillog", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	iddeelnemer: integer().references(() => deelnemers.id),
+	type: varchar({ length: 30 }).notNull(),
+	ontvanger: varchar({ length: 255 }).notNull(),
+	onderwerp: varchar({ length: 255 }).notNull(),
+	resendId: varchar("resend_id", { length: 255 }),
+	verstuurdDoor: integer("verstuurd_door").references(() => deelnemers.id),
+	verstuurdOp: timestamp("verstuurd_op", { mode: "string" }).notNull().defaultNow(),
+});

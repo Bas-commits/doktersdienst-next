@@ -114,12 +114,38 @@ describe('DoktersdienstHeader', () => {
     expect(screen.getByTestId('header-user-menu')).toBeInTheDocument();
   });
 
+  it('switches from Doktersdienst to Praktijkplanner', () => {
+    render(
+      <DoktersdienstHeader
+        {...defaultProps}
+        routes={{ ...defaultProps.routes, praktijkplanner_activiteiten: '/praktijkplanner/activiteiten' }}
+      />
+    );
+
+    expect(screen.getByTestId('header-section-switch')).toHaveAttribute(
+      'href',
+      '/praktijkplanner/activiteiten'
+    );
+  });
+
+  it('switches from Praktijkplanner back to Doktersdienst', () => {
+    render(
+      <DoktersdienstHeader
+        {...defaultProps}
+        section="praktijkplanner"
+        routes={{ ...defaultProps.routes, rooster_inzien: '/rooster-inzien' }}
+      />
+    );
+
+    expect(screen.getByTestId('header-section-switch')).toHaveAttribute('href', '/rooster-inzien');
+  });
+
   it('appends telnringaand and telnronzecentrale to each option label', () => {
     render(<DoktersdienstHeader {...defaultProps} />);
 
     const options = screen.getAllByRole('option');
-    expect(options[0]).toHaveTextContent('Groep A — 020-1234567 - 088-1112233');
-    expect(options[1]).toHaveTextContent('Groep B — 030-7654321 - 088-4445566');
+    expect(options[0]).toHaveTextContent('Groep A — 020-1234567 — 088-1112233');
+    expect(options[1]).toHaveTextContent('Groep B — 030-7654321 — 088-4445566');
   });
 
   it('renders group select options from waarneemgroepen', () => {

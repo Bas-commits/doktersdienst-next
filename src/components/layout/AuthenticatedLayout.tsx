@@ -13,7 +13,8 @@ import {
   headerUserFromSession,
   EMPTY_WAARNEMGROEPEN,
 } from '@/lib/header-defaults';
-import { isRouteAllowedForRole } from '@/lib/route-access';
+import { getAppSection, isRouteAllowedForRole } from '@/lib/route-access';
+import { isPraktijkplannerEnabled } from '@/lib/praktijkplanner/feature-flag';
 import {
   deriveEffectiveRoleTier,
   GROEP_ADMINISTRATOR,
@@ -52,6 +53,8 @@ function AuthenticatedLayoutShell({
   globalIdgroep,
 }: AuthenticatedLayoutShellProps) {
   const router = useRouter();
+  const section = getAppSection(router.pathname);
+  const praktijkplannerEnabled = isPraktijkplannerEnabled();
   const { activeWaarneemgroep, waarneemgroepen, loading: wgLoading } = useWaarneemgroep();
   const isGlobalAdmin = globalIdgroep === GROEP_ADMINISTRATOR;
   const resolvedRoleTier: RoleTier = useMemo(
@@ -68,8 +71,10 @@ function AuthenticatedLayoutShell({
     (wgLoading || (!activeWaarneemgroep && waarneemgroepen.length > 0));
 
   const isAllowedRoute = useMemo(
-    () => isRouteAllowedForRole(router.pathname, resolvedRoleTier),
-    [router.pathname, resolvedRoleTier]
+    () =>
+      isRouteAllowedForRole(router.pathname, resolvedRoleTier) &&
+      (section !== 'praktijkplanner' || praktijkplannerEnabled),
+    [praktijkplannerEnabled, router.pathname, resolvedRoleTier, section]
   );
 
   useEffect(() => {
@@ -102,9 +107,11 @@ function AuthenticatedLayoutShell({
         routes={DEFAULT_ROUTES}
         routeName={routeName}
         assetUrls={DEFAULT_ASSET_URLS}
+        section={section}
+        showSectionSwitch={praktijkplannerEnabled}
       />
       <div className="flex flex-1">
-        <Sidebar roleTier={resolvedRoleTier} />
+        <Sidebar roleTier={resolvedRoleTier} section={section} />
         <main className="flex-1">{children}</main>
       </div>
     </div>

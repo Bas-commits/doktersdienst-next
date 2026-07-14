@@ -3,8 +3,10 @@ import { logger } from '@/lib/logger';
 import {
   renderMagicLinkBodies,
   renderPasswordResetBodies,
+  renderPraktijkplannerScheduleBodies,
   renderVerificationBodies,
 } from '@/lib/render-auth-email';
+import type { PraktijkplannerScheduleEntry } from '@email/praktijkplanner-schedule';
 
 const log = logger.child({ module: 'resend-email' });
 
@@ -256,5 +258,36 @@ export async function sendInvitationVerifyEmailViaResend(params: {
     warnMessage:
       'Resend niet geconfigureerd; uitnodigingsmail alleen gelogd',
     errorLabel: 'Resend invitation verify email failed',
+  });
+}
+
+/**
+ * Sends a rendered Praktijkplanner schedule and requires Resend to acknowledge
+ * enqueueing the message so the caller can keep an audit record.
+ */
+export async function sendPraktijkplannerScheduleEmailViaResend(params: {
+  to: string;
+  subject: string;
+  userName?: string | null;
+  plannerType: 'activiteiten' | 'afwezigheden';
+  entries: PraktijkplannerScheduleEntry[];
+}): Promise<{ resendEmailId: string }> {
+  const { html, text } = await renderPraktijkplannerScheduleBodies({
+    userName: params.userName,
+    plannerType: params.plannerType,
+    entries: params.entries,
+  });
+  return sendRenderedEmailRequireResendDelivery({
+    to: params.to,
+    subject: params.subject,
+    html,
+    text,
+    devLogPayload: {
+      to: params.to,
+      subject: params.subject,
+      plannerType: params.plannerType,
+      entries: params.entries.length,
+    },
+    errorLabel: 'Resend Praktijkplanner schedule email failed',
   });
 }

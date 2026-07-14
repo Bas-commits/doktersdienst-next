@@ -43,6 +43,13 @@
       "when": 1784025463110,
       "tag": "0005_cute_sasquatch",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784028492491,
+      "tag": "0006_cultured_aqueduct",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,8 @@ import { useRef, useState, useEffect } from 'react';
 import { MONTH_SHORT } from '@/utils/calendarUtils';
 import { MonthPicker } from '@/components/ui/monthpicker';
 
+import { PLANNER_MONTH_NAV_HEIGHT_PX } from '@/components/praktijkplanner/planner-grid-layout';
+
 function formatMonthYear(m: number, y: number): string {
   const label = MONTH_SHORT[m];
   const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
@@ -66,7 +68,10 @@ export function MonthNavigation({ month, year, onSelectMonth }: MonthNavigationP
   ];
 
   return (
-    <div className="flex justify-center min-w-0">
+    <div
+      className="flex min-w-0 items-center justify-center"
+      style={{ height: `${PLANNER_MONTH_NAV_HEIGHT_PX}px` }}
+    >
       <nav className="flex items-center min-w-0" aria-label="Maandnavigatie">
         <ul className="list-none flex flex-wrap items-center justify-center gap-y-2 gap-x-4 p-0 m-0">
           {navItems.map(({ month: m, year: y }) => (

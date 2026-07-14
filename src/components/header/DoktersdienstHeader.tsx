@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 
 import { computeOvernameCaps, OVERNAME_ACTION_FORBIDDEN_TOAST } from '@/lib/overname-ui-access';
 import { deriveEffectiveRoleTier, GROEP_DEELNEMER } from '@/lib/roles';
+import type { AppSection } from '@/lib/route-access';
 
 import {
   WaarneemgroepContext,
@@ -46,6 +47,8 @@ export interface DoktersdienstHeaderProps {
   routes: Record<string, string>;
   routeName?: string | null;
   assetUrls: AssetUrls;
+  section?: AppSection;
+  showSectionSwitch?: boolean;
 }
 
 function getStoredGroupId(): string | null {
@@ -68,6 +71,8 @@ export function DoktersdienstHeader({
   routes,
   routeName = null,
   assetUrls,
+  section = 'doktersdienst',
+  showSectionSwitch = true,
 }: DoktersdienstHeaderProps) {
   const router = useRouter();
   const ctx = useContext(WaarneemgroepContext) as WaarneemgroepContextValue | null;
@@ -177,6 +182,17 @@ export function DoktersdienstHeader({
       }),
     [globalIdgroep, headerActiveWaarneemgroep?.idgroep]
   );
+  const isPraktijkplanner = section === 'praktijkplanner';
+  const primaryHref = isPraktijkplanner
+    ? routes.praktijkplanner_activiteiten ?? '/praktijkplanner/activiteiten'
+    : routes.rooster_inzien ?? '/rooster-inzien';
+  const switchHref = isPraktijkplanner
+    ? routes.rooster_inzien ?? '/rooster-inzien'
+    : routes.praktijkplanner_activiteiten ?? routes.spreekuren ?? '/praktijkplanner/activiteiten';
+  const primaryLogo = isPraktijkplanner ? assetUrls.ppLogo : assetUrls.logo;
+  const switchLogo = isPraktijkplanner ? assetUrls.logo : assetUrls.ppLogo;
+  const primaryLabel = isPraktijkplanner ? 'Praktijkplanner' : 'DoktersDienst';
+  const switchLabel = isPraktijkplanner ? 'Naar Doktersdienst' : 'Naar Praktijkplanner';
 
   const fetchVerzoeken = useCallback(() => {
     fetch('/api/overnames/pending', { credentials: 'include' })
@@ -325,25 +341,25 @@ export function DoktersdienstHeader({
     <header className="relative" data-testid="doktersdienst-header">
       <div className="sticky top-0 left-0 right-0 z-[1500] min-w-[1024px] bg-white border-b border-[rgba(151,151,151,0.5)]">
         <nav className="flex flex-nowrap items-center justify-start">
-          <a
+          <Link
             className="inline-block cursor-pointer py-1.5 mr-4 text-[1.09375rem] leading-inherit whitespace-nowrap no-underline hover:no-underline focus:no-underline [&_img]:max-h-[46px]"
-            href="#"
+            href={primaryHref}
             data-testid="header-logo"
           >
-            <img src={assetUrls.logo} alt="DoktersDienst" className="ml-[10px]" />
-          </a>
+            <img src={primaryLogo} alt={primaryLabel} className="ml-[10px]" />
+          </Link>
 
-          {false && (
-            <a
-              className="flex items-center bg-[#f0f0f0] border border-[#a5a5a5] rounded-md ml-5 text-xl text-[#a5a5a5] py-2 px-5 no-underline [&_img]:w-[110px] [&_img]:mr-4"
-              href={routes.spreekuren ?? '#'}
-              data-testid="header-spreekuren"
-              aria-label="Naar spreekuren"
+          {showSectionSwitch ? (
+            <Link
+              className="flex items-center bg-[#f0f0f0] border border-[#a5a5a5] rounded-md ml-5 text-xl text-[#a5a5a5] py-2 px-5 no-underline hover:bg-[#e7e7e7] [&_img]:max-h-[32px] [&_img]:max-w-[130px] [&_img]:mr-4"
+              href={switchHref}
+              data-testid="header-section-switch"
+              aria-label={switchLabel}
             >
-              <img src={assetUrls.ppLogo} alt="Logo" />
-              <i className="fa fa-long-arrow-right" aria-hidden="true" />
-            </a>
-          )}
+              <img src={switchLogo} alt="" />
+              <span aria-hidden="true">→</span>
+            </Link>
+          ) : null}
 
           <div
             className="relative ml-auto mr-auto w-[650]"

@@ -9,6 +9,7 @@ export type PlannerCursorTool = {
   color: string | null;
   background?: string | null;
   label: string;
+  preview?: ReactNode;
 };
 
 export function usePlannerCursorTool({
@@ -23,12 +24,10 @@ export function usePlannerCursorTool({
   keepActiveSelector?: string;
 }) {
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const isActive = active && onDismiss != null;
 
   useEffect(() => {
-    if (!active || !onDismiss) {
-      setPosition(null);
-      return;
-    }
+    if (!isActive || !onDismiss) return;
 
     const handleMove = (event: MouseEvent) => {
       setPosition({ x: event.clientX, y: event.clientY });
@@ -57,9 +56,9 @@ export function usePlannerCursorTool({
       window.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('pointerdown', handlePointerDown, true);
     };
-  }, [active, containerRef, keepActiveSelector, onDismiss]);
+  }, [containerRef, isActive, keepActiveSelector, onDismiss]);
 
-  return position;
+  return isActive ? position : null;
 }
 
 export function PlannerCursorToolFollower({
@@ -73,15 +72,18 @@ export function PlannerCursorToolFollower({
 
   return createPortal(
     <div
-      className="pointer-events-none fixed z-[100] flex size-9 items-center justify-center rounded shadow-lg ring-2 ring-white/80"
+      className={[
+        'pointer-events-none fixed z-[100]',
+        tool.preview ? '' : 'flex size-9 items-center justify-center rounded shadow-lg ring-2 ring-white/80',
+      ].join(' ')}
       style={{
         left: position.x + 12,
         top: position.y + 12,
-        background: tool.background ?? tool.color ?? '#64748b',
+        background: tool.preview ? undefined : tool.background ?? tool.color ?? '#64748b',
       }}
       aria-hidden
     >
-      {tool.icon ? (
+      {tool.preview ?? (tool.icon ? (
         typeof tool.icon === 'string' ? (
           <Image src={tool.icon} alt="" width={24} height={24} className="size-6 object-contain" />
         ) : (
@@ -89,7 +91,7 @@ export function PlannerCursorToolFollower({
         )
       ) : (
         <span className="px-1 text-[10px] font-bold text-white">{tool.label.slice(0, 2)}</span>
-      )}
+      ))}
     </div>,
     document.body
   );

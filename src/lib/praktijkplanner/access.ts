@@ -143,25 +143,6 @@ export async function canAccessPraktijkplannerParticipant(
   if (!isSelf && !access.isManager) return false;
   if (isSelf && !allowSelf) return false;
 
-  if (isSelf) {
-    return isUserInWaarneemgroep(targetId, access.idwaarneemgroep);
-  }
-
-  if (access.user.isAdmin && access.isManager) {
-    const [membership] = await db
-      .select({ id: schema.waarneemgroepdeelnemers.id })
-      .from(schema.waarneemgroepdeelnemers)
-      .where(
-        and(
-          eq(schema.waarneemgroepdeelnemers.iddeelnemer, targetId),
-          eq(schema.waarneemgroepdeelnemers.idwaarneemgroep, access.idwaarneemgroep),
-          eq(schema.waarneemgroepdeelnemers.aangemeld, true)
-        )
-      )
-      .limit(1);
-    return membership?.id != null;
-  }
-
   return isUserInWaarneemgroep(targetId, access.idwaarneemgroep);
 }
 

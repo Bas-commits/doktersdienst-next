@@ -92,4 +92,23 @@ describe('resolvePraktijkplannerAccess', () => {
       error: { status: 403, error: 'Deze actie is alleen beschikbaar voor beheerders.' },
     });
   });
+
+  it('allows a manager admin to target active participants in the selected group', async () => {
+    mocks.getAuthenticatedUser.mockResolvedValue({
+      id: 119,
+      email: 'admin@example.test',
+      idgroep: 1,
+      isAdmin: true,
+    });
+    mocks.hasGroupManagementAccess.mockResolvedValue(true);
+    mocks.isUserInWaarneemgroep.mockResolvedValue(true);
+
+    const result = await resolvePraktijkplannerAccess(request, 77, 'activiteiten:manage');
+    if (!result.ok) throw new Error('Expected manager access.');
+
+    await expect(
+      canAccessPraktijkplannerParticipant(result.access, 1388, { requireManager: true })
+    ).resolves.toBe(true);
+    expect(mocks.isUserInWaarneemgroep).toHaveBeenCalledWith(1388, 77);
+  });
 });

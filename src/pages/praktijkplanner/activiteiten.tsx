@@ -2,9 +2,13 @@
 
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, Mail, Repeat2, Save, Trash2 } from 'lucide-react';
+import { Copy, Mail, Repeat2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
+import {
+  PlannerCombinedDaypartChip,
+  type PlannerDaypartChipItem,
+} from '@/components/praktijkplanner/PlannerCombinedDaypartChip';
 import type { PlannerCursorTool } from '@/components/praktijkplanner/PlannerCursorTool';
 import { PlannerDaypartGrid } from '@/components/praktijkplanner/PlannerDaypartGrid';
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
@@ -12,21 +16,15 @@ import { plannerWeekGridNavOffsetPx } from '@/components/praktijkplanner/planner
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
+import {
+  buildActivityAssignmentSlot,
+  hasActivityAssignmentSelection,
+  type ActivityAssignmentSelection,
+  type CurrentActivityAssignment,
+} from '@/lib/praktijkplanner/activity-assignment';
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import type { PraktijkplannerPlanningSlot } from '@/types/praktijkplanner';
-
-type PendingSlot = {
-  iddeelnemer: number;
-  datum: string;
-  iddagdeel: number;
-  idactiviteit: number | null;
-  idactiviteitspecificatie: number | null;
-  idplannerlocatie: number | null;
-  idbeschikbaarheidstype: number | null;
-  taskIds: number[];
-  version: number | null;
-};
 
 type RecurrenceSeries = {
   id: number;
@@ -49,7 +47,6 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   const [slots, setSlots] = useState<PraktijkplannerPlanningSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotError, setSlotError] = useState<string | null>(null);
-  const [pending, setPending] = useState<Map<string, PendingSlot>>(new Map());
   const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
   const [selectedSpecificationId, setSelectedSpecificationId] = useState<number | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
@@ -62,7 +59,6 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   const [copyTargetDate, setCopyTargetDate] = useState(addDays(currentWeekStart(), 7));
   const [repeatEndDate, setRepeatEndDate] = useState(addDays(currentWeekStart(), 28));
   const [frequencyWeeks, setFrequencyWeeks] = useState('1');
-  const [saving, setSaving] = useState(false);
   const [participantFilter, setParticipantFilter] = useState<number | 'all'>('all');
   const [zoom, setZoom] = useState('100');
   const [series, setSeries] = useState<RecurrenceSeries[]>([]);
@@ -165,6 +161,18 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     return () => abortController.abort();
   }, [end, groupId, weekStart]);
 
+  const refreshSlots = useCallback(async () => {
+    const response = await fetch(
+      `/api/praktijkplanner/activiteiten?idwaarneemgroep=${groupId}&start=${weekStart}&end=${end}`,
+      { credentials: 'include' }
+    );
+    const payload = (await response.json()) as { slots?: PraktijkplannerPlanningSlot[]; error?: string };
+    if (!response.ok || !payload.slots) {
+      throw new Error(payload.error || 'De activiteitenplanning kon niet worden geladen.');
+    }
+    setSlots(payload.slots);
+  }, [end, groupId, weekStart]);
+
   useEffect(() => loadSlots(), [loadSlots]);
 
   const loadSeries = useCallback(() => {
@@ -185,16 +193,6 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     return () => window.clearTimeout(timer);
   }, [loadSeries]);
 
-  useEffect(() => {
-    if (pending.size === 0) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [pending.size]);
-
   const baseSlotMap = useMemo(
     () => new Map(slots.map((slot) => [slotKey(slot.iddeelnemer, slot.datum, slot.iddagdeel), slot])),
     [slots]
@@ -203,65 +201,74 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   const renderSlot = useCallback(
     (iddeelnemer: number, datum: string, iddagdeel: number) => {
       const key = slotKey(iddeelnemer, datum, iddagdeel);
-      const override = pending.get(key);
       const existing = baseSlotMap.get(key);
-      const activity =
-        override?.idactiviteit != null
-          ? data.masterData.activities.find((item) => item.id === override.idactiviteit)
-          : override
-            ? null
-            : existing?.activity;
-      const specification =
-        override?.idactiviteitspecificatie != null
-          ? data.masterData.specifications.find((item) => item.id === override.idactiviteitspecificatie)
-          : override
-            ? null
-            : existing?.specification;
-      const location =
-        override?.idplannerlocatie != null
-          ? data.masterData.locations.find((item) => item.id === override.idplannerlocatie)
-          : override
-            ? null
-            : existing?.location;
-      const taskIds = override ? override.taskIds : existing?.tasks.map((task) => task.id) ?? [];
-      const tasks = taskIds
-        .map((id) => data.masterData.tasks.find((task) => task.id === id))
-        .filter(Boolean);
-      const availability =
-        override?.idbeschikbaarheidstype != null
-          ? data.masterData.availabilityTypes.find(
-              (availabilityType) => availabilityType.id === override.idbeschikbaarheidstype
-            )
-          : override
-            ? null
-            : existing?.availability;
+      const activity = existing?.activity ?? null;
+      const specification = existing?.specification ?? null;
+      const location = existing?.location ?? null;
+      const tasks = existing?.tasks ?? [];
+      const availability = existing?.availability ?? null;
 
       if (!activity && !location && tasks.length === 0 && !availability) {
-        return <span className="block min-h-4" />;
+        return null;
       }
+
+      const taskItems: PlannerDaypartChipItem[] = tasks.flatMap((task) =>
+        task
+          ? [
+              {
+                id: task.id,
+                label: task.afkorting || task.omschrijving || `Taak ${task.id}`,
+                color: task.kleur,
+              },
+            ]
+          : []
+      );
+      const activityItem: PlannerDaypartChipItem | null = activity
+        ? {
+            id: activity.id,
+            label: [
+              activity.afkorting || activity.naam,
+              specification ? specification.afkorting || specification.naam : null,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            color: specification?.kleur || activity.kleur,
+            icon: activiteitenIconPath(activity.icon),
+          }
+        : null;
+      const locationItem: PlannerDaypartChipItem | null = location
+        ? {
+            id: location.id,
+            label: location.afkorting || location.naam,
+            color: location.kleur,
+          }
+        : null;
+
       return (
-        <div className="space-y-0.5 text-[10px] leading-tight">
-          {activity ? (
-            <span
-              className="block truncate rounded px-1 py-0.5 font-semibold text-white"
-              style={{ backgroundColor: activity.kleur || '#64748b' }}
-            >
-              {activity.afkorting || activity.naam}
-              {specification ? ` · ${specification.afkorting || specification.naam}` : ''}
+        <div className="relative h-full w-full min-w-0">
+          {activityItem || locationItem || taskItems.length > 0 ? (
+            <PlannerCombinedDaypartChip
+              tasks={taskItems}
+              activity={activityItem}
+              location={locationItem}
+              fill
+              className="shadow-none"
+            />
+          ) : null}
+          {availability ? (
+            <span className="pointer-events-none absolute inset-x-0.5 bottom-0.5 truncate rounded bg-background/80 px-0.5 text-[9px] font-medium text-emerald-700">
+              {availability.naam}
             </span>
           ) : null}
-          {tasks.length > 0 ? (
-            <span className="block truncate text-muted-foreground">
-              {tasks.map((task) => task?.afkorting || task?.omschrijving).filter(Boolean).join(' · ')}
+          {existing?.recurrenceId ? (
+            <span className="pointer-events-none absolute top-0.5 right-0.5 rounded bg-background/80 px-0.5 text-muted-foreground">
+              ↻
             </span>
           ) : null}
-          {location ? <span className="block truncate text-muted-foreground">{location.afkorting || location.naam}</span> : null}
-          {availability ? <span className="block truncate font-medium text-emerald-700">{availability.naam}</span> : null}
-          {existing?.recurrenceId ? <span className="text-muted-foreground">↻</span> : null}
         </div>
       );
     },
-    [baseSlotMap, data.masterData, pending]
+    [baseSlotMap]
   );
 
   const isCellFilled = useCallback(
@@ -275,15 +282,6 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
       daypart: { id: number };
     }) => {
       const key = slotKey(participant.id, datum, daypart.id);
-      const override = pending.get(key);
-      if (override) {
-        return (
-          override.idactiviteit != null ||
-          override.idplannerlocatie != null ||
-          override.idbeschikbaarheidstype != null ||
-          override.taskIds.length > 0
-        );
-      }
       const existing = baseSlotMap.get(key);
       return Boolean(
         existing?.activity ||
@@ -292,11 +290,21 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           existing?.tasks.length
       );
     },
-    [baseSlotMap, pending]
+    [baseSlotMap]
   );
 
   const clearSelection = useCallback(() => {
     setClearMode(false);
+    setSelectedActivityId(null);
+    setSelectedSpecificationId(null);
+    setSelectedLocationId(null);
+    setSelectedAvailabilityId(null);
+    setSelectedTaskIds([]);
+  }, []);
+
+  const setAssignmentClearMode = useCallback((enabled: boolean) => {
+    setClearMode(enabled);
+    if (!enabled) return;
     setSelectedActivityId(null);
     setSelectedSpecificationId(null);
     setSelectedLocationId(null);
@@ -319,6 +327,9 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     }
 
     const activity = data.masterData.activities.find((item) => item.id === selectedActivityId);
+    const specification = data.masterData.specifications.find(
+      (item) => item.id === selectedSpecificationId
+    );
     const location = data.masterData.locations.find((item) => item.id === selectedLocationId);
     const availability = data.masterData.availabilityTypes.find(
       (item) => item.id === selectedAvailabilityId
@@ -329,7 +340,14 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     if (!activity && !location && !availability && tasks.length === 0) return null;
 
     const labels = [
-      activity ? activity.afkorting || activity.naam : null,
+      activity
+        ? [
+            activity.afkorting || activity.naam,
+            specification ? specification.afkorting || specification.naam : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : null,
       ...tasks.map((task) => task.afkorting || task.omschrijving),
       location ? location.afkorting || location.naam : null,
       availability ? availability.code || availability.naam : null,
@@ -348,6 +366,41 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         tasks[0]?.kleur ??
         '#64748b',
       label: labels.join(' · '),
+      preview:
+        activity || location || tasks.length > 0 ? (
+          <PlannerCombinedDaypartChip
+            tasks={tasks.map((task) => ({
+              id: task.id,
+              label: task.afkorting || task.omschrijving || `Taak ${task.id}`,
+              color: task.kleur,
+            }))}
+            activity={
+              activity
+                ? {
+                    id: activity.id,
+                    label: [
+                      activity.afkorting || activity.naam,
+                      specification ? specification.afkorting || specification.naam : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · '),
+                    color: specification?.kleur || activity.kleur,
+                    icon: activiteitenIconPath(activity.icon),
+                  }
+                : null
+            }
+            location={
+              location
+                ? {
+                    id: location.id,
+                    label: location.afkorting || location.naam,
+                    color: location.kleur,
+                  }
+                : null
+            }
+            className="w-28 ring-2 ring-white/80"
+          />
+        ) : undefined,
     };
   }, [
     clearMode,
@@ -355,15 +408,17 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     data.masterData.activities,
     data.masterData.availabilityTypes,
     data.masterData.locations,
+    data.masterData.specifications,
     data.masterData.tasks,
     selectedActivityId,
     selectedAvailabilityId,
     selectedLocationId,
+    selectedSpecificationId,
     selectedTaskIds,
   ]);
 
   const queueCell = useCallback(
-    ({
+    async ({
       participant,
       datum,
       daypart,
@@ -377,89 +432,136 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         return;
       }
       const key = slotKey(participant.id, datum, daypart.id);
-      const pendingSlot = pending.get(key);
       const existingSlot = baseSlotMap.get(key);
-      const current = pendingSlot ?? existingSlot;
-      if (
-        !clearMode &&
-        selectedActivityId == null &&
-        selectedLocationId == null &&
-        selectedAvailabilityId == null &&
-        selectedTaskIds.length === 0
-      ) {
+      const currentAssignment: CurrentActivityAssignment | null = existingSlot
+        ? {
+            idactiviteit: existingSlot.idactiviteit,
+            idactiviteitspecificatie: existingSlot.idactiviteitspecificatie,
+            idplannerlocatie: existingSlot.idplannerlocatie,
+            idbeschikbaarheidstype: existingSlot.availability?.id ?? null,
+            taskIds: existingSlot.tasks.map((task) => task.id),
+            version: existingSlot.version,
+          }
+        : null;
+      const selection: ActivityAssignmentSelection = {
+        activityId: selectedActivityId,
+        specificationId: selectedSpecificationId,
+        taskIds: selectedTaskIds,
+        locationId: selectedLocationId,
+        availabilityId: selectedAvailabilityId,
+      };
+
+      if (!clearMode && !hasActivityAssignmentSelection(selection)) {
         toast.info('Kies eerst een activiteit, locatie, beschikbaarheidstype of taak.');
         return;
       }
 
-      const next: PendingSlot = clearMode
-        ? {
-            iddeelnemer: participant.id,
-            datum,
-            iddagdeel: daypart.id,
-            idactiviteit: null,
-            idactiviteitspecificatie: null,
-            idplannerlocatie: null,
-            idbeschikbaarheidstype: null,
-            taskIds: [],
-            version: current?.version ?? null,
-          }
-        : {
-            iddeelnemer: participant.id,
-            datum,
-            iddagdeel: daypart.id,
-            idactiviteit: selectedActivityId ?? current?.idactiviteit ?? null,
-            idactiviteitspecificatie:
-              selectedActivityId != null
-                ? selectedSpecificationId
-                : current?.idactiviteitspecificatie ?? null,
-            idplannerlocatie: selectedLocationId ?? current?.idplannerlocatie ?? null,
-            idbeschikbaarheidstype:
-              selectedAvailabilityId ??
-              pendingSlot?.idbeschikbaarheidstype ??
-              existingSlot?.availability?.id ??
-              null,
-            taskIds:
-              selectedTaskIds.length > 0
-                ? selectedTaskIds
-                : pendingSlot?.taskIds ?? existingSlot?.tasks.map((task) => task.id) ?? [],
-            version: current?.version ?? null,
-          };
-      setPending((previous) => new Map(previous).set(key, next));
+      const next = buildActivityAssignmentSlot({
+        participantId: participant.id,
+        date: datum,
+        daypartId: daypart.id,
+        selection,
+        current: currentAssignment,
+        clearMode,
+      });
+
+      const activity =
+        next.idactiviteit != null
+          ? data.masterData.activities.find((item) => item.id === next.idactiviteit) ?? null
+          : null;
+      const specification =
+        next.idactiviteitspecificatie != null
+          ? data.masterData.specifications.find((item) => item.id === next.idactiviteitspecificatie) ?? null
+          : null;
+      const location =
+        next.idplannerlocatie != null
+          ? data.masterData.locations.find((item) => item.id === next.idplannerlocatie) ?? null
+          : null;
+      const tasks = next.taskIds.flatMap(
+        (id, index) => {
+          const task = data.masterData.tasks.find((item) => item.id === id);
+          return task
+            ? [
+                {
+                  id: task.id,
+                  positie: index,
+                  afkorting: task.afkorting,
+                  omschrijving: task.omschrijving,
+                  kleur: task.kleur,
+                },
+              ]
+            : [];
+        }
+      );
+      const availability =
+        next.idbeschikbaarheidstype != null
+          ? data.masterData.availabilityTypes.find(
+              (item) => item.id === next.idbeschikbaarheidstype
+            ) ?? null
+          : null;
+      const hasAssignment = activity != null || location != null || tasks.length > 0 || availability != null;
+      const previousSlots = slots;
+
+      setSlots((current) => {
+        const updated = current.filter(
+          (slot) => slotKey(slot.iddeelnemer, slot.datum, slot.iddagdeel) !== key
+        );
+        if (!hasAssignment) return updated;
+
+        updated.push({
+          id: existingSlot?.id ?? -1,
+          iddeelnemer: participant.id,
+          datum,
+          iddagdeel: daypart.id,
+          idactiviteit: next.idactiviteit,
+          idactiviteitspecificatie: next.idactiviteitspecificatie,
+          idplannerlocatie: next.idplannerlocatie,
+          version: existingSlot?.version ?? 0,
+          activity,
+          specification,
+          location,
+          tasks,
+          availability,
+          recurrenceId: existingSlot?.recurrenceId ?? null,
+        });
+        return updated;
+      });
+
+      try {
+        const response = await fetch('/api/praktijkplanner/activiteiten', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idwaarneemgroep: groupId, slots: [next] }),
+        });
+        const payload = (await response.json()) as { error?: string };
+        if (!response.ok) throw new Error(payload.error || 'Wijziging kon niet worden opgeslagen.');
+        await refreshSlots();
+        toast.success(clearMode ? 'Dagdeel leeggemaakt.' : 'Dagdeel opgeslagen.');
+      } catch (error) {
+        setSlots(previousSlots);
+        toast.error(error instanceof Error ? error.message : 'Wijziging kon niet worden opgeslagen.');
+      }
     },
     [
       baseSlotMap,
       clearMode,
       data.isManager,
-      pending,
+      data.masterData.activities,
+      data.masterData.availabilityTypes,
+      data.masterData.locations,
+      data.masterData.specifications,
+      data.masterData.tasks,
+      groupId,
+      refreshSlots,
       selectedActivityId,
       selectedAvailabilityId,
       selectedLocationId,
       selectedSpecificationId,
       selectedTaskIds,
+      slots,
     ]
   );
-
-  const savePending = useCallback(async () => {
-    if (pending.size === 0) return;
-    setSaving(true);
-    try {
-      const response = await fetch('/api/praktijkplanner/activiteiten', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idwaarneemgroep: groupId, slots: [...pending.values()] }),
-      });
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(payload.error || 'Opslaan mislukt.');
-      setPending(new Map());
-      loadSlots();
-      toast.success('Activiteitenplanning opgeslagen.');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Opslaan mislukt.');
-    } finally {
-      setSaving(false);
-    }
-  }, [groupId, loadSlots, pending]);
 
   const runRecurrenceAction = useCallback(
     async (action: 'copyWeek' | 'create') => {
@@ -570,7 +672,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-end gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-3" data-planner-tool-keep-active>
         <div className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm">
           <label className="flex items-center gap-2">
             <Checkbox checked={showDay} onCheckedChange={(value) => updateVisibility(!!value, showNight)} />
@@ -592,7 +694,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
       </div>
 
       {data.isManager ? (
-        <div className="grid gap-3 xl:grid-cols-[minmax(14rem,1fr)_auto]">
+        <div className="grid gap-3 xl:grid-cols-[minmax(14rem,1fr)_auto]" data-planner-tool-keep-active>
           <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 shadow-sm">
             <label className="text-sm font-medium" htmlFor="planner-participant">
               Deelnemer
@@ -715,7 +817,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
                   setSelectedAvailabilityId(id);
                 }}
                 onClearSelection={clearSelection}
-                onClearModeChange={setClearMode}
+                onClearModeChange={setAssignmentClearMode}
               />
             </div>
           </div>
@@ -791,25 +893,6 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         </section>
       ) : null}
 
-      {data.isManager && pending.size > 0 ? (
-        <div className="sticky bottom-4 flex items-center justify-between rounded-xl border bg-card p-3 shadow-lg">
-          <p className="text-sm text-muted-foreground">{pending.size} niet-opgeslagen wijziging(en)</p>
-          <div className="flex gap-2">
-            <button type="button" className="rounded-md border px-3 py-2 text-sm hover:bg-muted" onClick={() => setPending(new Map())}>
-              Wijzigingen verwerpen
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-              onClick={savePending}
-            >
-              <Save className="size-4" />
-              {saving ? 'Opslaan…' : 'Opslaan'}
-            </button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

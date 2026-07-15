@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useRef, type ReactNode } from 'react';
 import { weekDates } from '@/lib/praktijkplanner/dates';
+import { cn } from '@/lib/utils';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
 import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
 import {
@@ -46,7 +47,7 @@ function dayLabel(date: string): { weekday: string; day: number } {
 function DaypartIcon({ volgorde, className }: { volgorde: number; className?: string }) {
   const icon = DAYPART_ICONS[volgorde];
   if (!icon) return null;
-  return <Image src={icon} alt="" width={28} height={28} className={className ?? 'size-7 opacity-[0.25]'} />;
+  return <Image src={icon} alt="" width={28} height={28} className={className ?? 'size-7'} />;
 }
 
 export function PlannerDaypartGrid({
@@ -136,27 +137,36 @@ export function PlannerDaypartGrid({
               <span className="text-sm font-medium">{participantLabel(participant)}</span>
             </div>
             {days.map((datum) => (
-              <div key={`${participant.id}-${datum}`} className="min-h-30 border-l p-1">
-                <div className="grid grid-cols-2 gap-1">
+              <div key={`${participant.id}-${datum}`} className="flex min-h-30 items-stretch border-l p-1">
+                <div className="grid h-full w-full min-w-30 grid-cols-2 gap-1">
                   {orderedDayparts.map((daypart) => {
                     const cell = { participant, datum, daypart };
                     const disabled = isCellDisabled?.(cell) ?? false;
+                    const filled = isCellFilled?.(cell) ?? false;
                     return (
                       <button
                         key={`${participant.id}-${datum}-${daypart.id}`}
                         type="button"
                         disabled={disabled || !onCellClick}
                         onClick={() => onCellClick?.(cell)}
-                        className="group/cell relative flex min-h-12 w-full items-center justify-center rounded border border-border/70 px-1 text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default disabled:opacity-80"
+                        className={cn(
+                          'group/cell relative flex h-full min-h-12 w-full rounded border border-border/70 text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default disabled:opacity-80',
+                          filled ? 'items-stretch p-0.5' : 'items-center justify-center p-1'
+                        )}
                         aria-label={`${participantLabel(participant)} ${datum} ${daypart.naam}`}
                       >
-                        {isCellFilled?.(cell) ? null : (
+                        {!filled ? (
                           <DaypartIcon
                             volgorde={daypart.volgorde}
-                            className="pointer-events-none absolute size-7"
+                            className="pointer-events-none absolute inset-0 m-auto size-7"
                           />
-                        )}
-                        <span className="relative z-10 flex h-full w-full min-w-0 items-center justify-center">
+                        ) : null}
+                        <span
+                          className={cn(
+                            'relative z-10 flex h-full w-full min-w-0',
+                            filled ? 'items-stretch' : 'items-center justify-center'
+                          )}
+                        >
                           {renderCell(cell)}
                         </span>
                       </button>

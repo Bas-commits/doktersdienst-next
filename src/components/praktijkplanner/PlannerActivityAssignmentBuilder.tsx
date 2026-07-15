@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { Check, ChevronDown, ChevronUp, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
@@ -11,6 +10,10 @@ import type {
   PraktijkplannerLocation,
   PraktijkplannerTaskType,
 } from '@/types/praktijkplanner';
+import {
+  PlannerCombinedDaypartChip,
+  type PlannerDaypartChipItem,
+} from './PlannerCombinedDaypartChip';
 
 type BuilderSectionId = 'activities' | 'tasks' | 'locations' | 'availability';
 
@@ -128,48 +131,15 @@ function OptionPreview({
   icon?: string | null;
   slot?: 'top' | 'middle' | 'bottom';
 }) {
-  const coloredRow = (
-    <span
-      className="flex flex-1 w-full items-center justify-center"
-      style={{ backgroundColor: color || '#e5e7eb' }}
-    >
-      {icon ? (
-        <span className="flex h-5 items-center justify-center">
-          <Image
-            src={icon}
-            alt=""
-            width={17}
-            height={17}
-            className="py-0.5 object-contain"
-            style={{ filter: 'invert(1) brightness(2)' }}
-          />
-          {label ? (
-            <span className="ml-0.5 w-full truncate overflow-hidden whitespace-nowrap px-0.5 text-[12px] font-semibold text-white">
-              {label}
-            </span>
-          ) : null}
-        </span>
-      ) : (
-        <span className="px-1 text-[9px] text-white">{label}</span>
-      )}
-    </span>
-  );
-  const neutralRow = <span className="flex-1 w-full bg-neutral-300" />;
-
-  const rows =
-    slot === 'top'
-      ? [coloredRow, neutralRow, neutralRow]
-      : slot === 'bottom'
-        ? [neutralRow, neutralRow, coloredRow]
-        : [neutralRow, coloredRow, neutralRow];
+  const item: PlannerDaypartChipItem = { color, label, icon };
 
   return (
-    <span
-      className="flex h-12 w-18 shrink-0 flex-col overflow-hidden rounded-md text-center text-[9px] font-semibold leading-tight"
-      aria-hidden
-    >
-      {rows}
-    </span>
+    <PlannerCombinedDaypartChip
+      tasks={slot === 'top' ? [item] : []}
+      activity={slot === 'middle' ? item : null}
+      location={slot === 'bottom' ? item : null}
+      className="w-18 shrink-0"
+    />
   );
 }
 

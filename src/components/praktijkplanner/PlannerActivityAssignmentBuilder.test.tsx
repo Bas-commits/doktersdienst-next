@@ -119,6 +119,19 @@ describe('PlannerActivityAssignmentBuilder', () => {
     expect(screen.getByRole('checkbox', { name: 'SV Supervisie' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('radio', { name: 'UT Utrecht' })).toHaveAttribute('aria-checked', 'true');
 
+    const taskRows = Array.from(
+      screen.getByRole('checkbox', { name: 'SV Supervisie' }).querySelectorAll('[data-planner-daypart-chip-row]')
+    );
+    const activityRows = Array.from(
+      screen.getByRole('radio', { name: 'ALG Algemeen' }).querySelectorAll('[data-planner-daypart-chip-row]')
+    );
+    const locationRows = Array.from(
+      screen.getByRole('radio', { name: 'UT Utrecht' }).querySelectorAll('[data-planner-daypart-chip-row]')
+    );
+    expect(taskRows.map((row) => row.textContent)).toEqual(['SV', '', '']);
+    expect(activityRows.map((row) => row.textContent)).toEqual(['', 'ALG', '']);
+    expect(locationRows.map((row) => row.textContent)).toEqual(['', '', 'UT']);
+
     fireEvent.click(screen.getByRole('button', { name: 'Wis selectie' }));
     expect(
       within(builder).getByText('Kies een activiteit, taak of locatie en klik daarna op een dagdeel.')

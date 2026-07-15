@@ -1,6 +1,7 @@
 'use client';
 
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, Plus, Save } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,13 +23,14 @@ type Entity =
 type Form = Record<string, string | boolean>;
 
 const TABS: Array<{ id: Entity; label: string }> = [
-  { id: 'expertise', label: 'Expertises' },
   { id: 'activity', label: 'Activiteiten' },
-  { id: 'specification', label: 'Specificaties' },
   { id: 'task', label: 'Taken' },
-  { id: 'location', label: 'Plannerlocaties' },
+  { id: 'location', label: 'Locaties' },
   { id: 'absenceType', label: 'Afwezigheidstypen' },
-  { id: 'availabilityType', label: 'Beschikbaarheid' },
+  // { id: 'availabilityType', label: 'Beschikbaarheid' },
+  { id: 'expertise', label: 'Expertises' },
+  // { id: 'specification', label: 'Specificaties' },
+
 ];
 
 function initialForm(): Form {
@@ -54,9 +56,22 @@ function getItems(masterData: PraktijkplannerMasterData, entity: Entity) {
   }
 }
 
-function itemLabel(entity: Entity, item: Record<string, unknown>) {
-  if (entity === 'task') return String(item.afkorting || item.omschrijving || `Taak ${item.id}`);
-  return String(item.afkorting || item.naam || `Item ${item.id}`);
+function itemFullName(entity: Entity, item: Record<string, unknown>): string {
+  if (entity === 'task') {
+    return String(item.omschrijving ?? item.afkorting ?? `Taak ${item.id}`);
+  }
+  return String(item.naam ?? item.afkorting ?? `Item ${item.id}`);
+}
+
+function itemShortLabel(entity: Entity, item: Record<string, unknown>): string {
+  if (['absenceType', 'availabilityType'].includes(entity)) {
+    return String(item.code ?? '');
+  }
+  return String(item.afkorting ?? '');
+}
+
+function compareItemsByName(entity: Entity, a: Record<string, unknown>, b: Record<string, unknown>): number {
+  return itemFullName(entity, a).localeCompare(itemFullName(entity, b), 'nl', { sensitivity: 'base' });
 }
 
 function RequiredAsterisk() {
@@ -68,14 +83,48 @@ function hasRequiredName(entity: Entity, form: Form): boolean {
   return String(value ?? '').trim().length > 0;
 }
 
-function hasRequiredAfkorting(form: Form): boolean {
+function requiresAfkorting(entity: Entity): boolean {
+  return !['absenceType', 'availabilityType'].includes(entity);
+}
+
+function hasRequiredAfkorting(entity: Entity, form: Form): boolean {
+  if (!requiresAfkorting(entity)) return true;
   return String(form.afkorting ?? '').trim().length > 0;
 }
 
 const DEFAULT_KLEUR = '#cccccc';
 
+const VALID_ENTITIES = new Set<Entity>(TABS.map((tab) => tab.id));
+
+function parseEntity(value: unknown): Entity {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (typeof raw === 'string' && VALID_ENTITIES.has(raw as Entity)) {
+    return raw as Entity;
+  }
+  return 'expertise';
+}
+
+function readEntityFromUrl(): Entity {
+  if (typeof window === 'undefined') return 'expertise';
+  return parseEntity(new URLSearchParams(window.location.search).get('entity'));
+}
+
 function BeheerContent({ groupId, data, reload: reloadContext }: PraktijkplannerPageContext) {
-  const [entity, setEntity] = useState<Entity>('expertise');
+  const router = useRouter();
+  const entity = useMemo((): Entity => {
+    if (router.isReady) {
+      return parseEntity(router.query.entity);
+    }
+    return readEntityFromUrl();
+  }, [router.isReady, router.query.entity]);
+
+  const setEntity = useCallback((next: Entity) => {
+    void router.replace(
+      { pathname: router.pathname, query: { ...router.query, entity: next } },
+      undefined,
+      { shallow: true }
+    );
+  }, [router]);
   const [masterData, setMasterData] = useState<PraktijkplannerMasterData>(data.masterData);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<Form>(initialForm);
@@ -116,10 +165,10 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
     setForm(initialForm());
   }, [entity]);
 
-  const items = useMemo(
-    () => getItems(masterData, entity) as Array<Record<string, unknown>>,
-    [entity, masterData]
-  );
+  const items = useMemo(() => {
+    const list = getItems(masterData, entity) as Array<Record<string, unknown>>;
+    return [...list].sort((a, b) => compareItemsByName(entity, a, b));
+  }, [entity, masterData]);
 
   const selectItem = (item: Record<string, unknown>) => {
     setEditingId(Number(item.id));
@@ -140,8 +189,8 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
   };
 
   const submit = async () => {
-    if (!hasRequiredName(entity, form) || !hasRequiredAfkorting(form)) {
-      toast.error('Naam en afkorting zijn verplicht.');
+    if (!hasRequiredName(entity, form) || !hasRequiredAfkorting(entity, form)) {
+      toast.error(requiresAfkorting(entity) ? 'Naam en afkorting zijn verplicht.' : 'Naam is verplicht.');
       return;
     }
     setSaving(true);
@@ -206,7 +255,7 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
   const showActivity = entity === 'specification';
   const showCode = ['absenceType', 'availabilityType'].includes(entity);
   const showVisual = ['activity', 'specification', 'location', 'absenceType', 'availabilityType', 'task'].includes(entity);
-  const canSubmit = hasRequiredName(entity, form) && hasRequiredAfkorting(form);
+  const canSubmit = hasRequiredName(entity, form) && hasRequiredAfkorting(entity, form);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.2fr)]">
@@ -226,26 +275,35 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
             </button>
           ))}
         </div>
-        <div className="max-h-[620px] space-y-1 overflow-y-auto">
+        <div className="max-h-[620px] overflow-y-auto">
           {loading ? <p className="p-2 text-sm text-muted-foreground">Laden…</p> : null}
-          {items.map((item) => {
-            const active = item.actief !== false;
-            return (
-              <button
-                type="button"
-                key={Number(item.id)}
-                onClick={() => selectItem(item)}
-                className={[
-                  'flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm hover:bg-muted',
-                  editingId === Number(item.id) ? 'bg-muted' : '',
-                  !active ? 'opacity-50' : '',
-                ].join(' ')}
-              >
-                <span className="truncate">{itemLabel(entity, item)}</span>
-                {!active ? <span className="ml-2 text-[10px] uppercase text-muted-foreground">Gearchiveerd</span> : null}
-              </button>
-            );
-          })}
+          {!loading && items.length > 0 ? (
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,6rem)] gap-x-2 border-b px-2 py-1.5 text-xs font-medium text-muted-foreground">
+              <span>Naam</span>
+              <span>{['absenceType', 'availabilityType'].includes(entity) ? 'Code' : 'Afkorting'}</span>
+            </div>
+          ) : null}
+          <div className="space-y-1">
+            {items.map((item) => {
+              const active = item.actief !== false;
+              const shortLabel = itemShortLabel(entity, item);
+              return (
+                <button
+                  type="button"
+                  key={Number(item.id)}
+                  onClick={() => selectItem(item)}
+                  className={[
+                    'grid w-full grid-cols-[minmax(0,1fr)_minmax(0,6rem)] gap-x-2 rounded px-2 py-2 text-left text-sm hover:bg-muted',
+                    editingId === Number(item.id) ? 'bg-muted' : '',
+                    !active ? 'opacity-50' : '',
+                  ].join(' ')}
+                >
+                  <span className="truncate">{itemFullName(entity, item)}</span>
+                  <span className="truncate text-muted-foreground">{shortLabel || '—'}</span>
+                </button>
+              );
+            })}
+          </div>
           {items.length === 0 && !loading ? <p className="p-2 text-sm text-muted-foreground">Nog geen gegevens.</p> : null}
         </div>
       </section>
@@ -276,15 +334,17 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
               ))}
             />
           </label>
-          <label className="grid gap-1 text-sm">
-            <span className="font-medium">Afkorting <RequiredAsterisk /></span>
-            <input
-              required
-              className="h-9 rounded border bg-background px-2"
-              value={String(form.afkorting ?? '')}
-              onChange={(event) => setForm((current) => ({ ...current, afkorting: event.target.value }))}
-            />
-          </label>
+          {requiresAfkorting(entity) ? (
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium">Afkorting <RequiredAsterisk /></span>
+              <input
+                required
+                className="h-9 rounded border bg-background px-2"
+                value={String(form.afkorting ?? '')}
+                onChange={(event) => setForm((current) => ({ ...current, afkorting: event.target.value }))}
+              />
+            </label>
+          ) : null}
           {showExpertise ? (
             <label className="grid gap-1 text-sm">
               <span className="font-medium">Expertise</span>
@@ -355,12 +415,12 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
               ) : null}
             </>
           ) : null}
-          {entity === 'location' ? (
+          {/* {entity === 'location' ? (
             <label className="grid gap-1 text-sm">
-              <span className="font-medium">Bestaande Doktersdienst-locatie (optioneel)</span>
+              <span className="font-medium">Kamer nummer</span>
               <input className="h-9 rounded border bg-background px-2" inputMode="numeric" value={String(form.idlocatie ?? '')} onChange={(event) => setForm((current) => ({ ...current, idlocatie: event.target.value }))} />
             </label>
-          ) : null}
+          ) : null} */}
           {editingId ? (
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={form.actief !== false} onCheckedChange={(value) => setForm((current) => ({ ...current, actief: !!value }))} />

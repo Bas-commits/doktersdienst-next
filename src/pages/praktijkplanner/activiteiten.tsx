@@ -4,12 +4,15 @@ import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Copy, Mail, Repeat2, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PlannerChipPalette } from '@/components/praktijkplanner/PlannerChipPalette';
+import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
+import type { PlannerCursorTool } from '@/components/praktijkplanner/PlannerCursorTool';
 import { PlannerDaypartGrid } from '@/components/praktijkplanner/PlannerDaypartGrid';
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
+import { plannerWeekGridNavOffsetPx } from '@/components/praktijkplanner/planner-grid-layout';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
+import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import type { PraktijkplannerPlanningSlot } from '@/types/praktijkplanner';
 
@@ -197,14 +200,6 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     [slots]
   );
 
-  const selectedSpecifications = useMemo(
-    () =>
-      data.masterData.specifications.filter(
-        (specification) => specification.idactiviteit === selectedActivityId
-      ),
-    [data.masterData.specifications, selectedActivityId]
-  );
-
   const renderSlot = useCallback(
     (iddeelnemer: number, datum: string, iddagdeel: number) => {
       const key = slotKey(iddeelnemer, datum, iddagdeel);
@@ -268,6 +263,104 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     },
     [baseSlotMap, data.masterData, pending]
   );
+
+  const isCellFilled = useCallback(
+    ({
+      participant,
+      datum,
+      daypart,
+    }: {
+      participant: { id: number };
+      datum: string;
+      daypart: { id: number };
+    }) => {
+      const key = slotKey(participant.id, datum, daypart.id);
+      const override = pending.get(key);
+      if (override) {
+        return (
+          override.idactiviteit != null ||
+          override.idplannerlocatie != null ||
+          override.idbeschikbaarheidstype != null ||
+          override.taskIds.length > 0
+        );
+      }
+      const existing = baseSlotMap.get(key);
+      return Boolean(
+        existing?.activity ||
+          existing?.location ||
+          existing?.availability ||
+          existing?.tasks.length
+      );
+    },
+    [baseSlotMap, pending]
+  );
+
+  const clearSelection = useCallback(() => {
+    setClearMode(false);
+    setSelectedActivityId(null);
+    setSelectedSpecificationId(null);
+    setSelectedLocationId(null);
+    setSelectedAvailabilityId(null);
+    setSelectedTaskIds([]);
+  }, []);
+
+  const dismissCursorTool = useCallback(() => {
+    clearSelection();
+  }, [clearSelection]);
+
+  const cursorTool = useMemo((): PlannerCursorTool | null => {
+    if (!data.isManager) return null;
+    if (clearMode) {
+      return {
+        icon: <Trash2 className="text-white" aria-hidden />,
+        color: '#c91b23',
+        label: 'Leegmaken',
+      };
+    }
+
+    const activity = data.masterData.activities.find((item) => item.id === selectedActivityId);
+    const location = data.masterData.locations.find((item) => item.id === selectedLocationId);
+    const availability = data.masterData.availabilityTypes.find(
+      (item) => item.id === selectedAvailabilityId
+    );
+    const tasks = selectedTaskIds.flatMap(
+      (id) => data.masterData.tasks.find((task) => task.id === id) ?? []
+    );
+    if (!activity && !location && !availability && tasks.length === 0) return null;
+
+    const labels = [
+      activity ? activity.afkorting || activity.naam : null,
+      ...tasks.map((task) => task.afkorting || task.omschrijving),
+      location ? location.afkorting || location.naam : null,
+      availability ? availability.code || availability.naam : null,
+    ].filter(Boolean);
+    const icon =
+      activiteitenIconPath(activity?.icon) ??
+      activiteitenIconPath(availability?.icon) ??
+      null;
+
+    return {
+      icon,
+      color:
+        activity?.kleur ??
+        availability?.kleur ??
+        location?.kleur ??
+        tasks[0]?.kleur ??
+        '#64748b',
+      label: labels.join(' · '),
+    };
+  }, [
+    clearMode,
+    data.isManager,
+    data.masterData.activities,
+    data.masterData.availabilityTypes,
+    data.masterData.locations,
+    data.masterData.tasks,
+    selectedActivityId,
+    selectedAvailabilityId,
+    selectedLocationId,
+    selectedTaskIds,
+  ]);
 
   const queueCell = useCallback(
     ({
@@ -578,122 +671,75 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         </div>
       ) : null}
 
-      {data.isManager ? (
-        <div className="grid gap-3 xl:grid-cols-2">
-          <PlannerChipPalette
-            title="Activiteiten"
-            items={data.masterData.activities.map((activity) => ({
-              id: activity.id,
-              label: activity.afkorting || activity.naam,
-              detail: activity.naam,
-              color: activity.kleur,
-            }))}
-            selectedId={selectedActivityId}
-            onSelect={(id) => {
-              setClearMode(false);
-              setSelectedActivityId(Number(id));
-            }}
-            onClear={() => setSelectedActivityId(null)}
-          />
-          <PlannerChipPalette
-            title="Specificaties"
-            items={selectedSpecifications.map((specification) => ({
-              id: specification.id,
-              label: specification.afkorting || specification.naam,
-              color: specification.kleur,
-            }))}
-            selectedId={selectedSpecificationId}
-            onSelect={(id) => {
-              setClearMode(false);
-              setSelectedSpecificationId(Number(id));
-            }}
-            onClear={() => setSelectedSpecificationId(null)}
-            emptyMessage="Kies eerst een activiteit met specificaties."
-          />
-          <PlannerChipPalette
-            title="Locaties"
-            items={data.masterData.locations.map((location) => ({
-              id: location.id,
-              label: location.afkorting || location.naam,
-              detail: location.naam,
-              color: location.kleur,
-            }))}
-            selectedId={selectedLocationId}
-            onSelect={(id) => {
-              setClearMode(false);
-              setSelectedLocationId(Number(id));
-            }}
-            onClear={() => setSelectedLocationId(null)}
-          />
-          <PlannerChipPalette
-            title="Beschikbaarheid"
-            items={data.masterData.availabilityTypes.map((availability) => ({
-              id: availability.id,
-              label: availability.naam,
-              color: availability.kleur,
-            }))}
-            selectedId={selectedAvailabilityId}
-            onSelect={(id) => {
-              setClearMode(false);
-              setSelectedAvailabilityId(Number(id));
-            }}
-            onClear={() => setSelectedAvailabilityId(null)}
-          />
-          <section className="rounded-xl border bg-card p-3 shadow-sm xl:col-span-2">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Taken (maximaal 3)</h2>
-              <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setSelectedTaskIds([])}>
-                Wis selectie
-              </button>
+      <div className="flex items-start gap-4">
+        {data.isManager ? (
+          <div className="shrink-0 self-stretch">
+            <div
+              className="sticky top-4"
+              style={{ marginTop: `${plannerWeekGridNavOffsetPx()}px` }}
+              data-planner-tool-keep-active
+            >
+              <PlannerActivityAssignmentBuilder
+                activities={data.masterData.activities}
+                specifications={data.masterData.specifications}
+                tasks={data.masterData.tasks}
+                locations={data.masterData.locations}
+                availabilityTypes={data.masterData.availabilityTypes}
+                selection={{
+                  activityId: selectedActivityId,
+                  specificationId: selectedSpecificationId,
+                  taskIds: selectedTaskIds,
+                  locationId: selectedLocationId,
+                  availabilityId: selectedAvailabilityId,
+                }}
+                clearMode={clearMode}
+                onActivityChange={(id) => {
+                  setClearMode(false);
+                  setSelectedActivityId(id);
+                  setSelectedSpecificationId(null);
+                }}
+                onSpecificationChange={(id) => {
+                  setClearMode(false);
+                  setSelectedSpecificationId(id);
+                }}
+                onTaskChange={(ids) => {
+                  setClearMode(false);
+                  setSelectedTaskIds(ids);
+                }}
+                onLocationChange={(id) => {
+                  setClearMode(false);
+                  setSelectedLocationId(id);
+                }}
+                onAvailabilityChange={(id) => {
+                  setClearMode(false);
+                  setSelectedAvailabilityId(id);
+                }}
+                onClearSelection={clearSelection}
+                onClearModeChange={setClearMode}
+              />
             </div>
-            <div className="flex flex-wrap gap-2">
-              {data.masterData.tasks.map((task) => {
-                const checked = selectedTaskIds.includes(task.id);
-                return (
-                  <label key={task.id} className="flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs hover:bg-muted">
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(value) => {
-                        setClearMode(false);
-                        setSelectedTaskIds((current) => {
-                          if (value) return current.length < 3 ? [...current, task.id] : current;
-                          return current.filter((id) => id !== task.id);
-                        });
-                      }}
-                    />
-                    {task.afkorting || task.omschrijving}
-                  </label>
-                );
-              })}
-            </div>
-          </section>
-          <button
-            type="button"
-            className={[
-              'inline-flex w-fit items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium',
-              clearMode ? 'border-destructive bg-destructive text-destructive-foreground' : 'hover:bg-muted',
-            ].join(' ')}
-            onClick={() => setClearMode((value) => !value)}
-          >
-            <Trash2 className="size-4" />
-            {clearMode ? 'Verwijdermodus actief' : 'Cel leegmaken'}
-          </button>
-        </div>
-      ) : null}
+          </div>
+        ) : null}
 
-      {slotError ? <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{slotError}</p> : null}
-      {loadingSlots ? <p className="text-sm text-muted-foreground">Planning laden…</p> : null}
-      <PlannerDaypartGrid
-        participants={visibleParticipants}
-        dayparts={visibleDayparts}
-        weekStart={weekStart}
-        onWeekStartChange={setWeekStart}
-        zoom={zoom}
-        renderCell={({ participant, datum, daypart }) => renderSlot(participant.id, datum, daypart.id)}
-        onCellClick={queueCell}
-        isCellDisabled={() => !data.isManager}
-        holidayLabels={holidays}
-      />
+        <div className="min-w-0 flex-1 space-y-4">
+          {slotError ? <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{slotError}</p> : null}
+          {loadingSlots ? <p className="text-sm text-muted-foreground">Planning laden…</p> : null}
+          <PlannerDaypartGrid
+            participants={visibleParticipants}
+            dayparts={visibleDayparts}
+            weekStart={weekStart}
+            onWeekStartChange={setWeekStart}
+            zoom={zoom}
+            renderCell={({ participant, datum, daypart }) => renderSlot(participant.id, datum, daypart.id)}
+            onCellClick={queueCell}
+            isCellDisabled={() => !data.isManager}
+            isCellFilled={isCellFilled}
+            holidayLabels={holidays}
+            cursorTool={cursorTool}
+            onCursorToolDismiss={dismissCursorTool}
+          />
+        </div>
+      </div>
 
       {data.isManager && series.length > 0 ? (
         <section className="rounded-xl border bg-card p-3 shadow-sm">

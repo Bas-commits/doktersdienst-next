@@ -57,6 +57,13 @@
       "when": 1784030400000,
       "tag": "0007_optional_activiteit_expertise",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784031000000,
+      "tag": "0008_afwezigheidstype_kleur_defaults",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useRef, type ReactNode } from 'react';
 import { weekDates } from '@/lib/praktijkplanner/dates';
+import { getContrastTextColor } from '@/utils/contrastTextColor';
 import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
 import {
   PlannerCursorToolFollower,
@@ -123,8 +124,11 @@ export function PlannerDaypartGrid({
           >
             <div className="flex min-h-30 items-center justify-left gap-2 p-3 text-left">
               <span
-                className="inline-flex size-7 shrink-0 items-center justify-center rounded text-xs font-bold text-white"
-                style={{ backgroundColor: participant.color || '#64748b' }}
+                className="inline-flex h-7 w-13 shrink-0 items-center justify-center rounded text-xs font-bold"
+                style={{
+                  backgroundColor: participant.color || '#64748b',
+                  color: getContrastTextColor(participant.color || '#64748b'),
+                }}
                 aria-hidden
               >
                 {participant.initialen || participantLabel(participant).slice(0, 2).toUpperCase()}

@@ -1,8 +1,14 @@
+import { afwezigheidstypenIconPath } from '@/lib/praktijkplanner/afwezigheidstypen-iconen';
+
+function absenceIcon(filename: string): string {
+  return afwezigheidstypenIconPath(filename)!;
+}
+
 const ABSENCE_PALETTE_HELP_ICONS: Record<string, string> = {
-  vakantie: '/icons/holliday-help.svg',
-  nascholing: '/icons/education-help.svg',
-  fte: '/icons/FTE-help.svg',
-  compensatie: '/icons/compensation-help-bg.svg',
+  vakantie: absenceIcon('holliday-help.svg'),
+  nascholing: absenceIcon('education-help.svg'),
+  fte: absenceIcon('FTE-help.svg'),
+  compensatie: absenceIcon('compensation-help.svg'),
 };
 
 export const ABSENCE_PALETTE_ORDER = ['vakantie', 'nascholing', 'fte', 'compensatie'] as const;
@@ -20,20 +26,20 @@ export function sortAbsenceTypesForPalette<
 
 const ABSENCE_FOREGROUND_ICONS: Record<string, { confirmed: string; provisional: string }> = {
   vakantie: {
-    confirmed: '/images/icons/holliday.svg',
-    provisional: '/images/icons/holliday-help.svg',
+    confirmed: absenceIcon('holliday.svg'),
+    provisional: absenceIcon('holliday-help.svg'),
   },
   nascholing: {
-    confirmed: '/images/icons/education.svg',
-    provisional: '/images/icons/education-help.svg',
+    confirmed: absenceIcon('education.svg'),
+    provisional: absenceIcon('education-help.svg'),
   },
   fte: {
-    confirmed: '/images/icons/FTE.svg',
-    provisional: '/images/icons/FTE-help.svg',
+    confirmed: absenceIcon('FTE.svg'),
+    provisional: absenceIcon('FTE-help.svg'),
   },
   compensatie: {
-    confirmed: '/images/icons/compensation.svg',
-    provisional: '/images/icons/compensation-help.svg',
+    confirmed: absenceIcon('compensation.svg'),
+    provisional: absenceIcon('compensation-help.svg'),
   },
 };
 
@@ -64,9 +70,7 @@ export const DAYPART_ICONS: Record<number, string> = {
 };
 
 export function fallbackIconPath(icon: string | null) {
-  if (!icon) return null;
-  if (icon.startsWith('/') || icon.startsWith('http://') || icon.startsWith('https://')) return icon;
-  return `/images/icons/${icon}`;
+  return afwezigheidstypenIconPath(icon);
 }
 
 export function absenceBackgroundIconPath(code: string, icon: string | null, provisional: boolean) {
@@ -106,17 +110,37 @@ const ABSENCE_DISPLAY_BACKGROUNDS: Record<string, { confirmed: string; provision
   },
 };
 
-export function absenceDisplayBackground(code: string, kleur: string | null, provisional: boolean): string {
+function brightenHex(hex: string, amount: number): string {
+  const normalized = hex.trim().replace(/^#/, '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return hex;
+  const channels = [0, 2, 4].map((offset) => parseInt(normalized.slice(offset, offset + 2), 16));
+  const brightened = channels.map((channel) =>
+    Math.min(255, Math.round(channel + (255 - channel) * amount))
+  );
+  return `#${brightened.map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function legacyAbsenceBackground(code: string, provisional: boolean): string | null {
   const legacyBackground = ABSENCE_DISPLAY_BACKGROUNDS[code.toLowerCase()];
-  if (legacyBackground) return legacyBackground[provisional ? 'provisional' : 'confirmed'];
-  return kleur || '#64748b';
+  return legacyBackground ? legacyBackground[provisional ? 'provisional' : 'confirmed'] : null;
+}
+
+function legacyAbsenceColor(code: string, provisional: boolean): string | null {
+  const background = legacyAbsenceBackground(code, provisional);
+  if (!background) return null;
+  if (background.startsWith('linear-gradient')) {
+    const match = background.match(/#[0-9a-fA-F]{3,8}/);
+    return match?.[0] ?? null;
+  }
+  return background;
+}
+
+export function absenceDisplayBackground(code: string, kleur: string | null, provisional: boolean): string {
+  if (kleur) return provisional ? brightenHex(kleur, 0.18) : kleur;
+  return legacyAbsenceBackground(code, provisional) ?? '#64748b';
 }
 
 export function absenceDisplayColor(code: string, kleur: string | null, provisional: boolean): string {
-  const background = absenceDisplayBackground(code, kleur, provisional);
-  if (background.startsWith('linear-gradient')) {
-    const match = background.match(/#[0-9a-fA-F]{3,8}/);
-    return match?.[0] ?? kleur ?? '#64748b';
-  }
-  return background;
+  if (kleur) return provisional ? brightenHex(kleur, 0.18) : kleur;
+  return legacyAbsenceColor(code, provisional) ?? '#64748b';
 }

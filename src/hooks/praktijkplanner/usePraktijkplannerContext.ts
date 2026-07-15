@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import type {
   PraktijkplannerMasterData,
@@ -24,8 +24,13 @@ export function usePraktijkplannerContext() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const hasLoadedOnceRef = useRef(false);
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
+
+  useEffect(() => {
+    hasLoadedOnceRef.current = false;
+  }, [groupId]);
 
   useEffect(() => {
     if (groupLoading || !groupId) return;
@@ -33,7 +38,9 @@ export function usePraktijkplannerContext() {
     const abortController = new AbortController();
     queueMicrotask(() => {
       if (abortController.signal.aborted) return;
-      setLoading(true);
+      if (!hasLoadedOnceRef.current) {
+        setLoading(true);
+      }
       setError(null);
       fetch(`/api/praktijkplanner/context?idwaarneemgroep=${groupId}`, {
         credentials: 'include',
@@ -56,18 +63,23 @@ export function usePraktijkplannerContext() {
           }
         })
         .finally(() => {
-          if (!abortController.signal.aborted) setLoading(false);
+          if (!abortController.signal.aborted) {
+            setLoading(false);
+            hasLoadedOnceRef.current = true;
+          }
         });
     });
 
     return () => abortController.abort();
   }, [groupId, groupLoading, reloadKey]);
 
+  const combinedLoading = groupLoading || (groupId ? loading : false);
+
   return {
     groupId,
     groupName: activeWaarneemgroep?.naam ?? null,
     data: groupId ? data : null,
-    loading: groupLoading || (groupId ? loading : false),
+    loading: combinedLoading,
     error: groupId ? error : 'Kies eerst een waarneemgroep in de header.',
     reload,
   };

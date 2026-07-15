@@ -28,7 +28,7 @@ export type PraktijkplannerActivity = {
   afkorting: string | null;
   kleur: string | null;
   icon: string | null;
-  idexpertise: number;
+  idexpertise: number | null;
   actief: boolean;
 };
 

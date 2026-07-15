@@ -104,8 +104,8 @@ export function PlannerDaypartGrid({
             const holidays = holidayLabels?.get(date) ?? [];
             return (
               <div key={date} className="border-l p-3 text-center">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label.weekday}</p>
-                <p className="mt-0.5 text-sm font-semibold text-muted-foreground">{label.day}</p>
+                <p className="text-s font-semibold uppercase tracking-wide text-muted-foreground">{label.weekday} {label.day}</p>
+                {/* <p className="mt-0.5 text-sm font-semibold text-muted-foreground">{label.day}</p> */}
                 {holidays.length > 0 ? (
                   <p className="mt-1 truncate text-[10px] font-medium text-rose-700" title={holidays.join(', ')}>
                     {holidays.join(', ')}

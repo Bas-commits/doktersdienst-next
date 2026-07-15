@@ -1,12 +1,13 @@
 'use client';
 
 import Head from 'next/head';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, Plus, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
+import { ActiviteitenIconPicker } from '@/components/praktijkplanner/ActiviteitenIconPicker';
 import type { PraktijkplannerMasterData } from '@/types/praktijkplanner';
 
 type Entity =
@@ -58,6 +59,21 @@ function itemLabel(entity: Entity, item: Record<string, unknown>) {
   return String(item.afkorting || item.naam || `Item ${item.id}`);
 }
 
+function RequiredAsterisk() {
+  return <span className="text-[#c91b23]">*</span>;
+}
+
+function hasRequiredName(entity: Entity, form: Form): boolean {
+  const value = entity === 'task' ? form.omschrijving : form.naam;
+  return String(value ?? '').trim().length > 0;
+}
+
+function hasRequiredAfkorting(form: Form): boolean {
+  return String(form.afkorting ?? '').trim().length > 0;
+}
+
+const DEFAULT_KLEUR = '#cccccc';
+
 function BeheerContent({ groupId, data, reload: reloadContext }: PraktijkplannerPageContext) {
   const [entity, setEntity] = useState<Entity>('expertise');
   const [masterData, setMasterData] = useState<PraktijkplannerMasterData>(data.masterData);
@@ -65,6 +81,7 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
   const [form, setForm] = useState<Form>(initialForm);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const colorInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     const abortController = new AbortController();
@@ -123,6 +140,10 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
   };
 
   const submit = async () => {
+    if (!hasRequiredName(entity, form) || !hasRequiredAfkorting(form)) {
+      toast.error('Naam en afkorting zijn verplicht.');
+      return;
+    }
     setSaving(true);
     try {
       const response = await fetch('/api/praktijkplanner/master-data', {
@@ -183,9 +204,9 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
 
   const showExpertise = ['activity', 'task'].includes(entity);
   const showActivity = entity === 'specification';
-  const showName = entity !== 'task';
   const showCode = ['absenceType', 'availabilityType'].includes(entity);
   const showVisual = ['activity', 'specification', 'location', 'absenceType', 'availabilityType', 'task'].includes(entity);
+  const canSubmit = hasRequiredName(entity, form) && hasRequiredAfkorting(form);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.2fr)]">
@@ -242,26 +263,33 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
           ) : null}
         </div>
         <div className="grid gap-3 md:grid-cols-2">
-          {showName ? (
-            <label className="grid gap-1 text-sm">
-              <span className="font-medium">Naam</span>
-              <input className="h-9 rounded border bg-background px-2" value={String(form.naam ?? '')} onChange={(event) => setForm((current) => ({ ...current, naam: event.target.value }))} />
-            </label>
-          ) : (
-            <label className="grid gap-1 text-sm">
-              <span className="font-medium">Omschrijving</span>
-              <input className="h-9 rounded border bg-background px-2" value={String(form.omschrijving ?? '')} onChange={(event) => setForm((current) => ({ ...current, omschrijving: event.target.value }))} />
-            </label>
-          )}
           <label className="grid gap-1 text-sm">
-            <span className="font-medium">Afkorting</span>
-            <input className="h-9 rounded border bg-background px-2" value={String(form.afkorting ?? '')} onChange={(event) => setForm((current) => ({ ...current, afkorting: event.target.value }))} />
+            <span className="font-medium">Naam <RequiredAsterisk /></span>
+            <input
+              required
+              className="h-9 rounded border bg-background px-2"
+              value={entity === 'task' ? String(form.omschrijving ?? '') : String(form.naam ?? '')}
+              onChange={(event) => setForm((current) => (
+                entity === 'task'
+                  ? { ...current, omschrijving: event.target.value }
+                  : { ...current, naam: event.target.value }
+              ))}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Afkorting <RequiredAsterisk /></span>
+            <input
+              required
+              className="h-9 rounded border bg-background px-2"
+              value={String(form.afkorting ?? '')}
+              onChange={(event) => setForm((current) => ({ ...current, afkorting: event.target.value }))}
+            />
           </label>
           {showExpertise ? (
             <label className="grid gap-1 text-sm">
               <span className="font-medium">Expertise</span>
               <select className="h-9 rounded border bg-background px-2" value={String(form.idexpertise ?? '')} onChange={(event) => setForm((current) => ({ ...current, idexpertise: event.target.value }))}>
-                <option value="">Kies expertise</option>
+                <option value="">Geen expertise</option>
                 {masterData.expertises.filter((item) => item.actief).map((item) => <option key={item.id} value={item.id}>{item.naam}</option>)}
               </select>
             </label>
@@ -291,12 +319,38 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
             <>
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">Kleur</span>
-                <input className="h-9 rounded border bg-background px-2" placeholder="#c91b23" value={String(form.kleur ?? '')} onChange={(event) => setForm((current) => ({ ...current, kleur: event.target.value }))} />
+                <div className="flex h-9 items-center gap-2">
+                  <button
+                    type="button"
+                    title="Wijzig kleur"
+                    onClick={() => colorInputRef.current?.click()}
+                    className="h-6 w-10 rounded border border-input shadow-sm transition-transform hover:scale-105"
+                    style={{ backgroundColor: String(form.kleur ?? '') || DEFAULT_KLEUR }}
+                  />
+                  <input
+                    ref={colorInputRef}
+                    type="color"
+                    className="sr-only"
+                    value={String(form.kleur ?? '') || DEFAULT_KLEUR}
+                    onChange={(event) => setForm((current) => ({ ...current, kleur: event.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => colorInputRef.current?.click()}
+                    className="text-xs text-muted-foreground underline hover:text-foreground"
+                  >
+                    Wijzig
+                  </button>
+                </div>
               </label>
               {entity !== 'location' && entity !== 'task' ? (
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">Icoon</span>
-                  <input className="h-9 rounded border bg-background px-2" placeholder="education.svg" value={String(form.icon ?? '')} onChange={(event) => setForm((current) => ({ ...current, icon: event.target.value }))} />
+                  <ActiviteitenIconPicker
+                    groupId={groupId}
+                    value={String(form.icon ?? '')}
+                    onChange={(icon) => setForm((current) => ({ ...current, icon }))}
+                  />
                 </label>
               ) : null}
             </>
@@ -315,7 +369,7 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
           ) : null}
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
-          <button type="button" disabled={saving} onClick={submit} className="inline-flex items-center gap-2 rounded bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
+          <button type="button" disabled={saving || !canSubmit} onClick={submit} className="inline-flex items-center gap-2 rounded bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
             <Save className="size-4" /> {saving ? 'Opslaan…' : editingId ? 'Bijwerken' : 'Toevoegen'}
           </button>
           {editingId ? (

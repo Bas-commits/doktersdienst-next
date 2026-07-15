@@ -163,8 +163,8 @@ export async function getPraktijkplannerMasterData(
       .map((row) => ({ id: row.id, naam: row.naam, afkorting: row.afkorting, actief: row.actief })),
     activities: activityRows
       .filter(
-        (row): row is typeof row & { id: number; naam: string; idexpertise: number; actief: boolean } =>
-          row.id != null && row.naam != null && row.idexpertise != null && row.actief != null
+        (row): row is typeof row & { id: number; naam: string; actief: boolean } =>
+          row.id != null && row.naam != null && row.actief != null
       )
       .map((row) => ({
         id: row.id,

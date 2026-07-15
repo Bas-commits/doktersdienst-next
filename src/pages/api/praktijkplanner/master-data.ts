@@ -75,6 +75,23 @@ async function specificationBelongsToGroup(idspecificatie: number, idwaarneemgro
   return row?.id != null;
 }
 
+async function resolveOptionalExpertiseId(
+  value: unknown,
+  idwaarneemgroep: number
+): Promise<{ ok: true; idexpertise: number | null } | { ok: false }> {
+  const idexpertise = parsePositiveInteger(value);
+  if (idexpertise == null) {
+    if (value === '' || value == null || value === undefined) {
+      return { ok: true, idexpertise: null };
+    }
+    return { ok: false };
+  }
+  if (!(await expertiseBelongsToGroup(idexpertise, idwaarneemgroep))) {
+    return { ok: false };
+  }
+  return { ok: true, idexpertise };
+}
+
 async function nextTaskTypeId() {
   const [row] = await db
     .select({ id: schema.taaktypen.id })
@@ -149,10 +166,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
       if (entity === 'activity') {
         const naam = textValue(body.naam, { required: true, max: 255 });
-        const idexpertise = parsePositiveInteger(body.idexpertise);
-        if (!naam || !idexpertise || !(await expertiseBelongsToGroup(idexpertise, idwaarneemgroep))) {
-          return res.status(400).json({ error: 'Kies een geldige expertise en activiteitsnaam.' });
-        }
+        if (!naam) return res.status(400).json({ error: 'Een activiteitsnaam is verplicht.' });
+        const expertise = await resolveOptionalExpertiseId(body.idexpertise, idwaarneemgroep);
+        if (!expertise.ok) return res.status(400).json({ error: 'Kies een geldige expertise.' });
         const [created] = await db
           .insert(schema.activiteiten)
           .values({
@@ -160,7 +176,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             afkorting: optionalText(body.afkorting, 50),
             kleur: optionalText(body.kleur, 50),
             icon: optionalText(body.icon, 100),
-            idexpertise,
+            idexpertise: expertise.idexpertise,
             idwaarneemgroep,
             actief: true,
           })
@@ -227,10 +243,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       }
 
       const omschrijving = textValue(body.omschrijving, { required: true, max: 50 });
-      const idexpertise = parsePositiveInteger(body.idexpertise);
-      if (!omschrijving || !idexpertise || !(await expertiseBelongsToGroup(idexpertise, idwaarneemgroep))) {
-        return res.status(400).json({ error: 'Kies een geldige expertise en taakomschrijving.' });
-      }
+      if (!omschrijving) return res.status(400).json({ error: 'Een taakomschrijving is verplicht.' });
+      const expertise = await resolveOptionalExpertiseId(body.idexpertise, idwaarneemgroep);
+      if (!expertise.ok) return res.status(400).json({ error: 'Kies een geldige expertise.' });
       const [created] = await db
         .insert(schema.taaktypen)
         .values({
@@ -239,7 +254,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           afkorting: optionalText(body.afkorting, 10),
           omschrijving,
           kleur: optionalText(body.kleur, 50),
-          idexpertise,
+          idexpertise: expertise.idexpertise,
           verwijderd: 0,
           volgorde: 9999,
         })
@@ -316,15 +331,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         .where(and(eq(schema.expertises.id, id), eq(schema.expertises.idwaarneemgroep, idwaarneemgroep)));
     } else if (entity === 'activity') {
       const naam = textValue(body.naam, { required: true, max: 255 });
-      const idexpertise = parsePositiveInteger(body.idexpertise);
-      if (!naam || !idexpertise || !(await expertiseBelongsToGroup(idexpertise, idwaarneemgroep))) {
-        return res.status(400).json({ error: 'Kies een geldige expertise en activiteitsnaam.' });
-      }
+      if (!naam) return res.status(400).json({ error: 'Een activiteitsnaam is verplicht.' });
+      const expertise = await resolveOptionalExpertiseId(body.idexpertise, idwaarneemgroep);
+      if (!expertise.ok) return res.status(400).json({ error: 'Kies een geldige expertise.' });
       await db
         .update(schema.activiteiten)
         .set({
           naam,
-          idexpertise,
+          idexpertise: expertise.idexpertise,
           afkorting: optionalText(body.afkorting, 50),
           kleur: optionalText(body.kleur, 50),
           icon: optionalText(body.icon, 100),
@@ -389,15 +403,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       }
     } else if (entity === 'task') {
       const omschrijving = textValue(body.omschrijving, { required: true, max: 50 });
-      const idexpertise = parsePositiveInteger(body.idexpertise);
-      if (!omschrijving || !idexpertise || !(await expertiseBelongsToGroup(idexpertise, idwaarneemgroep))) {
-        return res.status(400).json({ error: 'Kies een geldige expertise en taakomschrijving.' });
-      }
+      if (!omschrijving) return res.status(400).json({ error: 'Een taakomschrijving is verplicht.' });
+      const expertise = await resolveOptionalExpertiseId(body.idexpertise, idwaarneemgroep);
+      if (!expertise.ok) return res.status(400).json({ error: 'Kies een geldige expertise.' });
       await db
         .update(schema.taaktypen)
         .set({
           omschrijving,
-          idexpertise,
+          idexpertise: expertise.idexpertise,
           afkorting: optionalText(body.afkorting, 10),
           kleur: optionalText(body.kleur, 50),
           verwijderd: activeValue(body.actief) ? 0 : 1,

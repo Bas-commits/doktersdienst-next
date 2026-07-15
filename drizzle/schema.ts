@@ -468,7 +468,7 @@ export const activiteiten = pgTable("activiteiten", {
 	afkorting: varchar({ length: 50 }),
 	kleur: varchar({ length: 50 }),
 	icon: varchar({ length: 100 }),
-	idexpertise: integer().notNull().references(() => expertises.id),
+	idexpertise: integer().references(() => expertises.id),
 	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
 	actief: boolean().notNull().default(true),
 }, (table) => [

@@ -169,13 +169,13 @@ const PRAKTIJKPLANNER_MANAGER_NAV_ITEMS: NavItem[] = [
   },
   {
     id: 'praktijkplanner-capaciteitsplanner',
-    label: 'Capaciteiten planner',
+    label: 'Capaciteits planner',
     href: '/praktijkplanner/capaciteitsplanner',
     icon: <MapPin className="size-4 shrink-0" />,
   },
   {
     id: 'praktijkplanner-capaciteitsoverzicht',
-    label: 'Capaciteiten overzicht',
+    label: 'Capaciteits overzicht',
     href: '/praktijkplanner/capaciteitsoverzicht',
     icon: <Check className="size-4 shrink-0" />,
   },

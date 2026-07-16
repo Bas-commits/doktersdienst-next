@@ -75,7 +75,6 @@ function ChipBand({ row, items, style, density }: ChipBandProps) {
             index < items.length - 1 && '-mr-px'
           )}
           style={itemStyle(item.color)}
-          title={item.label}
         >
           {item.icon ? (
             <Image
@@ -160,7 +159,6 @@ export function PlannerCombinedDaypartChip({
         className
       )}
       aria-label={label || undefined}
-      title={label || undefined}
       data-participant-border={hasParticipantBorder ? 'true' : undefined}
     >
       <span

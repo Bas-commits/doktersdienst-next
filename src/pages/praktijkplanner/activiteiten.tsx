@@ -13,6 +13,7 @@ import type { PlannerCursorTool } from '@/components/praktijkplanner/PlannerCurs
 import { PlannerCopyWeekModal } from '@/components/praktijkplanner/PlannerCopyWeekModal';
 import { PlannerDaypartGrid } from '@/components/praktijkplanner/PlannerDaypartGrid';
 import { PlannerDaypartHoverPreview } from '@/components/praktijkplanner/PlannerDaypartHoverPreview';
+import { PlannerManageHerhalingModal } from '@/components/praktijkplanner/PlannerManageHerhalingModal';
 import { PlannerNotifyPlanningModal } from '@/components/praktijkplanner/PlannerNotifyPlanningModal';
 import { PlannerRepeatWeekModal } from '@/components/praktijkplanner/PlannerRepeatWeekModal';
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
@@ -29,18 +30,11 @@ import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import type { PraktijkplannerParticipant, PraktijkplannerPlanningSlot } from '@/types/praktijkplanner';
 
-type RecurrenceSeries = {
-  id: number;
-  iddeelnemer: number;
-  startdatum: string;
-  einddatum: string;
-  frequentieWeken: number;
-};
-
 type ParticipantActionModal =
   | { type: 'copy'; participant: PraktijkplannerParticipant; sourceWeekStart: string }
   | { type: 'repeat'; participant: PraktijkplannerParticipant; sourceWeekStart: string }
-  | { type: 'email'; participant: PraktijkplannerParticipant };
+  | { type: 'email'; participant: PraktijkplannerParticipant }
+  | { type: 'manageHerhaling'; participant: PraktijkplannerParticipant };
 
 function participantDisplayName(participant: PraktijkplannerParticipant): string {
   return (
@@ -74,8 +68,6 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   const [showNight, setShowNight] = useState(true);
   const [participantFilter, setParticipantFilter] = useState<number | 'all'>('all');
   const [zoom, setZoom] = useState('100');
-  const [series, setSeries] = useState<RecurrenceSeries[]>([]);
-  const [editingSeries, setEditingSeries] = useState<RecurrenceSeries | null>(null);
   const [actionModal, setActionModal] = useState<ParticipantActionModal | null>(null);
 
   const end = useMemo(() => addDays(weekStart, 6), [weekStart]);
@@ -183,23 +175,6 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   }, [end, groupId, weekStart]);
 
   useEffect(() => loadSlots(), [loadSlots]);
-
-  const loadSeries = useCallback(() => {
-    if (!data.isManager) return;
-    fetch(`/api/praktijkplanner/activiteiten/herhaling?idwaarneemgroep=${groupId}`, {
-      credentials: 'include',
-    })
-      .then(async (response) => {
-        const payload = (await response.json()) as { series?: RecurrenceSeries[] };
-        if (response.ok && payload.series) setSeries(payload.series);
-      })
-      .catch(() => undefined);
-  }, [data.isManager, groupId]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => loadSeries(), 0);
-    return () => window.clearTimeout(timer);
-  }, [loadSeries]);
 
   const baseSlotMap = useMemo(
     () => new Map(slots.map((slot) => [slotKey(slot.iddeelnemer, slot.datum, slot.iddagdeel), slot])),
@@ -639,72 +614,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
 
   const refreshAfterRecurrence = useCallback(() => {
     loadSlots();
-    loadSeries();
-  }, [loadSeries, loadSlots]);
-
-  const updateSeries = useCallback(async () => {
-    if (!editingSeries) return;
-    try {
-      const response = await fetch('/api/praktijkplanner/activiteiten/herhaling', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'edit',
-          idwaarneemgroep: groupId,
-          idherhaling: editingSeries.id,
-          startdatum: editingSeries.startdatum,
-          einddatum: editingSeries.einddatum,
-          frequentieWeken: editingSeries.frequentieWeken,
-        }),
-      });
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(payload.error || 'Herhaling bijwerken mislukt.');
-      toast.success('Herhaling bijgewerkt.');
-      setEditingSeries(null);
-      loadSeries();
-      loadSlots();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Herhaling bijwerken mislukt.');
-    }
-  }, [editingSeries, groupId, loadSeries, loadSlots]);
-
-  const deleteSeries = useCallback(
-    async (idherhaling: number) => {
-      const keepPlanning = window.confirm(
-        'Herhalingspatroon verwijderen?\n\nOK = patroon verwijderen, planning behouden\nAnnuleren = niets doen'
-      );
-      if (!keepPlanning) return;
-      const alsoDeletePlanning = window.confirm(
-        'Wilt u de gekoppelde planning ook verwijderen?\n\nOK = ook planning verwijderen\nAnnuleren = alleen patroon verwijderen'
-      );
-      try {
-        const response = await fetch('/api/praktijkplanner/activiteiten/herhaling', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'delete',
-            idwaarneemgroep: groupId,
-            idherhaling,
-            mode: alsoDeletePlanning ? 'deletePlanning' : 'unlink',
-          }),
-        });
-        const payload = (await response.json()) as { error?: string };
-        if (!response.ok) throw new Error(payload.error || 'Herhaling verwijderen mislukt.');
-        toast.success(
-          alsoDeletePlanning
-            ? 'Herhaling en planning verwijderd.'
-            : 'Herhalingspatroon verwijderd; planning behouden.'
-        );
-        loadSeries();
-        loadSlots();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Herhaling verwijderen mislukt.');
-      }
-    },
-    [groupId, loadSeries, loadSlots]
-  );
+  }, [loadSlots]);
 
   const renderParticipantActions = useCallback(
     (participant: PraktijkplannerParticipant) => (
@@ -739,6 +649,15 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           onClick={() => setActionModal({ type: 'email', participant })}
         >
           <SendHorizontal className="size-3.5" aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+          aria-label="Herhalingen beheren"
+          title="Herhalingen beheren"
+          onClick={() => setActionModal({ type: 'manageHerhaling', participant })}
+        >
+          <Trash2 className="size-3.5" aria-hidden />
         </button>
       </div>
     ),
@@ -861,55 +780,16 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           participantName={participantDisplayName(actionModal.participant)}
         />
       ) : null}
-
-      {data.isManager && series.length > 0 ? (
-        <section className="rounded-xl border bg-card p-3 shadow-sm">
-          <h2 className="mb-2 text-sm font-semibold">Actieve herhalingen</h2>
-          <div className="space-y-2">
-            {series.map((item) => (
-              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2 text-sm">
-                <span>
-                  {item.startdatum} t/m {item.einddatum} · elke {item.frequentieWeken} week
-                  {item.frequentieWeken === 1 ? '' : 'en'}
-                </span>
-                <span className="flex gap-2">
-                  <button type="button" className="rounded border px-2 py-1 hover:bg-muted" onClick={() => setEditingSeries(item)}>
-                    Bewerken
-                  </button>
-                  <button type="button" className="rounded border border-destructive/40 px-2 py-1 text-destructive hover:bg-destructive/10" onClick={() => deleteSeries(item.id)}>
-                    Verwijderen
-                  </button>
-                </span>
-              </div>
-            ))}
-          </div>
-          {editingSeries ? (
-            <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg bg-muted/50 p-3">
-              <label className="grid gap-1 text-xs">
-                Start
-                <input type="date" value={editingSeries.startdatum} onChange={(event) => setEditingSeries({ ...editingSeries, startdatum: event.target.value })} className="h-8 rounded border bg-background px-2" />
-              </label>
-              <label className="grid gap-1 text-xs">
-                Einde
-                <input type="date" value={editingSeries.einddatum} onChange={(event) => setEditingSeries({ ...editingSeries, einddatum: event.target.value })} className="h-8 rounded border bg-background px-2" />
-              </label>
-              <label className="grid gap-1 text-xs">
-                Frequentie
-                <select value={editingSeries.frequentieWeken} onChange={(event) => setEditingSeries({ ...editingSeries, frequentieWeken: Number(event.target.value) })} className="h-8 rounded border bg-background px-2">
-                  <option value={1}>Elke week</option>
-                  <option value={2}>Om de week</option>
-                  <option value={3}>Elke 3 weken</option>
-                </select>
-              </label>
-              <button type="button" className="rounded bg-primary px-3 py-2 text-xs font-medium text-primary-foreground" onClick={updateSeries}>
-                Bijwerken
-              </button>
-              <button type="button" className="rounded border px-3 py-2 text-xs hover:bg-muted" onClick={() => setEditingSeries(null)}>
-                Annuleren
-              </button>
-            </div>
-          ) : null}
-        </section>
+      {actionModal?.type === 'manageHerhaling' ? (
+        <PlannerManageHerhalingModal
+          open
+          onClose={() => setActionModal(null)}
+          groupId={groupId}
+          participantId={actionModal.participant.id}
+          participantName={participantDisplayName(actionModal.participant)}
+          defaultVanafWeekStart={weekStart}
+          onChanged={refreshAfterRecurrence}
+        />
       ) : null}
 
     </div>

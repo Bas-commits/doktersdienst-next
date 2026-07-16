@@ -2,7 +2,7 @@
 
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, Mail, Repeat2, Trash2 } from 'lucide-react';
+import { Copy, Repeat, SendHorizontal, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
 import {
@@ -13,8 +13,6 @@ import type { PlannerCursorTool } from '@/components/praktijkplanner/PlannerCurs
 import { PlannerDaypartGrid } from '@/components/praktijkplanner/PlannerDaypartGrid';
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { plannerWeekGridNavOffsetPx } from '@/components/praktijkplanner/planner-grid-layout';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import {
   buildActivityAssignmentSlot,
@@ -23,6 +21,7 @@ import {
   type CurrentActivityAssignment,
 } from '@/lib/praktijkplanner/activity-assignment';
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import type { PraktijkplannerPlanningSlot } from '@/types/praktijkplanner';
 
@@ -55,10 +54,6 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   const [clearMode, setClearMode] = useState(false);
   const [showDay, setShowDay] = useState(true);
   const [showNight, setShowNight] = useState(true);
-  const [selectedParticipantId, setSelectedParticipantId] = useState<number | null>(null);
-  const [copyTargetDate, setCopyTargetDate] = useState(addDays(currentWeekStart(), 7));
-  const [repeatEndDate, setRepeatEndDate] = useState(addDays(currentWeekStart(), 28));
-  const [frequencyWeeks, setFrequencyWeeks] = useState('1');
   const [participantFilter, setParticipantFilter] = useState<number | 'all'>('all');
   const [zoom, setZoom] = useState('100');
   const [series, setSeries] = useState<RecurrenceSeries[]>([]);
@@ -80,11 +75,6 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         : data.participants.filter((participant) => participant.id === participantFilter),
     [data.participants, participantFilter]
   );
-
-  useEffect(() => {
-    if (selectedParticipantId != null || data.participants.length === 0) return;
-    setSelectedParticipantId(data.participants[0].id);
-  }, [data.participants, selectedParticipantId]);
 
   useEffect(() => {
     setSelectedSpecificationId((current) => {
@@ -177,8 +167,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
 
   const loadSeries = useCallback(() => {
     if (!data.isManager) return;
-    const participant = selectedParticipantId ? `&iddeelnemer=${selectedParticipantId}` : '';
-    fetch(`/api/praktijkplanner/activiteiten/herhaling?idwaarneemgroep=${groupId}${participant}`, {
+    fetch(`/api/praktijkplanner/activiteiten/herhaling?idwaarneemgroep=${groupId}`, {
       credentials: 'include',
     })
       .then(async (response) => {
@@ -186,7 +175,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         if (response.ok && payload.series) setSeries(payload.series);
       })
       .catch(() => undefined);
-  }, [data.isManager, groupId, selectedParticipantId]);
+  }, [data.isManager, groupId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => loadSeries(), 0);
@@ -199,7 +188,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   );
 
   const renderSlot = useCallback(
-    (iddeelnemer: number, datum: string, iddagdeel: number) => {
+    (iddeelnemer: number, datum: string, iddagdeel: number, participantColor: string | null, initials: string | null) => {
       const key = slotKey(iddeelnemer, datum, iddagdeel);
       const existing = baseSlotMap.get(key);
       const activity = existing?.activity ?? null;
@@ -252,6 +241,8 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
               activity={activityItem}
               location={locationItem}
               fill
+              participantColor={participantColor}
+              initials={initials}
               className="shadow-none"
             />
           ) : null}
@@ -564,8 +555,10 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   );
 
   const runRecurrenceAction = useCallback(
-    async (action: 'copyWeek' | 'create') => {
-      if (!selectedParticipantId) return;
+    async (action: 'copyWeek' | 'create', iddeelnemer: number) => {
+      const copyTargetDate = addDays(weekStart, 7);
+      const repeatEndDate = addDays(weekStart, 28);
+      const frequencyWeeks = 1;
       try {
         const response = await fetch('/api/praktijkplanner/activiteiten/herhaling', {
           method: 'POST',
@@ -574,12 +567,12 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           body: JSON.stringify({
             action,
             idwaarneemgroep: groupId,
-            iddeelnemer: selectedParticipantId,
+            iddeelnemer,
             bronStartdatum: weekStart,
             doelStartdatum: copyTargetDate,
             startdatum: copyTargetDate,
             einddatum: action === 'create' ? repeatEndDate : copyTargetDate,
-            frequentieWeken: Number(frequencyWeeks),
+            frequentieWeken: frequencyWeeks,
           }),
         });
         const payload = (await response.json()) as { error?: string };
@@ -591,7 +584,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         toast.error(error instanceof Error ? error.message : 'Actie mislukt.');
       }
     },
-    [copyTargetDate, frequencyWeeks, groupId, loadSeries, loadSlots, repeatEndDate, selectedParticipantId, weekStart]
+    [groupId, loadSeries, loadSlots, weekStart]
   );
 
   const updateSeries = useCallback(async () => {
@@ -647,131 +640,71 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     [groupId, loadSeries, loadSlots]
   );
 
-  const sendScheduleEmail = useCallback(async () => {
-    if (!selectedParticipantId) return;
-    try {
-      const response = await fetch('/api/praktijkplanner/email', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          idwaarneemgroep: groupId,
-          iddeelnemer: selectedParticipantId,
-          plannerType: 'activiteiten',
-          start: weekStart,
-          end,
-        }),
-      });
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(payload.error || 'E-mail versturen mislukt.');
-      toast.success('Planning per e-mail verstuurd.');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'E-mail versturen mislukt.');
-    }
-  }, [end, groupId, selectedParticipantId, weekStart]);
+  const sendScheduleEmail = useCallback(
+    async (iddeelnemer: number) => {
+      try {
+        const response = await fetch('/api/praktijkplanner/email', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idwaarneemgroep: groupId,
+            iddeelnemer,
+            plannerType: 'activiteiten',
+            start: weekStart,
+            end,
+          }),
+        });
+        const payload = (await response.json()) as { error?: string };
+        if (!response.ok) throw new Error(payload.error || 'E-mail versturen mislukt.');
+        toast.success('Planning per e-mail verstuurd.');
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'E-mail versturen mislukt.');
+      }
+    },
+    [end, groupId, weekStart]
+  );
+
+  const renderParticipantActions = useCallback(
+    (participant: { id: number }) => (
+      <div className="flex shrink-0 flex-col items-center gap-0.5">
+        <button
+          type="button"
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+          aria-label="Week kopiëren"
+          title="Week kopiëren"
+          onClick={() => runRecurrenceAction('copyWeek', participant.id)}
+        >
+          <Copy className="size-3.5" aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+          aria-label="Herhalen"
+          title="Herhalen"
+          onClick={() => runRecurrenceAction('create', participant.id)}
+        >
+          <Repeat className="size-3.5" aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+          aria-label="Planning per e-mail versturen"
+          title="Planning per e-mail versturen"
+          onClick={() => sendScheduleEmail(participant.id)}
+        >
+          <SendHorizontal className="size-3.5" aria-hidden />
+        </button>
+      </div>
+    ),
+    [runRecurrenceAction, sendScheduleEmail]
+  );
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-end gap-3" data-planner-tool-keep-active>
-        <div className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm">
-          <label className="flex items-center gap-2">
-            <Checkbox checked={showDay} onCheckedChange={(value) => updateVisibility(!!value, showNight)} />
-            <Label className="cursor-pointer">Dag</Label>
-          </label>
-          <label className="flex items-center gap-2">
-            <Checkbox checked={showNight} onCheckedChange={(value) => updateVisibility(showDay, !!value)} />
-            <Label className="cursor-pointer">Nacht</Label>
-          </label>
-        </div>
-        <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm">
-          <span className="font-medium">Zoom</span>
-          <select value={zoom} onChange={(event) => setZoom(event.target.value)} className="bg-transparent text-sm">
-            <option value="85">85%</option>
-            <option value="100">100%</option>
-            <option value="115">115%</option>
-          </select>
-        </label>
-      </div>
+      
 
-      {data.isManager ? (
-        <div className="grid gap-3 xl:grid-cols-[minmax(14rem,1fr)_auto]" data-planner-tool-keep-active>
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 shadow-sm">
-            <label className="text-sm font-medium" htmlFor="planner-participant">
-              Deelnemer
-            </label>
-            <select
-              id="planner-participant"
-              value={selectedParticipantId ?? ''}
-              onChange={(event) => setSelectedParticipantId(Number(event.target.value) || null)}
-              className="h-9 min-w-48 rounded-md border bg-background px-2 text-sm"
-            >
-              {data.participants.map((participant) => (
-                <option key={participant.id} value={participant.id}>
-                  {[participant.voornaam, participant.achternaam].filter(Boolean).join(' ') ||
-                    participant.name ||
-                    participant.initialen}
-                </option>
-              ))}
-            </select>
-            <label className="text-sm font-medium" htmlFor="participant-filter">
-              Toon
-            </label>
-            <select
-              id="participant-filter"
-              value={participantFilter}
-              onChange={(event) =>
-                setParticipantFilter(event.target.value === 'all' ? 'all' : Number(event.target.value))
-              }
-              className="h-9 min-w-40 rounded-md border bg-background px-2 text-sm"
-            >
-              <option value="all">Alle deelnemers</option>
-              {data.participants.map((participant) => (
-                <option key={participant.id} value={participant.id}>
-                  {[participant.voornaam, participant.achternaam].filter(Boolean).join(' ') ||
-                    participant.name ||
-                    participant.initialen}
-                </option>
-              ))}
-            </select>
-            <label className="text-sm font-medium" htmlFor="copy-target">
-              Doelweek
-            </label>
-            <input
-              id="copy-target"
-              type="date"
-              value={copyTargetDate}
-              onChange={(event) => setCopyTargetDate(event.target.value)}
-              className="h-9 rounded-md border bg-background px-2 text-sm"
-            />
-            <button type="button" className="inline-flex items-center gap-1 rounded-md border px-3 py-2 text-sm hover:bg-muted" onClick={() => runRecurrenceAction('copyWeek')}>
-              <Copy className="size-4" /> Kopieer week
-            </button>
-            <input
-              type="date"
-              aria-label="Herhalen tot"
-              value={repeatEndDate}
-              onChange={(event) => setRepeatEndDate(event.target.value)}
-              className="h-9 rounded-md border bg-background px-2 text-sm"
-            />
-            <select
-              aria-label="Herhalingsfrequentie"
-              value={frequencyWeeks}
-              onChange={(event) => setFrequencyWeeks(event.target.value)}
-              className="h-9 rounded-md border bg-background px-2 text-sm"
-            >
-              <option value="1">Elke week</option>
-              <option value="2">Om de week</option>
-              <option value="3">Elke 3 weken</option>
-            </select>
-            <button type="button" className="inline-flex items-center gap-1 rounded-md border px-3 py-2 text-sm hover:bg-muted" onClick={() => runRecurrenceAction('create')}>
-              <Repeat2 className="size-4" /> Herhaal
-            </button>
-            <button type="button" className="inline-flex items-center gap-1 rounded-md border px-3 py-2 text-sm hover:bg-muted" onClick={sendScheduleEmail}>
-              <Mail className="size-4" /> E-mail
-            </button>
-          </div>
-        </div>
-      ) : null}
+      
 
       <div className="flex items-start gap-4">
         {data.isManager ? (
@@ -832,13 +765,16 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
             weekStart={weekStart}
             onWeekStartChange={setWeekStart}
             zoom={zoom}
-            renderCell={({ participant, datum, daypart }) => renderSlot(participant.id, datum, daypart.id)}
+            renderCell={({ participant, datum, daypart }) =>
+              renderSlot(participant.id, datum, daypart.id, participant.color, deelnemerChipInitials(participant))
+            }
             onCellClick={queueCell}
             isCellDisabled={() => !data.isManager}
             isCellFilled={isCellFilled}
             holidayLabels={holidays}
             cursorTool={cursorTool}
             onCursorToolDismiss={dismissCursorTool}
+            renderParticipantActions={data.isManager ? renderParticipantActions : undefined}
           />
         </div>
       </div>

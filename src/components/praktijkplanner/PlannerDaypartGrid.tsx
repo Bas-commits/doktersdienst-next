@@ -12,7 +12,7 @@ import {
   type PlannerCursorTool,
 } from './PlannerCursorTool';
 import { PlannerWeekNavigation } from './PlannerWeekNavigation';
-import { PLANNER_GRID_NAV_MARGIN_PX } from './planner-grid-layout';
+import { PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX, PLANNER_GRID_NAV_MARGIN_PX, plannerWeekGridNavOffsetPx } from './planner-grid-layout';
 
 const DAYPART_ICONS: Record<number, string> = {
   1: '/icons/sunrise.svg',
@@ -63,6 +63,7 @@ export function PlannerDaypartGrid({
   holidayLabels,
   cursorTool,
   onCursorToolDismiss,
+  renderParticipantActions,
 }: {
   participants: PraktijkplannerParticipant[];
   dayparts: PraktijkplannerDaypart[];
@@ -76,6 +77,7 @@ export function PlannerDaypartGrid({
   holidayLabels?: ReadonlyMap<string, string[]>;
   cursorTool?: PlannerCursorTool | null;
   onCursorToolDismiss?: () => void;
+  renderParticipantActions?: (participant: PraktijkplannerParticipant) => ReactNode;
 }) {
   const days = weekDates(weekStart);
   const orderedDayparts = [...dayparts].sort((a, b) => a.volgorde - b.volgorde);
@@ -88,28 +90,56 @@ export function PlannerDaypartGrid({
 
   return (
     <div ref={gridRootRef}>
-      {onWeekStartChange ? (
-        <div className="ml-44" style={{ marginBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}>
-          <PlannerWeekNavigation weekStart={weekStart} onWeekStartChange={onWeekStartChange} />
-        </div>
-      ) : null}
-      <div
-        className="overflow-x-auto rounded-xl border bg-card shadow-sm"
-        style={zoom ? { zoom: `${zoom}%` } : undefined}
-      >
+      <div className={cn('flex', renderParticipantActions && 'gap-1')}>
+        {renderParticipantActions ? (
+          <div className="flex w-fit shrink-0 flex-col">
+            {onWeekStartChange ? (
+              <div aria-hidden style={{ height: `${plannerWeekGridNavOffsetPx()}px` }} />
+            ) : null}
+            <div
+              aria-hidden
+              className="border-b border-transparent"
+              style={{ height: `${PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX}px` }}
+            />
+            {participants.map((participant) => (
+              <div
+                key={participant.id}
+                className="flex min-h-30 w-fit items-center justify-center border-b border-transparent last:border-b-0"
+              >
+                {renderParticipantActions(participant)}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          {onWeekStartChange ? (
+            <div className="ml-44" style={{ marginBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}>
+              <PlannerWeekNavigation weekStart={weekStart} onWeekStartChange={onWeekStartChange} />
+            </div>
+          ) : null}
+          <div
+            className="overflow-x-auto rounded-xl border bg-card shadow-sm"
+            style={zoom ? { zoom: `${zoom}%` } : undefined}
+          >
       <div className="min-w-[1120px]">
-        <div className="grid grid-cols-[minmax(11rem,1fr)_repeat(7,minmax(9.5rem,1fr))] border-b bg-muted/40">
-          <div className="flex items-center justify-center p-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground h-full">Deelnemer</div>
-     
+        <div
+          className="grid grid-cols-[minmax(11rem,1fr)_repeat(7,minmax(9.5rem,1fr))] border-b bg-muted/40"
+          style={{ height: `${PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX}px` }}
+        >
+          <div className="flex h-full items-center justify-center px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Deelnemer
+          </div>
+
           {days.map((date) => {
             const label = dayLabel(date);
             const holidays = holidayLabels?.get(date) ?? [];
             return (
-              <div key={date} className="border-l p-3 text-center">
-                <p className="text-s font-semibold uppercase tracking-wide text-muted-foreground">{label.weekday} {label.day}</p>
-                {/* <p className="mt-0.5 text-sm font-semibold text-muted-foreground">{label.day}</p> */}
+              <div key={date} className="flex h-full flex-col justify-center overflow-hidden border-l px-3 py-2 text-center">
+                <p className="truncate text-s font-semibold uppercase tracking-wide text-muted-foreground">
+                  {label.weekday} {label.day}
+                </p>
                 {holidays.length > 0 ? (
-                  <p className="mt-1 truncate text-[10px] font-medium text-rose-700" title={holidays.join(', ')}>
+                  <p className="mt-0.5 truncate text-[10px] font-medium text-rose-700" title={holidays.join(', ')}>
                     {holidays.join(', ')}
                   </p>
                 ) : null}
@@ -118,12 +148,14 @@ export function PlannerDaypartGrid({
           })}
         </div>
 
-        {participants.map((participant) => (
+        {participants.map((participant) => {
+          const label = participantLabel(participant);
+          return (
           <div
             key={participant.id}
             className="grid grid-cols-[minmax(11rem,1fr)_repeat(7,minmax(9.5rem,1fr))] border-b last:border-b-0"
           >
-            <div className="flex min-h-30 items-center justify-left gap-2 p-3 text-left">
+            <div className="flex min-h-30 items-center gap-2 p-3 text-left">
               <span
                 className="inline-flex h-7 w-13 shrink-0 items-center justify-center rounded text-xs font-bold"
                 style={{
@@ -132,9 +164,11 @@ export function PlannerDaypartGrid({
                 }}
                 aria-hidden
               >
-                {participant.initialen || participantLabel(participant).slice(0, 2).toUpperCase()}
+                {participant.initialen || label.slice(0, 2).toUpperCase()}
               </span>
-              <span className="text-sm font-medium">{participantLabel(participant)}</span>
+              <span className="line-clamp-2 min-w-0 flex-1 text-sm font-medium leading-snug" title={label}>
+                {label}
+              </span>
             </div>
             {days.map((datum) => (
               <div key={`${participant.id}-${datum}`} className="flex min-h-30 items-stretch border-l p-1">
@@ -176,8 +210,11 @@ export function PlannerDaypartGrid({
               </div>
             ))}
           </div>
-        ))}
+          );
+        })}
       </div>
+          </div>
+        </div>
       </div>
       <PlannerCursorToolFollower tool={cursorTool ?? null} position={cursorPosition} />
     </div>

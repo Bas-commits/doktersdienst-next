@@ -35,6 +35,22 @@ describe('PlannerCombinedDaypartChip', () => {
     expect(rows.map((row) => row.textContent)).toEqual(['', 'ALG', '']);
   });
 
+  it('uses the participant color as border when assigned to the grid', () => {
+    const { container } = render(
+      <PlannerCombinedDaypartChip
+        activity={{ id: 2, label: 'GRID', color: '#008000' }}
+        participantColor="#e11d48"
+        initials="JD"
+      />
+    );
+
+    const chip = container.firstChild as HTMLElement;
+    const topRow = chip.querySelector('[data-planner-daypart-chip-row="tasks"]');
+
+    expect(topRow).toHaveStyle({ borderColor: 'rgb(225, 29, 72)' });
+    expect(screen.getByText('JD')).toHaveClass('z-20');
+  });
+
   it('uses a contrasting monochrome activity icon', () => {
     const { container } = render(
       <>

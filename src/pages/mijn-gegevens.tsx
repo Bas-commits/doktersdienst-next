@@ -240,7 +240,13 @@ export default function MijnGegevensPage() {
         setPendingEmailChange(null);
         setProfile(profileRes);
         setLookup(lookupRes);
-        setLogin(profileRes.deelnemer.login ?? '');
+        const initialLogin = profileRes.deelnemer.login ?? '';
+        // Prefill email from login when huisemail is empty so the required field doesn't block the form
+        const initialHuisemail =
+          (profileRes.deelnemer.huisemail ?? '').trim() ||
+          (initialLogin.includes('@') ? initialLogin : '') ||
+          (typeof session.user.email === 'string' ? session.user.email.trim() : '');
+        setLogin(initialLogin);
         setColor(profileRes.deelnemer.color ?? '#cccccc');
         setAchternaam(profileRes.deelnemer.achternaam ?? '');
         setVoorletterstussenvoegsel(profileRes.deelnemer.voorletterstussenvoegsel ?? '');
@@ -257,7 +263,7 @@ export default function MijnGegevensPage() {
         setHuisadrplaats(profileRes.deelnemer.huisadrplaats ?? '');
         setHuisadrtelnr(profileRes.deelnemer.huisadrtelnr ?? '');
         setHuisadrfax(profileRes.deelnemer.huisadrfax ?? '');
-        setHuisemail(profileRes.deelnemer.huisemail ?? '');
+        setHuisemail(initialHuisemail);
         setEchtedeelnemer(profileRes.deelnemer.echtedeelnemer === true);
         setSmsdienstbegin(profileRes.deelnemer.smsdienstbegin === true);
         setCallRecording(profileRes.deelnemer.callRecording === true);
@@ -281,7 +287,7 @@ export default function MijnGegevensPage() {
           huisadrplaats: profileRes.deelnemer.huisadrplaats ?? '',
           huisadrtelnr: profileRes.deelnemer.huisadrtelnr ?? '',
           huisadrfax: profileRes.deelnemer.huisadrfax ?? '',
-          huisemail: profileRes.deelnemer.huisemail ?? '',
+          huisemail: initialHuisemail,
           echtedeelnemer: profileRes.deelnemer.echtedeelnemer === true,
           smsdienstbegin: profileRes.deelnemer.smsdienstbegin === true,
           callRecording: profileRes.deelnemer.callRecording === true,

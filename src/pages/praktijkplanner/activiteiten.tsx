@@ -2,7 +2,7 @@
 
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, Repeat, SendHorizontal, Trash2 } from 'lucide-react';
+import { Copy, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
 import {
@@ -10,7 +10,11 @@ import {
   type PlannerDaypartChipItem,
 } from '@/components/praktijkplanner/PlannerCombinedDaypartChip';
 import type { PlannerCursorTool } from '@/components/praktijkplanner/PlannerCursorTool';
+import { PlannerCopyWeekModal } from '@/components/praktijkplanner/PlannerCopyWeekModal';
 import { PlannerDaypartGrid } from '@/components/praktijkplanner/PlannerDaypartGrid';
+import { PlannerDaypartHoverPreview } from '@/components/praktijkplanner/PlannerDaypartHoverPreview';
+import { PlannerNotifyPlanningModal } from '@/components/praktijkplanner/PlannerNotifyPlanningModal';
+import { PlannerRepeatWeekModal } from '@/components/praktijkplanner/PlannerRepeatWeekModal';
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { plannerWeekGridNavOffsetPx } from '@/components/praktijkplanner/planner-grid-layout';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
@@ -23,7 +27,7 @@ import {
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
-import type { PraktijkplannerPlanningSlot } from '@/types/praktijkplanner';
+import type { PraktijkplannerParticipant, PraktijkplannerPlanningSlot } from '@/types/praktijkplanner';
 
 type RecurrenceSeries = {
   id: number;
@@ -32,6 +36,20 @@ type RecurrenceSeries = {
   einddatum: string;
   frequentieWeken: number;
 };
+
+type ParticipantActionModal =
+  | { type: 'copy'; participant: PraktijkplannerParticipant; sourceWeekStart: string }
+  | { type: 'repeat'; participant: PraktijkplannerParticipant; sourceWeekStart: string }
+  | { type: 'email'; participant: PraktijkplannerParticipant };
+
+function participantDisplayName(participant: PraktijkplannerParticipant): string {
+  return (
+    [participant.voornaam, participant.achternaam].filter(Boolean).join(' ') ||
+    participant.name ||
+    participant.initialen ||
+    `Deelnemer ${participant.id}`
+  );
+}
 
 function slotKey(iddeelnemer: number, datum: string, iddagdeel: number) {
   return `${iddeelnemer}:${datum}:${iddagdeel}`;
@@ -58,6 +76,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   const [zoom, setZoom] = useState('100');
   const [series, setSeries] = useState<RecurrenceSeries[]>([]);
   const [editingSeries, setEditingSeries] = useState<RecurrenceSeries | null>(null);
+  const [actionModal, setActionModal] = useState<ParticipantActionModal | null>(null);
 
   const end = useMemo(() => addDays(weekStart, 6), [weekStart]);
   const holidays = usePlannerHolidays(weekStart, end);
@@ -188,14 +207,26 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   );
 
   const renderSlot = useCallback(
-    (iddeelnemer: number, datum: string, iddagdeel: number, participantColor: string | null, initials: string | null) => {
-      const key = slotKey(iddeelnemer, datum, iddagdeel);
+    ({
+      participant,
+      datum,
+      daypart,
+      hoverEnabled,
+    }: {
+      participant: PraktijkplannerParticipant;
+      datum: string;
+      daypart: { id: number; naam: string };
+      hoverEnabled: boolean;
+    }) => {
+      const key = slotKey(participant.id, datum, daypart.id);
       const existing = baseSlotMap.get(key);
       const activity = existing?.activity ?? null;
       const specification = existing?.specification ?? null;
       const location = existing?.location ?? null;
       const tasks = existing?.tasks ?? [];
       const availability = existing?.availability ?? null;
+      const initials = deelnemerChipInitials(participant);
+      const participantName = participantDisplayName(participant);
 
       if (!activity && !location && tasks.length === 0 && !availability) {
         return null;
@@ -233,7 +264,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           }
         : null;
 
-      return (
+      const chip = (
         <div className="relative h-full w-full min-w-0">
           {activityItem || locationItem || taskItems.length > 0 ? (
             <PlannerCombinedDaypartChip
@@ -241,7 +272,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
               activity={activityItem}
               location={locationItem}
               fill
-              participantColor={participantColor}
+              participantColor={participant.color}
               initials={initials}
               className="shadow-none"
             />
@@ -251,12 +282,42 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
               {availability.naam}
             </span>
           ) : null}
-          {existing?.recurrenceId ? (
-            <span className="pointer-events-none absolute top-0.5 right-0.5 rounded bg-background/80 px-0.5 text-muted-foreground">
-              ↻
+          {existing?.isUitzondering ? (
+            <span
+              className="pointer-events-none absolute top-0.5 left-0.5 z-20 rounded bg-background/90 p-0.5 text-amber-500"
+              title="Uitzondering op herhaling"
+            >
+              <TriangleAlert className="size-3.5" aria-hidden />
             </span>
           ) : null}
         </div>
+      );
+
+      return (
+        <PlannerDaypartHoverPreview
+          enabled={hoverEnabled}
+          participantName={participantName}
+          initials={initials}
+          datum={datum}
+          daypartName={daypart.naam}
+          fromRepetition={existing?.recurrenceId != null}
+          isException={Boolean(existing?.isUitzondering)}
+          availabilityName={availability?.naam}
+          chip={
+            <PlannerCombinedDaypartChip
+              tasks={taskItems}
+              activity={activityItem}
+              location={locationItem}
+              fill
+              participantColor={participant.color}
+              initials={initials}
+              initialsVariant="popover"
+              className="shadow-sm"
+            />
+          }
+        >
+          {chip}
+        </PlannerDaypartHoverPreview>
       );
     },
     [baseSlotMap]
@@ -280,6 +341,23 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           existing?.availability ||
           existing?.tasks.length
       );
+    },
+    [baseSlotMap]
+  );
+
+  const getCellClassName = useCallback(
+    ({
+      participant,
+      datum,
+      daypart,
+    }: {
+      participant: { id: number };
+      datum: string;
+      daypart: { id: number };
+    }) => {
+      const existing = baseSlotMap.get(slotKey(participant.id, datum, daypart.id));
+      if (!existing?.isUitzondering) return undefined;
+      return 'border-2 border-amber-400 bg-amber-100 enabled:hover:border-amber-500 enabled:hover:bg-amber-100';
     },
     [baseSlotMap]
   );
@@ -514,6 +592,11 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           tasks,
           availability,
           recurrenceId: existingSlot?.recurrenceId ?? null,
+          isBronslot: existingSlot?.isBronslot ?? null,
+          isUitzondering:
+            existingSlot?.recurrenceId != null && existingSlot.isBronslot === false
+              ? true
+              : (existingSlot?.isUitzondering ?? null),
         });
         return updated;
       });
@@ -554,38 +637,10 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     ]
   );
 
-  const runRecurrenceAction = useCallback(
-    async (action: 'copyWeek' | 'create', iddeelnemer: number) => {
-      const copyTargetDate = addDays(weekStart, 7);
-      const repeatEndDate = addDays(weekStart, 28);
-      const frequencyWeeks = 1;
-      try {
-        const response = await fetch('/api/praktijkplanner/activiteiten/herhaling', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action,
-            idwaarneemgroep: groupId,
-            iddeelnemer,
-            bronStartdatum: weekStart,
-            doelStartdatum: copyTargetDate,
-            startdatum: copyTargetDate,
-            einddatum: action === 'create' ? repeatEndDate : copyTargetDate,
-            frequentieWeken: frequencyWeeks,
-          }),
-        });
-        const payload = (await response.json()) as { error?: string };
-        if (!response.ok) throw new Error(payload.error || 'Actie mislukt.');
-        toast.success(action === 'copyWeek' ? 'Week gekopieerd.' : 'Herhaling aangemaakt.');
-        loadSlots();
-        loadSeries();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Actie mislukt.');
-      }
-    },
-    [groupId, loadSeries, loadSlots, weekStart]
-  );
+  const refreshAfterRecurrence = useCallback(() => {
+    loadSlots();
+    loadSeries();
+  }, [loadSeries, loadSlots]);
 
   const updateSeries = useCallback(async () => {
     if (!editingSeries) return;
@@ -616,7 +671,13 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
 
   const deleteSeries = useCallback(
     async (idherhaling: number) => {
-      if (!window.confirm('Deze herhaling en de gekoppelde planning verwijderen?')) return;
+      const keepPlanning = window.confirm(
+        'Herhalingspatroon verwijderen?\n\nOK = patroon verwijderen, planning behouden\nAnnuleren = niets doen'
+      );
+      if (!keepPlanning) return;
+      const alsoDeletePlanning = window.confirm(
+        'Wilt u de gekoppelde planning ook verwijderen?\n\nOK = ook planning verwijderen\nAnnuleren = alleen patroon verwijderen'
+      );
       try {
         const response = await fetch('/api/praktijkplanner/activiteiten/herhaling', {
           method: 'POST',
@@ -626,11 +687,16 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
             action: 'delete',
             idwaarneemgroep: groupId,
             idherhaling,
+            mode: alsoDeletePlanning ? 'deletePlanning' : 'unlink',
           }),
         });
         const payload = (await response.json()) as { error?: string };
         if (!response.ok) throw new Error(payload.error || 'Herhaling verwijderen mislukt.');
-        toast.success('Herhaling verwijderd.');
+        toast.success(
+          alsoDeletePlanning
+            ? 'Herhaling en planning verwijderd.'
+            : 'Herhalingspatroon verwijderd; planning behouden.'
+        );
         loadSeries();
         loadSlots();
       } catch (error) {
@@ -640,40 +706,17 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     [groupId, loadSeries, loadSlots]
   );
 
-  const sendScheduleEmail = useCallback(
-    async (iddeelnemer: number) => {
-      try {
-        const response = await fetch('/api/praktijkplanner/email', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            idwaarneemgroep: groupId,
-            iddeelnemer,
-            plannerType: 'activiteiten',
-            start: weekStart,
-            end,
-          }),
-        });
-        const payload = (await response.json()) as { error?: string };
-        if (!response.ok) throw new Error(payload.error || 'E-mail versturen mislukt.');
-        toast.success('Planning per e-mail verstuurd.');
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'E-mail versturen mislukt.');
-      }
-    },
-    [end, groupId, weekStart]
-  );
-
   const renderParticipantActions = useCallback(
-    (participant: { id: number }) => (
+    (participant: PraktijkplannerParticipant) => (
       <div className="flex shrink-0 flex-col items-center gap-0.5">
         <button
           type="button"
           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
           aria-label="Week kopiëren"
           title="Week kopiëren"
-          onClick={() => runRecurrenceAction('copyWeek', participant.id)}
+          onClick={() =>
+            setActionModal({ type: 'copy', participant, sourceWeekStart: weekStart })
+          }
         >
           <Copy className="size-3.5" aria-hidden />
         </button>
@@ -682,7 +725,9 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
           aria-label="Herhalen"
           title="Herhalen"
-          onClick={() => runRecurrenceAction('create', participant.id)}
+          onClick={() =>
+            setActionModal({ type: 'repeat', participant, sourceWeekStart: weekStart })
+          }
         >
           <Repeat className="size-3.5" aria-hidden />
         </button>
@@ -691,13 +736,13 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
           aria-label="Planning per e-mail versturen"
           title="Planning per e-mail versturen"
-          onClick={() => sendScheduleEmail(participant.id)}
+          onClick={() => setActionModal({ type: 'email', participant })}
         >
           <SendHorizontal className="size-3.5" aria-hidden />
         </button>
       </div>
     ),
-    [runRecurrenceAction, sendScheduleEmail]
+    [weekStart]
   );
 
   return (
@@ -766,11 +811,17 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
             onWeekStartChange={setWeekStart}
             zoom={zoom}
             renderCell={({ participant, datum, daypart }) =>
-              renderSlot(participant.id, datum, daypart.id, participant.color, deelnemerChipInitials(participant))
+              renderSlot({
+                participant,
+                datum,
+                daypart,
+                hoverEnabled: cursorTool == null,
+              })
             }
             onCellClick={queueCell}
             isCellDisabled={() => !data.isManager}
             isCellFilled={isCellFilled}
+            getCellClassName={getCellClassName}
             holidayLabels={holidays}
             cursorTool={cursorTool}
             onCursorToolDismiss={dismissCursorTool}
@@ -778,6 +829,38 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           />
         </div>
       </div>
+
+      {actionModal?.type === 'copy' ? (
+        <PlannerCopyWeekModal
+          open
+          onClose={() => setActionModal(null)}
+          groupId={groupId}
+          participant={actionModal.participant}
+          sourceWeekStart={actionModal.sourceWeekStart}
+          dayparts={visibleDayparts}
+          onCopied={refreshAfterRecurrence}
+        />
+      ) : null}
+      {actionModal?.type === 'repeat' ? (
+        <PlannerRepeatWeekModal
+          open
+          onClose={() => setActionModal(null)}
+          groupId={groupId}
+          participantId={actionModal.participant.id}
+          participantName={participantDisplayName(actionModal.participant)}
+          sourceWeekStart={actionModal.sourceWeekStart}
+          onCreated={refreshAfterRecurrence}
+        />
+      ) : null}
+      {actionModal?.type === 'email' ? (
+        <PlannerNotifyPlanningModal
+          open
+          onClose={() => setActionModal(null)}
+          groupId={groupId}
+          participantId={actionModal.participant.id}
+          participantName={participantDisplayName(actionModal.participant)}
+        />
+      ) : null}
 
       {data.isManager && series.length > 0 ? (
         <section className="rounded-xl border bg-card p-3 shadow-sm">

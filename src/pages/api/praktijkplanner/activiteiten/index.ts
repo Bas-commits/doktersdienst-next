@@ -186,6 +186,8 @@ async function loadSlots(
       availabilityKleur: schema.beschikbaarheidstypen.kleur,
       availabilityIcon: schema.beschikbaarheidstypen.icon,
       recurrenceId: schema.planningherhalingslots.idherhaling,
+      isBronslot: schema.planningherhalingslots.isBronslot,
+      isUitzondering: schema.planningherhalingslots.isUitzondering,
     })
     .from(schema.planning)
     .leftJoin(schema.activiteiten, eq(schema.planning.idactiviteit, schema.activiteiten.id))
@@ -311,6 +313,8 @@ async function loadSlots(
             }
           : null,
       recurrenceId: row.recurrenceId ?? null,
+      isBronslot: row.recurrenceId != null ? Boolean(row.isBronslot) : null,
+      isUitzondering: row.recurrenceId != null ? Boolean(row.isUitzondering) : null,
     }));
 }
 
@@ -456,6 +460,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
         if (isEmpty) {
           if (existing?.id != null) {
+            const [link] = await tx
+              .select({
+                idherhaling: schema.planningherhalingslots.idherhaling,
+                isBronslot: schema.planningherhalingslots.isBronslot,
+              })
+              .from(schema.planningherhalingslots)
+              .where(eq(schema.planningherhalingslots.idplanning, existing.id))
+              .limit(1);
+            if (link?.idherhaling != null && !link.isBronslot) {
+              await tx
+                .insert(schema.planningherhalinguitzonderingen)
+                .values({
+                  idherhaling: link.idherhaling,
+                  reeksdatum: mutation.datum,
+                  iddagdeel: mutation.iddagdeel,
+                  type: 'verwijderd',
+                  createdBy: accessResult.access.user.id,
+                })
+                .onConflictDoNothing();
+            }
             await tx.delete(schema.planning).where(eq(schema.planning.id, existing.id));
           }
           continue;
@@ -473,6 +497,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             })
             .where(eq(schema.planning.id, existing.id));
           planningId = existing.id;
+          const [link] = await tx
+            .select({
+              idherhaling: schema.planningherhalingslots.idherhaling,
+              isBronslot: schema.planningherhalingslots.isBronslot,
+              isUitzondering: schema.planningherhalingslots.isUitzondering,
+            })
+            .from(schema.planningherhalingslots)
+            .where(eq(schema.planningherhalingslots.idplanning, existing.id))
+            .limit(1);
+          if (link?.idherhaling != null && !link.isBronslot && !link.isUitzondering) {
+            await tx
+              .update(schema.planningherhalingslots)
+              .set({
+                isUitzondering: true,
+                uitzonderingAt: new Date().toISOString(),
+              })
+              .where(eq(schema.planningherhalingslots.idplanning, existing.id));
+          }
         } else {
           const [created] = await tx
             .insert(schema.planning)

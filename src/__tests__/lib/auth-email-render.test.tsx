@@ -6,6 +6,7 @@ import {
   getEmailTemplateSiteUrl,
   renderMagicLinkBodies,
   renderPasswordResetBodies,
+  renderPraktijkplannerPlanningAvailableBodies,
   renderVerificationBodies,
 } from '@/lib/render-auth-email';
 
@@ -75,5 +76,16 @@ describe('render-auth-email', () => {
     expect(setup.html).toContain('Welkom bij De Doktersdienst');
     expect(setup.html).toContain('Wachtwoord instellen');
     expect(setup.html).toContain('Hallo Kim,');
+  });
+
+  it('renderPraktijkplannerPlanningAvailableBodies links to activiteiten', async () => {
+    const { html, text } = await renderPraktijkplannerPlanningAvailableBodies({
+      userName: 'Ada Lovelace',
+    });
+    expect(html).toContain('Nieuwe planning beschikbaar');
+    expect(html).toContain('Hallo Ada Lovelace,');
+    expect(html).toContain('https://auth.example.nl/praktijkplanner/activiteiten');
+    expect(html).toContain('Planning bekijken');
+    expect(text).toContain('nieuwe planning');
   });
 });

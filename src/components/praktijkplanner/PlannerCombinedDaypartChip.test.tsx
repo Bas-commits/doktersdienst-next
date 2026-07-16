@@ -35,7 +35,7 @@ describe('PlannerCombinedDaypartChip', () => {
     expect(rows.map((row) => row.textContent)).toEqual(['', 'ALG', '']);
   });
 
-  it('uses the participant color as border when assigned to the grid', () => {
+  it('uses the participant color as an outer frame when assigned to the grid', () => {
     const { container } = render(
       <PlannerCombinedDaypartChip
         activity={{ id: 2, label: 'GRID', color: '#008000' }}
@@ -45,11 +45,14 @@ describe('PlannerCombinedDaypartChip', () => {
     );
 
     const chip = container.firstChild as HTMLElement;
-    const topRow = chip.querySelector('[data-planner-daypart-chip-row="tasks"]');
+    const border = chip.querySelector('[data-planner-daypart-chip-border]') as HTMLElement;
 
-    expect(topRow).toHaveStyle({ borderColor: 'rgb(225, 29, 72)' });
+    expect(chip).toHaveAttribute('data-participant-border', 'true');
+    expect(border).toHaveStyle({ backgroundColor: 'rgb(225, 29, 72)' });
+    expect(border).toHaveClass('p-[3px]');
     expect(screen.getByText('JD')).toHaveClass('z-20');
   });
+
 
   it('uses a contrasting monochrome activity icon', () => {
     const { container } = render(

@@ -12,27 +12,14 @@ export type PlannerDaypartChipItem = {
   icon?: string | null;
 };
 
-type ChipRowProps = {
+type ChipDensity = 'compact' | 'popover';
+
+type ChipBandProps = {
   row: 'tasks' | 'activity' | 'location';
   items: PlannerDaypartChipItem[];
-  participantColor?: string | null;
+  style: CSSProperties;
+  density: ChipDensity;
 };
-
-function rowBorderClasses(row: ChipRowProps['row'], participantColor?: string | null): string {
-  if (participantColor) {
-    if (row === 'tasks') return 'border-x-[3px] border-t-[3px] border-b-0 rounded-t-md';
-    if (row === 'location') return 'border-x-[3px] border-b-[3px] border-t-0 rounded-b-md';
-    return 'border-x-[3px] border-y-0';
-  }
-
-  if (row === 'tasks') return 'rounded-t-md border border-b-0 border-black/10';
-  if (row === 'location') return 'rounded-b-md border border-t-0 border-black/10';
-  return 'border-x border-y-0 border-black/10';
-}
-
-function rowBorderStyle(participantColor?: string | null): CSSProperties | undefined {
-  return participantColor ? { borderColor: participantColor } : undefined;
-}
 
 function itemStyle(color: string | null): CSSProperties {
   const backgroundColor = color || '#64748b';
@@ -52,40 +39,41 @@ function iconStyle(color: string | null): CSSProperties {
   };
 }
 
-function emptyRowRounding(row: ChipRowProps['row']): string {
-  if (row === 'tasks') return 'rounded-t-md';
-  if (row === 'location') return 'rounded-b-md';
-  return 'rounded-none';
-}
-
-function ChipRow({ row, items, participantColor }: ChipRowProps) {
-  const rowBorderClassName = rowBorderClasses(row, participantColor);
-  const rowBorderStyleValue = rowBorderStyle(participantColor);
+/**
+ * One horizontal band of the chip. Positioned by the parent so bands overlap by 1px;
+ * that overlap (not flex) is what prevents white hairlines between rows.
+ */
+function ChipBand({ row, items, style, density }: ChipBandProps) {
+  const isPopover = density === 'popover';
 
   if (items.length === 0) {
     return (
       <span
-        className={cn(
-          'box-border flex min-h-0 flex-1 items-center justify-center bg-neutral-300',
-          emptyRowRounding(row),
-          rowBorderClassName
-        )}
-        style={rowBorderStyleValue}
+        className="absolute inset-x-0 flex items-center justify-center bg-neutral-300"
+        style={style}
         data-planner-daypart-chip-row={row}
       />
     );
   }
 
+  // Band fill matches the first segment so any micro-gap between segments is never white.
+  const bandFill = items[0]?.color || '#64748b';
+
   return (
     <span
-      className={cn('box-border flex min-h-0 flex-1 overflow-hidden', rowBorderClassName)}
-      style={rowBorderStyleValue}
+      className="absolute inset-x-0 flex"
+      style={{ ...style, backgroundColor: bandFill }}
       data-planner-daypart-chip-row={row}
     >
       {items.map((item, index) => (
         <span
           key={item.id ?? `${item.label}-${index}`}
-          className="flex min-w-0 flex-1 items-center justify-center gap-0.5 px-1"
+          className={cn(
+            'flex h-full min-w-0 flex-1 items-center justify-center',
+            isPopover ? 'gap-1 px-1.5' : 'gap-0.5 px-1',
+            // Overlap adjacent task segments the same way bands overlap.
+            index < items.length - 1 && '-mr-px'
+          )}
           style={itemStyle(item.color)}
           title={item.label}
         >
@@ -93,16 +81,40 @@ function ChipRow({ row, items, participantColor }: ChipRowProps) {
             <Image
               src={item.icon}
               alt=""
-              width={12}
-              height={12}
-              className="size-3 shrink-0 object-contain"
+              width={64}
+              height={64}
+              // Scale to band height so the icon fills the row (grid + popover).
+              className="h-[85%] w-auto shrink-0 object-contain"
               style={iconStyle(item.color)}
             />
           ) : null}
-          <span className="truncate text-[9px] font-semibold leading-tight">{item.label}</span>
+          <span
+            className={cn(
+              'truncate font-semibold leading-tight',
+              isPopover ? 'text-[13px]' : 'text-[9px]'
+            )}
+          >
+            {item.label}
+          </span>
         </span>
       ))}
     </span>
+  );
+}
+
+function fallbackFaceColor(
+  participantColor: string | null | undefined,
+  tasks: PlannerDaypartChipItem[],
+  activity: PlannerDaypartChipItem | null | undefined,
+  location: PlannerDaypartChipItem | null | undefined
+): string {
+  // Any residual seam must match a chip color, never page white.
+  return (
+    participantColor ||
+    location?.color ||
+    activity?.color ||
+    tasks[0]?.color ||
+    '#a3a3a3'
   );
 }
 
@@ -114,6 +126,7 @@ export function PlannerCombinedDaypartChip({
   fill = false,
   participantColor,
   initials,
+  initialsVariant = 'compact',
 }: {
   tasks?: PlannerDaypartChipItem[];
   activity?: PlannerDaypartChipItem | null;
@@ -122,36 +135,89 @@ export function PlannerCombinedDaypartChip({
   fill?: boolean;
   participantColor?: string | null;
   initials?: string | null;
+  /** `popover`: larger labels/icons, initials sit below the face. */
+  initialsVariant?: ChipDensity;
 }) {
   const label = [...tasks.map((task) => task.label), activity?.label, location?.label]
     .filter(Boolean)
     .join(' · ');
+  const hasParticipantBorder = Boolean(participantColor);
+  const faceColor = fallbackFaceColor(participantColor, tasks, activity, location);
+  const density: ChipDensity = initialsVariant;
+
+  // Real outer border without CSS `border`: the frame is colored padding around a
+  // clipped face. Gaps can only show the frame color, never page white.
+  // Use a solid default frame (not rgba) so small builder previews never fringe white.
+  const borderWidthClass = hasParticipantBorder ? 'p-[3px]' : 'p-px';
+  const borderColor = hasParticipantBorder ? participantColor! : '#c4c4c4';
 
   return (
     <span
       className={cn(
-        'relative flex min-w-0 flex-col overflow-visible rounded-md text-center shadow-sm',
+        'relative block min-w-0 text-center shadow-sm',
         fill ? 'h-full w-full min-h-0' : 'h-12',
+        initialsVariant === 'popover' && 'mb-3',
         className
       )}
       aria-label={label || undefined}
       title={label || undefined}
+      data-participant-border={hasParticipantBorder ? 'true' : undefined}
     >
-      <span className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md">
-        <ChipRow row="tasks" items={tasks} participantColor={participantColor} />
-        <ChipRow row="activity" items={activity ? [activity] : []} participantColor={participantColor} />
-        <ChipRow row="location" items={location ? [location] : []} participantColor={participantColor} />
+      <span
+        className={cn('absolute inset-0 rounded-md', borderWidthClass)}
+        style={{ backgroundColor: borderColor }}
+        data-planner-daypart-chip-border=""
+      >
+        <span
+          className={cn(
+            'relative block h-full w-full overflow-hidden',
+            // Keep corner concentric with the outer radius (6px) minus padding.
+            hasParticipantBorder ? 'rounded-[3px]' : 'rounded-[5px]'
+          )}
+          style={{ backgroundColor: faceColor }}
+          data-planner-daypart-chip-face=""
+        >
+          {/*
+            Absolute bands with 1px vertical overlap. Flex 1fr/1fr/1fr was the source of
+            intermittent white seams between activity and location.
+          */}
+          <ChipBand
+            row="tasks"
+            items={tasks}
+            density={density}
+            style={{ top: 0, height: 'calc(33.333% + 1px)' }}
+          />
+          <ChipBand
+            row="activity"
+            items={activity ? [activity] : []}
+            density={density}
+            style={{ top: 'calc(33.333% - 1px)', height: 'calc(33.333% + 2px)' }}
+          />
+          <ChipBand
+            row="location"
+            items={location ? [location] : []}
+            density={density}
+            style={{ top: 'calc(66.666% - 1px)', bottom: 0 }}
+          />
+        </span>
       </span>
-      {participantColor ? (
+
+      {participantColor && initials ? (
         <span
           aria-hidden
-          className="absolute bottom-0 left-1/2 z-20 flex h-2 w-1/2 -translate-x-1/2 translate-y-1/2 items-center justify-center truncate rounded-full px-0.5 text-[7px] font-bold leading-none"
+          className={cn(
+            'absolute left-1/2 z-20 flex -translate-x-1/2 items-center justify-center truncate rounded-full px-1 font-bold leading-none',
+            density === 'popover'
+              ? // Fully below the face; only the top half of the badge kisses the border.
+                'top-full h-4 w-[60%] -translate-y-1/3 text-[11px]'
+              : 'bottom-0 h-2 w-1/2 translate-y-1/2 text-[7px]'
+          )}
           style={{
             backgroundColor: participantColor,
             color: getContrastTextColor(participantColor),
           }}
         >
-          {initials?.slice(0, 4).toUpperCase()}
+          {initials.slice(0, 4).toUpperCase()}
         </span>
       ) : null}
     </span>

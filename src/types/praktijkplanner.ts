@@ -112,6 +112,8 @@ export type PraktijkplannerPlanningSlot = {
   tasks: PraktijkplannerTask[];
   availability: Pick<PraktijkplannerAvailabilityType, 'id' | 'naam' | 'code' | 'kleur' | 'icon'> | null;
   recurrenceId: number | null;
+  isBronslot: boolean | null;
+  isUitzondering: boolean | null;
 };
 
 export type PraktijkplannerAbsenceSlot = {

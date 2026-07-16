@@ -138,7 +138,7 @@ function OptionPreview({
       tasks={slot === 'top' ? [item] : []}
       activity={slot === 'middle' ? item : null}
       location={slot === 'bottom' ? item : null}
-      className="w-18 shrink-0"
+      className="w-18 shrink-0 shadow-none"
     />
   );
 }

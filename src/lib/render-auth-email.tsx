@@ -7,6 +7,8 @@ import InviteVerifyEmail from '@email/invite-verify-email';
 import type { VerifyEmailVariant } from '@email/invite-verify-email';
 import PraktijkplannerScheduleEmail from '@email/praktijkplanner-schedule';
 import type { PraktijkplannerScheduleEmailProps } from '@email/praktijkplanner-schedule';
+import PraktijkplannerPlanningAvailableEmail from '@email/praktijkplanner-planning-available';
+import type { PraktijkplannerPlanningAvailableEmailProps } from '@email/praktijkplanner-planning-available';
 
 /** Publieke origin voor shell (logo-fallback `{origin}/logo.png`); logo meestal via `EMAIL_LOGO_URL`. */
 export function getEmailTemplateSiteUrl(): string {
@@ -73,4 +75,20 @@ export async function renderPraktijkplannerScheduleBodies(
 ): Promise<{ html: string; text: string }> {
   const siteUrl = getEmailTemplateSiteUrl();
   return toHtmlAndText(<PraktijkplannerScheduleEmail {...params} siteUrl={siteUrl} />);
+}
+
+export async function renderPraktijkplannerPlanningAvailableBodies(
+  params: Omit<PraktijkplannerPlanningAvailableEmailProps, 'siteUrl' | 'logoSrc' | 'reviewUrl'> & {
+    reviewUrl?: string;
+  }
+): Promise<{ html: string; text: string }> {
+  const siteUrl = getEmailTemplateSiteUrl();
+  const reviewUrl = params.reviewUrl ?? `${siteUrl}/praktijkplanner/activiteiten`;
+  return toHtmlAndText(
+    <PraktijkplannerPlanningAvailableEmail
+      userName={params.userName}
+      reviewUrl={reviewUrl}
+      siteUrl={siteUrl}
+    />
+  );
 }

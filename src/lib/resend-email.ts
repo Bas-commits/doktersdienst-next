@@ -3,6 +3,7 @@ import { logger } from '@/lib/logger';
 import {
   renderMagicLinkBodies,
   renderPasswordResetBodies,
+  renderPraktijkplannerPlanningAvailableBodies,
   renderPraktijkplannerScheduleBodies,
   renderVerificationBodies,
 } from '@/lib/render-auth-email';
@@ -289,5 +290,27 @@ export async function sendPraktijkplannerScheduleEmailViaResend(params: {
       entries: params.entries.length,
     },
     errorLabel: 'Resend Praktijkplanner schedule email failed',
+  });
+}
+
+export async function sendPraktijkplannerPlanningAvailableEmailViaResend(params: {
+  to: string;
+  userName?: string | null;
+}): Promise<{ resendEmailId: string }> {
+  const subject = 'Nieuwe planning beschikbaar in Praktijkplanner';
+  const { html, text } = await renderPraktijkplannerPlanningAvailableBodies({
+    userName: params.userName,
+  });
+  return sendRenderedEmailRequireResendDelivery({
+    to: params.to,
+    subject,
+    html,
+    text,
+    devLogPayload: {
+      to: params.to,
+      subject,
+      mode: 'notify',
+    },
+    errorLabel: 'Resend Praktijkplanner planning-available email failed',
   });
 }

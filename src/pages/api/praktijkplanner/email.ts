@@ -7,7 +7,10 @@ import {
   sendPraktijkplannerAccessError,
 } from '@/lib/praktijkplanner/access';
 import { isIsoDate, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
-import { sendPraktijkplannerScheduleEmailViaResend } from '@/lib/resend-email';
+import {
+  sendPraktijkplannerPlanningAvailableEmailViaResend,
+  sendPraktijkplannerScheduleEmailViaResend,
+} from '@/lib/resend-email';
 
 type Data = { success: true } | { error: string };
 
@@ -17,13 +20,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
 
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const plannerType = body.plannerType === 'afwezigheden' ? 'afwezigheden' : body.plannerType === 'activiteiten' ? 'activiteiten' : null;
+  const mode = body.mode === 'notify' ? 'notify' : 'schedule';
+  const plannerType =
+    body.plannerType === 'afwezigheden'
+      ? 'afwezigheden'
+      : body.plannerType === 'activiteiten'
+        ? 'activiteiten'
+        : null;
   const capability = plannerType === 'afwezigheden' ? 'afwezigheid:manage' : 'activiteiten:manage';
   const accessResult = await resolvePraktijkplannerAccess(req, body.idwaarneemgroep, capability);
   if (!accessResult.ok) return sendPraktijkplannerAccessError(res, accessResult);
 
   const iddeelnemer = parsePositiveInteger(body.iddeelnemer);
-  if (!iddeelnemer || !plannerType || !isIsoDate(body.start) || !isIsoDate(body.end) || body.start > body.end) {
+  if (!iddeelnemer || !plannerType) {
     return res.status(400).json({ error: 'De e-mailgegevens zijn ongeldig.' });
   }
   if (
@@ -32,6 +41,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }))
   ) {
     return res.status(403).json({ error: 'Geen toegang tot deze deelnemer.' });
+  }
+
+  if (mode === 'notify') {
+    if (plannerType !== 'activiteiten') {
+      return res.status(400).json({ error: 'Meldingen zijn alleen beschikbaar voor activiteiten.' });
+    }
+
+    try {
+      const [participant] = await db
+        .select({
+          login: schema.deelnemers.login,
+          voornaam: schema.deelnemers.voornaam,
+          achternaam: schema.deelnemers.achternaam,
+          name: schema.deelnemers.name,
+        })
+        .from(schema.deelnemers)
+        .where(eq(schema.deelnemers.id, iddeelnemer))
+        .limit(1);
+      const to = participant?.login?.trim();
+      if (!to) {
+        return res.status(400).json({ error: 'Deze deelnemer heeft geen login-e-mailadres.' });
+      }
+      const userName =
+        [participant?.voornaam, participant?.achternaam].filter(Boolean).join(' ') ||
+        participant?.name ||
+        null;
+      const subject = 'Nieuwe planning beschikbaar in Praktijkplanner';
+      const { resendEmailId } = await sendPraktijkplannerPlanningAvailableEmailViaResend({
+        to,
+        userName,
+      });
+      await db.insert(schema.praktijkplanneremaillog).values({
+        idwaarneemgroep: accessResult.access.idwaarneemgroep,
+        iddeelnemer,
+        type: 'activiteiten-notify',
+        ontvanger: to,
+        onderwerp: subject,
+        resendId: resendEmailId,
+        verstuurdDoor: accessResult.access.user.id,
+      });
+      return res.status(200).json({ success: true });
+    } catch (error) {
+      console.error('[praktijkplanner/email]', error);
+      return res.status(502).json({ error: 'De e-mail kon niet worden verstuurd.' });
+    }
+  }
+
+  if (!isIsoDate(body.start) || !isIsoDate(body.end) || body.start > body.end) {
+    return res.status(400).json({ error: 'De e-mailgegevens zijn ongeldig.' });
   }
 
   try {
@@ -130,9 +188,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }
 
     const subject =
-      plannerType === 'activiteiten'
-        ? 'Uw activiteitenplanning'
-        : 'Uw afwezigheden';
+      plannerType === 'activiteiten' ? 'Uw activiteitenplanning' : 'Uw afwezigheden';
     const { resendEmailId } = await sendPraktijkplannerScheduleEmailViaResend({
       to,
       subject,

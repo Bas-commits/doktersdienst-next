@@ -64,6 +64,13 @@
       "when": 1784031000000,
       "tag": "0008_afwezigheidstype_kleur_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784190000000,
+      "tag": "0009_planningherhaling_uitzonderingen",
+      "breakpoints": true
     }
   ]
 }

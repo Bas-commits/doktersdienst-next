@@ -680,9 +680,28 @@ export const planningherhalingslots = pgTable("planningherhalingslots", {
 	idplanning: integer().notNull().references(() => planning.id, { onDelete: "cascade" }),
 	reeksdatum: date().notNull(),
 	isBronslot: boolean("is_bronslot").notNull().default(false),
+	isUitzondering: boolean("is_uitzondering").notNull().default(false),
+	uitzonderingAt: timestamp("uitzondering_at", { mode: "string" }),
 }, (table) => [
 	primaryKey({ columns: [table.idherhaling, table.idplanning] }),
 	unique("planningherhalingslots_planning_unique").on(table.idplanning),
+]);
+
+/** Tombstones for cleared/skipped occurrences of a recurrence series. */
+export const planningherhalinguitzonderingen = pgTable("planningherhalinguitzonderingen", {
+	id: serial().primaryKey().notNull(),
+	idherhaling: integer().notNull().references(() => planningherhalingen.id, { onDelete: "cascade" }),
+	reeksdatum: date().notNull(),
+	iddagdeel: integer().notNull().references(() => dagdelen.id),
+	type: varchar({ length: 30 }).notNull(),
+	createdBy: integer("created_by").references(() => deelnemers.id),
+	createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	unique("planningherhalinguitzonderingen_series_date_daypart_unique").on(
+		table.idherhaling,
+		table.reeksdatum,
+		table.iddagdeel
+	),
 ]);
 
 export const capaciteitsjablonen = pgTable("capaciteitsjablonen", {

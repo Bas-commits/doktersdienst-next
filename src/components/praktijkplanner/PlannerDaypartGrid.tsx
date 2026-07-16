@@ -64,6 +64,7 @@ export function PlannerDaypartGrid({
   cursorTool,
   onCursorToolDismiss,
   renderParticipantActions,
+  getCellClassName,
 }: {
   participants: PraktijkplannerParticipant[];
   dayparts: PraktijkplannerDaypart[];
@@ -78,6 +79,7 @@ export function PlannerDaypartGrid({
   cursorTool?: PlannerCursorTool | null;
   onCursorToolDismiss?: () => void;
   renderParticipantActions?: (participant: PraktijkplannerParticipant) => ReactNode;
+  getCellClassName?: (cell: PlannerDaypartCell) => string | undefined;
 }) {
   const days = weekDates(weekStart);
   const orderedDayparts = [...dayparts].sort((a, b) => a.volgorde - b.volgorde);
@@ -185,7 +187,8 @@ export function PlannerDaypartGrid({
                         onClick={() => onCellClick?.(cell)}
                         className={cn(
                           'group/cell relative flex h-full min-h-12 w-full rounded border border-border/70 text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default disabled:opacity-80',
-                          filled ? 'items-stretch p-0.5' : 'items-center justify-center p-1'
+                          filled ? 'items-stretch p-0.5' : 'items-center justify-center p-1',
+                          getCellClassName?.(cell)
                         )}
                         aria-label={`${participantLabel(participant)} ${datum} ${daypart.naam}`}
                       >

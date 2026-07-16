@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, asc, eq, gte, inArray, lte } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import {
   canAccessPraktijkplannerParticipant,
@@ -7,6 +7,11 @@ import {
   sendPraktijkplannerAccessError,
 } from '@/lib/praktijkplanner/access';
 import { addDays, isIsoDate, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
+import {
+  buildMaterializePlans,
+  occurrenceKey,
+  type PlannerTemplate,
+} from '@/lib/praktijkplanner/herhaling-materialize';
 
 type Data =
   | {
@@ -20,16 +25,6 @@ type Data =
     }
   | { success: true; id?: number }
   | { error: string };
-
-type PlannerTemplate = {
-  datum: string;
-  iddagdeel: number;
-  idactiviteit: number | null;
-  idactiviteitspecificatie: number | null;
-  idplannerlocatie: number | null;
-  idbeschikbaarheidstype: number | null;
-  tasks: Array<{ idtaaktype: number; positie: number }>;
-};
 
 class RecurrenceError extends Error {
   constructor(
@@ -200,32 +195,191 @@ async function getSeriesTemplates(idherhaling: number): Promise<PlannerTemplate[
     }));
 }
 
+async function loadSkipKeys(idherhaling: number): Promise<Set<string>> {
+  const [tombstones, exceptionSlots] = await Promise.all([
+    db
+      .select({
+        reeksdatum: schema.planningherhalinguitzonderingen.reeksdatum,
+        iddagdeel: schema.planningherhalinguitzonderingen.iddagdeel,
+      })
+      .from(schema.planningherhalinguitzonderingen)
+      .where(eq(schema.planningherhalinguitzonderingen.idherhaling, idherhaling)),
+    db
+      .select({
+        reeksdatum: schema.planningherhalingslots.reeksdatum,
+        iddagdeel: schema.planning.iddagdeel,
+      })
+      .from(schema.planningherhalingslots)
+      .innerJoin(schema.planning, eq(schema.planningherhalingslots.idplanning, schema.planning.id))
+      .where(
+        and(
+          eq(schema.planningherhalingslots.idherhaling, idherhaling),
+          eq(schema.planningherhalingslots.isUitzondering, true)
+        )
+      ),
+  ]);
+  const keys = new Set<string>();
+  for (const row of tombstones) {
+    if (row.reeksdatum != null && row.iddagdeel != null) {
+      keys.add(occurrenceKey(row.reeksdatum, row.iddagdeel));
+    }
+  }
+  for (const row of exceptionSlots) {
+    if (row.reeksdatum != null && row.iddagdeel != null) {
+      keys.add(occurrenceKey(row.reeksdatum, row.iddagdeel));
+    }
+  }
+  return keys;
+}
+
+async function collectTargetPlanningIds(
+  idwaarneemgroep: number,
+  iddeelnemer: number,
+  targetStarts: string[],
+  ignoredPlanningIds: readonly number[] = []
+): Promise<number[]> {
+  if (targetStarts.length === 0) return [];
+  const ignored = new Set(ignoredPlanningIds);
+  const weekFilters = targetStarts.map((targetStart) =>
+    and(gte(schema.planning.datum, targetStart), lte(schema.planning.datum, addDays(targetStart, 6)))
+  );
+  const candidates = await db
+    .select({ id: schema.planning.id })
+    .from(schema.planning)
+    .where(
+      and(
+        eq(schema.planning.idwaarneemgroep, idwaarneemgroep),
+        eq(schema.planning.iddeelnemer, iddeelnemer),
+        or(...weekFilters)
+      )
+    );
+  return candidates
+    .map((candidate) => candidate.id)
+    .filter((id): id is number => id != null && !ignored.has(id));
+}
+
 async function assertNoTargetCollision(
   idwaarneemgroep: number,
   iddeelnemer: number,
   targetStarts: string[],
   ignoredPlanningIds: readonly number[] = []
 ) {
-  const ignored = new Set(ignoredPlanningIds);
-  for (const targetStart of targetStarts) {
-    const targetEnd = addDays(targetStart, 6);
-    const candidates = await db
-      .select({ id: schema.planning.id })
-      .from(schema.planning)
-      .where(
-        and(
-          eq(schema.planning.idwaarneemgroep, idwaarneemgroep),
-          eq(schema.planning.iddeelnemer, iddeelnemer),
-          gte(schema.planning.datum, targetStart),
-          lte(schema.planning.datum, targetEnd)
-        )
-      );
-    if (candidates.some((candidate) => candidate.id != null && !ignored.has(candidate.id))) {
-      throw new RecurrenceError(
-        `Er bestaat al een planning in de doelweek van ${targetStart}.`,
-        409
-      );
-    }
+  const colliding = await collectTargetPlanningIds(
+    idwaarneemgroep,
+    iddeelnemer,
+    targetStarts,
+    ignoredPlanningIds
+  );
+  if (colliding.length > 0) {
+    throw new RecurrenceError('Er bestaat al een planning in een of meer doelweken.', 409);
+  }
+}
+
+/** Deletes existing planning in target weeks (cascades tasks, availability, herhalingslots). */
+async function clearTargetWeeksPlanning(
+  idwaarneemgroep: number,
+  iddeelnemer: number,
+  targetStarts: string[]
+) {
+  const ids = await collectTargetPlanningIds(idwaarneemgroep, iddeelnemer, targetStarts);
+  if (ids.length === 0) return;
+  await db.delete(schema.planning).where(inArray(schema.planning.id, ids));
+}
+
+async function materializeSeriesWithTx(
+  // Drizzle transaction client — same insert/query surface as `db`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  input: {
+    idherhaling: number;
+    idwaarneemgroep: number;
+    iddeelnemer: number;
+    sourceStart: string;
+    targetStarts: string[];
+    templates: PlannerTemplate[];
+    userId: number;
+    skipKeys?: ReadonlySet<string>;
+  }
+) {
+  const plans = buildMaterializePlans({
+    sourceStart: input.sourceStart,
+    targetStarts: input.targetStarts,
+    templates: input.templates,
+    skipKeys: input.skipKeys,
+  });
+  if (plans.length === 0) return;
+
+  const created = await tx
+    .insert(schema.planning)
+    .values(
+      plans.map((plan) => ({
+        idwaarneemgroep: input.idwaarneemgroep,
+        iddeelnemer: input.iddeelnemer,
+        datum: plan.datum,
+        iddagdeel: plan.iddagdeel,
+        idactiviteit: plan.idactiviteit,
+        idactiviteitspecificatie: plan.idactiviteitspecificatie,
+        idplannerlocatie: plan.idplannerlocatie,
+        createdBy: input.userId,
+        updatedBy: input.userId,
+      }))
+    )
+    .returning({
+      id: schema.planning.id,
+      datum: schema.planning.datum,
+      iddagdeel: schema.planning.iddagdeel,
+    });
+
+  const idByKey = new Map<string, number>();
+  for (const row of created as Array<{ id: number | null; datum: string | null; iddagdeel: number | null }>) {
+    if (row.id == null || row.datum == null || row.iddagdeel == null) continue;
+    idByKey.set(occurrenceKey(row.datum, row.iddagdeel), row.id);
+  }
+
+  const tasks = plans.flatMap((plan) => {
+    const idplanning = idByKey.get(occurrenceKey(plan.datum, plan.iddagdeel));
+    if (idplanning == null) return [];
+    return plan.tasks.map((task) => ({
+      idplanning,
+      idtaaktype: task.idtaaktype,
+      positie: task.positie,
+    }));
+  });
+  if (tasks.length > 0) {
+    await tx.insert(schema.planningtaak).values(tasks);
+  }
+
+  const availability = plans.flatMap((plan) => {
+    if (plan.idbeschikbaarheidstype == null) return [];
+    const idplanning = idByKey.get(occurrenceKey(plan.datum, plan.iddagdeel));
+    if (idplanning == null) return [];
+    return [
+      {
+        idplanning,
+        idbeschikbaarheidstype: plan.idbeschikbaarheidstype,
+        updatedBy: input.userId,
+      },
+    ];
+  });
+  if (availability.length > 0) {
+    await tx.insert(schema.planningbeschikbaarheid).values(availability);
+  }
+
+  const links = plans.flatMap((plan) => {
+    const idplanning = idByKey.get(occurrenceKey(plan.datum, plan.iddagdeel));
+    if (idplanning == null) return [];
+    return [
+      {
+        idherhaling: input.idherhaling,
+        idplanning,
+        reeksdatum: plan.datum,
+        isBronslot: plan.isBronslot,
+        isUitzondering: false,
+      },
+    ];
+  });
+  if (links.length > 0) {
+    await tx.insert(schema.planningherhalingslots).values(links);
   }
 }
 
@@ -237,55 +391,10 @@ async function materializeSeries(input: {
   targetStarts: string[];
   templates: PlannerTemplate[];
   userId: number;
+  skipKeys?: ReadonlySet<string>;
 }) {
   await db.transaction(async (tx) => {
-    for (const targetStart of input.targetStarts) {
-      for (const template of input.templates) {
-        const offset = Math.round(
-          (new Date(`${template.datum}T12:00:00`).getTime() -
-            new Date(`${input.sourceStart}T12:00:00`).getTime()) /
-            (24 * 60 * 60 * 1000)
-        );
-        const datum = addDays(targetStart, offset);
-        const [created] = await tx
-          .insert(schema.planning)
-          .values({
-            idwaarneemgroep: input.idwaarneemgroep,
-            iddeelnemer: input.iddeelnemer,
-            datum,
-            iddagdeel: template.iddagdeel,
-            idactiviteit: template.idactiviteit,
-            idactiviteitspecificatie: template.idactiviteitspecificatie,
-            idplannerlocatie: template.idplannerlocatie,
-            createdBy: input.userId,
-            updatedBy: input.userId,
-          })
-          .returning({ id: schema.planning.id });
-        if (!created?.id) throw new RecurrenceError('Herhaling kon niet worden opgeslagen.');
-        if (template.tasks.length > 0) {
-          await tx.insert(schema.planningtaak).values(
-            template.tasks.map((task) => ({
-              idplanning: created.id,
-              idtaaktype: task.idtaaktype,
-              positie: task.positie,
-            }))
-          );
-        }
-        if (template.idbeschikbaarheidstype != null) {
-          await tx.insert(schema.planningbeschikbaarheid).values({
-            idplanning: created.id,
-            idbeschikbaarheidstype: template.idbeschikbaarheidstype,
-            updatedBy: input.userId,
-          });
-        }
-        await tx.insert(schema.planningherhalingslots).values({
-          idherhaling: input.idherhaling,
-          idplanning: created.id,
-          reeksdatum: datum,
-          isBronslot: targetStart === input.targetStarts[0],
-        });
-      }
-    }
+    await materializeSeriesWithTx(tx, input);
   });
 }
 
@@ -390,15 +499,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         iddeelnemer,
         bronStartdatum
       );
-      const targetStarts = action === 'copyWeek' ? [startdatum] : datesForFrequency(startdatum, einddatum, frequencyWeeks);
+      const targetStarts =
+        action === 'copyWeek' ? [startdatum] : datesForFrequency(startdatum, einddatum, frequencyWeeks);
       if (targetStarts.includes(bronStartdatum)) {
         throw new RecurrenceError('De doelweek moet verschillen van de bronweek.');
       }
-      await assertNoTargetCollision(
-        accessResult.access.idwaarneemgroep,
-        iddeelnemer,
-        targetStarts
-      );
+      const overwrite = body.overwrite === true;
+      if (overwrite) {
+        await clearTargetWeeksPlanning(
+          accessResult.access.idwaarneemgroep,
+          iddeelnemer,
+          targetStarts
+        );
+      } else {
+        await assertNoTargetCollision(
+          accessResult.access.idwaarneemgroep,
+          iddeelnemer,
+          targetStarts
+        );
+      }
 
       if (action === 'copyWeek') {
         const [copy] = await db
@@ -480,6 +599,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }
 
     if (action === 'delete') {
+      const mode = body.mode === 'deletePlanning' ? 'deletePlanning' : 'unlink';
       const vanaf = body.vanaf ? readDate(body.vanaf, 'Vanaf') : null;
       const tot = body.tot ? readDate(body.tot, 'Tot') : null;
       const linked = await db
@@ -489,26 +609,91 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         })
         .from(schema.planningherhalingslots)
         .where(eq(schema.planningherhalingslots.idherhaling, idherhaling));
-      const idsToDelete = linked
-        .filter(
-          (row) =>
-            row.idplanning != null &&
-            row.reeksdatum != null &&
-            (!vanaf || row.reeksdatum >= vanaf) &&
-            (!tot || row.reeksdatum <= tot)
-        )
-        .map((row) => row.idplanning as number);
-      if (idsToDelete.length === 0) {
+      const matching = linked.filter(
+        (row) =>
+          row.idplanning != null &&
+          row.reeksdatum != null &&
+          (!vanaf || row.reeksdatum >= vanaf) &&
+          (!tot || row.reeksdatum <= tot)
+      );
+      const idsInRange = matching.map((row) => row.idplanning as number);
+
+      if (mode === 'unlink') {
+        // Delete series (cascades links + uitzonderingen); keep planning rows.
+        if (!vanaf && !tot) {
+          await db
+            .delete(schema.planningherhalingen)
+            .where(eq(schema.planningherhalingen.id, idherhaling));
+          return res.status(200).json({ success: true });
+        }
+        if (idsInRange.length === 0) {
+          throw new RecurrenceError('Er zijn geen herhalingsslots in dit bereik.', 404);
+        }
+        await db.transaction(async (tx) => {
+          await tx
+            .delete(schema.planningherhalingslots)
+            .where(
+              and(
+                eq(schema.planningherhalingslots.idherhaling, idherhaling),
+                inArray(schema.planningherhalingslots.idplanning, idsInRange)
+              )
+            );
+          await tx
+            .delete(schema.planningherhalinguitzonderingen)
+            .where(
+              and(
+                eq(schema.planningherhalinguitzonderingen.idherhaling, idherhaling),
+                vanaf ? gte(schema.planningherhalinguitzonderingen.reeksdatum, vanaf) : sql`true`,
+                tot ? lte(schema.planningherhalinguitzonderingen.reeksdatum, tot) : sql`true`
+              )
+            );
+          const remaining = await tx
+            .select({ reeksdatum: schema.planningherhalingslots.reeksdatum })
+            .from(schema.planningherhalingslots)
+            .where(eq(schema.planningherhalingslots.idherhaling, idherhaling));
+          if (remaining.length === 0) {
+            await tx
+              .delete(schema.planningherhalingen)
+              .where(eq(schema.planningherhalingen.id, idherhaling));
+          } else {
+            const values = remaining
+              .map((row) => row.reeksdatum)
+              .filter((value): value is string => value != null)
+              .sort();
+            await tx
+              .update(schema.planningherhalingen)
+              .set({
+                startdatum: values[0],
+                einddatum: values[values.length - 1],
+                updatedBy: accessResult.access.user.id,
+                updatedAt: new Date().toISOString(),
+              })
+              .where(eq(schema.planningherhalingen.id, idherhaling));
+          }
+        });
+        return res.status(200).json({ success: true });
+      }
+
+      // deletePlanning: remove linked planning (cascades links), then series if empty.
+      if (idsInRange.length === 0 && !vanaf && !tot) {
+        await db
+          .delete(schema.planningherhalingen)
+          .where(eq(schema.planningherhalingen.id, idherhaling));
+        return res.status(200).json({ success: true });
+      }
+      if (idsInRange.length === 0) {
         throw new RecurrenceError('Er zijn geen herhalingsslots in dit bereik.', 404);
       }
       await db.transaction(async (tx) => {
-        await tx.delete(schema.planning).where(inArray(schema.planning.id, idsToDelete));
+        await tx.delete(schema.planning).where(inArray(schema.planning.id, idsInRange));
         const remaining = await tx
           .select({ reeksdatum: schema.planningherhalingslots.reeksdatum })
           .from(schema.planningherhalingslots)
           .where(eq(schema.planningherhalingslots.idherhaling, idherhaling));
         if (remaining.length === 0) {
-          await tx.delete(schema.planningherhalingen).where(eq(schema.planningherhalingen.id, idherhaling));
+          await tx
+            .delete(schema.planningherhalingen)
+            .where(eq(schema.planningherhalingen.id, idherhaling));
         } else {
           const values = remaining
             .map((row) => row.reeksdatum)
@@ -536,22 +721,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         throw new RecurrenceError('De herhalingsinstellingen zijn ongeldig.');
       }
 
-      const [templates, linked] = await Promise.all([
+      const [templates, linked, skipKeys] = await Promise.all([
         getSeriesTemplates(idherhaling),
         db
-          .select({ idplanning: schema.planningherhalingslots.idplanning })
+          .select({
+            idplanning: schema.planningherhalingslots.idplanning,
+            isUitzondering: schema.planningherhalingslots.isUitzondering,
+          })
           .from(schema.planningherhalingslots)
           .where(eq(schema.planningherhalingslots.idherhaling, idherhaling)),
+        loadSkipKeys(idherhaling),
       ]);
       const linkedPlanningIds = linked
-        .map((row) => row.idplanning)
-        .filter((id): id is number => id != null);
+        .filter((row) => row.idplanning != null && !row.isUitzondering)
+        .map((row) => row.idplanning as number);
+      const keepPlanningIds = linked
+        .filter((row) => row.idplanning != null && row.isUitzondering)
+        .map((row) => row.idplanning as number);
       const targetStarts = datesForFrequency(startdatum, einddatum, frequentieWeken);
       await assertNoTargetCollision(
         accessResult.access.idwaarneemgroep,
         series.iddeelnemer,
         targetStarts,
-        linkedPlanningIds
+        [...linkedPlanningIds, ...keepPlanningIds]
       );
 
       await db.transaction(async (tx) => {
@@ -569,53 +761,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           })
           .where(eq(schema.planningherhalingen.id, idherhaling));
 
-        for (const targetStart of targetStarts) {
-          for (const template of templates) {
-            const offset = Math.round(
-              (new Date(`${template.datum}T12:00:00`).getTime() -
-                new Date(`${series.startdatum}T12:00:00`).getTime()) /
-                (24 * 60 * 60 * 1000)
-            );
-            const datum = addDays(targetStart, offset);
-            const [created] = await tx
-              .insert(schema.planning)
-              .values({
-                idwaarneemgroep: accessResult.access.idwaarneemgroep,
-                iddeelnemer: series.iddeelnemer,
-                datum,
-                iddagdeel: template.iddagdeel,
-                idactiviteit: template.idactiviteit,
-                idactiviteitspecificatie: template.idactiviteitspecificatie,
-                idplannerlocatie: template.idplannerlocatie,
-                createdBy: accessResult.access.user.id,
-                updatedBy: accessResult.access.user.id,
-              })
-              .returning({ id: schema.planning.id });
-            if (!created?.id) throw new RecurrenceError('Herhaling kon niet worden bijgewerkt.');
-            if (template.tasks.length > 0) {
-              await tx.insert(schema.planningtaak).values(
-                template.tasks.map((task) => ({
-                  idplanning: created.id,
-                  idtaaktype: task.idtaaktype,
-                  positie: task.positie,
-                }))
-              );
-            }
-            if (template.idbeschikbaarheidstype != null) {
-              await tx.insert(schema.planningbeschikbaarheid).values({
-                idplanning: created.id,
-                idbeschikbaarheidstype: template.idbeschikbaarheidstype,
-                updatedBy: accessResult.access.user.id,
-              });
-            }
-            await tx.insert(schema.planningherhalingslots).values({
-              idherhaling,
-              idplanning: created.id,
-              reeksdatum: datum,
-              isBronslot: targetStart === targetStarts[0],
-            });
-          }
-        }
+        await materializeSeriesWithTx(tx, {
+          idherhaling,
+          idwaarneemgroep: accessResult.access.idwaarneemgroep,
+          iddeelnemer: series.iddeelnemer,
+          sourceStart: series.startdatum,
+          targetStarts,
+          templates,
+          userId: accessResult.access.user.id,
+          skipKeys,
+        });
       });
       return res.status(200).json({ success: true, id: idherhaling });
     }

@@ -7,7 +7,6 @@ import {
   isUserInWaarneemgroep,
   type AuthenticatedUser,
 } from '@/lib/api-auth';
-import { isPraktijkplannerEnabled } from './feature-flag';
 
 export type PraktijkplannerCapability =
   | 'activiteiten:read'
@@ -67,12 +66,6 @@ export async function resolvePraktijkplannerAccess(
     return {
       ok: false,
       error: { status: 400, error: 'Een geldige waarneemgroep is verplicht.' },
-    };
-  }
-  if (!isPraktijkplannerEnabled()) {
-    return {
-      ok: false,
-      error: { status: 403, error: 'Praktijkplanner is momenteel nog niet beschikbaar.' },
     };
   }
 

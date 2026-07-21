@@ -13,10 +13,6 @@ vi.mock('@/lib/api-auth', () => ({
   isUserInWaarneemgroep: mocks.isUserInWaarneemgroep,
 }));
 
-vi.mock('./feature-flag', () => ({
-  isPraktijkplannerEnabled: () => true,
-}));
-
 vi.mock('@/db', () => ({
   db: {},
   schema: {},

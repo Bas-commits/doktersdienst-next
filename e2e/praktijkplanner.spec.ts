@@ -32,14 +32,16 @@ test.describe('Praktijkplanner deelnemer flow', () => {
   test('switches products and opens all personal screens', async ({ page }) => {
     await signIn(page, deelnemerCredentials);
     await page.getByTestId('header-section-switch').click();
-    await expect(page).toHaveURL(/\/praktijkplanner\/activiteiten$/);
-    await expect(page.getByRole('heading', { name: 'Activiteiten planner' })).toBeVisible();
+    await expect(page).toHaveURL(/\/praktijkplanner\/rooster-inzien$/);
+    await expect(page.getByRole('heading', { name: 'Rooster inzien' })).toBeVisible();
+    await expect(page.getByText('Rooster inzien')).toBeVisible();
     await expect(page.getByText('Afwezigheidsplanner dokter')).toBeVisible();
     await expect(page.getByText('Capaciteits rapportage')).toBeVisible();
     await expect(page.getByText('Absentie telling')).toBeVisible();
+    await expect(page.getByText('Activiteiten planner')).toHaveCount(0);
 
     await page.getByText('Afwezigheidsplanner dokter').click();
-    await expect(page.getByRole('heading', { name: 'Afwezigheidsplanner dokter' })).toBeVisible();
+    await expect(page).toHaveURL(/\/praktijkplanner\/afwezigheidsplanner-dokter$/);
     await page.getByTestId('header-section-switch').click();
     await expect(page).toHaveURL('/rooster-inzien');
   });
@@ -51,15 +53,22 @@ test.describe('Praktijkplanner secretaris flow', () => {
     'Set PLAYWRIGHT_PP_SECRETARIS_EMAIL and PLAYWRIGHT_PP_SECRETARIS_PASSWORD to run this flow.'
   );
 
-  test('opens group absence and capacity screens', async ({ page }) => {
+  test('opens group absence, capacity and management screens', async ({ page }) => {
     await signIn(page, secretarisCredentials);
     await page.getByTestId('header-section-switch').click();
+    await expect(page).toHaveURL(/\/praktijkplanner\/activiteiten$/);
+    await expect(page.getByText('Deze waarneemgroep')).toBeVisible();
+    await expect(page.getByText('Lijst deelnemers')).toBeVisible();
+    await expect(page.getByText('Activiteiten planner')).toBeVisible();
+
     await page.getByText('Afwezigheidsplanner', { exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Afwezigheidsplanner' })).toBeVisible();
-    await page.getByText('Capaciteit planner', { exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Capaciteit planner' })).toBeVisible();
-    await page.getByText('Capaciteit overzicht', { exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Capaciteit overzicht' })).toBeVisible();
+    await page.getByText('Capaciteitsplanner', { exact: true }).click();
+    await expect(page.getByRole('heading', { name: /Capaciteits\s?planner/i })).toBeVisible();
+    await page.getByText('Capaciteitsoverzicht', { exact: true }).click();
+    await expect(page.getByRole('heading', { name: /Capaciteits\s?overzicht/i })).toBeVisible();
+    await page.getByText('Plannerbeheer', { exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Plannerbeheer' })).toBeVisible();
   });
 });
 

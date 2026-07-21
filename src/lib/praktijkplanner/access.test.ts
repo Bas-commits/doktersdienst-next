@@ -84,12 +84,27 @@ describe('resolvePraktijkplannerAccess', () => {
     expect(mocks.isUserInWaarneemgroep).not.toHaveBeenCalledWith(12, 9);
   });
 
-  it('requires a global administrator for master-data management', async () => {
+  it('allows a secretaris to manage planner master data', async () => {
     mocks.hasGroupManagementAccess.mockResolvedValue(true);
+
+    await expect(resolvePraktijkplannerAccess(request, 9, 'beheer:manage')).resolves.toMatchObject({
+      ok: true,
+      access: {
+        idwaarneemgroep: 9,
+        isManager: true,
+      },
+    });
+  });
+
+  it('blocks a regular participant from master-data management', async () => {
+    mocks.hasGroupManagementAccess.mockResolvedValue(false);
 
     await expect(resolvePraktijkplannerAccess(request, 9, 'beheer:manage')).resolves.toEqual({
       ok: false,
-      error: { status: 403, error: 'Deze actie is alleen beschikbaar voor beheerders.' },
+      error: {
+        status: 403,
+        error: 'Deze actie is alleen beschikbaar voor secretarissen en beheerders.',
+      },
     });
   });
 

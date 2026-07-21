@@ -66,7 +66,12 @@ function currentWeekStart() {
   return startOfIsoWeek(formatIsoDate(new Date()));
 }
 
-function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
+export function ActivitiesContent({
+  groupId,
+  data,
+  readOnly = false,
+}: PraktijkplannerPageContext & { readOnly?: boolean }) {
+  const canEdit = data.isManager && !readOnly;
   const [weekStart, setWeekStart] = useState(currentWeekStart);
   const [slots, setSlots] = useState<PraktijkplannerPlanningSlot[]>([]);
   const [absenceSlots, setAbsenceSlots] = useState<PraktijkplannerAbsenceSlot[]>([]);
@@ -437,11 +442,11 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
       datum: string;
       daypart: { id: number };
     }) => {
-      if (!data.isManager) return true;
+      if (!canEdit) return true;
       const absence = absenceMap.get(slotKey(participant.id, datum, daypart.id));
       return Boolean(absence && !absence.isVoorlopig);
     },
-    [absenceMap, data.isManager]
+    [absenceMap, canEdit]
   );
 
   const isCellUnavailable = useCallback(
@@ -504,7 +509,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   }, [clearSelection]);
 
   const cursorTool = useMemo((): PlannerCursorTool | null => {
-    if (!data.isManager) return null;
+    if (!canEdit) return null;
     if (clearMode) {
       return {
         icon: <Trash2 className="text-white" aria-hidden />,
@@ -590,8 +595,8 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         ) : undefined,
     };
   }, [
+    canEdit,
     clearMode,
-    data.isManager,
     data.masterData.activities,
     data.masterData.availabilityTypes,
     data.masterData.locations,
@@ -614,7 +619,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
       datum: string;
       daypart: { id: number };
     }) => {
-      if (!data.isManager) {
+      if (!canEdit) {
         toast.info('Alleen secretarissen en beheerders kunnen de activiteitenplanning aanpassen.');
         return;
       }
@@ -755,7 +760,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
       absenceMap,
       baseSlotMap,
       clearMode,
-      data.isManager,
+      canEdit,
       data.masterData.activities,
       data.masterData.availabilityTypes,
       data.masterData.locations,
@@ -834,7 +839,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
       
 
       <div className="flex items-start gap-4">
-        {data.isManager ? (
+        {canEdit ? (
           <div className="shrink-0 self-stretch">
             <div
               className="sticky top-4"
@@ -900,7 +905,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
                 hoverEnabled: cursorTool == null,
               })
             }
-            onCellClick={queueCell}
+            onCellClick={canEdit ? queueCell : undefined}
             isCellDisabled={isCellDisabled}
             isCellUnavailable={isCellUnavailable}
             isCellFilled={isCellFilled}
@@ -908,12 +913,12 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
             holidayLabels={holidays}
             cursorTool={cursorTool}
             onCursorToolDismiss={dismissCursorTool}
-            renderParticipantActions={data.isManager ? renderParticipantActions : undefined}
+            renderParticipantActions={canEdit ? renderParticipantActions : undefined}
           />
         </div>
       </div>
 
-      {actionModal?.type === 'copy' ? (
+      {canEdit && actionModal?.type === 'copy' ? (
         <PlannerCopyWeekModal
           open
           onClose={() => setActionModal(null)}
@@ -926,7 +931,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           onCopied={refreshAfterRecurrence}
         />
       ) : null}
-      {actionModal?.type === 'repeat' ? (
+      {canEdit && actionModal?.type === 'repeat' ? (
         <PlannerRepeatWeekModal
           open
           onClose={() => setActionModal(null)}
@@ -937,7 +942,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           onCreated={refreshAfterRecurrence}
         />
       ) : null}
-      {actionModal?.type === 'email' ? (
+      {canEdit && actionModal?.type === 'email' ? (
         <PlannerNotifyPlanningModal
           open
           onClose={() => setActionModal(null)}
@@ -946,7 +951,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           participantName={participantDisplayName(actionModal.participant)}
         />
       ) : null}
-      {actionModal?.type === 'manageHerhaling' ? (
+      {canEdit && actionModal?.type === 'manageHerhaling' ? (
         <PlannerManageHerhalingModal
           open
           onClose={() => setActionModal(null)}

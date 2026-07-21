@@ -258,8 +258,8 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
     }
   };
 
-  if (!data.isAdmin) {
-    return <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Plannerbeheer is alleen beschikbaar voor beheerders.</p>;
+  if (!data.isManager) {
+    return <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Plannerbeheer is alleen beschikbaar voor secretarissen en beheerders.</p>;
   }
 
   if (tab === 'dayparts') {

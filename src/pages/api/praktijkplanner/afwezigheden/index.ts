@@ -197,17 +197,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       return res.status(400).json({ error: 'Een geldig datumbereik is verplicht.' });
     }
 
-    const participantId =
-      !accessResult.access.isManager || requestedParticipantId === accessResult.access.user.id
-        ? accessResult.access.user.id
-        : requestedParticipantId;
+    // No iddeelnemer → full group (needed for rooster overlay). Specific other
+    // participants remain self-or-manager only.
+    const scopedParticipantId =
+      requestedParticipantId == null
+        ? undefined
+        : accessResult.access.isManager || requestedParticipantId === accessResult.access.user.id
+          ? requestedParticipantId
+          : accessResult.access.user.id;
+
     const canAccessParticipant =
-      participantId == null
+      scopedParticipantId == null
         ? true
-        : await canAccessPraktijkplannerParticipant(accessResult.access, participantId);
-    if (participantId != null && !canAccessParticipant) {
+        : await canAccessPraktijkplannerParticipant(accessResult.access, scopedParticipantId);
+    if (scopedParticipantId != null && !canAccessParticipant) {
       const error =
-        participantId === accessResult.access.user.id
+        scopedParticipantId === accessResult.access.user.id
           ? 'U bent geen actieve deelnemer in deze waarneemgroep.'
           : 'Geen toegang tot deze deelnemer.';
       return res.status(403).json({ error });
@@ -221,7 +226,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             accessResult.access.idwaarneemgroep,
             start,
             end,
-            participantId ?? undefined
+            scopedParticipantId ?? undefined
           ),
         });
     } catch (error) {

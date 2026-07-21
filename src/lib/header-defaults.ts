@@ -10,7 +10,9 @@ export const DEFAULT_ASSET_URLS: AssetUrls = {
 
 export const DEFAULT_ROUTES: Record<string, string> = {
   rooster_inzien: '/rooster-inzien',
-  spreekuren: '/praktijkplanner/activiteiten',
+  spreekuren: '/praktijkplanner',
+  praktijkplanner_home: '/praktijkplanner',
+  praktijkplanner_rooster_inzien: '/praktijkplanner/rooster-inzien',
   praktijkplanner_activiteiten: '/praktijkplanner/activiteiten',
   praktijkplanner_afwezigheidsplanner_dokter: '/praktijkplanner/afwezigheidsplanner-dokter',
   praktijkplanner_dokter_activiteiten: '/praktijkplanner/dokter-activiteiten',
@@ -19,6 +21,8 @@ export const DEFAULT_ROUTES: Record<string, string> = {
   praktijkplanner_capaciteitsplanner: '/praktijkplanner/capaciteitsplanner',
   praktijkplanner_capaciteitsoverzicht: '/praktijkplanner/capaciteitsoverzicht',
   praktijkplanner_beheer: '/praktijkplanner/beheer',
+  praktijkplanner_waarneemgroep_wijzigen: '/praktijkplanner/waarneemgroep-wijzigen',
+  praktijkplanner_lijst_deelnemers: '/praktijkplanner/lijst-deelnemers',
   waarneemgroep_gegevens: '/waarneemgroep-gegevens',
   waarneemgroep_wissel: '/waarneemgroep-wissel',
   regio_toevoegen: '/regio-toevoegen',

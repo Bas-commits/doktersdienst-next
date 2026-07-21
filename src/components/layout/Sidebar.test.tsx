@@ -12,7 +12,7 @@ import {
 } from '@/lib/roles';
 
 vi.mock('next/router', () => ({
-  useRouter: () => ({ pathname: '/praktijkplanner/activiteiten' }),
+  useRouter: () => ({ pathname: '/praktijkplanner/afwezigheidsplanner-dokter' }),
 }));
 
 vi.mock('next/link', () => ({
@@ -36,26 +36,45 @@ describe('Praktijkplanner Sidebar', () => {
     cleanup();
     render(<Sidebar section="praktijkplanner" roleTier={GROEP_DEELNEMER} />);
 
-    expect(screen.getByText('Activiteiten planner')).toBeInTheDocument();
+    expect(screen.getByText('Rooster inzien')).toBeInTheDocument();
     expect(screen.getByText('Afwezigheidsplanner dokter')).toBeInTheDocument();
-    expect(screen.queryByText('Capaciteit planner')).not.toBeInTheDocument();
+    expect(screen.getByText('Absentie telling')).toBeInTheDocument();
+    expect(screen.getByText('Capaciteits rapportage')).toBeInTheDocument();
+    expect(screen.queryByText('Activiteiten planner')).not.toBeInTheDocument();
+    expect(screen.queryByText('Deze waarneemgroep')).not.toBeInTheDocument();
+    expect(screen.queryByText('Capaciteitsplanner')).not.toBeInTheDocument();
     expect(screen.queryByText('Plannerbeheer')).not.toBeInTheDocument();
   });
 
-  it('shows capacity pages for a secretaris but not admin-only planner management', () => {
+  it('shows secretaris pages including Plannerbeheer and doktersdienst embeds', () => {
     cleanup();
     render(<Sidebar section="praktijkplanner" roleTier={GROEP_SECRETARIS} />);
 
+    expect(screen.getByText('Deze waarneemgroep')).toBeInTheDocument();
+    expect(screen.getByText('Lijst deelnemers')).toBeInTheDocument();
+    expect(screen.getByText('Activiteiten planner')).toBeInTheDocument();
     expect(screen.getByText('Afwezigheidsplanner')).toBeInTheDocument();
-    expect(screen.getAllByText('Capaciteit planner').length).toBeGreaterThan(0);
-    expect(screen.getByText('Capaciteit overzicht')).toBeInTheDocument();
-    expect(screen.queryByText('Plannerbeheer')).not.toBeInTheDocument();
+    expect(screen.getByText('Capaciteitsplanner')).toBeInTheDocument();
+    expect(screen.getByText('Capaciteitsoverzicht')).toBeInTheDocument();
+    expect(screen.getByText('Plannerbeheer')).toBeInTheDocument();
+
+    expect(screen.getByText('Deze waarneemgroep').closest('a')).toHaveAttribute(
+      'href',
+      '/praktijkplanner/waarneemgroep-wijzigen'
+    );
+    expect(screen.getByText('Lijst deelnemers').closest('a')).toHaveAttribute(
+      'href',
+      '/praktijkplanner/lijst-deelnemers'
+    );
   });
 
-  it('shows Plannerbeheer for an administrator', () => {
+  it('shows deelnemer and secretaris pages for an administrator', () => {
     cleanup();
     render(<Sidebar section="praktijkplanner" roleTier={GROEP_ADMINISTRATOR} />);
 
+    expect(screen.getByText('Afwezigheidsplanner dokter')).toBeInTheDocument();
+    expect(screen.getByText('Activiteiten planner')).toBeInTheDocument();
     expect(screen.getByText('Plannerbeheer')).toBeInTheDocument();
+    expect(screen.queryByText('Admin')).not.toBeInTheDocument();
   });
 });

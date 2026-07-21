@@ -133,11 +133,11 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   },
 ];
 
-const PRAKTIJKPLANNER_MAIN_NAV_ITEMS: NavItem[] = [
+const PRAKTIJKPLANNER_DEELNEMER_NAV_ITEMS: NavItem[] = [
   {
-    id: 'praktijkplanner-activiteiten',
-    label: 'Activiteiten planner',
-    href: '/praktijkplanner/activiteiten',
+    id: 'praktijkplanner-rooster-inzien',
+    label: 'Rooster inzien',
+    href: '/praktijkplanner/rooster-inzien',
     icon: <Calendar className="size-4 shrink-0" />,
   },
   {
@@ -147,41 +147,56 @@ const PRAKTIJKPLANNER_MAIN_NAV_ITEMS: NavItem[] = [
     icon: <Palmtree className="size-4 shrink-0" />,
   },
   {
-    id: 'praktijkplanner-dokter-activiteiten',
-    label: 'Capaciteits rapportage',
-    href: '/praktijkplanner/dokter-activiteiten',
-    icon: <List className="size-4 shrink-0" />,
-  },
-  {
     id: 'praktijkplanner-dokter-afwezigheid',
     label: 'Absentie telling',
     href: '/praktijkplanner/dokter-afwezigheid',
     icon: <Clock className="size-4 shrink-0" />,
   },
+  {
+    id: 'praktijkplanner-dokter-activiteiten',
+    label: 'Capaciteits rapportage',
+    href: '/praktijkplanner/dokter-activiteiten',
+    icon: <List className="size-4 shrink-0" />,
+  },
 ];
 
-const PRAKTIJKPLANNER_MANAGER_NAV_ITEMS: NavItem[] = [
+const PRAKTIJKPLANNER_SECRETARIS_NAV_ITEMS: NavItem[] = [
+  {
+    id: 'praktijkplanner-waarneemgroep-wijzigen',
+    label: 'Deze waarneemgroep',
+    href: '/praktijkplanner/waarneemgroep-wijzigen',
+    icon: <PencilLine className="size-4 shrink-0" />,
+  },
+  {
+    id: 'praktijkplanner-lijst-deelnemers',
+    label: 'Lijst deelnemers',
+    href: '/praktijkplanner/lijst-deelnemers',
+    icon: <List className="size-4 shrink-0" />,
+  },
+  {
+    id: 'praktijkplanner-activiteiten',
+    label: 'Activiteiten planner',
+    href: '/praktijkplanner/activiteiten',
+    icon: <Calendar className="size-4 shrink-0" />,
+  },
   {
     id: 'praktijkplanner-afwezigheidsplanner',
     label: 'Afwezigheidsplanner',
     href: '/praktijkplanner/afwezigheidsplanner',
-    icon: <PencilLine className="size-4 shrink-0" />,
+    icon: <Palmtree className="size-4 shrink-0" />,
   },
   {
     id: 'praktijkplanner-capaciteitsplanner',
-    label: 'Capaciteits planner',
+    label: 'Capaciteitsplanner',
     href: '/praktijkplanner/capaciteitsplanner',
     icon: <MapPin className="size-4 shrink-0" />,
   },
   {
     id: 'praktijkplanner-capaciteitsoverzicht',
-    label: 'Capaciteits overzicht',
+    label: 'Capaciteitsoverzicht',
     href: '/praktijkplanner/capaciteitsoverzicht',
     icon: <Check className="size-4 shrink-0" />,
   },
-];
-
-const PRAKTIJKPLANNER_ADMIN_NAV_ITEMS: NavItem[] = [
   {
     id: 'praktijkplanner-beheer',
     label: 'Plannerbeheer',
@@ -263,18 +278,12 @@ export function Sidebar({ roleTier = GROEP_DEELNEMER, section = 'doktersdienst' 
         >
           {isPraktijkplanner ? (
             <>
-              <SectionHeading label="Praktijkplanner" />
-              <NavLinkList items={PRAKTIJKPLANNER_MAIN_NAV_ITEMS} pathname={pathname} />
+              <SectionHeading label="Deelnemer" />
+              <NavLinkList items={PRAKTIJKPLANNER_DEELNEMER_NAV_ITEMS} pathname={pathname} />
               {showSecretaris && (
                 <>
-                  <SectionHeading label="Capaciteit planner" />
-                  <NavLinkList items={PRAKTIJKPLANNER_MANAGER_NAV_ITEMS} pathname={pathname} />
-                </>
-              )}
-              {showAdmin && (
-                <>
-                  <SectionHeading label="Admin" />
-                  <NavLinkList items={PRAKTIJKPLANNER_ADMIN_NAV_ITEMS} pathname={pathname} />
+                  <SectionHeading label="Secretaris" />
+                  <NavLinkList items={PRAKTIJKPLANNER_SECRETARIS_NAV_ITEMS} pathname={pathname} />
                 </>
               )}
             </>

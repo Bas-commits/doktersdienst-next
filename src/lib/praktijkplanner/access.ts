@@ -43,9 +43,8 @@ const MANAGER_CAPABILITIES = new Set<PraktijkplannerCapability>([
   'dokter-afwezigheid:manage',
   'capaciteit:read',
   'capaciteit:manage',
+  'beheer:manage',
 ]);
-
-const ADMIN_CAPABILITIES = new Set<PraktijkplannerCapability>(['beheer:manage']);
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
@@ -95,12 +94,6 @@ export async function resolvePraktijkplannerAccess(
     return {
       ok: false,
       error: { status: 403, error: 'Deze actie is alleen beschikbaar voor secretarissen en beheerders.' },
-    };
-  }
-  if (ADMIN_CAPABILITIES.has(capability) && !user.isAdmin) {
-    return {
-      ok: false,
-      error: { status: 403, error: 'Deze actie is alleen beschikbaar voor beheerders.' },
     };
   }
 

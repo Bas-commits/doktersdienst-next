@@ -118,13 +118,13 @@ describe('DoktersdienstHeader', () => {
     render(
       <DoktersdienstHeader
         {...defaultProps}
-        routes={{ ...defaultProps.routes, praktijkplanner_activiteiten: '/praktijkplanner/activiteiten' }}
+        routes={{ ...defaultProps.routes, praktijkplanner_home: '/praktijkplanner' }}
       />
     );
 
     expect(screen.getByTestId('header-section-switch')).toHaveAttribute(
       'href',
-      '/praktijkplanner/activiteiten'
+      '/praktijkplanner'
     );
   });
 

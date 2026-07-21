@@ -183,12 +183,15 @@ export function DoktersdienstHeader({
     [globalIdgroep, headerActiveWaarneemgroep?.idgroep]
   );
   const isPraktijkplanner = section === 'praktijkplanner';
+  /** Index route role-redirects to the right home page. */
+  const praktijkplannerHome =
+    routes.praktijkplanner_home ?? routes.spreekuren ?? '/praktijkplanner';
   const primaryHref = isPraktijkplanner
-    ? routes.praktijkplanner_activiteiten ?? '/praktijkplanner/activiteiten'
+    ? praktijkplannerHome
     : routes.rooster_inzien ?? '/rooster-inzien';
   const switchHref = isPraktijkplanner
     ? routes.rooster_inzien ?? '/rooster-inzien'
-    : routes.praktijkplanner_activiteiten ?? routes.spreekuren ?? '/praktijkplanner/activiteiten';
+    : praktijkplannerHome;
   const primaryLogo = isPraktijkplanner ? assetUrls.ppLogo : assetUrls.logo;
   const switchLogo = isPraktijkplanner ? assetUrls.logo : assetUrls.ppLogo;
   const primaryLabel = isPraktijkplanner ? 'Praktijkplanner' : 'DoktersDienst';

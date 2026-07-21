@@ -330,17 +330,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     const start = oneQueryValue(req.query.start);
     const end = oneQueryValue(req.query.end);
-    const requestedParticipantId = parsePositiveInteger(oneQueryValue(req.query.iddeelnemer));
+    const participantId = parsePositiveInteger(oneQueryValue(req.query.iddeelnemer));
     if (!isIsoDate(start) || !isIsoDate(end) || start > end) {
       return res.status(400).json({ error: 'Een geldig datumbereik is verplicht.' });
     }
 
-    const participantId = accessResult.access.isManager
-      ? requestedParticipantId
-      : accessResult.access.user.id;
     if (
       participantId != null &&
       !(await canAccessPraktijkplannerParticipant(accessResult.access, participantId))
+    ) {
+      return res.status(403).json({ error: 'Geen toegang tot deze deelnemer.' });
+    }
+    if (
+      participantId != null &&
+      !accessResult.access.isManager &&
+      participantId !== accessResult.access.user.id
     ) {
       return res.status(403).json({ error: 'Geen toegang tot deze deelnemer.' });
     }

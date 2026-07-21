@@ -182,5 +182,5 @@ export async function getPraktijkplannerParticipants(
 }
 
 export function isManagerOnlyCapability(capability: PraktijkplannerCapability): boolean {
-  return MANAGER_CAPABILITIES.has(capability) || ADMIN_CAPABILITIES.has(capability);
+  return MANAGER_CAPABILITIES.has(capability);
 }

@@ -1,11 +1,14 @@
 'use client';
 
-import { useRef, type PointerEvent, type ReactNode } from 'react';
+import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import { datesBetweenInclusive, formatIsoDate, monthCalendarBounds } from '@/lib/praktijkplanner/dates';
 import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
 import type { PlannerDaypartCell } from './PlannerDaypartGrid';
+import { UNAVAILABLE_DAYPART_TOAST } from './PlannerDaypartGrid';
 import {
   PlannerCursorToolFollower,
+  UNAVAILABLE_DAYPART_CURSOR_TOOL,
   usePlannerCursorTool,
   type PlannerCursorTool,
 } from './PlannerCursorTool';
@@ -21,6 +24,7 @@ export function PlannerMonthDaypartGrid({
   onCellClick,
   onCellPointerEnter,
   isCellDisabled,
+  isCellUnavailable,
   holidayLabels,
   blockedDates,
   renderBlockedCell,
@@ -35,6 +39,7 @@ export function PlannerMonthDaypartGrid({
   onCellClick?: (cell: PlannerDaypartCell) => void;
   onCellPointerEnter?: (cell: PlannerDaypartCell, event: PointerEvent<HTMLButtonElement>) => void;
   isCellDisabled?: (cell: PlannerDaypartCell) => boolean;
+  isCellUnavailable?: (cell: PlannerDaypartCell) => boolean;
   holidayLabels?: ReadonlyMap<string, string[]>;
   blockedDates?: ReadonlySet<string>;
   renderBlockedCell?: (cell: PlannerDaypartCell) => ReactNode;
@@ -43,8 +48,9 @@ export function PlannerMonthDaypartGrid({
 }) {
   const bounds = monthCalendarBounds(year, month);
   const gridRootRef = useRef<HTMLDivElement>(null);
+  const [unavailableCursor, setUnavailableCursor] = useState<{ x: number; y: number } | null>(null);
   const cursorPosition = usePlannerCursorTool({
-    active: cursorTool != null,
+    active: cursorTool != null && unavailableCursor == null,
     containerRef: gridRootRef,
     onDismiss: onCursorToolDismiss,
   });
@@ -53,6 +59,12 @@ export function PlannerMonthDaypartGrid({
   const dates = datesBetweenInclusive(bounds.start, bounds.end);
   const orderedDayparts = [...dayparts].sort((a, b) => a.volgorde - b.volgorde);
   const today = formatIsoDate(new Date());
+  const followerTool = unavailableCursor ? UNAVAILABLE_DAYPART_CURSOR_TOOL : cursorTool ?? null;
+  const followerPosition = unavailableCursor ?? cursorPosition;
+
+  const trackUnavailableCursor = (event: { clientX: number; clientY: number }) => {
+    setUnavailableCursor({ x: event.clientX, y: event.clientY });
+  };
 
   return (
     <div ref={gridRootRef}>
@@ -91,21 +103,52 @@ export function PlannerMonthDaypartGrid({
                 <div className="grid grid-cols-2 gap-1">
                   {orderedDayparts.map((daypart) => {
                     const cell = { participant, datum, daypart };
-                    const disabled = blocked || isCellDisabled?.(cell) || !onCellClick;
+                    const unavailable = isCellUnavailable?.(cell) ?? false;
+                    const disabled =
+                      !unavailable && (blocked || isCellDisabled?.(cell) || !onCellClick);
                     return (
                       <button
                         key={`${datum}-${daypart.id}`}
                         type="button"
                         disabled={disabled}
-                        onClick={() => onCellClick?.(cell)}
-                        onPointerEnter={(event) => onCellPointerEnter?.(cell, event)}
-                        className="group/cell relative flex min-h-12 w-full items-center justify-center rounded border border-border/70 px-1 text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default disabled:opacity-80"
-                        aria-label={`${datum} ${daypart.naam}${blocked ? ' feestdag' : ''}`}
+                        onClick={() => {
+                          if (unavailable) {
+                            toast.info(UNAVAILABLE_DAYPART_TOAST);
+                            return;
+                          }
+                          onCellClick?.(cell);
+                        }}
+                        onPointerEnter={(event) => {
+                          if (unavailable) {
+                            trackUnavailableCursor(event);
+                            return;
+                          }
+                          onCellPointerEnter?.(cell, event);
+                        }}
+                        onPointerMove={(event) => {
+                          if (unavailable) trackUnavailableCursor(event);
+                        }}
+                        onPointerLeave={() => {
+                          if (unavailable) setUnavailableCursor(null);
+                        }}
+                        className={[
+                          'group/cell relative flex min-h-12 w-full items-center justify-center rounded border px-1 text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default',
+                          unavailable
+                            ? 'cursor-none border-border/40 bg-muted/40 opacity-50'
+                            : 'border-border/70 disabled:opacity-80',
+                        ].join(' ')}
+                        aria-label={`${datum} ${daypart.naam}${unavailable ? ' niet inplanbaar' : ''}${blocked ? ' feestdag' : ''}`}
                       >
                         <span className="absolute top-0.5 left-1 text-[8px] text-muted-foreground">
                           {daypart.naam.slice(0, 1)}
                         </span>
-                        <span className="min-w-0 max-w-full">{blocked ? renderBlockedCell?.(cell) ?? renderCell(cell) : renderCell(cell)}</span>
+                        <span className="min-w-0 max-w-full">
+                          {unavailable
+                            ? null
+                            : blocked
+                              ? renderBlockedCell?.(cell) ?? renderCell(cell)
+                              : renderCell(cell)}
+                        </span>
                       </button>
                     );
                   })}
@@ -116,7 +159,7 @@ export function PlannerMonthDaypartGrid({
         </div>
       </div>
     </div>
-    <PlannerCursorToolFollower tool={cursorTool ?? null} position={cursorPosition} />
+    <PlannerCursorToolFollower tool={followerTool} position={followerPosition} />
     </div>
   );
 }

@@ -6,6 +6,8 @@ import {
   sendPraktijkplannerAccessError,
 } from '@/lib/praktijkplanner/access';
 import { parseNonNegativeInteger, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
+import { isDaypartSchedulable } from '@/lib/praktijkplanner/schedulable-dayparts';
+import { loadSchedulableDayparts } from '@/lib/praktijkplanner/schedulable-dayparts-db';
 import type { PraktijkplannerCapacityCell } from '@/types/praktijkplanner';
 
 type Data = { cells: PraktijkplannerCapacityCell[] } | { success: true } | { error: string };
@@ -312,16 +314,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       return res.status(400).json({ error: 'Een gekozen dagdeel bestaat niet.' });
     }
 
-    const cellByKey = new Map(cells.map((cell) => [`${cell.weekdag}:${cell.iddagdeel}`, cell]));
+    const schedulableMatrix = await loadSchedulableDayparts(accessResult.access.idwaarneemgroep);
+    const schedulableCells = cells.filter((cell) =>
+      isDaypartSchedulable(schedulableMatrix, cell.weekdag, cell.iddagdeel)
+    );
+    for (const cell of cells) {
+      if (isDaypartSchedulable(schedulableMatrix, cell.weekdag, cell.iddagdeel)) continue;
+      const hasContent =
+        cell.aantalDeelnemers > 0 ||
+        cell.expertises.some((item) => item.aantal > 0) ||
+        cell.tasks.some((item) => item.aantal > 0) ||
+        cell.activities.some((item) => item.aantal > 0) ||
+        cell.specifications.some((item) => item.aantal > 0);
+      if (hasContent) {
+        return res.status(400).json({
+          error: 'Dit dagdeel is niet inplanbaar voor deze weekdag.',
+        });
+      }
+    }
+
+    const cellByKey = new Map(schedulableCells.map((cell) => [`${cell.weekdag}:${cell.iddagdeel}`, cell]));
     const updatedAt = new Date().toISOString();
     const updatedBy = accessResult.access.user.id;
 
     await db.transaction(async (tx) => {
       // One upsert for the whole week×daypart matrix instead of per-cell select/update.
+      if (schedulableCells.length === 0) {
+        return;
+      }
       const upserted = await tx
         .insert(schema.capaciteitsjablonen)
         .values(
-          cells.map((cell) => ({
+          schedulableCells.map((cell) => ({
             idwaarneemgroep: accessResult.access.idwaarneemgroep,
             idplannerlocatie,
             weekdag: cell.weekdag,
@@ -353,7 +377,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       const templateIds = upserted
         .map((row) => row.id)
         .filter((id): id is number => id != null);
-      if (templateIds.length !== cells.length) throw new Error('template-create-failed');
+      if (templateIds.length !== schedulableCells.length) throw new Error('template-create-failed');
 
       await Promise.all([
         tx

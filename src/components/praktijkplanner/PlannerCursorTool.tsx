@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { Ban } from 'lucide-react';
 import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -10,6 +11,16 @@ export type PlannerCursorTool = {
   background?: string | null;
   label: string;
   preview?: ReactNode;
+};
+
+/** Gray not-allowed icon shown next to the cursor on unavailable daypart cells. */
+export const UNAVAILABLE_DAYPART_CURSOR_TOOL: PlannerCursorTool = {
+  icon: null,
+  color: null,
+  label: 'Niet beschikbaar',
+  preview: (
+    <Ban className="size-6 text-slate-400 drop-shadow-sm" strokeWidth={2.25} aria-hidden />
+  ),
 };
 
 export function usePlannerCursorTool({

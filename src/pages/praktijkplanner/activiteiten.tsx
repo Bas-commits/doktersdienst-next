@@ -33,6 +33,10 @@ import {
   notifyPlannerChanged,
   subscribePlannerChanged,
 } from '@/lib/praktijkplanner/planner-change-broadcast';
+import {
+  isDaypartSchedulableForParticipant,
+  participantMatrixFor,
+} from '@/lib/praktijkplanner/schedulable-dayparts';
 import type {
   PraktijkplannerAbsenceSlot,
   PraktijkplannerParticipant,
@@ -440,6 +444,25 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     [absenceMap, data.isManager]
   );
 
+  const isCellUnavailable = useCallback(
+    ({
+      participant,
+      datum,
+      daypart,
+    }: {
+      participant: { id: number };
+      datum: string;
+      daypart: { id: number };
+    }) =>
+      !isDaypartSchedulableForParticipant(
+        data.masterData.schedulableDayparts ?? [],
+        participantMatrixFor(data.masterData.participantSchedulableDayparts ?? [], participant.id),
+        datum,
+        daypart.id
+      ),
+    [data.masterData.participantSchedulableDayparts, data.masterData.schedulableDayparts]
+  );
+
   const getCellClassName = useCallback(
     ({
       participant,
@@ -595,6 +618,16 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         toast.info('Alleen secretarissen en beheerders kunnen de activiteitenplanning aanpassen.');
         return;
       }
+      if (
+        !isDaypartSchedulableForParticipant(
+          data.masterData.schedulableDayparts ?? [],
+          participantMatrixFor(data.masterData.participantSchedulableDayparts ?? [], participant.id),
+          datum,
+          daypart.id
+        )
+      ) {
+        return;
+      }
       const key = slotKey(participant.id, datum, daypart.id);
       const confirmedAbsence = absenceMap.get(key);
       if (confirmedAbsence && !confirmedAbsence.isVoorlopig) {
@@ -726,6 +759,8 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
       data.masterData.activities,
       data.masterData.availabilityTypes,
       data.masterData.locations,
+      data.masterData.participantSchedulableDayparts,
+      data.masterData.schedulableDayparts,
       data.masterData.specifications,
       data.masterData.tasks,
       groupId,
@@ -867,6 +902,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
             }
             onCellClick={queueCell}
             isCellDisabled={isCellDisabled}
+            isCellUnavailable={isCellUnavailable}
             isCellFilled={isCellFilled}
             getCellClassName={getCellClassName}
             holidayLabels={holidays}
@@ -885,6 +921,8 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           participant={actionModal.participant}
           sourceWeekStart={actionModal.sourceWeekStart}
           dayparts={visibleDayparts}
+          schedulableDayparts={data.masterData.schedulableDayparts ?? []}
+          participantSchedulableDayparts={data.masterData.participantSchedulableDayparts ?? []}
           onCopied={refreshAfterRecurrence}
         />
       ) : null}

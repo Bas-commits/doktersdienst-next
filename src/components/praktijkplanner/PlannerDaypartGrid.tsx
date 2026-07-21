@@ -1,18 +1,23 @@
 'use client';
 
 import Image from 'next/image';
-import { useRef, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import { weekDates } from '@/lib/praktijkplanner/dates';
 import { cn } from '@/lib/utils';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
 import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
 import {
   PlannerCursorToolFollower,
+  UNAVAILABLE_DAYPART_CURSOR_TOOL,
   usePlannerCursorTool,
   type PlannerCursorTool,
 } from './PlannerCursorTool';
 import { PlannerWeekNavigation } from './PlannerWeekNavigation';
 import { PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX, PLANNER_GRID_NAV_MARGIN_PX, plannerWeekGridNavOffsetPx } from './planner-grid-layout';
+
+export const UNAVAILABLE_DAYPART_TOAST =
+  'Dit dagdeel is niet beschikbaar voor deze deelnemer/waarneemgroep';
 
 const DAYPART_ICONS: Record<number, string> = {
   1: '/icons/sunrise.svg',
@@ -59,6 +64,7 @@ export function PlannerDaypartGrid({
   renderCell,
   onCellClick,
   isCellDisabled,
+  isCellUnavailable,
   isCellFilled,
   holidayLabels,
   cursorTool,
@@ -74,6 +80,8 @@ export function PlannerDaypartGrid({
   renderCell: (cell: PlannerDaypartCell) => ReactNode;
   onCellClick?: (cell: PlannerDaypartCell) => void;
   isCellDisabled?: (cell: PlannerDaypartCell) => boolean;
+  /** Non-schedulable dayparts: always gray placeholder, never clickable, never show chips. */
+  isCellUnavailable?: (cell: PlannerDaypartCell) => boolean;
   isCellFilled?: (cell: PlannerDaypartCell) => boolean;
   holidayLabels?: ReadonlyMap<string, string[]>;
   cursorTool?: PlannerCursorTool | null;
@@ -84,11 +92,19 @@ export function PlannerDaypartGrid({
   const days = weekDates(weekStart);
   const orderedDayparts = [...dayparts].sort((a, b) => a.volgorde - b.volgorde);
   const gridRootRef = useRef<HTMLDivElement>(null);
+  const [unavailableCursor, setUnavailableCursor] = useState<{ x: number; y: number } | null>(null);
   const cursorPosition = usePlannerCursorTool({
-    active: cursorTool != null,
+    active: cursorTool != null && unavailableCursor == null,
     containerRef: gridRootRef,
     onDismiss: onCursorToolDismiss,
   });
+
+  const followerTool = unavailableCursor ? UNAVAILABLE_DAYPART_CURSOR_TOOL : cursorTool ?? null;
+  const followerPosition = unavailableCursor ?? cursorPosition;
+
+  const trackUnavailableCursor = (event: { clientX: number; clientY: number }) => {
+    setUnavailableCursor({ x: event.clientX, y: event.clientY });
+  };
 
   return (
     <div ref={gridRootRef}>
@@ -177,20 +193,39 @@ export function PlannerDaypartGrid({
                 <div className="grid h-full w-full min-w-30 grid-cols-2 gap-1">
                   {orderedDayparts.map((daypart) => {
                     const cell = { participant, datum, daypart };
-                    const disabled = isCellDisabled?.(cell) ?? false;
-                    const filled = isCellFilled?.(cell) ?? false;
+                    const unavailable = isCellUnavailable?.(cell) ?? false;
+                    const disabled = !unavailable && ((isCellDisabled?.(cell) ?? false) || !onCellClick);
+                    const filled = !unavailable && (isCellFilled?.(cell) ?? false);
                     return (
                       <button
                         key={`${participant.id}-${datum}-${daypart.id}`}
                         type="button"
-                        disabled={disabled || !onCellClick}
-                        onClick={() => onCellClick?.(cell)}
+                        disabled={disabled}
+                        onClick={() => {
+                          if (unavailable) {
+                            toast.info(UNAVAILABLE_DAYPART_TOAST);
+                            return;
+                          }
+                          onCellClick?.(cell);
+                        }}
+                        onPointerEnter={(event) => {
+                          if (unavailable) trackUnavailableCursor(event);
+                        }}
+                        onPointerMove={(event) => {
+                          if (unavailable) trackUnavailableCursor(event);
+                        }}
+                        onPointerLeave={() => {
+                          if (unavailable) setUnavailableCursor(null);
+                        }}
                         className={cn(
-                          'group/cell relative flex h-full min-h-12 w-full rounded border border-border/70 text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default disabled:opacity-80',
+                          'group/cell relative flex h-full min-h-12 w-full rounded border text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default',
+                          unavailable
+                            ? 'cursor-none border-border/40 bg-muted/40 opacity-50'
+                            : 'border-border/70 disabled:opacity-80',
                           filled ? 'items-stretch p-0.5' : 'items-center justify-center p-1',
-                          getCellClassName?.(cell)
+                          !unavailable ? getCellClassName?.(cell) : undefined
                         )}
-                        aria-label={`${participantLabel(participant)} ${datum} ${daypart.naam}`}
+                        aria-label={`${participantLabel(participant)} ${datum} ${daypart.naam}${unavailable ? ' niet inplanbaar' : ''}`}
                       >
                         {!filled ? (
                           <DaypartIcon
@@ -204,7 +239,7 @@ export function PlannerDaypartGrid({
                             filled ? 'items-stretch' : 'items-center justify-center'
                           )}
                         >
-                          {renderCell(cell)}
+                          {unavailable ? null : renderCell(cell)}
                         </span>
                       </button>
                     );
@@ -219,7 +254,7 @@ export function PlannerDaypartGrid({
           </div>
         </div>
       </div>
-      <PlannerCursorToolFollower tool={cursorTool ?? null} position={cursorPosition} />
+      <PlannerCursorToolFollower tool={followerTool} position={followerPosition} />
     </div>
   );
 }

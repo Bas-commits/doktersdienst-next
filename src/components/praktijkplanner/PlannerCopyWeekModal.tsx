@@ -12,11 +12,17 @@ import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import { addDays, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
+import {
+  isDaypartSchedulableForParticipant,
+  participantMatrixFor,
+} from '@/lib/praktijkplanner/schedulable-dayparts';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import type {
   PraktijkplannerDaypart,
   PraktijkplannerParticipant,
+  PraktijkplannerParticipantSchedulableDaypart,
   PraktijkplannerPlanningSlot,
+  PraktijkplannerSchedulableDaypart,
 } from '@/types/praktijkplanner';
 
 function slotKey(iddeelnemer: number, datum: string, iddagdeel: number) {
@@ -53,6 +59,8 @@ export function PlannerCopyWeekModal({
   participant,
   sourceWeekStart,
   dayparts,
+  schedulableDayparts = [],
+  participantSchedulableDayparts = [],
   onCopied,
   initialTargetWeekStart,
 }: {
@@ -62,6 +70,8 @@ export function PlannerCopyWeekModal({
   participant: PraktijkplannerParticipant;
   sourceWeekStart: string;
   dayparts: PraktijkplannerDaypart[];
+  schedulableDayparts?: PraktijkplannerSchedulableDaypart[];
+  participantSchedulableDayparts?: PraktijkplannerParticipantSchedulableDaypart[];
   onCopied?: () => void;
   /** Override initial target week (defaults to source + 7). */
   initialTargetWeekStart?: string;
@@ -378,6 +388,14 @@ export function PlannerCopyWeekModal({
             zoom="85"
             renderCell={renderCell}
             isCellFilled={isCellFilled}
+            isCellUnavailable={({ datum, daypart }) =>
+              !isDaypartSchedulableForParticipant(
+                schedulableDayparts,
+                participantMatrixFor(participantSchedulableDayparts, participant.id),
+                datum,
+                daypart.id
+              )
+            }
             holidayLabels={holidays}
           />
         </div>

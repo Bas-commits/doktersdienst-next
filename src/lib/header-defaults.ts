@@ -4,7 +4,7 @@ import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 /** Root-relative paths (`/…`) so assets resolve from the site origin on every route. */
 export const DEFAULT_ASSET_URLS: AssetUrls = {
   logo: '/logo.png',
-  ppLogo: '/praktijkplanner-logo.svg',
+  ppLogo: '/praktijkplanner-logo.png',
   requestIcon: '/request.svg',
 };
 

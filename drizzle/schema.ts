@@ -761,6 +761,55 @@ export const capaciteitsjabloonspecificaties = pgTable("capaciteitsjabloonspecif
 	check("capaciteitsjabloonspecificaties_count_check", sql`${table.aantal} >= 0`),
 ]);
 
+/**
+ * Per-waarneemgroep weekday × daypart matrix: which slots are schedulable.
+ * Empty set for a group means all combinations are schedulable (backward compatible).
+ */
+export const praktijkplannerdagdelen = pgTable("praktijkplannerdagdelen", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id, { onDelete: "cascade" }),
+	weekdag: smallint().notNull(),
+	iddagdeel: integer().notNull().references(() => dagdelen.id),
+	actief: boolean().notNull().default(true),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	unique("praktijkplannerdagdelen_group_weekday_daypart_unique").on(
+		table.idwaarneemgroep,
+		table.weekdag,
+		table.iddagdeel
+	),
+	check("praktijkplannerdagdelen_weekdag_check", sql`${table.weekdag} >= 1 AND ${table.weekdag} <= 7`),
+	index("praktijkplannerdagdelen_group_idx").on(table.idwaarneemgroep),
+]);
+
+/**
+ * Optional per-deelnemer weekday × daypart availability, constrained by the group matrix.
+ * Empty set for a deelnemer means they inherit the waarneemgroep schedule.
+ */
+export const praktijkplannerdeelnemerdagdelen = pgTable("praktijkplannerdeelnemerdagdelen", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id, { onDelete: "cascade" }),
+	iddeelnemer: integer().notNull().references(() => deelnemers.id, { onDelete: "cascade" }),
+	weekdag: smallint().notNull(),
+	iddagdeel: integer().notNull().references(() => dagdelen.id),
+	actief: boolean().notNull().default(true),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	unique("praktijkplannerdeelnemerdagdelen_unique").on(
+		table.idwaarneemgroep,
+		table.iddeelnemer,
+		table.weekdag,
+		table.iddagdeel
+	),
+	check("praktijkplannerdeelnemerdagdelen_weekdag_check", sql`${table.weekdag} >= 1 AND ${table.weekdag} <= 7`),
+	index("praktijkplannerdeelnemerdagdelen_group_participant_idx").on(
+		table.idwaarneemgroep,
+		table.iddeelnemer
+	),
+]);
+
 export const praktijkplannerweergavevoorkeuren = pgTable("praktijkplannerweergavevoorkeuren", {
 	iddeelnemer: integer().notNull().references(() => deelnemers.id, { onDelete: "cascade" }),
 	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id, { onDelete: "cascade" }),

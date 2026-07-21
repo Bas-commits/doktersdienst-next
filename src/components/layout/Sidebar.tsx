@@ -148,13 +148,13 @@ const PRAKTIJKPLANNER_MAIN_NAV_ITEMS: NavItem[] = [
   },
   {
     id: 'praktijkplanner-dokter-activiteiten',
-    label: 'Dokter activity',
+    label: 'Capaciteits rapportage',
     href: '/praktijkplanner/dokter-activiteiten',
     icon: <List className="size-4 shrink-0" />,
   },
   {
     id: 'praktijkplanner-dokter-afwezigheid',
-    label: 'Dokter absence',
+    label: 'Absentie telling',
     href: '/praktijkplanner/dokter-afwezigheid',
     icon: <Clock className="size-4 shrink-0" />,
   },

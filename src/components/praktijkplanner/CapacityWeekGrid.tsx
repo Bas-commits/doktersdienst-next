@@ -1,5 +1,13 @@
-import type { ReactNode } from 'react';
+'use client';
+
+import { useState, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import type { PraktijkplannerDaypart } from '@/types/praktijkplanner';
+import { UNAVAILABLE_DAYPART_TOAST } from './PlannerDaypartGrid';
+import {
+  PlannerCursorToolFollower,
+  UNAVAILABLE_DAYPART_CURSOR_TOOL,
+} from './PlannerCursorTool';
 
 export const CAPACITY_WEEKDAYS = [
   { id: 1, label: 'Maandag' },
@@ -18,6 +26,7 @@ type CapacityWeekGridProps = {
   /** Optional weekday header override (e.g. date labels on overzicht). */
   weekdayHeaders?: ReactNode[];
   renderCell: (weekday: CapacityWeekday, daypart: PraktijkplannerDaypart) => ReactNode;
+  isCellUnavailable?: (weekday: CapacityWeekday, daypart: PraktijkplannerDaypart) => boolean;
   className?: string;
 };
 
@@ -25,9 +34,15 @@ export function CapacityWeekGrid({
   dayparts,
   weekdayHeaders,
   renderCell,
+  isCellUnavailable,
   className,
 }: CapacityWeekGridProps) {
   const headers = weekdayHeaders ?? CAPACITY_WEEKDAYS.map((day) => day.label);
+  const [unavailableCursor, setUnavailableCursor] = useState<{ x: number; y: number } | null>(null);
+
+  const trackUnavailableCursor = (event: { clientX: number; clientY: number }) => {
+    setUnavailableCursor({ x: event.clientX, y: event.clientY });
+  };
 
   return (
     <div className={['overflow-x-auto rounded-xl border bg-card shadow-sm', className].filter(Boolean).join(' ')}>
@@ -48,15 +63,43 @@ export function CapacityWeekGrid({
           {dayparts.map((daypart) => (
             <tr key={daypart.id} className="border-t align-top">
               <th className="sticky left-0 z-10 border-r bg-card p-3 text-left font-medium">{daypart.naam}</th>
-              {CAPACITY_WEEKDAYS.map((weekday) => (
-                <td key={`${weekday.id}:${daypart.id}`} className="border-l p-2 align-top">
-                  {renderCell(weekday, daypart)}
-                </td>
-              ))}
+              {CAPACITY_WEEKDAYS.map((weekday) => {
+                const unavailable = isCellUnavailable?.(weekday, daypart) ?? false;
+                return (
+                  <td
+                    key={`${weekday.id}:${daypart.id}`}
+                    className={[
+                      'border-l p-2 align-top',
+                      unavailable ? 'bg-muted/40 opacity-50' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    {unavailable ? (
+                      <button
+                        type="button"
+                        onClick={() => toast.info(UNAVAILABLE_DAYPART_TOAST)}
+                        onPointerEnter={trackUnavailableCursor}
+                        onPointerMove={trackUnavailableCursor}
+                        onPointerLeave={() => setUnavailableCursor(null)}
+                        className="flex min-h-16 w-full cursor-none items-center justify-center rounded text-xs text-muted-foreground"
+                      >
+                        Niet inplanbaar
+                      </button>
+                    ) : (
+                      renderCell(weekday, daypart)
+                    )}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
       </table>
+      <PlannerCursorToolFollower
+        tool={unavailableCursor ? UNAVAILABLE_DAYPART_CURSOR_TOOL : null}
+        position={unavailableCursor}
+      />
     </div>
   );
 }

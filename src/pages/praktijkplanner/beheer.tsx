@@ -9,6 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { ActiviteitenIconPicker } from '@/components/praktijkplanner/ActiviteitenIconPicker';
+import { SchedulableDaypartsEditor } from '@/components/praktijkplanner/SchedulableDaypartsEditor';
+import { ParticipantSchedulableDaypartsEditor } from '@/components/praktijkplanner/ParticipantSchedulableDaypartsEditor';
 import type { PraktijkplannerMasterData } from '@/types/praktijkplanner';
 
 type Entity =
@@ -20,15 +22,18 @@ type Entity =
   | 'availabilityType'
   | 'task';
 
+type BeheerTab = Entity | 'dayparts';
+
 type Form = Record<string, string | boolean>;
 
-const TABS: Array<{ id: Entity; label: string }> = [
+const TABS: Array<{ id: BeheerTab; label: string }> = [
   { id: 'activity', label: 'Activiteiten' },
   { id: 'task', label: 'Taken' },
   { id: 'location', label: 'Locaties' },
   { id: 'absenceType', label: 'Afwezigheidstypen' },
   // { id: 'availabilityType', label: 'Beschikbaarheid' },
   { id: 'expertise', label: 'Expertises' },
+  { id: 'dayparts', label: 'Dagdelen' },
   // { id: 'specification', label: 'Specificaties' },
 
 ];
@@ -94,38 +99,44 @@ function hasRequiredAfkorting(entity: Entity, form: Form): boolean {
 
 const DEFAULT_KLEUR = '#cccccc';
 
-const VALID_ENTITIES = new Set<Entity>(TABS.map((tab) => tab.id));
+const VALID_TABS = new Set<BeheerTab>(TABS.map((tab) => tab.id));
 
-function parseEntity(value: unknown): Entity {
+function parseTab(value: unknown): BeheerTab {
   const raw = Array.isArray(value) ? value[0] : value;
-  if (typeof raw === 'string' && VALID_ENTITIES.has(raw as Entity)) {
-    return raw as Entity;
+  if (typeof raw === 'string' && VALID_TABS.has(raw as BeheerTab)) {
+    return raw as BeheerTab;
   }
-  return 'expertise';
+  return 'activity';
 }
 
-function readEntityFromUrl(): Entity {
-  if (typeof window === 'undefined') return 'expertise';
-  return parseEntity(new URLSearchParams(window.location.search).get('entity'));
+function readTabFromUrl(): BeheerTab {
+  if (typeof window === 'undefined') return 'activity';
+  return parseTab(new URLSearchParams(window.location.search).get('entity'));
 }
 
 function BeheerContent({ groupId, data, reload: reloadContext }: PraktijkplannerPageContext) {
   const router = useRouter();
-  const entity = useMemo((): Entity => {
+  const tab = useMemo((): BeheerTab => {
     if (router.isReady) {
-      return parseEntity(router.query.entity);
+      return parseTab(router.query.entity);
     }
-    return readEntityFromUrl();
+    return readTabFromUrl();
   }, [router.isReady, router.query.entity]);
 
-  const setEntity = useCallback((next: Entity) => {
+  const entity: Entity = tab === 'dayparts' ? 'activity' : tab;
+
+  const setTab = useCallback((next: BeheerTab) => {
     void router.replace(
       { pathname: router.pathname, query: { ...router.query, entity: next } },
       undefined,
       { shallow: true }
     );
   }, [router]);
-  const [masterData, setMasterData] = useState<PraktijkplannerMasterData>(data.masterData);
+  const [masterData, setMasterData] = useState<PraktijkplannerMasterData>({
+    ...data.masterData,
+    schedulableDayparts: data.masterData.schedulableDayparts ?? [],
+    participantSchedulableDayparts: data.masterData.participantSchedulableDayparts ?? [],
+  });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<Form>(initialForm);
   const [loading, setLoading] = useState(false);
@@ -163,7 +174,7 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
   useEffect(() => {
     setEditingId(null);
     setForm(initialForm());
-  }, [entity]);
+  }, [tab]);
 
   const items = useMemo(() => {
     const list = getItems(masterData, entity) as Array<Record<string, unknown>>;
@@ -251,6 +262,56 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
     return <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Plannerbeheer is alleen beschikbaar voor beheerders.</p>;
   }
 
+  if (tab === 'dayparts') {
+    return (
+      <div className="space-y-4">
+        <div className="mb-1 flex flex-wrap gap-1">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              className={[
+                'rounded px-2 py-1 text-xs font-medium',
+                tab === item.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted',
+              ].join(' ')}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <SchedulableDaypartsEditor
+          groupId={groupId}
+          dayparts={masterData.dayparts}
+          schedulableDayparts={masterData.schedulableDayparts ?? []}
+          onSaved={(next) => {
+            setMasterData((current) => ({ ...current, schedulableDayparts: next }));
+            reloadContext();
+          }}
+        />
+        <ParticipantSchedulableDaypartsEditor
+          groupId={groupId}
+          participants={data.participants}
+          dayparts={masterData.dayparts}
+          groupSchedulableDayparts={masterData.schedulableDayparts ?? []}
+          participantSchedulableDayparts={masterData.participantSchedulableDayparts ?? []}
+          onSaved={(iddeelnemer, nextForParticipant) => {
+            setMasterData((current) => ({
+              ...current,
+              participantSchedulableDayparts: [
+                ...(current.participantSchedulableDayparts ?? []).filter(
+                  (row) => row.iddeelnemer !== iddeelnemer
+                ),
+                ...nextForParticipant,
+              ],
+            }));
+            reloadContext();
+          }}
+        />
+      </div>
+    );
+  }
+
   const showExpertise = ['activity', 'task'].includes(entity);
   const showActivity = entity === 'specification';
   const showCode = ['absenceType', 'availabilityType'].includes(entity);
@@ -261,17 +322,17 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
     <div className="grid gap-4 xl:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.2fr)]">
       <section className="rounded-xl border bg-card p-3 shadow-sm">
         <div className="mb-3 flex flex-wrap gap-1">
-          {TABS.map((tab) => (
+          {TABS.map((item) => (
             <button
-              key={tab.id}
+              key={item.id}
               type="button"
-              onClick={() => setEntity(tab.id)}
+              onClick={() => setTab(item.id)}
               className={[
                 'rounded px-2 py-1 text-xs font-medium',
-                entity === tab.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted',
+                tab === item.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted',
               ].join(' ')}
             >
-              {tab.label}
+              {item.label}
             </button>
           ))}
         </div>

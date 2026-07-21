@@ -1,15 +1,34 @@
 'use client';
 
 import Head from 'next/head';
-import { useCallback, useEffect, useState } from 'react';
-import { Save } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartCell';
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
-import type { PraktijkplannerYearBalance } from '@/types/praktijkplanner';
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import type { PraktijkplannerYearBalance, PraktijkplannerYearBalanceMutation } from '@/types/praktijkplanner';
+
+const AUTOSAVE_DEBOUNCE_MS = 400;
 
 type EditableBalance = Pick<
   PraktijkplannerYearBalance,
-  'absenceType' | 'beginsaldo' | 'budget' | 'correctie' | 'mutaties' | 'totaal'
+  | 'absenceType'
+  | 'beginsaldo'
+  | 'budget'
+  | 'mutaties'
+  | 'mutatiesVoorlopig'
+  | 'mutatieDatums'
+  | 'mutatieDatumsVoorlopig'
+  | 'totaal'
+  | 'totaalVoorlopig'
 >;
 
 function participantName(participant: PraktijkplannerPageContext['data']['participants'][number]) {
@@ -21,6 +40,48 @@ function participantName(participant: PraktijkplannerPageContext['data']['partic
   );
 }
 
+function formatMutationDate(isoDate: string) {
+  return new Intl.DateTimeFormat('nl-NL', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(`${isoDate}T12:00:00`));
+}
+
+function MutationDatesDropdown({ datums }: { datums: PraktijkplannerYearBalanceMutation[] }) {
+  if (datums.length === 0) return null;
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        className="inline-flex size-6 shrink-0 items-center justify-center rounded border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+        aria-label={datums.length === 1 ? '1 datum tonen' : `${datums.length} datums tonen`}
+      >
+        <ChevronDown className="size-3.5" aria-hidden />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-2" sideOffset={6}>
+        <PopoverHeader className="px-1.5 pb-1">
+          <PopoverTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {datums.length === 1 ? '1 datum' : `${datums.length} datums`}
+          </PopoverTitle>
+          <PopoverDescription className="sr-only">
+            Datums waarop deze afwezigheid is toegekend in het geselecteerde jaar.
+          </PopoverDescription>
+        </PopoverHeader>
+        <ul className="max-h-64 overflow-y-auto py-0.5">
+          {datums.map((entry) => (
+            <li key={`${entry.datum}-${entry.dagdeel}`} className="px-1.5 py-1 text-sm text-foreground">
+              {formatMutationDate(entry.datum)}
+              <span className="text-muted-foreground"> · {entry.dagdeel}</span>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function DoctorAbsenceContent({ groupId, data }: PraktijkplannerPageContext) {
   const [selectedParticipantId, setSelectedParticipantId] = useState<number | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -28,6 +89,7 @@ function DoctorAbsenceContent({ groupId, data }: PraktijkplannerPageContext) {
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const skipNextSaveRef = useRef(true);
 
   useEffect(() => {
     if (selectedParticipantId != null || data.participants.length === 0) return;
@@ -53,6 +115,7 @@ function DoctorAbsenceContent({ groupId, data }: PraktijkplannerPageContext) {
       })
       .then((payload) => {
         if (!abortController.signal.aborted) {
+          skipNextSaveRef.current = true;
           setBalances(payload.balances ?? []);
           setNote(payload.note ?? '');
         }
@@ -70,34 +133,41 @@ function DoctorAbsenceContent({ groupId, data }: PraktijkplannerPageContext) {
 
   useEffect(() => load(), [load]);
 
-  const updateBalance = (index: number, key: 'beginsaldo' | 'budget' | 'correctie', value: string) => {
+  const updateBalance = (index: number, key: 'beginsaldo' | 'budget', value: string) => {
     const numeric = Number(value);
     if (!Number.isInteger(numeric)) return;
     setBalances((current) =>
-      current.map((balance, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...balance,
-              [key]: numeric,
-              totaal:
-                (key === 'beginsaldo' ? numeric : balance.beginsaldo) +
-                (key === 'budget' ? numeric : balance.budget) +
-                (key === 'correctie' ? numeric : balance.correctie) -
-                balance.mutaties,
-            }
-          : balance
-      )
+      current.map((balance, itemIndex) => {
+        if (itemIndex !== index) return balance;
+        const beginsaldo = key === 'beginsaldo' ? numeric : balance.beginsaldo;
+        const budget = key === 'budget' ? numeric : balance.budget;
+        const available = beginsaldo + budget;
+        return {
+          ...balance,
+          beginsaldo,
+          budget,
+          totaal: available - balance.mutaties,
+          totaalVoorlopig: available - balance.mutaties - balance.mutatiesVoorlopig,
+        };
+      })
     );
   };
 
-  const save = useCallback(async () => {
-    if (!data.isManager || !selectedParticipantId) return;
-    setSaving(true);
-    try {
-      const response = await fetch('/api/praktijkplanner/afwezigheden/balansen', {
+  useEffect(() => {
+    if (!data.isManager || !selectedParticipantId || loading) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
+
+    const abortController = new AbortController();
+    const timer = window.setTimeout(() => {
+      setSaving(true);
+      fetch('/api/praktijkplanner/afwezigheden/balansen', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
+        signal: abortController.signal,
         body: JSON.stringify({
           idwaarneemgroep: groupId,
           iddeelnemer: selectedParticipantId,
@@ -107,20 +177,27 @@ function DoctorAbsenceContent({ groupId, data }: PraktijkplannerPageContext) {
             idafwezigheidstype: balance.absenceType.id,
             beginsaldo: balance.beginsaldo,
             budget: balance.budget,
-            correctie: balance.correctie,
           })),
         }),
-      });
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(payload.error || 'Opslaan mislukt.');
-      toast.success('Afwezigheidsbalans opgeslagen.');
-      load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Opslaan mislukt.');
-    } finally {
-      setSaving(false);
-    }
-  }, [balances, data.isManager, groupId, load, note, selectedParticipantId, year]);
+      })
+        .then(async (response) => {
+          const payload = (await response.json()) as { error?: string };
+          if (!response.ok) throw new Error(payload.error || 'Opslaan mislukt.');
+        })
+        .catch((error: unknown) => {
+          if (abortController.signal.aborted) return;
+          toast.error(error instanceof Error ? error.message : 'Opslaan mislukt.');
+        })
+        .finally(() => {
+          if (!abortController.signal.aborted) setSaving(false);
+        });
+    }, AUTOSAVE_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+      abortController.abort();
+    };
+  }, [balances, data.isManager, groupId, loading, note, selectedParticipantId, year]);
 
   return (
     <div className="space-y-4">
@@ -152,32 +229,41 @@ function DoctorAbsenceContent({ groupId, data }: PraktijkplannerPageContext) {
             className="h-9 w-24 rounded border bg-background px-2"
           />
         </label>
+        {data.isManager && saving ? (
+          <span className="text-sm text-muted-foreground">Opslaan…</span>
+        ) : null}
       </div>
 
       {loading ? <p className="text-sm text-muted-foreground">Balans laden…</p> : null}
       <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
-        <table className="w-full min-w-[780px] text-sm">
+        <table className="w-full min-w-[820px] text-sm">
           <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="p-3">Afwezigheidstype</th>
               <th className="p-3 text-right">Beginsaldo</th>
               <th className="p-3 text-right">Budget</th>
-              <th className="p-3 text-right">Correctie</th>
               <th className="p-3 text-right">Mutaties</th>
+              <th className="p-3 text-right">Mutaties?</th>
               <th className="p-3 text-right">Resterend</th>
+              <th className="p-3 text-right">Resterend?</th>
             </tr>
           </thead>
           <tbody>
             {balances.map((balance, index) => (
               <tr key={balance.absenceType.id} className="border-t">
-                <td className="p-3 font-medium">{balance.absenceType.naam}</td>
-                {(['beginsaldo', 'budget', 'correctie'] as const).map((key) => (
+                <td className="p-3">
+                  <span className="inline-flex items-center gap-2 font-medium">
+                    <AbsenceDaypartCell absence={balance.absenceType} />
+                    {balance.absenceType.naam}
+                  </span>
+                </td>
+                {(['beginsaldo', 'budget'] as const).map((key) => (
                   <td key={key} className="p-3 text-right">
                     {data.isManager ? (
                       <input
                         type="number"
                         value={balance[key]}
-                        min={key === 'correctie' ? undefined : 0}
+                        min={0}
                         onChange={(event) => updateBalance(index, key, event.target.value)}
                         className="h-8 w-20 rounded border bg-background px-2 text-right"
                       />
@@ -186,13 +272,25 @@ function DoctorAbsenceContent({ groupId, data }: PraktijkplannerPageContext) {
                     )}
                   </td>
                 ))}
-                <td className="p-3 text-right">{balance.mutaties}</td>
+                <td className="p-3 text-right">
+                  <span className="inline-flex items-center justify-end gap-1.5">
+                    {balance.mutaties}
+                    <MutationDatesDropdown datums={balance.mutatieDatums ?? []} />
+                  </span>
+                </td>
+                <td className="p-3 text-right">
+                  <span className="inline-flex items-center justify-end gap-1.5">
+                    {balance.mutatiesVoorlopig}
+                    <MutationDatesDropdown datums={balance.mutatieDatumsVoorlopig ?? []} />
+                  </span>
+                </td>
                 <td className="p-3 text-right font-semibold">{balance.totaal}</td>
+                <td className="p-3 text-right font-semibold">{balance.totaalVoorlopig}</td>
               </tr>
             ))}
             {balances.length === 0 && !loading ? (
               <tr>
-                <td colSpan={6} className="p-6 text-center text-muted-foreground">
+                <td colSpan={7} className="p-6 text-center text-muted-foreground">
                   Geen afwezigheidstypen beschikbaar.
                 </td>
               </tr>
@@ -213,17 +311,6 @@ function DoctorAbsenceContent({ groupId, data }: PraktijkplannerPageContext) {
           <p className="whitespace-pre-wrap text-sm text-muted-foreground">{note || 'Geen notitie.'}</p>
         )}
       </label>
-
-      {data.isManager ? (
-        <button
-          type="button"
-          disabled={saving || !selectedParticipantId}
-          onClick={save}
-          className="inline-flex items-center gap-2 rounded bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-        >
-          <Save className="size-4" /> {saving ? 'Opslaan…' : 'Opslaan'}
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -232,10 +319,10 @@ export default function DokterAfwezigheidPage() {
   return (
     <>
       <Head>
-        <title>Dokter absence | Praktijkplanner</title>
+        <title>Absentie telling | Praktijkplanner</title>
       </Head>
       <PraktijkplannerPage
-        title="Dokter absence"
+        title="Absentie telling"
         description="Bekijk uw afwezigheidsbudget en resterende dagdelen per jaar."
       >
         {(context) => <DoctorAbsenceContent {...context} />}

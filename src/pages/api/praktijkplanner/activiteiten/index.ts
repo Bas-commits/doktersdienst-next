@@ -7,6 +7,10 @@ import {
   sendPraktijkplannerAccessError,
 } from '@/lib/praktijkplanner/access';
 import { isIsoDate, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
+import {
+  assertDaypartSchedulable,
+  SchedulableDaypartError,
+} from '@/lib/praktijkplanner/schedulable-dayparts-db';
 import type { PraktijkplannerPlanningSlot } from '@/types/praktijkplanner';
 
 type SlotMutation = {
@@ -425,6 +429,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     for (const mutation of parsed) {
       if (!(await canAccessPraktijkplannerParticipant(accessResult.access, mutation.iddeelnemer, { requireManager: true }))) {
         throw new PlannerRequestError('Een deelnemer hoort niet bij deze waarneemgroep.', 403);
+      }
+      try {
+        await assertDaypartSchedulable(
+          accessResult.access.idwaarneemgroep,
+          mutation.datum,
+          mutation.iddagdeel,
+          mutation.iddeelnemer
+        );
+      } catch (error) {
+        if (error instanceof SchedulableDaypartError) {
+          throw new PlannerRequestError(error.message, 400);
+        }
+        throw error;
       }
       await assertMasterDataBelongsToGroup(accessResult.access.idwaarneemgroep, mutation);
     }

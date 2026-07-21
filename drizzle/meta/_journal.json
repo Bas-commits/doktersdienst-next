@@ -71,6 +71,20 @@
       "when": 1784190000000,
       "tag": "0009_planningherhaling_uitzonderingen",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784620000000,
+      "tag": "0010_praktijkplanner_dagdelen",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784621000000,
+      "tag": "0011_praktijkplanner_deelnemer_dagdelen",
+      "breakpoints": true
     }
   ]
 }

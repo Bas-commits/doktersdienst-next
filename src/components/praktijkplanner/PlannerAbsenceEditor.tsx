@@ -19,6 +19,10 @@ import { Label } from '@/components/ui/label';
 import { usePlannerHolidayData } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import { addDays, formatIsoDate, monthCalendarBounds, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
+import {
+  isDaypartSchedulableForParticipant,
+  participantMatrixFor,
+} from '@/lib/praktijkplanner/schedulable-dayparts';
 import type { PraktijkplannerAbsenceSlot, PraktijkplannerDaypart } from '@/types/praktijkplanner';
  
 
@@ -269,6 +273,19 @@ export function PlannerAbsenceEditor({
       daypart: { id: number };
     }) => {
       if (!editable) return;
+      if (
+        !isDaypartSchedulableForParticipant(
+          data.masterData.schedulableDayparts ?? [],
+          participantMatrixFor(
+            data.masterData.participantSchedulableDayparts ?? [],
+            isDoctorMode ? data.userId : participant.id
+          ),
+          datum,
+          daypart.id
+        )
+      ) {
+        return;
+      }
       if (!clearMode && selectedTypeId == null) {
         toast.info('Kies eerst een afwezigheidstype.', { position: TOAST_POSITION });
         return;
@@ -357,6 +374,8 @@ export function PlannerAbsenceEditor({
     [
       clearMode,
       data.masterData.absenceTypes,
+      data.masterData.participantSchedulableDayparts,
+      data.masterData.schedulableDayparts,
       data.userId,
       editable,
       groupId,
@@ -519,6 +538,17 @@ export function PlannerAbsenceEditor({
           isCellFilled={({ participant, datum, daypart }) => isCellFilled(participant.id, datum, daypart)}
           onCellClick={applyCell}
           isCellDisabled={() => !editable}
+          isCellUnavailable={({ participant, datum, daypart }) =>
+            !isDaypartSchedulableForParticipant(
+              data.masterData.schedulableDayparts ?? [],
+              participantMatrixFor(
+                data.masterData.participantSchedulableDayparts ?? [],
+                participant.id
+              ),
+              datum,
+              daypart.id
+            )
+          }
           holidayLabels={holidayData.labels}
           cursorTool={cursorTool}
           onCursorToolDismiss={dismissCursorTool}
@@ -550,6 +580,17 @@ export function PlannerAbsenceEditor({
                 if (event.ctrlKey) void applyCell(cell);
               }}
               isCellDisabled={() => !editable}
+              isCellUnavailable={({ participant, datum, daypart }) =>
+                !isDaypartSchedulableForParticipant(
+                  data.masterData.schedulableDayparts ?? [],
+                  participantMatrixFor(
+                    data.masterData.participantSchedulableDayparts ?? [],
+                    participant.id
+                  ),
+                  datum,
+                  daypart.id
+                )
+              }
               holidayLabels={holidayData.labels}
               blockedDates={holidayData.publicHolidayDates}
               cursorTool={cursorTool}

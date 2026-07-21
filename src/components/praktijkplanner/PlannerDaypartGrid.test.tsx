@@ -42,4 +42,45 @@ describe('PlannerDaypartGrid', () => {
       })
     );
   });
+
+  it('grays out unavailable dayparts and shows a toast on click', async () => {
+    const onCellClick = vi.fn();
+    const { toast } = await import('sonner');
+    const toastInfo = vi.spyOn(toast, 'info').mockImplementation(() => '');
+
+    render(
+      <PlannerDaypartGrid
+        weekStart="2026-07-13"
+        participants={[
+          {
+            id: 7,
+            voornaam: 'Ada',
+            achternaam: 'Lovelace',
+            initialen: 'AL',
+            color: '#334155',
+            name: null,
+          },
+        ]}
+        dayparts={[
+          { id: 1, naam: 'Ochtend', volgorde: 1 },
+          { id: 2, naam: 'Middag', volgorde: 2 },
+        ]}
+        renderCell={() => <span>Beschikbaar</span>}
+        onCellClick={onCellClick}
+        isCellUnavailable={({ datum, daypart }) => datum === '2026-07-13' && daypart.id === 2}
+        isCellFilled={() => true}
+      />
+    );
+
+    const unavailable = screen.getByRole('button', {
+      name: 'Ada Lovelace 2026-07-13 Middag niet inplanbaar',
+    });
+    expect(unavailable).not.toBeDisabled();
+    fireEvent.click(unavailable);
+    expect(onCellClick).not.toHaveBeenCalled();
+    expect(toastInfo).toHaveBeenCalledWith(
+      'Dit dagdeel is niet beschikbaar voor deze deelnemer/waarneemgroep'
+    );
+    toastInfo.mockRestore();
+  });
 });

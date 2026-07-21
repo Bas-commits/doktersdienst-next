@@ -9,6 +9,7 @@ import {
 } from '@/components/praktijkplanner/CapacityRequirementList';
 import { CAPACITY_WEEKDAYS, CapacityWeekGrid } from '@/components/praktijkplanner/CapacityWeekGrid';
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
+import { isDaypartSchedulable } from '@/lib/praktijkplanner/schedulable-dayparts';
 import type { PraktijkplannerCapacityCell } from '@/types/praktijkplanner';
 
 type Requirement = { id: number; aantal: number };
@@ -308,6 +309,9 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
           {loading ? <p className="text-sm text-muted-foreground">Capaciteit laden…</p> : null}
           <CapacityWeekGrid
             dayparts={dayparts}
+            isCellUnavailable={(weekday, daypart) =>
+              !isDaypartSchedulable(data.masterData.schedulableDayparts ?? [], weekday.id, daypart.id)
+            }
             renderCell={(weekday, daypart) => {
               const key = keyFor(weekday.id, daypart.id);
               const cell = cells.get(key);

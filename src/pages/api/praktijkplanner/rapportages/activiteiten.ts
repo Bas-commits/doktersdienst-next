@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq, gte, inArray, lte } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, type SQL } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import {
   canAccessPraktijkplannerParticipant,
@@ -15,6 +15,7 @@ type ReportRow = {
   kleur: string | null;
   cellen: Record<string, number>;
   totaal: number;
+  datums: string[];
 };
 
 type Data = { rows: ReportRow[] } | { error: string };
@@ -25,12 +26,16 @@ function oneQueryValue(value: string | string[] | undefined): string | undefined
 
 function addCount(
   rows: Map<string, ReportRow>,
-  input: Omit<ReportRow, 'cellen' | 'totaal'>,
-  cell: string
+  input: Omit<ReportRow, 'cellen' | 'totaal' | 'datums'>,
+  cell: string,
+  datum: string
 ) {
-  const existing = rows.get(input.id) ?? { ...input, cellen: {}, totaal: 0 };
+  const existing = rows.get(input.id) ?? { ...input, cellen: {}, totaal: 0, datums: [] };
   existing.cellen[cell] = (existing.cellen[cell] ?? 0) + 1;
   existing.totaal += 1;
+  if (!existing.datums.includes(datum)) {
+    existing.datums.push(datum);
+  }
   rows.set(input.id, existing);
 }
 
@@ -46,22 +51,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   );
   if (!accessResult.ok) return sendPraktijkplannerAccessError(res, accessResult);
 
-  const iddeelnemer = parsePositiveInteger(oneQueryValue(req.query.iddeelnemer));
+  const iddeelnemerRaw = oneQueryValue(req.query.iddeelnemer);
+  const allParticipants = iddeelnemerRaw === 'all';
+  const iddeelnemer = allParticipants ? null : parsePositiveInteger(iddeelnemerRaw);
   const start = oneQueryValue(req.query.start);
   const end = oneQueryValue(req.query.end);
-  if (!iddeelnemer || !isIsoDate(start) || !isIsoDate(end) || start > end) {
+
+  if ((!allParticipants && !iddeelnemer) || !isIsoDate(start) || !isIsoDate(end) || start > end) {
     return res.status(400).json({ error: 'Een geldige deelnemer en datumbereik zijn verplicht.' });
   }
-  if (!(await canAccessPraktijkplannerParticipant(accessResult.access, iddeelnemer))) {
+  if (allParticipants && !accessResult.access.isManager) {
+    return res.status(403).json({ error: 'Alleen managers kunnen alle deelnemers bekijken.' });
+  }
+  if (iddeelnemer != null && !(await canAccessPraktijkplannerParticipant(accessResult.access, iddeelnemer))) {
     return res.status(403).json({ error: 'Geen toegang tot deze deelnemer.' });
   }
 
   try {
+    const planningFilters: SQL[] = [
+      eq(schema.planning.idwaarneemgroep, accessResult.access.idwaarneemgroep),
+      gte(schema.planning.datum, start),
+      lte(schema.planning.datum, end),
+    ];
+    if (iddeelnemer != null) {
+      planningFilters.push(eq(schema.planning.iddeelnemer, iddeelnemer));
+    }
+
+    const absenceFilters: SQL[] = [
+      eq(schema.planningafwezigheden.idwaarneemgroep, accessResult.access.idwaarneemgroep),
+      gte(schema.planningafwezigheden.datum, start),
+      lte(schema.planningafwezigheden.datum, end),
+    ];
+    if (iddeelnemer != null) {
+      absenceFilters.push(eq(schema.planningafwezigheden.iddeelnemer, iddeelnemer));
+    }
+
     const rows = await db
       .select({
         id: schema.planning.id,
         datum: schema.planning.datum,
         iddagdeel: schema.planning.iddagdeel,
+        iddeelnemer: schema.planning.iddeelnemer,
         activityId: schema.activiteiten.id,
         activityNaam: schema.activiteiten.naam,
         activityAfkorting: schema.activiteiten.afkorting,
@@ -77,14 +107,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         schema.activiteitSpecificaties,
         eq(schema.planning.idactiviteitspecificatie, schema.activiteitSpecificaties.id)
       )
-      .where(
-        and(
-          eq(schema.planning.idwaarneemgroep, accessResult.access.idwaarneemgroep),
-          eq(schema.planning.iddeelnemer, iddeelnemer),
-          gte(schema.planning.datum, start),
-          lte(schema.planning.datum, end)
-        )
-      );
+      .where(and(...planningFilters));
 
     const planningIds = rows.map((row) => row.id).filter((id): id is number => id != null);
     const [taskRows, absenceRows] = await Promise.all([
@@ -105,22 +128,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         .select({
           datum: schema.planningafwezigheden.datum,
           iddagdeel: schema.planningafwezigheden.iddagdeel,
+          iddeelnemer: schema.planningafwezigheden.iddeelnemer,
         })
         .from(schema.planningafwezigheden)
-        .where(
-          and(
-            eq(schema.planningafwezigheden.idwaarneemgroep, accessResult.access.idwaarneemgroep),
-            eq(schema.planningafwezigheden.iddeelnemer, iddeelnemer),
-            gte(schema.planningafwezigheden.datum, start),
-            lte(schema.planningafwezigheden.datum, end)
-          )
-        ),
+        .where(and(...absenceFilters)),
     ]);
 
     const absenceKeys = new Set(
       absenceRows
-        .filter((row) => row.datum != null && row.iddagdeel != null)
-        .map((row) => `${row.datum}:${row.iddagdeel}`)
+        .filter((row) => row.datum != null && row.iddagdeel != null && row.iddeelnemer != null)
+        .map((row) => `${row.iddeelnemer}:${row.datum}:${row.iddagdeel}`)
     );
     const tasksByPlanning = new Map<number, typeof taskRows>();
     for (const task of taskRows) {
@@ -132,8 +149,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     const aggregate = new Map<string, ReportRow>();
     for (const row of rows) {
-      if (row.id == null || row.datum == null || row.iddagdeel == null) continue;
-      if (absenceKeys.has(`${row.datum}:${row.iddagdeel}`)) continue;
+      if (row.id == null || row.datum == null || row.iddagdeel == null || row.iddeelnemer == null) continue;
+      if (absenceKeys.has(`${row.iddeelnemer}:${row.datum}:${row.iddagdeel}`)) continue;
       const cell = `${weekdayFromIsoDate(row.datum)}:${row.iddagdeel}`;
 
       if (row.activityId != null && row.activityNaam != null) {
@@ -145,7 +162,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             label: row.activityAfkorting || row.activityNaam,
             kleur: row.activityKleur,
           },
-          cell
+          cell,
+          row.datum
         );
       }
       if (row.specificationId != null && row.specificationNaam != null) {
@@ -157,7 +175,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             label: row.specificationAfkorting || row.specificationNaam,
             kleur: row.specificationKleur,
           },
-          cell
+          cell,
+          row.datum
         );
       }
       for (const task of tasksByPlanning.get(row.id) ?? []) {
@@ -170,13 +189,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             label: task.afkorting || task.omschrijving || `Taak ${task.idtaaktype}`,
             kleur: task.kleur,
           },
-          cell
+          cell,
+          row.datum
         );
       }
     }
 
+    const soortOrder = { activiteit: 0, specificatie: 1, taak: 2 } as const;
     return res.status(200).json({
-      rows: [...aggregate.values()].sort((a, b) => a.label.localeCompare(b.label, 'nl')),
+      rows: [...aggregate.values()]
+        .map((row) => ({
+          ...row,
+          datums: [...row.datums].sort(),
+        }))
+        .sort((a, b) => {
+          const bySoort = soortOrder[a.soort] - soortOrder[b.soort];
+          if (bySoort !== 0) return bySoort;
+          return a.label.localeCompare(b.label, 'nl');
+        }),
     });
   } catch (error) {
     console.error('[praktijkplanner/rapportages/activiteiten]', error);

@@ -78,6 +78,18 @@ export type PraktijkplannerAbsenceType = {
   actief: boolean;
 };
 
+/** Per-group weekday (1=Mon…7=Sun) × daypart schedulability. Empty = all schedulable. */
+export type PraktijkplannerSchedulableDaypart = {
+  weekdag: number;
+  iddagdeel: number;
+  actief: boolean;
+};
+
+/** Per-deelnemer override. Empty for a deelnemer = inherit group matrix. */
+export type PraktijkplannerParticipantSchedulableDaypart = PraktijkplannerSchedulableDaypart & {
+  iddeelnemer: number;
+};
+
 export type PraktijkplannerMasterData = {
   dayparts: PraktijkplannerDaypart[];
   expertises: PraktijkplannerExpertise[];
@@ -87,6 +99,8 @@ export type PraktijkplannerMasterData = {
   locations: PraktijkplannerLocation[];
   availabilityTypes: PraktijkplannerAvailabilityType[];
   absenceTypes: PraktijkplannerAbsenceType[];
+  schedulableDayparts: PraktijkplannerSchedulableDaypart[];
+  participantSchedulableDayparts: PraktijkplannerParticipantSchedulableDaypart[];
 };
 
 export type PraktijkplannerTask = {
@@ -127,13 +141,21 @@ export type PraktijkplannerAbsenceSlot = {
   absenceType: Pick<PraktijkplannerAbsenceType, 'id' | 'naam' | 'code' | 'kleur' | 'icon'>;
 };
 
+export type PraktijkplannerYearBalanceMutation = {
+  datum: string;
+  dagdeel: string;
+};
+
 export type PraktijkplannerYearBalance = {
   absenceType: PraktijkplannerAbsenceType;
   beginsaldo: number;
   budget: number;
-  correctie: number;
   mutaties: number;
+  mutatiesVoorlopig: number;
+  mutatieDatums: PraktijkplannerYearBalanceMutation[];
+  mutatieDatumsVoorlopig: PraktijkplannerYearBalanceMutation[];
   totaal: number;
+  totaalVoorlopig: number;
 };
 
 export type PraktijkplannerCapacityRequirement = {

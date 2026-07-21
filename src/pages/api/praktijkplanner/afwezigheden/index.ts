@@ -7,6 +7,10 @@ import {
   sendPraktijkplannerAccessError,
 } from '@/lib/praktijkplanner/access';
 import { isIsoDate, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
+import {
+  assertDaypartSchedulable,
+  SchedulableDaypartError,
+} from '@/lib/praktijkplanner/schedulable-dayparts-db';
 import type { PraktijkplannerAbsenceSlot } from '@/types/praktijkplanner';
 
 type AbsenceMutation = {
@@ -281,6 +285,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     for (const mutation of mutations) {
       if (!(await canAccessPraktijkplannerParticipant(accessResult.access, mutation.iddeelnemer))) {
         throw new AbsenceRequestError('Geen toegang tot deze deelnemer.', 403);
+      }
+      try {
+        await assertDaypartSchedulable(
+          accessResult.access.idwaarneemgroep,
+          mutation.datum,
+          mutation.iddagdeel,
+          mutation.iddeelnemer
+        );
+      } catch (error) {
+        if (error instanceof SchedulableDaypartError) {
+          throw new AbsenceRequestError(error.message, 400);
+        }
+        throw error;
       }
       if (!accessResult.access.isManager && mutation.idafwezigheidstype != null && !mutation.isVoorlopig) {
         throw new AbsenceRequestError('Alleen secretarissen en beheerders kunnen afwezigheden bevestigen.', 403);

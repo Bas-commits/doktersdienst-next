@@ -342,21 +342,29 @@ export function DoktersdienstHeader({
       <div className="w-full bg-white border-b border-[rgba(151,151,151,0.5)]">
         <nav className="flex flex-nowrap items-center justify-start">
           <Link
-            className="inline-block cursor-pointer py-1.5 mr-4 text-[1.09375rem] leading-inherit whitespace-nowrap no-underline hover:no-underline focus:no-underline [&_img]:max-h-[46px]"
+            className="inline-block cursor-pointer py-1.5 mr-4 text-[1.09375rem] leading-inherit whitespace-nowrap no-underline hover:no-underline focus:no-underline"
             href={primaryHref}
             data-testid="header-logo"
           >
-            <img src={primaryLogo} alt={primaryLabel} className="ml-[10px]" />
+            <img
+              src={primaryLogo}
+              alt={primaryLabel}
+              className="ml-[10px] h-auto w-[175px] object-contain"
+            />
           </Link>
 
           {showSectionSwitch ? (
             <Link
-              className="flex items-center bg-[#f0f0f0] border border-[#a5a5a5] rounded-md ml-5 text-xl text-[#a5a5a5] py-2 px-5 no-underline hover:bg-[#e7e7e7] [&_img]:max-h-[32px] [&_img]:max-w-[130px] [&_img]:mr-4"
+              className="flex items-center bg-[#f0f0f0] border border-[#a5a5a5] rounded-md ml-5 text-xl text-[#a5a5a5] py-2 px-5 no-underline hover:bg-[#e7e7e7]"
               href={switchHref}
               data-testid="header-section-switch"
               aria-label={switchLabel}
             >
-              <img src={switchLogo} alt="" />
+              <img
+                src={switchLogo}
+                alt=""
+                className="mr-4 h-[32px] w-auto max-w-[130px] object-contain"
+              />
               <span aria-hidden="true">→</span>
             </Link>
           ) : null}

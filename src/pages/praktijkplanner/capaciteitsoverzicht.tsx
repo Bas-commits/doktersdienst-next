@@ -8,6 +8,7 @@ import { PlannerWeekNavigation } from '@/components/praktijkplanner/PlannerWeekN
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import { subscribePlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
+import { isDaypartSchedulable } from '@/lib/praktijkplanner/schedulable-dayparts';
 import type { PraktijkplannerCapacityComparison } from '@/types/praktijkplanner';
 
 type OverviewCell = {
@@ -177,6 +178,9 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
           <CapacityWeekGrid
             dayparts={dayparts}
             weekdayHeaders={weekdayHeaders}
+            isCellUnavailable={(weekday, daypart) =>
+              !isDaypartSchedulable(data.masterData.schedulableDayparts ?? [], weekday.id, daypart.id)
+            }
             renderCell={(weekday, daypart) => {
               const date = weekDates[weekday.id - 1];
               const cell = cellByKey.get(`${date}:${daypart.id}`);

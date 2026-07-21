@@ -71,7 +71,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             idafwezigheidstype: schema.afwezigheidsjaarbudgetten.idafwezigheidstype,
             beginsaldo: schema.afwezigheidsjaarbudgetten.beginsaldo,
             budget: schema.afwezigheidsjaarbudgetten.budget,
-            correctie: schema.afwezigheidsjaarbudgetten.correctie,
           })
           .from(schema.afwezigheidsjaarbudgetten)
           .where(
@@ -84,13 +83,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         db
           .select({
             idafwezigheidstype: schema.planningafwezigheden.idafwezigheidstype,
+            isVoorlopig: schema.planningafwezigheden.isVoorlopig,
+            datum: schema.planningafwezigheden.datum,
+            dagdeel: schema.dagdelen.naam,
+            dagdeelVolgorde: schema.dagdelen.volgorde,
           })
           .from(schema.planningafwezigheden)
+          .innerJoin(schema.dagdelen, eq(schema.dagdelen.id, schema.planningafwezigheden.iddagdeel))
           .where(
             and(
               eq(schema.planningafwezigheden.idwaarneemgroep, accessResult.access.idwaarneemgroep),
               eq(schema.planningafwezigheden.iddeelnemer, iddeelnemer),
-              eq(schema.planningafwezigheden.isVoorlopig, false),
               gte(schema.planningafwezigheden.datum, start),
               lte(schema.planningafwezigheden.datum, end)
             )
@@ -116,17 +119,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             {
               beginsaldo: row.beginsaldo ?? 0,
               budget: row.budget ?? 0,
-              correctie: row.correctie ?? 0,
             },
           ])
       );
-      const mutationsByType = new Map<number, number>();
-      for (const absence of absences) {
-        if (absence.idafwezigheidstype == null) continue;
-        mutationsByType.set(
-          absence.idafwezigheidstype,
-          (mutationsByType.get(absence.idafwezigheidstype) ?? 0) + 1
-        );
+      const mutationsByType = new Map<number, PraktijkplannerYearBalance['mutatieDatums']>();
+      const provisionalMutationsByType = new Map<number, PraktijkplannerYearBalance['mutatieDatumsVoorlopig']>();
+      const sortedAbsences = [...absences].sort((left, right) => {
+        const byDate = (left.datum ?? '').localeCompare(right.datum ?? '');
+        if (byDate !== 0) return byDate;
+        return (left.dagdeelVolgorde ?? 0) - (right.dagdeelVolgorde ?? 0);
+      });
+      for (const absence of sortedAbsences) {
+        if (absence.idafwezigheidstype == null || !absence.datum || !absence.dagdeel) continue;
+        const target = absence.isVoorlopig ? provisionalMutationsByType : mutationsByType;
+        const current = target.get(absence.idafwezigheidstype) ?? [];
+        current.push({ datum: absence.datum, dagdeel: absence.dagdeel });
+        target.set(absence.idafwezigheidstype, current);
       }
 
       const balances: PraktijkplannerYearBalance[] = types
@@ -141,8 +149,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           } => type.id != null && type.naam != null && type.code != null && type.actief != null
         )
         .map((type) => {
-          const configured = budgetByType.get(type.id) ?? { beginsaldo: 0, budget: 0, correctie: 0 };
-          const mutaties = mutationsByType.get(type.id) ?? 0;
+          const configured = budgetByType.get(type.id) ?? { beginsaldo: 0, budget: 0 };
+          const mutatieDatums = mutationsByType.get(type.id) ?? [];
+          const mutatieDatumsVoorlopig = provisionalMutationsByType.get(type.id) ?? [];
+          const mutaties = mutatieDatums.length;
+          const mutatiesVoorlopig = mutatieDatumsVoorlopig.length;
+          const available = configured.beginsaldo + configured.budget;
           return {
             absenceType: {
               id: type.id,
@@ -152,9 +164,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
               icon: type.icon,
               actief: type.actief,
             },
-            ...configured,
+            beginsaldo: configured.beginsaldo,
+            budget: configured.budget,
             mutaties,
-            totaal: configured.beginsaldo + configured.budget + configured.correctie - mutaties,
+            mutatiesVoorlopig,
+            mutatieDatums,
+            mutatieDatumsVoorlopig,
+            totaal: available - mutaties,
+            totaalVoorlopig: available - mutaties - mutatiesVoorlopig,
           };
         });
 
@@ -197,17 +214,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       const idafwezigheidstype = parsePositiveInteger(row.idafwezigheidstype);
       const beginsaldo = parseNonNegativeInteger(row.beginsaldo);
       const budget = parseNonNegativeInteger(row.budget);
-      const correctie = Number(row.correctie);
-      if (
-        !idafwezigheidstype ||
-        beginsaldo == null ||
-        budget == null ||
-        !Number.isInteger(correctie) ||
-        Math.abs(correctie) > 10_000
-      ) {
+      if (!idafwezigheidstype || beginsaldo == null || budget == null) {
         throw new Error('invalid balance');
       }
-      return { idafwezigheidstype, beginsaldo, budget, correctie };
+      return { idafwezigheidstype, beginsaldo, budget };
     });
     const typeRows = await db
       .select({ id: schema.afwezigheidstypen.id })
@@ -234,7 +244,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const values = {
           beginsaldo: balance.beginsaldo,
           budget: balance.budget,
-          correctie: balance.correctie,
+          correctie: 0,
           updatedBy: accessResult.access.user.id,
           updatedAt: new Date().toISOString(),
         };

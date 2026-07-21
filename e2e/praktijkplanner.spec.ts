@@ -35,8 +35,8 @@ test.describe('Praktijkplanner deelnemer flow', () => {
     await expect(page).toHaveURL(/\/praktijkplanner\/activiteiten$/);
     await expect(page.getByRole('heading', { name: 'Activiteiten planner' })).toBeVisible();
     await expect(page.getByText('Afwezigheidsplanner dokter')).toBeVisible();
-    await expect(page.getByText('Dokter activity')).toBeVisible();
-    await expect(page.getByText('Dokter absence')).toBeVisible();
+    await expect(page.getByText('Capaciteits rapportage')).toBeVisible();
+    await expect(page.getByText('Absentie telling')).toBeVisible();
 
     await page.getByText('Afwezigheidsplanner dokter').click();
     await expect(page.getByRole('heading', { name: 'Afwezigheidsplanner dokter' })).toBeVisible();

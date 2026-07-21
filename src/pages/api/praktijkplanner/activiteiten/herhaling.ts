@@ -12,6 +12,11 @@ import {
   occurrenceKey,
   type PlannerTemplate,
 } from '@/lib/praktijkplanner/herhaling-materialize';
+import { isDaypartSchedulableForParticipant } from '@/lib/praktijkplanner/schedulable-dayparts';
+import {
+  loadParticipantSchedulableDayparts,
+  loadSchedulableDayparts,
+} from '@/lib/praktijkplanner/schedulable-dayparts-db';
 
 type Data =
   | {
@@ -307,12 +312,30 @@ async function materializeSeriesWithTx(
     templates: input.templates,
     skipKeys: input.skipKeys,
   });
-  if (plans.length === 0) return;
+  const schedulableMatrix = await loadSchedulableDayparts(input.idwaarneemgroep);
+  const participantRows = await loadParticipantSchedulableDayparts(
+    input.idwaarneemgroep,
+    input.iddeelnemer
+  );
+  const participantMatrix = participantRows.map(({ weekdag, iddagdeel, actief }) => ({
+    weekdag,
+    iddagdeel,
+    actief,
+  }));
+  const schedulablePlans = plans.filter((plan) =>
+    isDaypartSchedulableForParticipant(
+      schedulableMatrix,
+      participantMatrix,
+      plan.datum,
+      plan.iddagdeel
+    )
+  );
+  if (schedulablePlans.length === 0) return;
 
   const created = await tx
     .insert(schema.planning)
     .values(
-      plans.map((plan) => ({
+      schedulablePlans.map((plan) => ({
         idwaarneemgroep: input.idwaarneemgroep,
         iddeelnemer: input.iddeelnemer,
         datum: plan.datum,
@@ -336,7 +359,7 @@ async function materializeSeriesWithTx(
     idByKey.set(occurrenceKey(row.datum, row.iddagdeel), row.id);
   }
 
-  const tasks = plans.flatMap((plan) => {
+  const tasks = schedulablePlans.flatMap((plan) => {
     const idplanning = idByKey.get(occurrenceKey(plan.datum, plan.iddagdeel));
     if (idplanning == null) return [];
     return plan.tasks.map((task) => ({
@@ -349,7 +372,7 @@ async function materializeSeriesWithTx(
     await tx.insert(schema.planningtaak).values(tasks);
   }
 
-  const availability = plans.flatMap((plan) => {
+  const availability = schedulablePlans.flatMap((plan) => {
     if (plan.idbeschikbaarheidstype == null) return [];
     const idplanning = idByKey.get(occurrenceKey(plan.datum, plan.iddagdeel));
     if (idplanning == null) return [];
@@ -365,7 +388,7 @@ async function materializeSeriesWithTx(
     await tx.insert(schema.planningbeschikbaarheid).values(availability);
   }
 
-  const links = plans.flatMap((plan) => {
+  const links = schedulablePlans.flatMap((plan) => {
     const idplanning = idByKey.get(occurrenceKey(plan.datum, plan.iddagdeel));
     if (idplanning == null) return [];
     return [

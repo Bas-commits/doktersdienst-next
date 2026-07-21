@@ -78,6 +78,8 @@ const context: PraktijkplannerPageContext = {
           actief: true,
         },
       ],
+      schedulableDayparts: [],
+      participantSchedulableDayparts: [],
     },
   },
 };

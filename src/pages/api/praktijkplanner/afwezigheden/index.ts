@@ -38,6 +38,60 @@ function nullableId(value: unknown): number | null | undefined {
   return parsePositiveInteger(value) ?? undefined;
 }
 
+/**
+ * Confirmed absences govern the daypart: remove any activity planning so the
+ * shift does not resurface when the absence overlay is shown.
+ */
+async function clearPlanningForConfirmedAbsence(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  params: {
+    idwaarneemgroep: number;
+    iddeelnemer: number;
+    datum: string;
+    iddagdeel: number;
+    userId: number;
+  }
+) {
+  const [existing] = await tx
+    .select({ id: schema.planning.id })
+    .from(schema.planning)
+    .where(
+      and(
+        eq(schema.planning.idwaarneemgroep, params.idwaarneemgroep),
+        eq(schema.planning.iddeelnemer, params.iddeelnemer),
+        eq(schema.planning.datum, params.datum),
+        eq(schema.planning.iddagdeel, params.iddagdeel)
+      )
+    )
+    .limit(1);
+
+  if (existing?.id == null) return;
+
+  const [link] = await tx
+    .select({
+      idherhaling: schema.planningherhalingslots.idherhaling,
+      isBronslot: schema.planningherhalingslots.isBronslot,
+    })
+    .from(schema.planningherhalingslots)
+    .where(eq(schema.planningherhalingslots.idplanning, existing.id))
+    .limit(1);
+
+  if (link?.idherhaling != null && !link.isBronslot) {
+    await tx
+      .insert(schema.planningherhalinguitzonderingen)
+      .values({
+        idherhaling: link.idherhaling,
+        reeksdatum: params.datum,
+        iddagdeel: params.iddagdeel,
+        type: 'verwijderd',
+        createdBy: params.userId,
+      })
+      .onConflictDoNothing();
+  }
+
+  await tx.delete(schema.planning).where(eq(schema.planning.id, existing.id));
+}
+
 async function loadAbsences(
   idwaarneemgroep: number,
   start: string,
@@ -307,6 +361,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             isVoorlopig: mutation.isVoorlopig,
             createdBy: accessResult.access.user.id,
             updatedBy: accessResult.access.user.id,
+          });
+        }
+
+        if (!mutation.isVoorlopig) {
+          await clearPlanningForConfirmedAbsence(tx, {
+            idwaarneemgroep: accessResult.access.idwaarneemgroep,
+            iddeelnemer: mutation.iddeelnemer,
+            datum: mutation.datum,
+            iddagdeel: mutation.iddagdeel,
+            userId: accessResult.access.user.id,
           });
         }
       }

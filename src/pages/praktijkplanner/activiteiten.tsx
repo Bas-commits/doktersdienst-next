@@ -4,6 +4,7 @@ import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Copy, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
+import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartCell';
 import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
 import {
   PlannerCombinedDaypartChip,
@@ -28,7 +29,15 @@ import {
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
-import type { PraktijkplannerParticipant, PraktijkplannerPlanningSlot } from '@/types/praktijkplanner';
+import {
+  notifyPlannerChanged,
+  subscribePlannerChanged,
+} from '@/lib/praktijkplanner/planner-change-broadcast';
+import type {
+  PraktijkplannerAbsenceSlot,
+  PraktijkplannerParticipant,
+  PraktijkplannerPlanningSlot,
+} from '@/types/praktijkplanner';
 
 type ParticipantActionModal =
   | { type: 'copy'; participant: PraktijkplannerParticipant; sourceWeekStart: string }
@@ -56,6 +65,7 @@ function currentWeekStart() {
 function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
   const [weekStart, setWeekStart] = useState(currentWeekStart);
   const [slots, setSlots] = useState<PraktijkplannerPlanningSlot[]>([]);
+  const [absenceSlots, setAbsenceSlots] = useState<PraktijkplannerAbsenceSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotError, setSlotError] = useState<string | null>(null);
   const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
@@ -174,11 +184,67 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     setSlots(payload.slots);
   }, [end, groupId, weekStart]);
 
+  const loadAbsences = useCallback(() => {
+    const abortController = new AbortController();
+    fetch(
+      `/api/praktijkplanner/afwezigheden?idwaarneemgroep=${groupId}&start=${weekStart}&end=${end}`,
+      { credentials: 'include', signal: abortController.signal }
+    )
+      .then(async (response) => {
+        const payload = (await response.json()) as { slots?: PraktijkplannerAbsenceSlot[]; error?: string };
+        if (!response.ok || !payload.slots) {
+          throw new Error(payload.error || 'Afwezigheden konden niet worden geladen.');
+        }
+        return payload.slots;
+      })
+      .then((loaded) => {
+        if (!abortController.signal.aborted) setAbsenceSlots(loaded);
+      })
+      .catch((error: unknown) => {
+        if (!abortController.signal.aborted) {
+          toast.error(error instanceof Error ? error.message : 'Afwezigheden konden niet worden geladen.');
+        }
+      });
+    return () => abortController.abort();
+  }, [end, groupId, weekStart]);
+
   useEffect(() => loadSlots(), [loadSlots]);
+  useEffect(() => loadAbsences(), [loadAbsences]);
+
+  useEffect(() => {
+    let debounceTimer: number | undefined;
+    const scheduleRefresh = () => {
+      window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        void refreshSlots();
+        loadAbsences();
+      }, 300);
+    };
+
+    const unsubscribe = subscribePlannerChanged(groupId, scheduleRefresh);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') scheduleRefresh();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      unsubscribe();
+      window.clearTimeout(debounceTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [groupId, loadAbsences, refreshSlots]);
 
   const baseSlotMap = useMemo(
     () => new Map(slots.map((slot) => [slotKey(slot.iddeelnemer, slot.datum, slot.iddagdeel), slot])),
     [slots]
+  );
+
+  const absenceMap = useMemo(
+    () =>
+      new Map(
+        absenceSlots.map((slot) => [slotKey(slot.iddeelnemer, slot.datum, slot.iddagdeel), slot])
+      ),
+    [absenceSlots]
   );
 
   const renderSlot = useCallback(
@@ -195,6 +261,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     }) => {
       const key = slotKey(participant.id, datum, daypart.id);
       const existing = baseSlotMap.get(key);
+      const absence = absenceMap.get(key);
       const activity = existing?.activity ?? null;
       const specification = existing?.specification ?? null;
       const location = existing?.location ?? null;
@@ -202,8 +269,19 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
       const availability = existing?.availability ?? null;
       const initials = deelnemerChipInitials(participant);
       const participantName = participantDisplayName(participant);
+      const hasActivityContent = Boolean(
+        activity || location || tasks.length > 0 || availability
+      );
 
-      if (!activity && !location && tasks.length === 0 && !availability) {
+      if (absence && !absence.isVoorlopig) {
+        return <AbsenceDaypartCell absence={absence.absenceType} fill />;
+      }
+
+      if (absence?.isVoorlopig && !hasActivityContent) {
+        return <AbsenceDaypartCell absence={absence.absenceType} provisional fill />;
+      }
+
+      if (!hasActivityContent) {
         return null;
       }
 
@@ -239,30 +317,52 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           }
         : null;
 
+      const provisionalOverlay = Boolean(absence?.isVoorlopig);
+      const absenceLabel = absence
+        ? `${absence.absenceType.naam}${absence.isVoorlopig ? '?' : ''}`
+        : null;
+
       const chip = (
         <div className="relative h-full w-full min-w-0">
-          {activityItem || locationItem || taskItems.length > 0 ? (
-            <PlannerCombinedDaypartChip
-              tasks={taskItems}
-              activity={activityItem}
-              location={locationItem}
-              fill
-              participantColor={participant.color}
-              initials={initials}
-              className="shadow-none"
-            />
-          ) : null}
-          {availability ? (
-            <span className="pointer-events-none absolute inset-x-0.5 bottom-0.5 truncate rounded bg-background/80 px-0.5 text-[9px] font-medium text-emerald-700">
-              {availability.naam}
-            </span>
-          ) : null}
+          <div
+            className={[
+              'relative h-full w-full min-w-0',
+              provisionalOverlay ? 'opacity-45 grayscale' : null,
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {activityItem || locationItem || taskItems.length > 0 ? (
+              <PlannerCombinedDaypartChip
+                tasks={taskItems}
+                activity={activityItem}
+                location={locationItem}
+                fill
+                participantColor={participant.color}
+                initials={initials}
+                className="shadow-none"
+              />
+            ) : null}
+            {availability ? (
+              <span className="pointer-events-none absolute inset-x-0.5 bottom-0.5 truncate rounded bg-background/80 px-0.5 text-[9px] font-medium text-emerald-700">
+                {availability.naam}
+              </span>
+            ) : null}
+          </div>
           {existing?.isUitzondering ? (
             <span
               className="pointer-events-none absolute top-0.5 left-0.5 z-20 rounded bg-background/90 p-0.5 text-amber-500"
               title="Uitzondering op herhaling"
             >
               <TriangleAlert className="size-3.5" aria-hidden />
+            </span>
+          ) : null}
+          {provisionalOverlay ? (
+            <span
+              className="pointer-events-none absolute top-0.5 right-0.5 z-20 flex size-4 items-center justify-center rounded bg-background/90 text-[11px] font-bold text-muted-foreground ring-1 ring-border"
+              title={absenceLabel ?? 'Voorlopige afwezigheid'}
+            >
+              ?
             </span>
           ) : null}
         </div>
@@ -278,6 +378,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
           fromRepetition={existing?.recurrenceId != null}
           isException={Boolean(existing?.isUitzondering)}
           availabilityName={availability?.naam}
+          taskNames={taskItems.map((task) => task.label)}
           chip={
             <PlannerCombinedDaypartChip
               tasks={taskItems}
@@ -295,7 +396,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         </PlannerDaypartHoverPreview>
       );
     },
-    [baseSlotMap]
+    [absenceMap, baseSlotMap]
   );
 
   const isCellFilled = useCallback(
@@ -310,14 +411,33 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
     }) => {
       const key = slotKey(participant.id, datum, daypart.id);
       const existing = baseSlotMap.get(key);
+      const absence = absenceMap.get(key);
       return Boolean(
-        existing?.activity ||
+        absence ||
+          existing?.activity ||
           existing?.location ||
           existing?.availability ||
           existing?.tasks.length
       );
     },
-    [baseSlotMap]
+    [absenceMap, baseSlotMap]
+  );
+
+  const isCellDisabled = useCallback(
+    ({
+      participant,
+      datum,
+      daypart,
+    }: {
+      participant: { id: number };
+      datum: string;
+      daypart: { id: number };
+    }) => {
+      if (!data.isManager) return true;
+      const absence = absenceMap.get(slotKey(participant.id, datum, daypart.id));
+      return Boolean(absence && !absence.isVoorlopig);
+    },
+    [absenceMap, data.isManager]
   );
 
   const getCellClassName = useCallback(
@@ -476,6 +596,11 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         return;
       }
       const key = slotKey(participant.id, datum, daypart.id);
+      const confirmedAbsence = absenceMap.get(key);
+      if (confirmedAbsence && !confirmedAbsence.isVoorlopig) {
+        toast.info('Dit dagdeel heeft een bevestigde afwezigheid en kan niet worden aangepast.');
+        return;
+      }
       const existingSlot = baseSlotMap.get(key);
       const currentAssignment: CurrentActivityAssignment | null = existingSlot
         ? {
@@ -586,6 +711,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
         const payload = (await response.json()) as { error?: string };
         if (!response.ok) throw new Error(payload.error || 'Wijziging kon niet worden opgeslagen.');
         await refreshSlots();
+        notifyPlannerChanged(groupId);
         toast.success(clearMode ? 'Dagdeel leeggemaakt.' : 'Dagdeel opgeslagen.');
       } catch (error) {
         setSlots(previousSlots);
@@ -593,6 +719,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
       }
     },
     [
+      absenceMap,
       baseSlotMap,
       clearMode,
       data.isManager,
@@ -614,7 +741,8 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
 
   const refreshAfterRecurrence = useCallback(() => {
     loadSlots();
-  }, [loadSlots]);
+    notifyPlannerChanged(groupId);
+  }, [groupId, loadSlots]);
 
   const renderParticipantActions = useCallback(
     (participant: PraktijkplannerParticipant) => (
@@ -738,7 +866,7 @@ function ActivitiesContent({ groupId, data }: PraktijkplannerPageContext) {
               })
             }
             onCellClick={queueCell}
-            isCellDisabled={() => !data.isManager}
+            isCellDisabled={isCellDisabled}
             isCellFilled={isCellFilled}
             getCellClassName={getCellClassName}
             holidayLabels={holidays}

@@ -18,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { usePlannerHolidayData } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import { addDays, formatIsoDate, monthCalendarBounds, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 import type { PraktijkplannerAbsenceSlot, PraktijkplannerDaypart } from '@/types/praktijkplanner';
  
 
@@ -342,6 +343,7 @@ export function PlannerAbsenceEditor({
         const payload = (await response.json()) as { error?: string };
         if (!response.ok) throw new Error(payload.error || 'Wijziging kon niet worden opgeslagen.');
         await refreshSlots();
+        notifyPlannerChanged(groupId);
         toast.success(clearMode ? 'Afwezigheid verwijderd.' : 'Afwezigheid opgeslagen.', {
           position: TOAST_POSITION,
         });

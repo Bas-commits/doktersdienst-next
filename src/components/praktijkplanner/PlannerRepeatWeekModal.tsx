@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { addDays, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 
 export function PlannerRepeatWeekModal({
   open,
@@ -71,6 +72,7 @@ export function PlannerRepeatWeekModal({
       }
       if (!response.ok) throw new Error(payload.error || 'Herhaling aanmaken mislukt.');
       toast.success(overwrite ? 'Herhaling aangemaakt (bestaande planning overschreven).' : 'Herhaling aangemaakt.');
+      notifyPlannerChanged(groupId);
       onCreated?.();
       onClose();
     } catch (error) {

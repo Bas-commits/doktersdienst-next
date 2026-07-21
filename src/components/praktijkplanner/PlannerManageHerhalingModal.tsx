@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 
 export type ManagedHerhalingSeries = {
   id: number;
@@ -115,6 +116,7 @@ export function PlannerManageHerhalingModal({
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(payload.error || 'Herhaling bijwerken mislukt.');
       toast.success('Herhaling bijgewerkt.');
+      notifyPlannerChanged(groupId);
       setView({ kind: 'list' });
       setEditDraft(null);
       onChanged?.();
@@ -149,6 +151,7 @@ export function PlannerManageHerhalingModal({
           ? 'Herhaling en planning verwijderd.'
           : 'Herhalingspatroon verwijderd; planning behouden.'
       );
+      notifyPlannerChanged(groupId);
       setView({ kind: 'list' });
       onChanged?.();
       await loadSeries();

@@ -338,8 +338,8 @@ export function DoktersdienstHeader({
   }, [router]);
 
   return (
-    <header className="relative" data-testid="doktersdienst-header">
-      <div className="sticky top-0 left-0 right-0 z-[1500] min-w-[1024px] bg-white border-b border-[rgba(151,151,151,0.5)]">
+    <header className="relative z-[1500] shrink-0" data-testid="doktersdienst-header">
+      <div className="w-full bg-white border-b border-[rgba(151,151,151,0.5)]">
         <nav className="flex flex-nowrap items-center justify-start">
           <Link
             className="inline-block cursor-pointer py-1.5 mr-4 text-[1.09375rem] leading-inherit whitespace-nowrap no-underline hover:no-underline focus:no-underline [&_img]:max-h-[46px]"

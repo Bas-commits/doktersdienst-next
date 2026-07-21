@@ -252,7 +252,7 @@ export function Sidebar({ roleTier = GROEP_DEELNEMER, section = 'doktersdienst' 
 
   return (
     <aside
-      className="sidebar group/sb sticky top-0 h-screen w-14 shrink-0 self-start overflow-hidden border-r border-border bg-muted/30 transition-[width] duration-200 ease-out hover:w-75"
+      className="sidebar group/sb h-full w-14 shrink-0 overflow-hidden border-r border-border bg-muted/30 transition-[width] duration-200 ease-out hover:w-75"
       aria-label={isPraktijkplanner ? 'Praktijkplanner navigatie' : 'Hoofdnavigatie'}
     >
       <nav className="h-full overflow-y-auto px-2 py-4 transition-[padding] duration-200 group-hover/sb:px-4">

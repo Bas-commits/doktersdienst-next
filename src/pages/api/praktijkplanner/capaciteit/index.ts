@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import {
   resolvePraktijkplannerAccess,
@@ -294,112 +294,125 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const identifiers = new Set(cells.map((cell) => `${cell.weekdag}:${cell.iddagdeel}`));
     if (identifiers.size !== cells.length) return res.status(400).json({ error: 'Een dagdeel komt dubbel voor.' });
 
-    const dayparts = await db
-      .select({ id: schema.dagdelen.id })
-      .from(schema.dagdelen)
-      .where(inArray(schema.dagdelen.id, [...new Set(cells.map((cell) => cell.iddagdeel))]));
-    if (dayparts.length !== new Set(cells.map((cell) => cell.iddagdeel)).size) {
+    const daypartIds = [...new Set(cells.map((cell) => cell.iddagdeel))];
+    const [dayparts] = await Promise.all([
+      db
+        .select({ id: schema.dagdelen.id })
+        .from(schema.dagdelen)
+        .where(inArray(schema.dagdelen.id, daypartIds)),
+      assertRequirementIds({
+        idwaarneemgroep: accessResult.access.idwaarneemgroep,
+        expertises: [...new Set(cells.flatMap((cell) => cell.expertises.map((item) => item.id)))],
+        tasks: [...new Set(cells.flatMap((cell) => cell.tasks.map((item) => item.id)))],
+        activities: [...new Set(cells.flatMap((cell) => cell.activities.map((item) => item.id)))],
+        specifications: [...new Set(cells.flatMap((cell) => cell.specifications.map((item) => item.id)))],
+      }),
+    ]);
+    if (dayparts.length !== daypartIds.length) {
       return res.status(400).json({ error: 'Een gekozen dagdeel bestaat niet.' });
     }
 
-    await assertRequirementIds({
-      idwaarneemgroep: accessResult.access.idwaarneemgroep,
-      expertises: [...new Set(cells.flatMap((cell) => cell.expertises.map((item) => item.id)))],
-      tasks: [...new Set(cells.flatMap((cell) => cell.tasks.map((item) => item.id)))],
-      activities: [...new Set(cells.flatMap((cell) => cell.activities.map((item) => item.id)))],
-      specifications: [...new Set(cells.flatMap((cell) => cell.specifications.map((item) => item.id)))],
-    });
+    const cellByKey = new Map(cells.map((cell) => [`${cell.weekdag}:${cell.iddagdeel}`, cell]));
+    const updatedAt = new Date().toISOString();
+    const updatedBy = accessResult.access.user.id;
 
     await db.transaction(async (tx) => {
-      for (const cell of cells) {
-        const where = and(
-          eq(schema.capaciteitsjablonen.idwaarneemgroep, accessResult.access.idwaarneemgroep),
-          eq(schema.capaciteitsjablonen.idplannerlocatie, idplannerlocatie),
-          eq(schema.capaciteitsjablonen.weekdag, cell.weekdag),
-          eq(schema.capaciteitsjablonen.iddagdeel, cell.iddagdeel)
-        );
-        const [existing] = await tx
-          .select({ id: schema.capaciteitsjablonen.id })
-          .from(schema.capaciteitsjablonen)
-          .where(where)
-          .limit(1);
-        let templateId = existing?.id;
-        if (templateId == null) {
-          const [created] = await tx
-            .insert(schema.capaciteitsjablonen)
-            .values({
-              idwaarneemgroep: accessResult.access.idwaarneemgroep,
-              idplannerlocatie,
-              weekdag: cell.weekdag,
-              iddagdeel: cell.iddagdeel,
-              aantalDeelnemers: cell.aantalDeelnemers,
-              updatedBy: accessResult.access.user.id,
-            })
-            .returning({ id: schema.capaciteitsjablonen.id });
-          templateId = created?.id;
-        } else {
-          await tx
-            .update(schema.capaciteitsjablonen)
-            .set({
-              aantalDeelnemers: cell.aantalDeelnemers,
-              updatedBy: accessResult.access.user.id,
-              updatedAt: new Date().toISOString(),
-            })
-            .where(eq(schema.capaciteitsjablonen.id, templateId));
-        }
-        if (templateId == null) throw new Error('template-create-failed');
+      // One upsert for the whole week×daypart matrix instead of per-cell select/update.
+      const upserted = await tx
+        .insert(schema.capaciteitsjablonen)
+        .values(
+          cells.map((cell) => ({
+            idwaarneemgroep: accessResult.access.idwaarneemgroep,
+            idplannerlocatie,
+            weekdag: cell.weekdag,
+            iddagdeel: cell.iddagdeel,
+            aantalDeelnemers: cell.aantalDeelnemers,
+            updatedBy,
+            updatedAt,
+          }))
+        )
+        .onConflictDoUpdate({
+          target: [
+            schema.capaciteitsjablonen.idwaarneemgroep,
+            schema.capaciteitsjablonen.idplannerlocatie,
+            schema.capaciteitsjablonen.weekdag,
+            schema.capaciteitsjablonen.iddagdeel,
+          ],
+          set: {
+            aantalDeelnemers: sql`excluded.aantal_deelnemers`,
+            updatedBy,
+            updatedAt,
+          },
+        })
+        .returning({
+          id: schema.capaciteitsjablonen.id,
+          weekdag: schema.capaciteitsjablonen.weekdag,
+          iddagdeel: schema.capaciteitsjablonen.iddagdeel,
+        });
 
-        await Promise.all([
-          tx
-            .delete(schema.capaciteitsjabloonexpertises)
-            .where(eq(schema.capaciteitsjabloonexpertises.idcapaciteitsjabloon, templateId)),
-          tx
-            .delete(schema.capaciteitsjabloontaken)
-            .where(eq(schema.capaciteitsjabloontaken.idcapaciteitsjabloon, templateId)),
-          tx
-            .delete(schema.capaciteitsjabloonactiviteiten)
-            .where(eq(schema.capaciteitsjabloonactiviteiten.idcapaciteitsjabloon, templateId)),
-          tx
-            .delete(schema.capaciteitsjabloonspecificaties)
-            .where(eq(schema.capaciteitsjabloonspecificaties.idcapaciteitsjabloon, templateId)),
-        ]);
-        if (cell.expertises.length > 0) {
-          await tx.insert(schema.capaciteitsjabloonexpertises).values(
-            cell.expertises.map((item) => ({
-              idcapaciteitsjabloon: templateId!,
-              idexpertise: item.id,
-              aantal: item.aantal,
-            }))
-          );
+      const templateIds = upserted
+        .map((row) => row.id)
+        .filter((id): id is number => id != null);
+      if (templateIds.length !== cells.length) throw new Error('template-create-failed');
+
+      await Promise.all([
+        tx
+          .delete(schema.capaciteitsjabloonexpertises)
+          .where(inArray(schema.capaciteitsjabloonexpertises.idcapaciteitsjabloon, templateIds)),
+        tx
+          .delete(schema.capaciteitsjabloontaken)
+          .where(inArray(schema.capaciteitsjabloontaken.idcapaciteitsjabloon, templateIds)),
+        tx
+          .delete(schema.capaciteitsjabloonactiviteiten)
+          .where(inArray(schema.capaciteitsjabloonactiviteiten.idcapaciteitsjabloon, templateIds)),
+        tx
+          .delete(schema.capaciteitsjabloonspecificaties)
+          .where(inArray(schema.capaciteitsjabloonspecificaties.idcapaciteitsjabloon, templateIds)),
+      ]);
+
+      const expertiseRows: Array<{ idcapaciteitsjabloon: number; idexpertise: number; aantal: number }> = [];
+      const taskRows: Array<{ idcapaciteitsjabloon: number; idtaaktype: number; aantal: number }> = [];
+      const activityRows: Array<{ idcapaciteitsjabloon: number; idactiviteit: number; aantal: number }> = [];
+      const specificationRows: Array<{
+        idcapaciteitsjabloon: number;
+        idactiviteitspecificatie: number;
+        aantal: number;
+      }> = [];
+
+      for (const row of upserted) {
+        if (row.id == null || row.weekdag == null || row.iddagdeel == null) continue;
+        const cell = cellByKey.get(`${row.weekdag}:${row.iddagdeel}`);
+        if (!cell) continue;
+        for (const item of cell.expertises) {
+          expertiseRows.push({ idcapaciteitsjabloon: row.id, idexpertise: item.id, aantal: item.aantal });
         }
-        if (cell.tasks.length > 0) {
-          await tx.insert(schema.capaciteitsjabloontaken).values(
-            cell.tasks.map((item) => ({
-              idcapaciteitsjabloon: templateId!,
-              idtaaktype: item.id,
-              aantal: item.aantal,
-            }))
-          );
+        for (const item of cell.tasks) {
+          taskRows.push({ idcapaciteitsjabloon: row.id, idtaaktype: item.id, aantal: item.aantal });
         }
-        if (cell.activities.length > 0) {
-          await tx.insert(schema.capaciteitsjabloonactiviteiten).values(
-            cell.activities.map((item) => ({
-              idcapaciteitsjabloon: templateId!,
-              idactiviteit: item.id,
-              aantal: item.aantal,
-            }))
-          );
+        for (const item of cell.activities) {
+          activityRows.push({ idcapaciteitsjabloon: row.id, idactiviteit: item.id, aantal: item.aantal });
         }
-        if (cell.specifications.length > 0) {
-          await tx.insert(schema.capaciteitsjabloonspecificaties).values(
-            cell.specifications.map((item) => ({
-              idcapaciteitsjabloon: templateId!,
-              idactiviteitspecificatie: item.id,
-              aantal: item.aantal,
-            }))
-          );
+        for (const item of cell.specifications) {
+          specificationRows.push({
+            idcapaciteitsjabloon: row.id,
+            idactiviteitspecificatie: item.id,
+            aantal: item.aantal,
+          });
         }
       }
+
+      await Promise.all([
+        expertiseRows.length
+          ? tx.insert(schema.capaciteitsjabloonexpertises).values(expertiseRows)
+          : Promise.resolve(),
+        taskRows.length ? tx.insert(schema.capaciteitsjabloontaken).values(taskRows) : Promise.resolve(),
+        activityRows.length
+          ? tx.insert(schema.capaciteitsjabloonactiviteiten).values(activityRows)
+          : Promise.resolve(),
+        specificationRows.length
+          ? tx.insert(schema.capaciteitsjabloonspecificaties).values(specificationRows)
+          : Promise.resolve(),
+      ]);
     });
     return res.status(200).json({ success: true });
   } catch (error) {

@@ -11,6 +11,7 @@ import { PlannerDaypartGrid } from '@/components/praktijkplanner/PlannerDaypartG
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import { addDays, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import type {
   PraktijkplannerDaypart,
@@ -260,6 +261,7 @@ export function PlannerCopyWeekModal({
         toast.success(
           overwrite ? 'Week gekopieerd (bestaande planning overschreven).' : 'Week gekopieerd.'
         );
+        notifyPlannerChanged(groupId);
         setOverwriteConfirm(false);
         onCopied?.();
         // Reload modal week so chips appear after copy

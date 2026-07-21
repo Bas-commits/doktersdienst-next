@@ -100,7 +100,7 @@ function AuthenticatedLayoutShell({
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-dvh flex-col overflow-hidden">
       <DoktersdienstHeader
         waarneemgroepen={fallbackWaarneemgroepen}
         headerUser={headerUser}
@@ -110,9 +110,9 @@ function AuthenticatedLayoutShell({
         section={section}
         showSectionSwitch={praktijkplannerEnabled}
       />
-      <div className="flex flex-1">
+      <div className="flex min-h-0 flex-1">
         <Sidebar roleTier={resolvedRoleTier} section={section} />
-        <main className="flex-1">{children}</main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</main>
       </div>
     </div>
   );

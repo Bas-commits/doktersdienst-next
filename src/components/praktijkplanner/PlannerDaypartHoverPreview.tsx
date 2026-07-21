@@ -76,6 +76,7 @@ export function PlannerDaypartHoverPreview({
   fromRepetition,
   isException,
   availabilityName,
+  taskNames,
   chip,
   children,
 }: {
@@ -87,6 +88,7 @@ export function PlannerDaypartHoverPreview({
   fromRepetition: boolean;
   isException: boolean;
   availabilityName?: string | null;
+  taskNames?: string[];
   chip: ReactNode;
   children: ReactNode;
 }) {
@@ -186,7 +188,7 @@ export function PlannerDaypartHoverPreview({
                   <dd className="font-medium">{fromRepetition ? 'Ja' : 'Nee'}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="text-muted-foreground">Uitzondering</dt>
+                  <dt className="text-muted-foreground">Uitzondering op herhaling</dt>
                   <dd
                     className={cn(
                       'inline-flex items-center gap-1 font-medium',
@@ -201,6 +203,12 @@ export function PlannerDaypartHoverPreview({
                     ) : (
                       'Nee'
                     )}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Taken</dt>
+                  <dd className="text-right font-medium">
+                    {taskNames && taskNames.length > 0 ? taskNames.join(', ') : '—'}
                   </dd>
                 </div>
                 {availabilityName ? (

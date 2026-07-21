@@ -1,111 +1,150 @@
 'use client';
 
 import Head from 'next/head';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CapacityRequirementList } from '@/components/praktijkplanner/CapacityRequirementList';
+import { CapacityWeekGrid } from '@/components/praktijkplanner/CapacityWeekGrid';
 import { PlannerWeekNavigation } from '@/components/praktijkplanner/PlannerWeekNavigation';
+import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
-
-type Comparison = {
-  key: string;
-  label: string;
-  gepland: number;
-  benodigd: number;
-  status: 'groen' | 'oranje' | 'rood';
-};
+import { subscribePlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
+import type { PraktijkplannerCapacityComparison } from '@/types/praktijkplanner';
 
 type OverviewCell = {
   datum: string;
   iddagdeel: number;
   dagdeel: string;
-  totaal: Comparison;
-  expertises: Comparison[];
-  taken: Comparison[];
-  activiteiten: Comparison[];
-  specificaties: Comparison[];
-};
-
-const STATUS_CLASS: Record<Comparison['status'], string> = {
-  groen: 'bg-emerald-100 text-emerald-800 ring-emerald-300',
-  oranje: 'bg-amber-100 text-amber-800 ring-amber-300',
-  rood: 'bg-red-100 text-red-800 ring-red-300',
+  totaal: PraktijkplannerCapacityComparison;
+  expertises: PraktijkplannerCapacityComparison[];
+  taken: PraktijkplannerCapacityComparison[];
+  activiteiten: PraktijkplannerCapacityComparison[];
+  specificaties: PraktijkplannerCapacityComparison[];
 };
 
 function currentWeekStart() {
   return startOfIsoWeek(formatIsoDate(new Date()));
 }
 
-function ComparisonList({ title, items }: { title: string; items: Comparison[] }) {
-  if (items.length === 0) return null;
-  return (
-    <details className="border-t pt-2">
-      <summary className="cursor-pointer text-xs font-medium text-muted-foreground">{title}</summary>
-      <ul className="mt-2 space-y-1">
-        {items.map((item) => (
-          <li key={item.key} className="flex items-center justify-between gap-2 text-xs">
-            <span className="truncate">{item.label}</span>
-            <span className={`shrink-0 rounded px-1.5 py-0.5 font-semibold ring-1 ${STATUS_CLASS[item.status]}`}>
-              {item.gepland}/{item.benodigd}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </details>
-  );
+function emptyComparison(key: string, label: string): PraktijkplannerCapacityComparison {
+  return { key, label, gepland: 0, benodigd: 0, status: 'groen' };
 }
+
+const REFETCH_DEBOUNCE_MS = 300;
 
 function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) {
   const [locationId, setLocationId] = useState<number | null>(null);
   const [weekStart, setWeekStart] = useState(currentWeekStart);
   const [cells, setCells] = useState<OverviewCell[]>([]);
   const [loading, setLoading] = useState(false);
+  const hasLoadedRef = useRef(false);
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
   const effectiveLocationId = locationId ?? data.masterData.locations[0]?.id ?? null;
 
-  const load = useCallback(() => {
-    if (!effectiveLocationId) return;
-    const abortController = new AbortController();
-    setLoading(true);
-    fetch(
-      `/api/praktijkplanner/capaciteit/overzicht?idwaarneemgroep=${groupId}&idplannerlocatie=${effectiveLocationId}&start=${weekStart}&end=${weekEnd}`,
-      { credentials: 'include', signal: abortController.signal }
-    )
-      .then(async (response) => {
-        const payload = (await response.json()) as { cells?: OverviewCell[]; error?: string };
-        if (!response.ok || !payload.cells) throw new Error(payload.error || 'Capaciteitsoverzicht kon niet worden geladen.');
-        return payload.cells;
-      })
-      .then((loaded) => {
-        if (!abortController.signal.aborted) setCells(loaded);
-      })
-      .catch(() => {
-        if (!abortController.signal.aborted) setCells([]);
-      })
-      .finally(() => {
-        if (!abortController.signal.aborted) setLoading(false);
-      });
-    return () => abortController.abort();
-  }, [effectiveLocationId, groupId, weekEnd, weekStart]);
+  const dayparts = useMemo(
+    () => [...data.masterData.dayparts].sort((left, right) => left.volgorde - right.volgorde),
+    [data.masterData.dayparts]
+  );
+
+  const weekDates = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
+    [weekStart]
+  );
+
+  const weekdayHeaders = useMemo(
+    () =>
+      weekDates.map((date) => (
+        <span key={date} className="block normal-case tracking-normal">
+          {new Intl.DateTimeFormat('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' }).format(
+            new Date(`${date}T12:00:00`)
+          )}
+        </span>
+      )),
+    [weekDates]
+  );
+
+  const load = useCallback(
+    (options?: { quiet?: boolean }) => {
+      if (!effectiveLocationId) return () => undefined;
+      const abortController = new AbortController();
+      const quiet = options?.quiet === true && hasLoadedRef.current;
+      if (!quiet) setLoading(true);
+      fetch(
+        `/api/praktijkplanner/capaciteit/overzicht?idwaarneemgroep=${groupId}&idplannerlocatie=${effectiveLocationId}&start=${weekStart}&end=${weekEnd}`,
+        { credentials: 'include', signal: abortController.signal }
+      )
+        .then(async (response) => {
+          const payload = (await response.json()) as { cells?: OverviewCell[]; error?: string };
+          if (!response.ok || !payload.cells) {
+            throw new Error(payload.error || 'Capaciteitsoverzicht kon niet worden geladen.');
+          }
+          return payload.cells;
+        })
+        .then((loaded) => {
+          if (!abortController.signal.aborted) {
+            setCells(loaded);
+            hasLoadedRef.current = true;
+          }
+        })
+        .catch(() => {
+          if (!abortController.signal.aborted && !quiet) setCells([]);
+        })
+        .finally(() => {
+          if (!abortController.signal.aborted && !quiet) setLoading(false);
+        });
+      return () => abortController.abort();
+    },
+    [effectiveLocationId, groupId, weekEnd, weekStart]
+  );
 
   useEffect(() => {
+    hasLoadedRef.current = false;
     const timer = window.setTimeout(() => {
       void load();
     }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const byDate = useMemo(() => {
-    const map = new Map<string, OverviewCell[]>();
+  useEffect(() => {
+    let debounceTimer: number | undefined;
+    const scheduleQuietRefetch = () => {
+      window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        void load({ quiet: true });
+      }, REFETCH_DEBOUNCE_MS);
+    };
+
+    const unsubscribe = subscribePlannerChanged(groupId, () => {
+      scheduleQuietRefetch();
+    });
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        scheduleQuietRefetch();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      unsubscribe();
+      window.clearTimeout(debounceTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [groupId, load]);
+
+  const cellByKey = useMemo(() => {
+    const map = new Map<string, OverviewCell>();
     for (const cell of cells) {
-      const entries = map.get(cell.datum) ?? [];
-      entries.push(cell);
-      map.set(cell.datum, entries);
+      map.set(`${cell.datum}:${cell.iddagdeel}`, cell);
     }
     return map;
   }, [cells]);
 
   if (!data.isManager) {
-    return <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Deze pagina is alleen beschikbaar voor secretarissen en beheerders.</p>;
+    return (
+      <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        Deze pagina is alleen beschikbaar voor secretarissen en beheerders.
+      </p>
+    );
   }
 
   return (
@@ -129,43 +168,37 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
       </div>
 
       {data.masterData.locations.length === 0 ? (
-        <p className="rounded-lg border p-4 text-sm text-muted-foreground">Voeg eerst een plannerlocatie toe in Plannerbeheer.</p>
+        <p className="rounded-lg border p-4 text-sm text-muted-foreground">
+          Voeg eerst een plannerlocatie toe in Plannerbeheer.
+        </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
-          <div className="grid min-w-[1120px] grid-cols-7">
-            {Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)).map((date) => {
-              const dayCells = byDate.get(date) ?? [];
+        <>
+          {loading ? <p className="text-sm text-muted-foreground">Overzicht laden…</p> : null}
+          <CapacityWeekGrid
+            dayparts={dayparts}
+            weekdayHeaders={weekdayHeaders}
+            renderCell={(weekday, daypart) => {
+              const date = weekDates[weekday.id - 1];
+              const cell = cellByKey.get(`${date}:${daypart.id}`);
+              const totaal =
+                cell?.totaal ??
+                emptyComparison(`totaal:${date}:${daypart.id}`, 'Aantal deelnemers');
               return (
-                <section key={date} className="border-r last:border-r-0">
-                  <header className="border-b bg-muted/40 p-3 text-center text-sm font-semibold">
-                    {new Intl.DateTimeFormat('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' }).format(
-                      new Date(`${date}T12:00:00`)
-                    )}
-                  </header>
-                  <div className="space-y-2 p-2">
-                    {dayCells.map((cell) => (
-                      <article key={`${cell.datum}-${cell.iddagdeel}`} className="rounded-lg border p-2">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <span className="text-xs font-medium">{cell.dagdeel}</span>
-                          <span className={`rounded px-2 py-1 text-xs font-bold ring-1 ${STATUS_CLASS[cell.totaal.status]}`}>
-                            {cell.totaal.gepland}/{cell.totaal.benodigd}
-                          </span>
-                        </div>
-                        <ComparisonList title="Expertises" items={cell.expertises} />
-                        <ComparisonList title="Taken" items={cell.taken} />
-                        <ComparisonList title="Activiteiten" items={cell.activiteiten} />
-                        <ComparisonList title="Specificaties" items={cell.specificaties} />
-                      </article>
-                    ))}
-                    {dayCells.length === 0 && !loading ? <p className="p-2 text-xs text-muted-foreground">Geen dagdelen.</p> : null}
-                  </div>
-                </section>
+                <CapacityRequirementList
+                  mode="status"
+                  totaal={totaal}
+                  sections={[
+                    { key: 'expertises', title: 'Expertises', items: cell?.expertises ?? [] },
+                    { key: 'taken', title: 'Taken', items: cell?.taken ?? [] },
+                    { key: 'activiteiten', title: 'Activiteiten', items: cell?.activiteiten ?? [] },
+                    { key: 'specificaties', title: 'Specificaties', items: cell?.specificaties ?? [] },
+                  ]}
+                />
               );
-            })}
-          </div>
-        </div>
+            }}
+          />
+        </>
       )}
-      {loading ? <p className="text-sm text-muted-foreground">Overzicht laden…</p> : null}
     </div>
   );
 }

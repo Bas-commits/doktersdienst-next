@@ -335,7 +335,9 @@ export const ContinuesFromPrev: Story = {
       endTime: '08:00',
       currentDate: '2025-03-09 22:00:00',
       nextDate: '2025-03-10 08:00:00',
+      top: doctor2,
       middle: doctor1,
+      bottom: doctor3,
     },
     ...mondayCell,
     containerWidth: 400,
@@ -347,7 +349,7 @@ export const ContinuesFromPrev: Story = {
     docs: {
       description: {
         story:
-          'Segment that continues from the previous row/cell. Left border is removed; on Monday (new row) a white inset shadow gives a gradient to the left.',
+          'Segment that continues from the previous row/cell. Left border is removed; on Monday (new row) a white inset shadow gives a gradient to the left. Initials (middle + strips) are shown here because the overnight midpoint (~03:00) falls in this segment.',
       },
     },
   },
@@ -363,7 +365,9 @@ export const ContinuesToNext: Story = {
       endTime: '08:00',
       currentDate: '2025-03-09 22:00:00',
       nextDate: '2025-03-10 08:00:00',
-      middle: doctor2,
+      top: doctor2,
+      middle: doctor1,
+      bottom: doctor3,
     },
     ...sundayCell,
     containerWidth: 400,
@@ -375,7 +379,7 @@ export const ContinuesToNext: Story = {
     docs: {
       description: {
         story:
-          'Segment that continues to the next row/cell. Right border is removed; on Sunday (end of row) a white inset shadow gives a gradient to the right.',
+          'Segment that continues to the next row/cell. Right border is removed; on Sunday (end of row) a white inset shadow gives a gradient to the right. Initials are hidden here — the overnight midpoint falls on the next-day segment.',
       },
     },
   },
@@ -428,7 +432,9 @@ export const CrossRowContinuation: Story = {
       endTime: '08:00',
       currentDate: '2025-03-09 22:00:00',
       nextDate: '2025-03-10 08:00:00',
+      top: doctor2,
       middle: doctor1,
+      bottom: doctor3,
     };
     return (
       <div className="space-y-4">
@@ -471,7 +477,7 @@ export const CrossRowContinuation: Story = {
     docs: {
       description: {
         story:
-          'Overnight shift split across two rows: Sunday segment (right gradient) and Monday segment (left gradient). Shows the inset shadow effect when a shift continues on another row.',
+          'Overnight shift split across two rows: Sunday segment (right gradient) and Monday segment (left gradient). Initials appear once, centered at the full-shift midpoint on the Monday segment.',
       },
     },
   },

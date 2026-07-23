@@ -210,13 +210,81 @@ export function ShiftBlock({
   const overnameBadgeRef = useRef<HTMLSpanElement>(null);
   const showShiftTooltipPortal = shiftTooltipOpen && !overnameHoverDetailOpen;
 
+  const totalMinutesInDay = 24 * 60;
+  const parseTimeToMinutes = (time: string): number => {
+    const [h, m] = time.split(':').map((part) => Number(part));
+    if (Number.isNaN(h) || Number.isNaN(m)) return 0;
+    const minutes = h * 60 + m;
+    if (minutes < 0) return 0;
+    if (minutes > totalMinutesInDay) return totalMinutesInDay;
+    return minutes;
+  };
+
+  const useSegment =
+    segmentStartTime != null && segmentEndTime != null && segmentStartTime !== '' && segmentEndTime !== '';
+  const startMinutes = useSegment
+    ? parseTimeToMinutes(segmentStartTime)
+    : parseTimeToMinutes(block.startTime);
+  const endMinutes = useSegment
+    ? parseTimeToMinutes(segmentEndTime)
+    : parseTimeToMinutes(block.endTime);
+  const sameDay = endMinutes >= startMinutes;
+  const durationMinutes = sameDay
+    ? endMinutes - startMinutes
+    : (totalMinutesInDay - startMinutes) + endMinutes;
+
+  // Overnight / multi-day segments: show doctor initials once, at the full-shift midpoint.
+  // tooltipAnchorRatio may fall outside [0,1] so the hover popover can sit over the true center
+  // even when hovering a non-midpoint day segment.
+  let showSpanLabels = true;
+  let labelOffsetPercent: number | null = null;
+  let tooltipAnchorRatio = 0.5;
+  if (useSegment) {
+    const shiftStartMs = new Date(String(block.currentDate).replace(' ', 'T')).getTime();
+    const shiftEndMs = new Date(String(block.nextDate).replace(' ', 'T')).getTime();
+    if (!Number.isNaN(shiftStartMs) && !Number.isNaN(shiftEndMs) && shiftEndMs > shiftStartMs) {
+      const midpointMs = shiftStartMs + (shiftEndMs - shiftStartMs) / 2;
+      const dayStartMs = new Date(year, month, day, 0, 0, 0, 0).getTime();
+      const segmentStartMs = dayStartMs + startMinutes * 60_000;
+      const segmentEndMs = dayStartMs + endMinutes * 60_000;
+      const segmentDurationMs = segmentEndMs - segmentStartMs;
+      if (segmentDurationMs > 0) {
+        tooltipAnchorRatio = (midpointMs - segmentStartMs) / segmentDurationMs;
+      }
+      showSpanLabels = midpointMs >= segmentStartMs && midpointMs < segmentEndMs;
+      if (showSpanLabels) {
+        const raw = tooltipAnchorRatio * 100;
+        labelOffsetPercent = Math.min(92, Math.max(8, raw));
+      }
+    }
+  }
+  const spanLabelPositionStyle: CSSProperties =
+    labelOffsetPercent != null
+      ? {
+          position: 'absolute',
+          left: `${labelOffsetPercent}%`,
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          maxWidth: '100%',
+          zIndex: 2,
+          pointerEvents: 'none',
+        }
+      : {
+          position: 'relative',
+          zIndex: 2,
+          pointerEvents: 'none',
+        };
+
   useLayoutEffect(() => {
     if (!showShiftTooltipPortal) return;
     const el = shiftTooltipAnchorRef.current;
     if (!el) return;
     const update = () => {
       const r = el.getBoundingClientRect();
-      setShiftTooltipCoords({ left: r.left + r.width / 2, top: r.bottom + 4 });
+      setShiftTooltipCoords({
+        left: r.left + r.width * tooltipAnchorRatio,
+        top: r.bottom + 4,
+      });
     };
     update();
     window.addEventListener('scroll', update, true);
@@ -225,7 +293,7 @@ export function ShiftBlock({
       window.removeEventListener('scroll', update, true);
       window.removeEventListener('resize', update);
     };
-  }, [showShiftTooltipPortal]);
+  }, [showShiftTooltipPortal, tooltipAnchorRatio]);
 
   // Portal overname detail above calendar clipping ancestors (same pattern as shift tooltip).
   // Flip above the badge when there isn't enough viewport space below.
@@ -282,29 +350,6 @@ export function ShiftBlock({
   const endIsWeekend = endDate.getDay() === 0 || endDate.getDay() === 6;
   const cellDate = new Date(year, month, day);
   const isMonday = cellDate.getDay() === 1;
-
-  const totalMinutesInDay = 24 * 60;
-  const parseTimeToMinutes = (time: string): number => {
-    const [h, m] = time.split(':').map((part) => Number(part));
-    if (Number.isNaN(h) || Number.isNaN(m)) return 0;
-    const minutes = h * 60 + m;
-    if (minutes < 0) return 0;
-    if (minutes > totalMinutesInDay) return totalMinutesInDay;
-    return minutes;
-  };
-
-  const useSegment =
-    segmentStartTime != null && segmentEndTime != null && segmentStartTime !== '' && segmentEndTime !== '';
-  const startMinutes = useSegment
-    ? parseTimeToMinutes(segmentStartTime)
-    : parseTimeToMinutes(block.startTime);
-  const endMinutes = useSegment
-    ? parseTimeToMinutes(segmentEndTime)
-    : parseTimeToMinutes(block.endTime);
-  const sameDay = endMinutes >= startMinutes;
-  const durationMinutes = sameDay
-    ? endMinutes - startMinutes
-    : (totalMinutesInDay - startMinutes) + endMinutes;
 
   const usePixelLayout =
     containerWidth != null && Number.isFinite(containerWidth) && containerWidth > 0;
@@ -619,15 +664,20 @@ export function ShiftBlock({
             : `${leftPercent}%`,
         transform: 'translateY(-50%)',
         // Layering on the calendar lane:
-        // 1) normal blocks, 2) hovered blocks, 3) overname blocks (+hover),
+        // 1) normal / unlabeled overnight segments
+        // 2) hovered blocks
+        // 3) segments that carry the span initials (always above unlabeled overnight siblings)
+        // 4) overname blocks (+hover)
         // while global modals live much higher in their own layer.
         zIndex: overnameType
           ? isHovered ? 40 : 30
-          : isHovered
-            ? 20
-            : continuesFromPrev || continuesToNext
-              ? 1
-              : undefined,
+          : showSpanLabels && useSegment
+            ? isHovered ? 25 : 22
+            : isHovered
+              ? 20
+              : continuesFromPrev || continuesToNext
+                ? 1
+                : undefined,
       }}
     >
       {onDelete && (
@@ -647,7 +697,7 @@ export function ShiftBlock({
       {!hideTopStrip &&
         (achterw === 0 ? (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
+            className={`relative h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor="111"
             data-testid="shift-block-top"
             style={{
@@ -659,11 +709,13 @@ export function ShiftBlock({
             }}
             onClick={topHasClick ? (e) => useSectionClick ? onSectionClick!('top', e) : onClick!(e) : undefined}
           >
-            {topPending ? (pendingDoctorTop!.shortName) : null}
+            {showSpanLabels && topPending ? (
+              <span style={spanLabelPositionStyle}>{pendingDoctorTop!.shortName}</span>
+            ) : null}
           </div>
         ) : (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
+            className={`relative h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={achterw}
             data-testid="shift-block-top"
             style={{
@@ -674,9 +726,13 @@ export function ShiftBlock({
             }}
             onClick={topHasClick ? (e) => useSectionClick ? onSectionClick!('top', e) : onClick!(e) : undefined}
           >
-            {(achterwDoc?.shortName ?? '').trim() ||
-              (achterwDoc?.name ?? '').slice(0, 3).toUpperCase() ||
-              `#${achterw}`}
+            {showSpanLabels ? (
+              <span style={spanLabelPositionStyle} className="whitespace-nowrap">
+                {(achterwDoc?.shortName ?? '').trim() ||
+                  (achterwDoc?.name ?? '').slice(0, 3).toUpperCase() ||
+                  `#${achterw}`}
+              </span>
+            ) : null}
           </div>
         ))}
       <>
@@ -735,9 +791,18 @@ export function ShiftBlock({
           {showPreferenceFill ? (() => {
             const { Icon } = preferenceFill!;
             const showInitialsWithPreferenceFill =
-              !hideInitialsInPreferenceFill && Boolean(displayShortName);
+              showSpanLabels && !hideInitialsInPreferenceFill && Boolean(displayShortName);
             return (
-              <div className="flex flex-col items-center justify-center min-w-0 max-w-full gap-0.5">
+              <div
+                className="flex flex-col items-center justify-center min-w-0 max-w-full gap-0.5"
+                style={
+                  showInitialsWithPreferenceFill
+                    ? spanLabelPositionStyle
+                    : showSpanLabels
+                      ? { position: 'relative', zIndex: 2 }
+                      : undefined
+                }
+              >
                 {showInitialsWithPreferenceFill ? (
                   <span className="flex items-center">
                     <span
@@ -755,14 +820,6 @@ export function ShiftBlock({
                 ) : (
                   <Icon className="h-5 w-5 shrink-0" style={{ color: preferenceTextColor! }} aria-hidden />
                 )}
-                {/* {aantekeningLabel ? (
-                  <span
-                    className="hidden @[36px]:inline text-[7px] font-semibold text-center leading-tight truncate max-w-full px-0.5"
-                    style={{ color: preferenceTextColor!, opacity: 0.95 }}
-                  >
-                    {aantekeningLabel}
-                  </span>
-                ) : null} */}
               </div>
             );
           })() : (
@@ -774,10 +831,13 @@ export function ShiftBlock({
                   ...(middleStripTextColor ? { color: middleStripTextColor } : {}),
                 }}
               />
-              {(() => {
+              {showSpanLabels ? (() => {
                 const primaryLabel = showPendingDoctor ? pendingDoctor!.shortName : displayShortName;
                 return (
-                  <div className="hidden @[1px]:flex flex-col items-center justify-center min-w-0 max-w-full gap-0 px-0.5">
+                  <div
+                    className="hidden @[1px]:flex flex-col items-center justify-center min-w-0 max-w-full gap-0 px-0.5"
+                    style={spanLabelPositionStyle}
+                  >
                     {primaryLabel ? (
                       <span
                         className={`text-[10px] font-semibold tracking-[0.5px] wrap-break-word leading-[12px] text-center truncate max-w-full ${
@@ -802,7 +862,7 @@ export function ShiftBlock({
                     ) : null}
                   </div>
                 );
-              })()}
+              })() : null}
               <span
                 className={`rotate-180 whitespace-nowrap text-sm font-mono ${middleStripTextColor ? '' : 'text-[#a0a0a0]'}`}
                 style={{
@@ -929,7 +989,7 @@ export function ShiftBlock({
       {!hideBottomStrip &&
         (extra === 0 ? (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
+            className={`relative h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor="111"
             data-testid="shift-block-bottom"
             style={{
@@ -941,11 +1001,13 @@ export function ShiftBlock({
             }}
             onClick={bottomHasClick ? (e) => useSectionClick ? onSectionClick!('bottom', e) : onClick!(e) : undefined}
           >
-            {bottomPending ? (pendingDoctorBottom!.shortName) : null}
+            {showSpanLabels && bottomPending ? (
+              <span style={spanLabelPositionStyle}>{pendingDoctorBottom!.shortName}</span>
+            ) : null}
           </div>
         ) : (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
+            className={`relative h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={extra}
             data-testid="shift-block-bottom"
             style={{
@@ -956,9 +1018,13 @@ export function ShiftBlock({
             }}
             onClick={bottomHasClick ? (e) => useSectionClick ? onSectionClick!('bottom', e) : onClick!(e) : undefined}
           >
-            {(extraDoc?.shortName ?? '').trim() ||
-              (extraDoc?.name ?? '').slice(0, 3).toUpperCase() ||
-              `#${extra}`}
+            {showSpanLabels ? (
+              <span style={spanLabelPositionStyle} className="whitespace-nowrap">
+                {(extraDoc?.shortName ?? '').trim() ||
+                  (extraDoc?.name ?? '').slice(0, 3).toUpperCase() ||
+                  `#${extra}`}
+              </span>
+            ) : null}
           </div>
         ))}
     </div>

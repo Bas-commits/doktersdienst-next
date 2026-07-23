@@ -889,7 +889,8 @@ export function ShiftBlock({
               )}
             </span>
           )}
-          {overnameType === 'overname' && (
+          {/* Multi-day segments: show overname badge only on the rightmost (last) segment. */}
+          {overnameType === 'overname' && !continuesToNext && (
             <span
               ref={overnameBadgeRef}
               className="absolute top-0.5 right-0.5 hidden @[36px]:flex h-5 w-5 items-center justify-center rounded bg-black/40"
@@ -902,7 +903,7 @@ export function ShiftBlock({
               <TbSwitch3 className="h-3.5 w-3.5 text-white" />
             </span>
           )}
-          {overnameType === 'voorstelOvername' && (
+          {overnameType === 'voorstelOvername' && !continuesToNext && (
             <span
               ref={overnameBadgeRef}
               className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40"
@@ -915,7 +916,7 @@ export function ShiftBlock({
               <img src="request.svg" alt="Voorstel overname" className="h-3.5 w-3.5" style={{ filter: 'invert(47%) sepia(97%) saturate(2098%) hue-rotate(2deg) brightness(106%) contrast(101%)' }} />
             </span>
           )}
-          {overnameType === 'vraagtekenOvername' && (
+          {overnameType === 'vraagtekenOvername' && !continuesToNext && (
             <span
               className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40 pointer-events-none"
               title="Overname geweigerd — geen arts toegewezen"

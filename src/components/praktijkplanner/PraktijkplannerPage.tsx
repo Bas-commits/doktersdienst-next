@@ -35,7 +35,7 @@ export function PraktijkplannerPage({
   children,
 }: {
   title: string;
-  description?: string;
+  description?: ReactNode;
   children: (context: PraktijkplannerPageContext) => ReactNode;
 }) {
   const context = usePraktijkplannerContext();

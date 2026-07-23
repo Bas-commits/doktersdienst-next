@@ -1,5 +1,11 @@
 export type IsoDate = `${number}-${number}-${number}`;
 
+export type PraktijkplannerParticipantExpertise = {
+  id: number;
+  naam: string;
+  afkorting: string | null;
+};
+
 export type PraktijkplannerParticipant = {
   id: number;
   voornaam: string | null;
@@ -8,6 +14,8 @@ export type PraktijkplannerParticipant = {
   initialen: string | null;
   color: string | null;
   name: string | null;
+  /** Expertises assigned to this deelnemer for the current waarneemgroep. */
+  expertises?: PraktijkplannerParticipantExpertise[];
 };
 
 export type PraktijkplannerDaypart = {

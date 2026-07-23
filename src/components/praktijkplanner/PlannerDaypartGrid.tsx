@@ -44,6 +44,10 @@ function participantLabel(participant: PraktijkplannerParticipant): string {
   );
 }
 
+function expertiseLabel(expertise: { naam: string; afkorting: string | null }): string {
+  return expertise.afkorting?.trim() || expertise.naam;
+}
+
 function dayLabel(date: string): { weekday: string; day: number } {
   const value = new Date(`${date}T12:00:00`);
   return {
@@ -73,6 +77,7 @@ export function PlannerDaypartGrid({
   cursorTool,
   onCursorToolDismiss,
   renderParticipantActions,
+  onParticipantNameClick,
   getCellClassName,
 }: {
   participants: PraktijkplannerParticipant[];
@@ -90,6 +95,8 @@ export function PlannerDaypartGrid({
   cursorTool?: PlannerCursorTool | null;
   onCursorToolDismiss?: () => void;
   renderParticipantActions?: (participant: PraktijkplannerParticipant) => ReactNode;
+  /** When set, participant names become clickable (e.g. open mijn gegevens). */
+  onParticipantNameClick?: (participant: PraktijkplannerParticipant) => void;
   getCellClassName?: (cell: PlannerDaypartCell) => string | undefined;
 }) {
   const days = weekDates(weekStart);
@@ -171,6 +178,7 @@ export function PlannerDaypartGrid({
 
         {participants.map((participant) => {
           const label = participantLabel(participant);
+          const expertises = participant.expertises ?? [];
           return (
           <div
             key={participant.id}
@@ -187,9 +195,30 @@ export function PlannerDaypartGrid({
               >
                 {participant.initialen || label.slice(0, 2).toUpperCase()}
               </span>
-              <span className="line-clamp-2 min-w-0 flex-1 text-sm font-medium leading-snug" title={label}>
-                {label}
-              </span>
+              <div className="min-w-0 flex-1">
+                {onParticipantNameClick ? (
+                  <button
+                    type="button"
+                    className="line-clamp-2 w-full cursor-pointer text-left text-sm font-medium leading-snug text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    title={`Open gegevens van ${label}`}
+                    onClick={() => onParticipantNameClick(participant)}
+                  >
+                    {label}
+                  </button>
+                ) : (
+                  <span className="line-clamp-2 text-sm font-medium leading-snug" title={label}>
+                    {label}
+                  </span>
+                )}
+                {expertises.length > 0 ? (
+                  <p
+                    className="mt-1 text-[11px] leading-snug text-muted-foreground"
+                    title={expertises.map((expertise) => expertise.naam).join(', ')}
+                  >
+                    {expertises.map((expertise) => expertiseLabel(expertise)).join(', ')}
+                  </p>
+                ) : null}
+              </div>
             </div>
             {days.map((datum) => (
               <div key={`${participant.id}-${datum}`} className="flex min-h-30 items-stretch border-l p-1">

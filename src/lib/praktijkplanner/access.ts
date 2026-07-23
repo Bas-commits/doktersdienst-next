@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import {
   getAuthenticatedUser,
@@ -7,6 +7,7 @@ import {
   isUserInWaarneemgroep,
   type AuthenticatedUser,
 } from '@/lib/api-auth';
+import type { PraktijkplannerParticipantExpertise } from '@/types/praktijkplanner';
 
 export type PraktijkplannerCapability =
   | 'activiteiten:read'
@@ -143,9 +144,10 @@ export async function getPraktijkplannerParticipants(
     initialen: string | null;
     color: string | null;
     name: string | null;
+    expertises: PraktijkplannerParticipantExpertise[];
   }>
 > {
-  const { deelnemers, waarneemgroepdeelnemers } = schema;
+  const { deelnemers, waarneemgroepdeelnemers, deelnemerexpertises, expertises } = schema;
   const rows = await db
     .select({
       id: deelnemers.id,
@@ -166,8 +168,7 @@ export async function getPraktijkplannerParticipants(
       )
     );
 
-  const visible = access.isManager ? rows : rows.filter((row) => row.id === access.user.id);
-  return visible
+  const visible = (access.isManager ? rows : rows.filter((row) => row.id === access.user.id))
     .filter((row): row is typeof row & { id: number } => row.id != null)
     .sort((a, b) => {
       const aName = [a.achternaam, a.voornaam, a.voorletterstussenvoegsel, a.name]
@@ -178,6 +179,43 @@ export async function getPraktijkplannerParticipants(
         .join(' ');
       return aName.localeCompare(bName, 'nl');
     });
+
+  const participantIds = visible.map((row) => row.id);
+  const expertiseByParticipant = new Map<number, PraktijkplannerParticipantExpertise[]>();
+  if (participantIds.length > 0) {
+    const expertiseRows = await db
+      .select({
+        iddeelnemer: deelnemerexpertises.iddeelnemer,
+        id: expertises.id,
+        naam: expertises.naam,
+        afkorting: expertises.afkorting,
+      })
+      .from(deelnemerexpertises)
+      .innerJoin(expertises, eq(deelnemerexpertises.idexpertise, expertises.id))
+      .where(
+        and(
+          inArray(deelnemerexpertises.iddeelnemer, participantIds),
+          eq(expertises.idwaarneemgroep, access.idwaarneemgroep)
+        )
+      )
+      .orderBy(asc(expertises.naam));
+
+    for (const row of expertiseRows) {
+      if (row.iddeelnemer == null || row.id == null) continue;
+      const list = expertiseByParticipant.get(row.iddeelnemer) ?? [];
+      list.push({
+        id: row.id,
+        naam: row.naam,
+        afkorting: row.afkorting ?? null,
+      });
+      expertiseByParticipant.set(row.iddeelnemer, list);
+    }
+  }
+
+  return visible.map((row) => ({
+    ...row,
+    expertises: expertiseByParticipant.get(row.id) ?? [],
+  }));
 }
 
 export function isManagerOnlyCapability(capability: PraktijkplannerCapability): boolean {

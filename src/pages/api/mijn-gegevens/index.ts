@@ -14,7 +14,17 @@ import type {
   TelnrSlot,
 } from '@/types/mijn-gegevens';
 
-const { deelnemers, waarneemgroepen, waarneemgroepdeelnemers, groepen, locaties, instellingtype, settelnrs } = schema;
+const {
+  deelnemers,
+  waarneemgroepen,
+  waarneemgroepdeelnemers,
+  groepen,
+  locaties,
+  instellingtype,
+  settelnrs,
+  expertises,
+  deelnemerexpertises,
+} = schema;
 
 const LOGIN_MIN = 3;
 const LOGIN_MAX = 50;
@@ -198,18 +208,101 @@ export default async function handler(
       const wg = waarneemgroepRows[0];
       const waarneemgroep = wg ? { id: wg.id!, naam: wg.naam } : null;
       const waarneemgroepIdregio = wg?.idregio ?? null;
+      const membershipWgIds = membershipRows
+        .map((m) => m.idwaarneemgroep)
+        .filter((id): id is number => id != null);
+
+      const [expertiseCatalogRows, selectedExpertiseRows] = await Promise.all([
+        membershipWgIds.length > 0
+          ? db
+              .select({
+                id: expertises.id,
+                naam: expertises.naam,
+                afkorting: expertises.afkorting,
+                idwaarneemgroep: expertises.idwaarneemgroep,
+                actief: expertises.actief,
+              })
+              .from(expertises)
+              .where(inArray(expertises.idwaarneemgroep, membershipWgIds))
+              .orderBy(asc(expertises.naam))
+          : Promise.resolve([]),
+        db
+          .select({
+            idexpertise: deelnemerexpertises.idexpertise,
+            idwaarneemgroep: expertises.idwaarneemgroep,
+            naam: expertises.naam,
+            afkorting: expertises.afkorting,
+            actief: expertises.actief,
+          })
+          .from(deelnemerexpertises)
+          .innerJoin(expertises, eq(deelnemerexpertises.idexpertise, expertises.id))
+          .where(eq(deelnemerexpertises.iddeelnemer, targetDeelnemerId)),
+      ]);
+
+      const selectedByWg = new Map<number, number[]>();
+      const selectedInactiveByWg = new Map<
+        number,
+        { id: number; naam: string; afkorting: string | null }[]
+      >();
+      for (const row of selectedExpertiseRows) {
+        if (row.idwaarneemgroep == null || row.idexpertise == null) continue;
+        const list = selectedByWg.get(row.idwaarneemgroep) ?? [];
+        list.push(row.idexpertise);
+        selectedByWg.set(row.idwaarneemgroep, list);
+        if (!row.actief) {
+          const inactive = selectedInactiveByWg.get(row.idwaarneemgroep) ?? [];
+          inactive.push({
+            id: row.idexpertise,
+            naam: row.naam,
+            afkorting: row.afkorting ?? null,
+          });
+          selectedInactiveByWg.set(row.idwaarneemgroep, inactive);
+        }
+      }
+
+      const activeExpertisesByWg = new Map<
+        number,
+        { id: number; naam: string; afkorting: string | null }[]
+      >();
+      for (const row of expertiseCatalogRows) {
+        if (!row.actief) continue;
+        const list = activeExpertisesByWg.get(row.idwaarneemgroep) ?? [];
+        list.push({
+          id: row.id,
+          naam: row.naam,
+          afkorting: row.afkorting ?? null,
+        });
+        activeExpertisesByWg.set(row.idwaarneemgroep, list);
+      }
+
       const allWaarneemgroepen = membershipRows
         .filter((m) => m.idwaarneemgroep != null)
-        .map((m) => ({
-          id: m.idwaarneemgroep!,
-          naam: m.naam ?? null,
-          idgroep: m.idgroep ?? null,
-          fte: m.fte != null && Number.isFinite(m.fte) ? m.fte : null,
-          idfunctie:
-            m.idfunctie != null && GELDIGE_WAARNEEMGROEP_FUNCTIES.has(m.idfunctie)
-              ? m.idfunctie
-              : null,
-        }));
+        .map((m) => {
+          const wgId = m.idwaarneemgroep!;
+          const active = activeExpertisesByWg.get(wgId) ?? [];
+          const inactiveSelected = selectedInactiveByWg.get(wgId) ?? [];
+          const seen = new Set(active.map((e) => e.id));
+          const expertisesForWg = [
+            ...active,
+            ...inactiveSelected.filter((e) => {
+              if (seen.has(e.id)) return false;
+              seen.add(e.id);
+              return true;
+            }),
+          ];
+          return {
+            id: wgId,
+            naam: m.naam ?? null,
+            idgroep: m.idgroep ?? null,
+            fte: m.fte != null && Number.isFinite(m.fte) ? m.fte : null,
+            idfunctie:
+              m.idfunctie != null && GELDIGE_WAARNEEMGROEP_FUNCTIES.has(m.idfunctie)
+                ? m.idfunctie
+                : null,
+            expertises: expertisesForWg,
+            selectedExpertiseIds: selectedByWg.get(wgId) ?? [],
+          };
+        });
       const groep = groepRows[0]?.id != null ? { id: groepRows[0].id } : null;
       const locRow = locatieRows[0];
       const locatie =
@@ -616,6 +709,139 @@ export default async function handler(
             error: 'U bent niet aangemeld bij een van de opgegeven waarneemgroepen',
           });
         }
+      }
+    }
+
+    if (body.waarneemgroepExpertises !== undefined) {
+      const raw = body.waarneemgroepExpertises;
+      if (!Array.isArray(raw)) {
+        return res.status(400).json({ error: 'waarneemgroepExpertises moet een array zijn' });
+      }
+
+      const parsed: { idwaarneemgroep: number; expertiseIds: number[] }[] = [];
+      for (let i = 0; i < raw.length; i++) {
+        const row = raw[i];
+        if (!row || typeof row !== 'object') {
+          return res.status(400).json({ error: `waarneemgroepExpertises[${i}] is ongeldig` });
+        }
+        const idwg = (row as { idwaarneemgroep?: unknown }).idwaarneemgroep;
+        const expertiseIdsRaw = (row as { expertiseIds?: unknown }).expertiseIds;
+        if (typeof idwg !== 'number' || !Number.isInteger(idwg) || idwg < 1) {
+          return res.status(400).json({
+            error: `Ongeldige waarneemgroep bij expertise-regel ${i + 1}`,
+          });
+        }
+        if (!Array.isArray(expertiseIdsRaw)) {
+          return res.status(400).json({
+            error: `expertiseIds moet een array zijn (waarneemgroep ${idwg})`,
+          });
+        }
+        const expertiseIds: number[] = [];
+        for (const id of expertiseIdsRaw) {
+          if (typeof id !== 'number' || !Number.isInteger(id) || id < 1) {
+            return res.status(400).json({
+              error: `Ongeldige expertise bij waarneemgroep ${idwg}`,
+            });
+          }
+          if (!expertiseIds.includes(id)) expertiseIds.push(id);
+        }
+        parsed.push({ idwaarneemgroep: idwg, expertiseIds });
+      }
+
+      const wgIds = parsed.map((p) => p.idwaarneemgroep);
+      if (wgIds.length > 0) {
+        const membershipOk = await db
+          .select({ idwaarneemgroep: waarneemgroepdeelnemers.idwaarneemgroep })
+          .from(waarneemgroepdeelnemers)
+          .where(
+            and(
+              eq(waarneemgroepdeelnemers.iddeelnemer, targetDeelnemerId),
+              eq(waarneemgroepdeelnemers.aangemeld, true),
+              inArray(waarneemgroepdeelnemers.idwaarneemgroep, wgIds)
+            )
+          );
+        const memberSet = new Set(
+          membershipOk
+            .map((m) => m.idwaarneemgroep)
+            .filter((id): id is number => id != null)
+        );
+        if (memberSet.size !== new Set(wgIds).size) {
+          return res.status(403).json({
+            error: 'U bent niet aangemeld bij een van de opgegeven waarneemgroepen',
+          });
+        }
+
+        const allExpertiseIds = [...new Set(parsed.flatMap((p) => p.expertiseIds))];
+        const [catalogRows, currentlySelectedRows] = await Promise.all([
+          db
+            .select({
+              id: expertises.id,
+              idwaarneemgroep: expertises.idwaarneemgroep,
+              actief: expertises.actief,
+            })
+            .from(expertises)
+            .where(inArray(expertises.idwaarneemgroep, wgIds)),
+          allExpertiseIds.length > 0
+            ? db
+                .select({ idexpertise: deelnemerexpertises.idexpertise })
+                .from(deelnemerexpertises)
+                .where(
+                  and(
+                    eq(deelnemerexpertises.iddeelnemer, targetDeelnemerId),
+                    inArray(deelnemerexpertises.idexpertise, allExpertiseIds)
+                  )
+                )
+            : Promise.resolve([] as { idexpertise: number }[]),
+        ]);
+
+        const catalogById = new Map(catalogRows.map((r) => [r.id, r]));
+        const currentlySelected = new Set(currentlySelectedRows.map((r) => r.idexpertise));
+        const catalogIdsByWg = new Map<number, number[]>();
+        for (const row of catalogRows) {
+          const list = catalogIdsByWg.get(row.idwaarneemgroep) ?? [];
+          list.push(row.id);
+          catalogIdsByWg.set(row.idwaarneemgroep, list);
+        }
+
+        for (const row of parsed) {
+          for (const expertiseId of row.expertiseIds) {
+            const cat = catalogById.get(expertiseId);
+            if (!cat || cat.idwaarneemgroep !== row.idwaarneemgroep) {
+              return res.status(400).json({
+                error: `Expertise ${expertiseId} hoort niet bij waarneemgroep ${row.idwaarneemgroep}`,
+              });
+            }
+            if (!cat.actief && !currentlySelected.has(expertiseId)) {
+              return res.status(400).json({
+                error: `Expertise ${expertiseId} is niet actief (waarneemgroep ${row.idwaarneemgroep})`,
+              });
+            }
+          }
+        }
+
+        await db.transaction(async (tx) => {
+          for (const row of parsed) {
+            const groupExpertiseIds = catalogIdsByWg.get(row.idwaarneemgroep) ?? [];
+            if (groupExpertiseIds.length > 0) {
+              await tx
+                .delete(deelnemerexpertises)
+                .where(
+                  and(
+                    eq(deelnemerexpertises.iddeelnemer, targetDeelnemerId),
+                    inArray(deelnemerexpertises.idexpertise, groupExpertiseIds)
+                  )
+                );
+            }
+            if (row.expertiseIds.length > 0) {
+              await tx.insert(deelnemerexpertises).values(
+                row.expertiseIds.map((idexpertise) => ({
+                  iddeelnemer: targetDeelnemerId,
+                  idexpertise,
+                }))
+              );
+            }
+          }
+        });
       }
     }
 

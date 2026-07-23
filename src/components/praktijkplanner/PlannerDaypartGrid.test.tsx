@@ -85,4 +85,59 @@ describe('PlannerDaypartGrid', () => {
     );
     toastInfo.mockRestore();
   });
+
+  it('makes participant names clickable when onParticipantNameClick is provided', () => {
+    const onParticipantNameClick = vi.fn();
+    render(
+      <PlannerDaypartGrid
+        weekStart="2026-07-13"
+        participants={[
+          {
+            id: 7,
+            voornaam: 'Ada',
+            voorletterstussenvoegsel: null,
+            achternaam: 'Lovelace',
+            initialen: 'AL',
+            color: '#334155',
+            name: null,
+          },
+        ]}
+        dayparts={[{ id: 1, naam: 'Ochtend', volgorde: 1 }]}
+        renderCell={() => null}
+        onParticipantNameClick={onParticipantNameClick}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lovelace, Ada' }));
+    expect(onParticipantNameClick).toHaveBeenCalledWith(expect.objectContaining({ id: 7 }));
+  });
+
+  it('lists assigned expertises under the participant name', () => {
+    render(
+      <PlannerDaypartGrid
+        weekStart="2026-07-13"
+        participants={[
+          {
+            id: 7,
+            voornaam: 'Ada',
+            voorletterstussenvoegsel: null,
+            achternaam: 'Lovelace',
+            initialen: 'AL',
+            color: '#334155',
+            name: null,
+            expertises: [
+              { id: 1, naam: 'Spoedzorg', afkorting: 'SZ' },
+              { id: 2, naam: 'Visite', afkorting: null },
+            ],
+          },
+        ]}
+        dayparts={[{ id: 1, naam: 'Ochtend', volgorde: 1 }]}
+        renderCell={() => null}
+      />
+    );
+
+    const expertises = screen.getByText('SZ, Visite');
+    expect(expertises).toBeInTheDocument();
+    expect(expertises).toHaveAttribute('title', 'Spoedzorg, Visite');
+  });
 });

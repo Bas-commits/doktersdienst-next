@@ -201,7 +201,13 @@ export function ShiftBlock({
   );
   /** True while pointer is on the overname/voorstel badge or its hover panel (hides the shift tooltip to avoid overlap). */
   const [overnameHoverDetailOpen, setOvernameHoverDetailOpen] = useState(false);
+  const [overnamePopoverCoords, setOvernamePopoverCoords] = useState<{
+    left: number;
+    top: number;
+    placement: 'above' | 'below';
+  } | null>(null);
   const shiftTooltipAnchorRef = useRef<HTMLDivElement>(null);
+  const overnameBadgeRef = useRef<HTMLSpanElement>(null);
   const showShiftTooltipPortal = shiftTooltipOpen && !overnameHoverDetailOpen;
 
   useLayoutEffect(() => {
@@ -220,6 +226,38 @@ export function ShiftBlock({
       window.removeEventListener('resize', update);
     };
   }, [showShiftTooltipPortal]);
+
+  // Portal overname detail above calendar clipping ancestors (same pattern as shift tooltip).
+  // Flip above the badge when there isn't enough viewport space below.
+  useLayoutEffect(() => {
+    if (!overnameHoverDetailOpen) {
+      setOvernamePopoverCoords(null);
+      return;
+    }
+    const el = overnameBadgeRef.current;
+    if (!el) return;
+    const GAP = 8;
+    // Approximate popover height (w-260 content + padding); used to decide flip before measure.
+    const ESTIMATED_HEIGHT = 190;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - r.bottom - GAP;
+      const placement: 'above' | 'below' =
+        spaceBelow < ESTIMATED_HEIGHT && r.top > spaceBelow ? 'above' : 'below';
+      setOvernamePopoverCoords({
+        left: r.right,
+        top: placement === 'above' ? r.top - GAP : r.bottom + GAP,
+        placement,
+      });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [overnameHoverDetailOpen]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
@@ -488,6 +526,76 @@ export function ShiftBlock({
     ? (block.label ?? '')
     : (doctorId ? displayName : block.label);
   const tooltipAantekeningLabel = rawAantekeningLabel;
+  const overnamePopoverTestId =
+    overnameType === 'voorstelOvername'
+      ? 'voorstel-overname-hover-popover'
+      : 'overname-hover-popover';
+  const overnameHoverPopover =
+    overnameHoverDetailOpen &&
+    overnamePopoverCoords &&
+    (overnameType === 'overname' || overnameType === 'voorstelOvername') &&
+    typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="pointer-events-none w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
+            data-testid={overnamePopoverTestId}
+            style={{
+              position: 'fixed',
+              left: overnamePopoverCoords.left,
+              top: overnamePopoverCoords.top,
+              transform:
+                overnamePopoverCoords.placement === 'above'
+                  ? 'translate(-100%, -100%)'
+                  : 'translateX(-100%)',
+              zIndex: 70,
+            }}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-sm font-bold">{overnameTypeLabel}</p>
+              {overnameStatusLabel && (
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${overnameStatusClass}`}>
+                  {overnameStatusLabel}
+                </span>
+              )}
+            </div>
+            <div className="mb-2 flex text-sm">
+              <p className="mb-0">Van: <br /> Tot:</p>
+              <p className="mb-0 ml-2">
+                {vanDateLabel} <strong>{block.startTime}</strong>
+                <br />
+                {totDateLabel} <strong>{block.endTime}</strong>
+              </p>
+            </div>
+            <div className="mb-2 flex items-center gap-2 text-sm">
+              <p className="font-bold">Van:</p>
+              <span
+                className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
+                style={{
+                  backgroundColor: vanArts?.color ?? '#7b2d8e',
+                  color: getContrastTextColor(vanArts?.color ?? '#7b2d8e'),
+                }}
+              >
+                {vanArts?.shortName ?? '??'}
+              </span>
+              <p className="font-medium leading-tight">{vanArts?.name ?? 'Onbekend'}</p>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <p className="font-bold">Naar:</p>
+              <span
+                className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
+                style={{
+                  backgroundColor: naarArts?.color ?? '#7b2d8e',
+                  color: getContrastTextColor(naarArts?.color ?? '#7b2d8e'),
+                }}
+              >
+                {naarArts?.shortName ?? '??'}
+              </span>
+              <p className="font-medium leading-tight">{naarArts?.name ?? 'Onbekend'}</p>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
 
   return (
     <div
@@ -723,7 +831,8 @@ export function ShiftBlock({
           )}
           {overnameType === 'overname' && (
             <span
-              className="group/overname absolute top-0.5 right-0.5 hidden @[36px]:flex h-5 w-5 items-center justify-center rounded bg-black/40"
+              ref={overnameBadgeRef}
+              className="absolute top-0.5 right-0.5 hidden @[36px]:flex h-5 w-5 items-center justify-center rounded bg-black/40"
               title="Overname"
               aria-hidden
               data-testid="overname-badge"
@@ -731,58 +840,12 @@ export function ShiftBlock({
               onMouseLeave={() => setOvernameHoverDetailOpen(false)}
             >
               <TbSwitch3 className="h-3.5 w-3.5 text-white" />
-              <div
-                className="hidden group-hover/overname:block absolute top-full right-0 z-50 mt-2 w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
-                data-testid="overname-hover-popover"
-              >
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-sm font-bold">{overnameTypeLabel}</p>
-                  {overnameStatusLabel && (
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${overnameStatusClass}`}>
-                      {overnameStatusLabel}
-                    </span>
-                  )}
-                </div>
-                <div className="mb-2 flex text-sm">
-                  <p className="mb-0">Van: <br /> Tot:</p>
-                  <p className="mb-0 ml-2">
-                    {vanDateLabel} <strong>{block.startTime}</strong>
-                    <br />
-                    {totDateLabel} <strong>{block.endTime}</strong>
-                  </p>
-                </div>
-                <div className="mb-2 flex items-center gap-2 text-sm">
-                  <p className="font-bold">Van:</p>
-                  <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
-                    style={{
-                      backgroundColor: vanArts?.color ?? '#7b2d8e',
-                      color: getContrastTextColor(vanArts?.color ?? '#7b2d8e'),
-                    }}
-                  >
-                    {vanArts?.shortName ?? '??'}
-                  </span>
-                  <p className="font-medium leading-tight">{vanArts?.name ?? 'Onbekend'}</p>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <p className="font-bold">Naar:</p>
-                  <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
-                    style={{
-                      backgroundColor: naarArts?.color ?? '#7b2d8e',
-                      color: getContrastTextColor(naarArts?.color ?? '#7b2d8e'),
-                    }}
-                  >
-                    {naarArts?.shortName ?? '??'}
-                  </span>
-                  <p className="font-medium leading-tight">{naarArts?.name ?? 'Onbekend'}</p>
-                </div>
-              </div>
             </span>
           )}
           {overnameType === 'voorstelOvername' && (
             <span
-              className="group/voorstel-overname absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40"
+              ref={overnameBadgeRef}
+              className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40"
               title="Voorstel overname"
               aria-hidden
               data-testid="voorstel-overname-badge"
@@ -790,53 +853,6 @@ export function ShiftBlock({
               onMouseLeave={() => setOvernameHoverDetailOpen(false)}
             >
               <img src="request.svg" alt="Voorstel overname" className="h-3.5 w-3.5" style={{ filter: 'invert(47%) sepia(97%) saturate(2098%) hue-rotate(2deg) brightness(106%) contrast(101%)' }} />
-              <div
-                className="hidden group-hover/voorstel-overname:block absolute top-full right-0 z-50 mt-2 w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
-                data-testid="voorstel-overname-hover-popover"
-              >
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-sm font-bold">{overnameTypeLabel}</p>
-                  {overnameStatusLabel && (
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${overnameStatusClass}`}>
-                      {overnameStatusLabel}
-                    </span>
-                  )}
-                </div>
-                <div className="mb-2 flex text-sm">
-                  <p className="mb-0">Van: <br /> Tot:</p>
-                  <p className="mb-0 ml-2">
-                    {vanDateLabel} <strong>{block.startTime}</strong>
-                    <br />
-                    {totDateLabel} <strong>{block.endTime}</strong>
-                  </p>
-                </div>
-                <div className="mb-2 flex items-center gap-2 text-sm">
-                  <p className="font-bold">Van:</p>
-                  <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
-                    style={{
-                      backgroundColor: vanArts?.color ?? '#7b2d8e',
-                      color: getContrastTextColor(vanArts?.color ?? '#7b2d8e'),
-                    }}
-                  >
-                    {vanArts?.shortName ?? '??'}
-                  </span>
-                  <p className="font-medium leading-tight">{vanArts?.name ?? 'Onbekend'}</p>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <p className="font-bold">Naar:</p>
-                  <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
-                    style={{
-                      backgroundColor: naarArts?.color ?? '#7b2d8e',
-                      color: getContrastTextColor(naarArts?.color ?? '#7b2d8e'),
-                    }}
-                  >
-                    {naarArts?.shortName ?? '??'}
-                  </span>
-                  <p className="font-medium leading-tight">{naarArts?.name ?? 'Onbekend'}</p>
-                </div>
-              </div>
             </span>
           )}
           {overnameType === 'vraagtekenOvername' && (
@@ -850,6 +866,7 @@ export function ShiftBlock({
             </span>
           )}
         </div>
+        {overnameHoverPopover}
         {showShiftTooltipPortal &&
           shiftTooltipCoords &&
           typeof document !== 'undefined' &&
@@ -879,10 +896,23 @@ export function ShiftBlock({
                   {tooltipAantekeningLabel && overnameType !== 'voorstelOvername' && overnameType !== 'overname' && overnameType !== 'vraagtekenOvername' ? (
                     <span className="block text-[10px] font-normal opacity-90">{tooltipAantekeningLabel}</span>
                   ) : null}
-                  {overnameType === 'voorstelOvername' || overnameType === 'overname' ? (
+                  {overnameType === 'overname' ? (
                     <>
-                      {/* <span className="block text-[10px] font-normal opacity-90">van: {vanArts?.name ?? '??'}</span> */}
-                      <span className="block text-[15px] font-normal opacity-90">naar: {naarArts?.name ?? '??'} ?</span>
+                      <span className="block text-[12px] font-normal opacity-90">
+                        van: {vanArts?.name ?? '??'}
+                      </span>
+                      <span className="block text-[12px] font-normal opacity-90">
+                        naar: {naarArts?.name ?? '??'}
+                      </span>
+                    </>
+                  ) : overnameType === 'voorstelOvername' ? (
+                    <>
+                      <span className="block text-[12px] font-normal opacity-90">
+                        van: {vanArts?.name ?? '??'}
+                      </span>
+                      <span className="block text-[15px] font-normal opacity-90">
+                        naar: {naarArts?.name ?? '??'} ?
+                      </span>
                     </>
                   ) : overnameType === 'vraagtekenOvername' ? (
                     <span className="block text-[17px] font-normal opacity-90">naar: ?</span>

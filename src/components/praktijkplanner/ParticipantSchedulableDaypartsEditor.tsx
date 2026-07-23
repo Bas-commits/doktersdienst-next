@@ -26,9 +26,12 @@ const DAYPART_ICONS: Record<number, { gray: string; green: string }> = {
   4: { gray: '/icons/moon-up.svg', green: '/images/icons/moon-up-green.svg' },
 };
 
+/** Same format as lijst deelnemers: achternaam, voornaam, voorletterstussenvoegsel */
 function participantLabel(participant: PraktijkplannerParticipant): string {
   return (
-    [participant.voornaam, participant.achternaam].filter(Boolean).join(' ') ||
+    [participant.achternaam, participant.voornaam, participant.voorletterstussenvoegsel]
+      .filter(Boolean)
+      .join(', ') ||
     participant.name ||
     participant.initialen ||
     `Deelnemer ${participant.id}`

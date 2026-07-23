@@ -51,6 +51,9 @@ export interface MijnGegevensProfile {
     idgroep: number | null;
     fte: number | null;
     idfunctie: number | null;
+    /** Active expertises for this group, plus any inactive ones the user already has */
+    expertises: { id: number; naam: string; afkorting: string | null }[];
+    selectedExpertiseIds: number[];
   }[];
   groep: { id: number } | null;
   locatie: { id: number; idinstellingtype: number | null; idregio: number | null } | null;
@@ -101,4 +104,6 @@ export interface MijnGegevensUpdateBody {
   telnrSlots?: TelnrSlotRaw[];
   /** Per waarneemgroep FTE (0–2); only rows where the user is aangemeld are updated */
   waarneemgroepFte?: { idwaarneemgroep: number; fte: number; idfunctie?: 1 | 2 | 3 | 4 | null }[];
+  /** Per waarneemgroep selected expertise IDs; replace-set for aangemelde memberships */
+  waarneemgroepExpertises?: { idwaarneemgroep: number; expertiseIds: number[] }[];
 }

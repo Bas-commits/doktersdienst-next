@@ -69,6 +69,7 @@ type FormSnapshot = {
   telnrSlots: TelnrSlot[];
   fteByWaarneemgroepId: Record<number, number>;
   functieByWaarneemgroepId: Record<number, 1 | 2 | 3 | 4 | null>;
+  expertiseIdsByWaarneemgroepId: Record<number, number[]>;
 };
 
 function defaultFteForWaarneemgroepen(
@@ -114,6 +115,40 @@ function functieRecordsDirty(
     if ((a[id] ?? null) !== (b[id] ?? null)) return true;
   }
   return false;
+}
+
+function defaultExpertiseIdsForWaarneemgroepen(
+  waarneemgroepen: MijnGegevensProfile['waarneemgroepen']
+): Record<number, number[]> {
+  const out: Record<number, number[]> = {};
+  for (const wg of waarneemgroepen) {
+    out[wg.id] = [...(wg.selectedExpertiseIds ?? [])].sort((a, b) => a - b);
+  }
+  return out;
+}
+
+function expertiseRecordsDirty(
+  a: Record<number, number[]>,
+  b: Record<number, number[]>
+): boolean {
+  const ids = new Set([...Object.keys(a), ...Object.keys(b)].map(Number));
+  for (const id of ids) {
+    const left = [...(a[id] ?? [])].sort((x, y) => x - y);
+    const right = [...(b[id] ?? [])].sort((x, y) => x - y);
+    if (left.length !== right.length) return true;
+    for (let i = 0; i < left.length; i++) {
+      if (left[i] !== right[i]) return true;
+    }
+  }
+  return false;
+}
+
+function cloneExpertiseIdsMap(map: Record<number, number[]>): Record<number, number[]> {
+  const out: Record<number, number[]> = {};
+  for (const [key, value] of Object.entries(map)) {
+    out[Number(key)] = [...value];
+  }
+  return out;
 }
 
 const FTE_DECIMAL_PLACES = 2;
@@ -178,6 +213,7 @@ export default function MijnGegevensPage() {
   const [color, setColor] = useState('#cccccc');
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [waarneemgroepenOpen, setWaarneemgroepenOpen] = useState(false);
+  const [expertisesOpen, setExpertisesOpen] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
   const [achternaam, setAchternaam] = useState('');
   const [voorletterstussenvoegsel, setVoorletterstussenvoegsel] = useState('');
@@ -200,6 +236,9 @@ export default function MijnGegevensPage() {
   const [fteByWaarneemgroepId, setFteByWaarneemgroepId] = useState<Record<number, number>>({});
   const [functieByWaarneemgroepId, setFunctieByWaarneemgroepId] = useState<
     Record<number, 1 | 2 | 3 | 4 | null>
+  >({});
+  const [expertiseIdsByWaarneemgroepId, setExpertiseIdsByWaarneemgroepId] = useState<
+    Record<number, number[]>
   >({});
   /** Raw string while editing (comma decimal); undefined = show formatted from fteByWaarneemgroepId */
   const [fteDraftByWgId, setFteDraftByWgId] = useState<Partial<Record<number, string>>>({});
@@ -271,8 +310,10 @@ export default function MijnGegevensPage() {
         setTelnrSlots(initialSlots);
         const initialFte = defaultFteForWaarneemgroepen(profileRes.waarneemgroepen);
         const initialFunctie = defaultFunctieForWaarneemgroepen(profileRes.waarneemgroepen);
+        const initialExpertises = defaultExpertiseIdsForWaarneemgroepen(profileRes.waarneemgroepen);
         setFteByWaarneemgroepId(initialFte);
         setFunctieByWaarneemgroepId(initialFunctie);
+        setExpertiseIdsByWaarneemgroepId(initialExpertises);
         setFteDraftByWgId({});
         setSavedSnapshot({
           color: profileRes.deelnemer.color ?? '#cccccc',
@@ -294,6 +335,7 @@ export default function MijnGegevensPage() {
           telnrSlots: initialSlots,
           fteByWaarneemgroepId: { ...initialFte },
           functieByWaarneemgroepId: { ...initialFunctie },
+          expertiseIdsByWaarneemgroepId: cloneExpertiseIdsMap(initialExpertises),
         });
         if (typeId === -1 && lookupRes?.instellingtypen?.length > 0) {
           const firstId = lookupRes.instellingtypen[0]?.id ?? -1;
@@ -338,7 +380,8 @@ export default function MijnGegevensPage() {
       callRecording !== s.callRecording ||
       JSON.stringify(telnrSlots) !== JSON.stringify(s.telnrSlots) ||
       fteRecordsDirty(fteByWaarneemgroepId, s.fteByWaarneemgroepId) ||
-      functieRecordsDirty(functieByWaarneemgroepId, s.functieByWaarneemgroepId)
+      functieRecordsDirty(functieByWaarneemgroepId, s.functieByWaarneemgroepId) ||
+      expertiseRecordsDirty(expertiseIdsByWaarneemgroepId, s.expertiseIdsByWaarneemgroepId)
     );
   }, [
     savedSnapshot,
@@ -361,6 +404,7 @@ export default function MijnGegevensPage() {
     telnrSlots,
     fteByWaarneemgroepId,
     functieByWaarneemgroepId,
+    expertiseIdsByWaarneemgroepId,
   ]);
 
   const {
@@ -500,6 +544,13 @@ export default function MijnGegevensPage() {
               idfunctie: functieCommitted[wg.id] ?? null,
             }))
           : undefined,
+      waarneemgroepExpertises:
+        profile && profile.waarneemgroepen.length > 0
+          ? profile.waarneemgroepen.map((wg) => ({
+              idwaarneemgroep: wg.id,
+              expertiseIds: [...(expertiseIdsByWaarneemgroepId[wg.id] ?? [])],
+            }))
+          : undefined,
     };
     if (!isDelegatedEdit && !useVerifiedEmailChangeFlow) {
       body.huisemail = trimmedEmail || undefined;
@@ -531,6 +582,8 @@ export default function MijnGegevensPage() {
     setFteByWaarneemgroepId(fteCommitted);
     setFunctieByWaarneemgroepId(functieCommitted);
     setFteDraftByWgId({});
+    const expertiseCommitted = cloneExpertiseIdsMap(expertiseIdsByWaarneemgroepId);
+    setExpertiseIdsByWaarneemgroepId(expertiseCommitted);
     setSavedSnapshot({
       color,
       achternaam,
@@ -551,6 +604,7 @@ export default function MijnGegevensPage() {
       telnrSlots,
       fteByWaarneemgroepId: { ...fteCommitted },
       functieByWaarneemgroepId: { ...functieCommitted },
+      expertiseIdsByWaarneemgroepId: expertiseCommitted,
     });
     return true;
   }
@@ -1111,6 +1165,87 @@ export default function MijnGegevensPage() {
                   )}
                 </div>
 
+                <div className="overflow-hidden rounded-xl border border-border bg-muted/30 shadow-sm dark:bg-muted/20">
+                  <button
+                    type="button"
+                    onClick={() => setExpertisesOpen((o) => !o)}
+                    className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium hover:bg-muted/40 aria-expanded:rounded-b-none"
+                    aria-expanded={expertisesOpen}
+                  >
+                    {expertisesOpen ? (
+                      <ChevronDown className="size-4 shrink-0" />
+                    ) : (
+                      <ChevronRight className="size-4 shrink-0" />
+                    )}
+                    <span>Expertises per waarneemgroep</span>
+                  </button>
+                  {expertisesOpen && (
+                    <div className="space-y-2 border-t border-border/60 px-4 py-3">
+                      {profile.waarneemgroepen.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">—</p>
+                      ) : (
+                        <div className="flex flex-col gap-3">
+                          {profile.waarneemgroepen.map((wg) => {
+                            const selected = expertiseIdsByWaarneemgroepId[wg.id] ?? [];
+                            const selectedSet = new Set(selected);
+                            return (
+                              <div
+                                key={wg.id}
+                                className="flex flex-col gap-2 border-b border-border/60 py-2 last:border-0 last:pb-0 first:pt-0"
+                              >
+                                <span className="text-sm text-foreground">
+                                  {wg.naam ?? `Groep ${wg.id}`}
+                                </span>
+                                {(wg.expertises ?? []).length === 0 ? (
+                                  <p className="text-sm text-muted-foreground">
+                                    Geen expertises beschikbaar
+                                  </p>
+                                ) : (
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-x-4 sm:gap-y-2">
+                                    {wg.expertises.map((exp) => {
+                                      const checked = selectedSet.has(exp.id);
+                                      const abbr = exp.afkorting?.trim();
+                                      const label =
+                                        abbr && abbr !== exp.naam
+                                          ? `${exp.naam} (${abbr})`
+                                          : exp.naam;
+                                      return (
+                                        <label
+                                          key={exp.id}
+                                          className="flex cursor-pointer items-center gap-2 text-sm"
+                                        >
+                                          <Checkbox
+                                            checked={checked}
+                                            disabled={isSubmitting}
+                                            onCheckedChange={(next) => {
+                                              setExpertiseIdsByWaarneemgroepId((prev) => {
+                                                const current = prev[wg.id] ?? [];
+                                                const nextIds = next
+                                                  ? current.includes(exp.id)
+                                                    ? current
+                                                    : [...current, exp.id]
+                                                  : current.filter((id) => id !== exp.id);
+                                                return {
+                                                  ...prev,
+                                                  [wg.id]: nextIds.sort((a, b) => a - b),
+                                                };
+                                              });
+                                            }}
+                                          />
+                                          <span>{label}</span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <div className={formSectionClass}>
                   <div className="flex flex-col gap-1">

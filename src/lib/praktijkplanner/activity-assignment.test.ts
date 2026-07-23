@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildActivityAssignmentSlot,
+  getMissingActivityExpertiseWarning,
+  getMissingTaskExpertiseWarnings,
   hasActivityAssignmentSelection,
+  missingActivityExpertiseMessage,
+  missingTaskExpertiseMessage,
   type ActivityAssignmentSelection,
 } from './activity-assignment';
 
@@ -161,5 +165,63 @@ describe('buildActivityAssignmentSlot', () => {
     expect(hasActivityAssignmentSelection(emptySelection)).toBe(false);
     expect(hasActivityAssignmentSelection({ ...emptySelection, taskIds: [5] })).toBe(true);
     expect(hasActivityAssignmentSelection({ ...emptySelection, availabilityId: 4 })).toBe(true);
+  });
+});
+
+describe('getMissingActivityExpertiseWarning', () => {
+  const expertises = [
+    { id: 1, naam: 'Spoedzorg' },
+    { id: 2, naam: 'Visite' },
+  ];
+
+  it('returns null when the activity has no required expertise', () => {
+    expect(
+      getMissingActivityExpertiseWarning({
+        activity: { naam: 'Balie', idexpertise: null },
+        expertises,
+        participantExpertiseIds: [],
+      })
+    ).toBeNull();
+  });
+
+  it('returns null when the deelnemer has the required expertise', () => {
+    expect(
+      getMissingActivityExpertiseWarning({
+        activity: { naam: 'Spoed', idexpertise: 1 },
+        expertises,
+        participantExpertiseIds: [1, 2],
+      })
+    ).toBeNull();
+  });
+
+  it('returns a warning when the required expertise is missing', () => {
+    expect(
+      getMissingActivityExpertiseWarning({
+        activity: { naam: 'Spoed', idexpertise: 1 },
+        expertises,
+        participantExpertiseIds: [2],
+      })
+    ).toBe(missingActivityExpertiseMessage('Spoedzorg', 'Spoed'));
+  });
+});
+
+describe('getMissingTaskExpertiseWarnings', () => {
+  const expertises = [
+    { id: 1, naam: 'Spoedzorg' },
+    { id: 2, naam: 'Visite' },
+  ];
+
+  it('returns warnings only for tasks with a missing required expertise', () => {
+    expect(
+      getMissingTaskExpertiseWarnings({
+        tasks: [
+          { afkorting: 'HV', omschrijving: 'Huisvisite', idexpertise: 2 },
+          { afkorting: 'SP', omschrijving: 'Spoed', idexpertise: 1 },
+          { afkorting: 'ALG', omschrijving: 'Algemeen', idexpertise: null },
+        ],
+        expertises,
+        participantExpertiseIds: [2],
+      })
+    ).toEqual([missingTaskExpertiseMessage('Spoedzorg', 'SP')]);
   });
 });

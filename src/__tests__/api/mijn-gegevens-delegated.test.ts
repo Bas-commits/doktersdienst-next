@@ -45,6 +45,8 @@ vi.mock('@/db', () => ({
     locaties: {},
     instellingtype: {},
     settelnrs: {},
+    expertises: {},
+    deelnemerexpertises: {},
   },
 }));
 

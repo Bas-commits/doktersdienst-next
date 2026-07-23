@@ -1,6 +1,7 @@
 'use client';
 
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Copy, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,6 +23,8 @@ import { plannerWeekGridNavOffsetPx } from '@/components/praktijkplanner/planner
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import {
   buildActivityAssignmentSlot,
+  getMissingActivityExpertiseWarning,
+  getMissingTaskExpertiseWarnings,
   hasActivityAssignmentSelection,
   type ActivityAssignmentSelection,
   type CurrentActivityAssignment,
@@ -74,6 +77,7 @@ export function ActivitiesContent({
   data,
   readOnly = false,
 }: PraktijkplannerPageContext & { readOnly?: boolean }) {
+  const router = useRouter();
   const canEdit = data.isManager && !readOnly;
   const [weekStart, setWeekStart] = useState(currentWeekStart);
   const [slots, setSlots] = useState<PraktijkplannerPlanningSlot[]>([]);
@@ -621,7 +625,7 @@ export function ActivitiesContent({
       datum,
       daypart,
     }: {
-      participant: { id: number };
+      participant: PraktijkplannerParticipant;
       datum: string;
       daypart: { id: number };
     }) => {
@@ -667,6 +671,32 @@ export function ActivitiesContent({
       if (!clearMode && !hasActivityAssignmentSelection(selection)) {
         toast.info('Kies eerst een activiteit, locatie, beschikbaarheidstype of taak.');
         return;
+      }
+
+      const expertiseWarnings: string[] = [];
+      const participantExpertiseIds = (participant.expertises ?? []).map((item) => item.id);
+
+      if (!clearMode && selection.activityId != null) {
+        const activity = data.masterData.activities.find((item) => item.id === selection.activityId);
+        const warning = getMissingActivityExpertiseWarning({
+          activity,
+          expertises: data.masterData.expertises,
+          participantExpertiseIds,
+        });
+        if (warning) expertiseWarnings.push(warning);
+      }
+
+      if (!clearMode && selection.taskIds.length > 0) {
+        const selectedTasks = selection.taskIds.flatMap(
+          (id) => data.masterData.tasks.find((task) => task.id === id) ?? []
+        );
+        expertiseWarnings.push(
+          ...getMissingTaskExpertiseWarnings({
+            tasks: selectedTasks,
+            expertises: data.masterData.expertises,
+            participantExpertiseIds,
+          })
+        );
       }
 
       const next = buildActivityAssignmentSlot({
@@ -756,7 +786,13 @@ export function ActivitiesContent({
         if (!response.ok) throw new Error(payload.error || 'Wijziging kon niet worden opgeslagen.');
         await refreshSlots();
         notifyPlannerChanged(groupId);
-        toast.success(clearMode ? 'Dagdeel leeggemaakt.' : 'Dagdeel opgeslagen.');
+        if (expertiseWarnings.length > 0) {
+          for (const warning of expertiseWarnings) {
+            toast.warning(warning, { duration: 8000 });
+          }
+        } else {
+          toast.success(clearMode ? 'Dagdeel leeggemaakt.' : 'Dagdeel opgeslagen.');
+        }
       } catch (error) {
         setSlots(previousSlots);
         toast.error(error instanceof Error ? error.message : 'Wijziging kon niet worden opgeslagen.');
@@ -769,6 +805,7 @@ export function ActivitiesContent({
       canEdit,
       data.masterData.activities,
       data.masterData.availabilityTypes,
+      data.masterData.expertises,
       data.masterData.locations,
       data.masterData.participantSchedulableDayparts,
       data.masterData.schedulableDayparts,
@@ -789,6 +826,13 @@ export function ActivitiesContent({
     loadSlots();
     notifyPlannerChanged(groupId);
   }, [groupId, loadSlots]);
+
+  const openDeelnemerGegevens = useCallback(
+    (participant: PraktijkplannerParticipant) => {
+      void router.push(`/mijn-gegevens?deelnemerId=${participant.id}`);
+    },
+    [router]
+  );
 
   const renderParticipantActions = useCallback(
     (participant: PraktijkplannerParticipant) => (
@@ -920,6 +964,7 @@ export function ActivitiesContent({
             cursorTool={cursorTool}
             onCursorToolDismiss={dismissCursorTool}
             renderParticipantActions={canEdit ? renderParticipantActions : undefined}
+            onParticipantNameClick={readOnly ? undefined : openDeelnemerGegevens}
           />
         </div>
       </div>
@@ -981,7 +1026,14 @@ export default function ActiviteitenPlannerPage() {
       </Head>
       <PraktijkplannerPage
         title="Activiteiten planner"
-        description="Plan activiteiten, taken, locaties en beschikbaarheid per deelnemer en dagdeel."
+        description={
+          <>
+            Plan activiteiten, taken, locaties en beschikbaarheid per deelnemer en dagdeel.
+            <br />
+            Druk op esc om fische aan cursor te laten verdwijnen.
+          </>
+        }
+   
       >
         {(context) => <ActivitiesContent {...context} />}
       </PraktijkplannerPage>

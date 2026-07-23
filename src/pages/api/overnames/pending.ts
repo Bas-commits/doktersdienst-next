@@ -3,10 +3,25 @@ import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { alias } from 'drizzle-orm/pg-core';
-import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { deelnemerChipInitials, formatDeelnemerDisplayName } from '@/lib/deelnemer-display';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers, waarneemgroepen } = schema;
 const GROEP_SECRETARIS = 2;
+
+/** Same format as lijst deelnemers: achternaam, voornaam, voorletterstussenvoegsel */
+function formatDeelnemerListName(fields: {
+  achternaam: string | null;
+  voornaam: string | null;
+  voorletterstussenvoegsel: string | null;
+}): string {
+  return (
+    [fields.achternaam, fields.voornaam, fields.voorletterstussenvoegsel]
+      .filter(Boolean)
+      .join(', ') ||
+    formatDeelnemerDisplayName(fields) ||
+    'Onbekend'
+  );
+}
 
 function toHeaders(incoming: NextApiRequest['headers']): Headers {
   const h = new Headers();
@@ -115,10 +130,12 @@ export default async function handler(
       senderId: dienstenTable.senderId,
       originalVoornaam: originalDeelnemer.voornaam,
       originalAchternaam: originalDeelnemer.achternaam,
+      originalVoorletterstussenvoegsel: originalDeelnemer.voorletterstussenvoegsel,
       originalInitialen: originalDeelnemer.initialen,
       originalColor: originalDeelnemer.color,
       targetVoornaam: targetDeelnemer.voornaam,
       targetAchternaam: targetDeelnemer.achternaam,
+      targetVoorletterstussenvoegsel: targetDeelnemer.voorletterstussenvoegsel,
       targetInitialen: targetDeelnemer.initialen,
       targetColor: targetDeelnemer.color,
       waarneemgroepNaam: waarneemgroepen.naam,
@@ -159,7 +176,11 @@ export default async function handler(
       },
       { fallback: '??' }
     );
-    const originalNaam = `${r.originalVoornaam ?? ''} ${r.originalAchternaam ?? ''}`.trim() || 'Onbekend';
+    const originalNaam = formatDeelnemerListName({
+      achternaam: r.originalAchternaam,
+      voornaam: r.originalVoornaam,
+      voorletterstussenvoegsel: r.originalVoorletterstussenvoegsel,
+    });
     const targetInitialen = deelnemerChipInitials(
       {
         initialen: r.targetInitialen,
@@ -168,7 +189,11 @@ export default async function handler(
       },
       { fallback: '??' }
     );
-    const targetNaam = `${r.targetVoornaam ?? ''} ${r.targetAchternaam ?? ''}`.trim() || 'Onbekend';
+    const targetNaam = formatDeelnemerListName({
+      achternaam: r.targetAchternaam,
+      voornaam: r.targetVoornaam,
+      voorletterstussenvoegsel: r.targetVoorletterstussenvoegsel,
+    });
     const isPartial =
       r.originalVan == null || r.originalTot == null
         ? false
@@ -197,12 +222,18 @@ export default async function handler(
       vanArts: {
         initialen: originalInitialen,
         naam: originalNaam,
+        voornaam: r.originalVoornaam,
+        achternaam: r.originalAchternaam,
+        voorletterstussenvoegsel: r.originalVoorletterstussenvoegsel,
         color: r.originalColor ?? '#7b2d8e',
         akkoord: true,
       },
       naarArts: {
         initialen: targetInitialen,
         naam: targetNaam,
+        voornaam: r.targetVoornaam,
+        achternaam: r.targetAchternaam,
+        voorletterstussenvoegsel: r.targetVoorletterstussenvoegsel,
         color: r.targetColor ?? '#7b2d8e',
         akkoord: false,
       },

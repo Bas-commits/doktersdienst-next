@@ -32,9 +32,12 @@ export type PlannerDaypartCell = {
   daypart: PraktijkplannerDaypart;
 };
 
+/** Same format as lijst deelnemers: achternaam, voornaam, voorletterstussenvoegsel */
 function participantLabel(participant: PraktijkplannerParticipant): string {
   return (
-    [participant.voornaam, participant.achternaam].filter(Boolean).join(' ') ||
+    [participant.achternaam, participant.voornaam, participant.voorletterstussenvoegsel]
+      .filter(Boolean)
+      .join(', ') ||
     participant.name ||
     participant.initialen ||
     `Deelnemer ${participant.id}`

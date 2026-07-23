@@ -3,6 +3,7 @@ export type IsoDate = `${number}-${number}-${number}`;
 export type PraktijkplannerParticipant = {
   id: number;
   voornaam: string | null;
+  voorletterstussenvoegsel: string | null;
   achternaam: string | null;
   initialen: string | null;
   color: string | null;

@@ -21,6 +21,7 @@ vi.mock('@/components/praktijkplanner/PlannerDaypartGrid', () => ({
 const participant = {
   id: 7,
   voornaam: 'Ada',
+  voorletterstussenvoegsel: null,
   achternaam: 'Lovelace',
   initialen: 'AL',
   color: '#334155',

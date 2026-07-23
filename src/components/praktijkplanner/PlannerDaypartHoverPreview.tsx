@@ -75,6 +75,9 @@ export function PlannerDaypartHoverPreview({
   daypartName,
   fromRepetition,
   isException,
+  activityName,
+  locationName,
+  absenceRequested,
   availabilityName,
   taskNames,
   chip,
@@ -87,6 +90,9 @@ export function PlannerDaypartHoverPreview({
   daypartName: string;
   fromRepetition: boolean;
   isException: boolean;
+  activityName?: string | null;
+  locationName?: string | null;
+  absenceRequested?: boolean;
   availabilityName?: string | null;
   taskNames?: string[];
   chip: ReactNode;
@@ -113,7 +119,16 @@ export function PlannerDaypartHoverPreview({
     if (!open || !cursor || !popupRef.current) return;
     const rect = popupRef.current.getBoundingClientRect();
     setCoords(placeNearCursor(cursor, rect.width, rect.height));
-  }, [open, cursor, chip, participantName, daypartName]);
+  }, [
+    open,
+    cursor,
+    chip,
+    participantName,
+    daypartName,
+    activityName,
+    locationName,
+    absenceRequested,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -176,12 +191,18 @@ export function PlannerDaypartHoverPreview({
                   <dd className="font-medium">{initials || '—'}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Datum</dt>
-                  <dd className="text-right font-medium">{formatDateLabel(datum)}</dd>
+                  <dt className="text-muted-foreground">Datum / dagdeel</dt>
+                  <dd className="text-right font-medium">
+                    {formatDateLabel(datum)} · {daypartName}
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Dagdeel</dt>
-                  <dd className="font-medium">{daypartName}</dd>
+                  <dt className="text-muted-foreground">Activiteit</dt>
+                  <dd className="text-right font-medium">{activityName || '—'}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Locatie</dt>
+                  <dd className="text-right font-medium">{locationName || '—'}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">Herhaling</dt>
@@ -215,6 +236,12 @@ export function PlannerDaypartHoverPreview({
                   <div className="flex justify-between gap-2">
                     <dt className="text-muted-foreground">Beschikbaarheid</dt>
                     <dd className="text-right font-medium">{availabilityName}</dd>
+                  </div>
+                ) : null}
+                {absenceRequested ? (
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted-foreground">Absentie aangevraagd</dt>
+                    <dd className="font-medium">Ja</dd>
                   </div>
                 ) : null}
               </dl>

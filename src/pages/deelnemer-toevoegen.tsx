@@ -119,6 +119,7 @@ export default function DeelnemerToevoegenPage() {
   const [leden, setLeden] = useState<DeelnemerWithGroepen[]>([]);
   const [ledenLoading, setLedenLoading] = useState(false);
   const [ledenError, setLedenError] = useState<string | null>(null);
+  const [toonAfgemelde, setToonAfgemelde] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
   const [registeringId, setRegisteringId] = useState<number | null>(null);
@@ -248,7 +249,14 @@ export default function DeelnemerToevoegenPage() {
         ? Number(activeWaarneemgroepId)
         : NaN;
     if (!Number.isFinite(wgId) || wgId <= 0) return leden;
-    return [...leden].sort((a, b) => {
+
+    const filtered = toonAfgemelde
+      ? leden
+      : leden.filter(
+          (d) => d.waarneemgroepen.find((wg) => wg.id === wgId)?.aangemeld === true
+        );
+
+    return [...filtered].sort((a, b) => {
       const aAangemeld =
         a.waarneemgroepen.find((wg) => wg.id === wgId)?.aangemeld === true;
       const bAangemeld =
@@ -256,7 +264,7 @@ export default function DeelnemerToevoegenPage() {
       if (aAangemeld === bAangemeld) return 0;
       return aAangemeld ? -1 : 1;
     });
-  }, [leden, activeWaarneemgroepId]);
+  }, [leden, activeWaarneemgroepId, toonAfgemelde]);
 
   const validateClient = (): string | null => {
     const em = email.trim().toLowerCase();
@@ -812,12 +820,23 @@ export default function DeelnemerToevoegenPage() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-lg font-semibold tracking-tight">
                       Deelnemers in deze waarneemgroep
                       {selectedWgLabel ? ` — ${selectedWgLabel}` : ''}
                     </h2>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
+                      <label
+                        htmlFor="toon-afgemelde"
+                        className="inline-flex cursor-pointer items-center gap-2 text-sm font-normal text-foreground"
+                      >
+                        <Checkbox
+                          id="toon-afgemelde"
+                          checked={toonAfgemelde}
+                          onCheckedChange={(checked) => setToonAfgemelde(checked === true)}
+                        />
+                        Afgemelde deelnemers
+                      </label>
                       <button
                         type="button"
                         title="Nieuwe deelnemer"
@@ -839,10 +858,14 @@ export default function DeelnemerToevoegenPage() {
                   </p>
                 )}
                 {ledenError && <p className="text-sm text-destructive">{ledenError}</p>}
-                {!ledenLoading && !ledenError && leden.length === 0 && (
-                  <p className="text-sm text-muted-foreground">Geen deelnemers gevonden voor deze groep.</p>
+                {!ledenLoading && !ledenError && sortedLeden.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    {leden.length > 0 && !toonAfgemelde
+                      ? 'Geen aangemelde deelnemers. Vink “Afgemelde deelnemers” aan om afgemelde leden te tonen.'
+                      : 'Geen deelnemers gevonden voor deze groep.'}
+                  </p>
                 )}
-                {!ledenLoading && !ledenError && leden.length > 0 && (
+                {!ledenLoading && !ledenError && sortedLeden.length > 0 && (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>

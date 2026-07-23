@@ -16,6 +16,7 @@ describe('PlannerDaypartGrid', () => {
           {
             id: 7,
             voornaam: 'Ada',
+            voorletterstussenvoegsel: null,
             achternaam: 'Lovelace',
             initialen: 'AL',
             color: '#334155',
@@ -33,7 +34,7 @@ describe('PlannerDaypartGrid', () => {
     );
 
     expect(screen.getByText('Feestdag')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Ada Lovelace 2026-07-13 Ochtend' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lovelace, Ada 2026-07-13 Ochtend' }));
     expect(onCellClick).toHaveBeenCalledWith(
       expect.objectContaining({
         datum: '2026-07-13',
@@ -55,6 +56,7 @@ describe('PlannerDaypartGrid', () => {
           {
             id: 7,
             voornaam: 'Ada',
+            voorletterstussenvoegsel: null,
             achternaam: 'Lovelace',
             initialen: 'AL',
             color: '#334155',
@@ -73,7 +75,7 @@ describe('PlannerDaypartGrid', () => {
     );
 
     const unavailable = screen.getByRole('button', {
-      name: 'Ada Lovelace 2026-07-13 Middag niet inplanbaar',
+      name: 'Lovelace, Ada 2026-07-13 Middag niet inplanbaar',
     });
     expect(unavailable).not.toBeDisabled();
     fireEvent.click(unavailable);

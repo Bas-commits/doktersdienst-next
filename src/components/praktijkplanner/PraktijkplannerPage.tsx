@@ -1,6 +1,12 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   type PraktijkplannerContextData,
@@ -14,6 +20,15 @@ export type PraktijkplannerPageContext = {
   reload: () => void;
 };
 
+const TitleAsideSlotContext = createContext<HTMLElement | null>(null);
+
+/** Renders children centered in the page header row, between title and group badge. */
+export function PraktijkplannerTitleAside({ children }: { children: ReactNode }) {
+  const slot = useContext(TitleAsideSlotContext);
+  if (!slot) return null;
+  return createPortal(children, slot);
+}
+
 export function PraktijkplannerPage({
   title,
   description,
@@ -24,6 +39,7 @@ export function PraktijkplannerPage({
   children: (context: PraktijkplannerPageContext) => ReactNode;
 }) {
   const context = usePraktijkplannerContext();
+  const [titleAsideSlot, setTitleAsideSlot] = useState<HTMLElement | null>(null);
 
   if (context.loading) {
     return (
@@ -50,21 +66,26 @@ export function PraktijkplannerPage({
 
   return (
     <div className="min-w-[1024px] space-y-5 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
         </div>
-        <span className="rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
-          {context.groupName ?? 'Waarneemgroep'}
-        </span>
+        <div ref={setTitleAsideSlot} className="flex flex-wrap items-center justify-center gap-3 self-center" />
+        <div className="flex justify-end self-start">
+          <span className="rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
+            {context.groupName ?? 'Waarneemgroep'}
+          </span>
+        </div>
       </div>
-      {children({
-        groupId: context.groupId,
-        groupName: context.groupName,
-        data: context.data,
-        reload: context.reload,
-      })}
+      <TitleAsideSlotContext.Provider value={titleAsideSlot}>
+        {children({
+          groupId: context.groupId,
+          groupName: context.groupName,
+          data: context.data,
+          reload: context.reload,
+        })}
+      </TitleAsideSlotContext.Provider>
     </div>
   );
 }

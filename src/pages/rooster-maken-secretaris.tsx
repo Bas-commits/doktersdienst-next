@@ -37,6 +37,7 @@ function totLteForMonth(viewMonth: number, viewYear: number): number {
 interface Doctor {
   id: number;
   voornaam: string | null;
+  voorletterstussenvoegsel: string | null;
   achternaam: string | null;
   color: string | null;
   initials: string;
@@ -44,9 +45,13 @@ interface Doctor {
   waarneemgroepIds: number[];
 }
 
-
-function toFullName(voornaam: string | null, achternaam: string | null): string {
-  return [voornaam, achternaam].filter(Boolean).join(' ') || 'Onbekend';
+/** Same format as lijst deelnemers: achternaam, voornaam, voorletterstussenvoegsel */
+function toFullName(
+  achternaam: string | null,
+  voornaam: string | null,
+  voorletterstussenvoegsel: string | null,
+): string {
+  return [achternaam, voornaam, voorletterstussenvoegsel].filter(Boolean).join(', ') || 'Onbekend';
 }
 
 /** Resolve sidebar doctor id + preference iddeelnemer ids (handles duplicate deelnemer records). */
@@ -60,8 +65,7 @@ function buildHighlightedVoorkeurUserIds(
     if (vk.iddeelnemer == null) continue;
     const d = vk.deelnemer;
     if (!d) continue;
-    const name = [d.voornaam, d.achternaam].filter(Boolean).join(' ');
-    if (name === selectedDoctor.fullName) {
+    if (d.voornaam === selectedDoctor.voornaam && d.achternaam === selectedDoctor.achternaam) {
       ids.add(vk.iddeelnemer);
     }
   }
@@ -446,6 +450,7 @@ export default function RoosterMakenSecretarisPage() {
         deelnemers?: Array<{
           id: number;
           voornaam: string | null;
+          voorletterstussenvoegsel: string | null;
           achternaam: string | null;
           initialen: string | null;
           color: string | null;
@@ -457,10 +462,11 @@ export default function RoosterMakenSecretarisPage() {
             data.deelnemers.map((d) => ({
               id: d.id,
               voornaam: d.voornaam,
+              voorletterstussenvoegsel: d.voorletterstussenvoegsel,
               achternaam: d.achternaam,
               color: d.color,
               initials: deelnemerChipInitials(d),
-              fullName: toFullName(d.voornaam, d.achternaam),
+              fullName: toFullName(d.achternaam, d.voornaam, d.voorletterstussenvoegsel),
               waarneemgroepIds: d.waarneemgroepen
                 .filter((wg) => wg.aangemeld)
                 .map((wg) => wg.id),

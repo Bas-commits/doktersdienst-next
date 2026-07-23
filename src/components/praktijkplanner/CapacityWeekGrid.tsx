@@ -1,8 +1,10 @@
 'use client';
 
+import Image from 'next/image';
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import type { PraktijkplannerDaypart } from '@/types/praktijkplanner';
+import { DAYPART_ICONS } from './absence-icons';
 import { UNAVAILABLE_DAYPART_TOAST } from './PlannerDaypartGrid';
 import {
   PlannerCursorToolFollower,
@@ -60,40 +62,50 @@ export function CapacityWeekGrid({
           </tr>
         </thead>
         <tbody>
-          {dayparts.map((daypart) => (
-            <tr key={daypart.id} className="border-t align-top">
-              <th className="sticky left-0 z-10 border-r bg-card p-3 text-left font-medium">{daypart.naam}</th>
-              {CAPACITY_WEEKDAYS.map((weekday) => {
-                const unavailable = isCellUnavailable?.(weekday, daypart) ?? false;
-                return (
-                  <td
-                    key={`${weekday.id}:${daypart.id}`}
-                    className={[
-                      'border-l p-2 align-top',
-                      unavailable ? 'bg-muted/40 opacity-50' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                  >
-                    {unavailable ? (
-                      <button
-                        type="button"
-                        onClick={() => toast.info(UNAVAILABLE_DAYPART_TOAST)}
-                        onPointerEnter={trackUnavailableCursor}
-                        onPointerMove={trackUnavailableCursor}
-                        onPointerLeave={() => setUnavailableCursor(null)}
-                        className="flex min-h-16 w-full cursor-none items-center justify-center rounded text-xs text-muted-foreground"
-                      >
-                        Niet inplanbaar
-                      </button>
-                    ) : (
-                      renderCell(weekday, daypart)
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
+          {dayparts.map((daypart) => {
+            const icon = DAYPART_ICONS[daypart.volgorde];
+            return (
+              <tr key={daypart.id} className="border-t align-top">
+                <th className="sticky left-0 z-10 border-r bg-card p-3 text-center font-medium align-middle">
+                  <div className="flex flex-col items-center justify-center gap-1.5">
+                    <span>{daypart.naam}</span>
+                    {icon ? (
+                      <Image src={icon} alt="" width={28} height={28} className="size-10" />
+                    ) : null}
+                  </div>
+                </th>
+                {CAPACITY_WEEKDAYS.map((weekday) => {
+                  const unavailable = isCellUnavailable?.(weekday, daypart) ?? false;
+                  return (
+                    <td
+                      key={`${weekday.id}:${daypart.id}`}
+                      className={[
+                        'border-l p-2 align-top',
+                        unavailable ? 'bg-muted/40 opacity-50' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      {unavailable ? (
+                        <button
+                          type="button"
+                          onClick={() => toast.info(UNAVAILABLE_DAYPART_TOAST)}
+                          onPointerEnter={trackUnavailableCursor}
+                          onPointerMove={trackUnavailableCursor}
+                          onPointerLeave={() => setUnavailableCursor(null)}
+                          className="flex min-h-16 w-full cursor-none items-center justify-center rounded text-xs text-muted-foreground"
+                        >
+                          Niet inplanbaar
+                        </button>
+                      ) : (
+                        renderCell(weekday, daypart)
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       <PlannerCursorToolFollower

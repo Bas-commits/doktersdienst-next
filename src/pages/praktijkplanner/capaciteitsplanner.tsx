@@ -8,7 +8,11 @@ import {
   type CapacityRequirementSection,
 } from '@/components/praktijkplanner/CapacityRequirementList';
 import { CAPACITY_WEEKDAYS, CapacityWeekGrid } from '@/components/praktijkplanner/CapacityWeekGrid';
-import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
+import {
+  PraktijkplannerPage,
+  PraktijkplannerTitleAside,
+  type PraktijkplannerPageContext,
+} from '@/components/praktijkplanner/PraktijkplannerPage';
 import { isDaypartSchedulable } from '@/lib/praktijkplanner/schedulable-dayparts';
 import type { PraktijkplannerCapacityCell } from '@/types/praktijkplanner';
 
@@ -272,13 +276,13 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 shadow-sm">
-        <label className="flex items-center gap-2 text-sm">
+      <PraktijkplannerTitleAside>
+        <label className="flex items-center gap-2 text-base">
           <span className="font-medium">Locatie</span>
           <select
             value={locationId ?? ''}
             onChange={(event) => setLocationId(Number(event.target.value) || null)}
-            className="h-9 min-w-64 rounded border bg-background px-2"
+            className="h-10 min-w-64 rounded border bg-background px-3 text-base"
           >
             {data.masterData.locations.map((location) => (
               <option key={location.id} value={location.id}>
@@ -298,7 +302,7 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
             {saveStatusLabel}
           </p>
         ) : null}
-      </div>
+      </PraktijkplannerTitleAside>
 
       {data.masterData.locations.length === 0 ? (
         <p className="rounded-lg border p-4 text-sm text-muted-foreground">

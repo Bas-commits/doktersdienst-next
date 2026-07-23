@@ -43,6 +43,7 @@ const context: PraktijkplannerPageContext = {
       {
         id: 7,
         voornaam: 'Ada',
+        voorletterstussenvoegsel: null,
         achternaam: 'Lovelace',
         initialen: 'AL',
         color: '#334155',
@@ -51,6 +52,7 @@ const context: PraktijkplannerPageContext = {
       {
         id: 8,
         voornaam: 'Grace',
+        voorletterstussenvoegsel: null,
         achternaam: 'Hopper',
         initialen: 'GH',
         color: '#64748b',

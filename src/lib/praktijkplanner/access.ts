@@ -138,6 +138,7 @@ export async function getPraktijkplannerParticipants(
   Array<{
     id: number;
     voornaam: string | null;
+    voorletterstussenvoegsel: string | null;
     achternaam: string | null;
     initialen: string | null;
     color: string | null;
@@ -149,6 +150,7 @@ export async function getPraktijkplannerParticipants(
     .select({
       id: deelnemers.id,
       voornaam: deelnemers.voornaam,
+      voorletterstussenvoegsel: deelnemers.voorletterstussenvoegsel,
       achternaam: deelnemers.achternaam,
       initialen: deelnemers.initialen,
       color: deelnemers.color,
@@ -168,8 +170,12 @@ export async function getPraktijkplannerParticipants(
   return visible
     .filter((row): row is typeof row & { id: number } => row.id != null)
     .sort((a, b) => {
-      const aName = [a.achternaam, a.voornaam, a.name].filter(Boolean).join(' ');
-      const bName = [b.achternaam, b.voornaam, b.name].filter(Boolean).join(' ');
+      const aName = [a.achternaam, a.voornaam, a.voorletterstussenvoegsel, a.name]
+        .filter(Boolean)
+        .join(' ');
+      const bName = [b.achternaam, b.voornaam, b.voorletterstussenvoegsel, b.name]
+        .filter(Boolean)
+        .join(' ');
       return aName.localeCompare(bName, 'nl');
     });
 }

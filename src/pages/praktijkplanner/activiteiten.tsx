@@ -49,9 +49,12 @@ type ParticipantActionModal =
   | { type: 'email'; participant: PraktijkplannerParticipant }
   | { type: 'manageHerhaling'; participant: PraktijkplannerParticipant };
 
+/** Same format as lijst deelnemers: achternaam, voornaam, voorletterstussenvoegsel */
 function participantDisplayName(participant: PraktijkplannerParticipant): string {
   return (
-    [participant.voornaam, participant.achternaam].filter(Boolean).join(' ') ||
+    [participant.achternaam, participant.voornaam, participant.voorletterstussenvoegsel]
+      .filter(Boolean)
+      .join(', ') ||
     participant.name ||
     participant.initialen ||
     `Deelnemer ${participant.id}`
@@ -386,6 +389,9 @@ export function ActivitiesContent({
           daypartName={daypart.naam}
           fromRepetition={existing?.recurrenceId != null}
           isException={Boolean(existing?.isUitzondering)}
+          activityName={activityItem?.label}
+          locationName={locationItem?.label}
+          absenceRequested={provisionalOverlay}
           availabilityName={availability?.naam}
           taskNames={taskItems.map((task) => task.label)}
           chip={

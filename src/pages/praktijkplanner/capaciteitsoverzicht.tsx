@@ -5,7 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CapacityRequirementList } from '@/components/praktijkplanner/CapacityRequirementList';
 import { CapacityWeekGrid } from '@/components/praktijkplanner/CapacityWeekGrid';
 import { PlannerWeekNavigation } from '@/components/praktijkplanner/PlannerWeekNavigation';
-import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
+import {
+  PraktijkplannerPage,
+  PraktijkplannerTitleAside,
+  type PraktijkplannerPageContext,
+} from '@/components/praktijkplanner/PraktijkplannerPage';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import { subscribePlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 import { isDaypartSchedulable } from '@/lib/praktijkplanner/schedulable-dayparts';
@@ -150,14 +154,13 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <PlannerWeekNavigation weekStart={weekStart} onWeekStartChange={setWeekStart} />
-        <label className="flex items-center gap-2 rounded-xl border bg-card p-2 text-sm shadow-sm">
+      <PraktijkplannerTitleAside>
+        <label className="flex items-center gap-2 text-base">
           <span className="font-medium">Locatie</span>
           <select
             value={effectiveLocationId ?? ''}
             onChange={(event) => setLocationId(Number(event.target.value) || null)}
-            className="h-8 min-w-56 rounded border bg-background px-2"
+            className="h-10 min-w-56 rounded border bg-background px-3 text-base"
           >
             {data.masterData.locations.map((location) => (
               <option key={location.id} value={location.id}>
@@ -166,7 +169,9 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
             ))}
           </select>
         </label>
-      </div>
+      </PraktijkplannerTitleAside>
+
+      <PlannerWeekNavigation weekStart={weekStart} onWeekStartChange={setWeekStart} />
 
       {data.masterData.locations.length === 0 ? (
         <p className="rounded-lg border p-4 text-sm text-muted-foreground">

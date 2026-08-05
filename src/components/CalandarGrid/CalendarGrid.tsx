@@ -251,6 +251,7 @@ function computeWeekVoorkeurLayout(
   // Global lane assignment per user: each voorkeur gets a fixed lane index that
   // is consistent across ALL days it spans (no per-day re-assignment).
   const userInitials = new Map<number, string>();
+  const userNames = new Map<number, { achternaam: string; voornaam: string }>();
   const userMaxLanes = new Map<number, number>();
   const vkToLane = new Map<VoorkeurItem, number>();
 
@@ -264,6 +265,11 @@ function computeWeekVoorkeurLayout(
         achternaam: d?.achternaam,
       }),
     );
+    // Chips show initials, so the surname is kept separately purely to order the rows.
+    userNames.set(userId, {
+      achternaam: d?.achternaam ?? '',
+      voornaam: d?.voornaam ?? '',
+    });
 
     const sorted = [...vks].sort((a, b) => a.van - b.van);
     // laneContents tracks which vks are assigned to each lane, for conflict checking.
@@ -337,9 +343,19 @@ function computeWeekVoorkeurLayout(
     byDayRaw.set(dateKey, dayMap);
   }
 
-  // Build stable user slot order (sorted by userId for consistency across re-renders).
+  // Rows read top-to-bottom by surname A-Z, matching the Dokters panel beside the
+  // grid. Same collation as sortMembers() in lib/urentelling.ts. userId breaks ties
+  // so two doctors sharing a name cannot swap places between re-renders.
   const users: WeekUserSlot[] = Array.from(userInitials.keys())
-    .sort((a, b) => a - b)
+    .sort((a, b) => {
+      const na = userNames.get(a);
+      const nb = userNames.get(b);
+      const achternaamCmp = (na?.achternaam ?? '').localeCompare(nb?.achternaam ?? '', 'nl');
+      if (achternaamCmp !== 0) return achternaamCmp;
+      const voornaamCmp = (na?.voornaam ?? '').localeCompare(nb?.voornaam ?? '', 'nl');
+      if (voornaamCmp !== 0) return voornaamCmp;
+      return a - b;
+    })
     .map((userId) => ({
       userId,
       initials: userInitials.get(userId)!,

@@ -128,6 +128,24 @@ export default async function handler(
       tot: dienstenTable.tot,
       originalVan: originalDienst.van,
       originalTot: originalDienst.tot,
+      /**
+       * Fallback for deciding partial-ness when iddienstovern does not resolve. Of the 21
+       * real overname rows -- type 4/6 with a non-null status; the other 141 rows of those
+       * types are legacy assignments, see DIENST_TYPES.md -- 9 hold a literal 0, and no
+       * dienst has id 0, so those never find a parent.
+       *
+       * A takeover of a whole shift starts and ends exactly on that shift's boundaries; a
+       * partial one lands inside them, so the window's shape answers the question without
+       * the reference. Cross-checked against the enclosing type-0 assignment of the same
+       * doctor, which finds exactly one parent for all 21, and the two agreed on every row.
+       */
+      alignsWithShiftBoundaries: sql<boolean>`exists (
+        select 1 from diensten s
+        where s.idwaarneemgroep = ${dienstenTable.idwaarneemgroep}
+          and s.van = ${dienstenTable.van}
+          and s.tot = ${dienstenTable.tot}
+          and s.type in (0, 1)
+      )`,
       iddeelnemer: dienstenTable.iddeelnemer,
       iddeelnovern: dienstenTable.iddeelnovern,
       idwaarneemgroep: dienstenTable.idwaarneemgroep,
@@ -195,9 +213,12 @@ export default async function handler(
       voornaam: r.targetVoornaam,
       voorletterstussenvoegsel: r.targetVoorletterstussenvoegsel,
     });
+    // The parent dienst is authoritative when the reference resolves. When it does not,
+    // fall back on the shape of the window rather than assuming a full takeover: the old
+    // `false` here labelled 4 of the 9 partial takeovers as "volledige dienst".
     const isPartial =
       r.originalVan == null || r.originalTot == null
-        ? false
+        ? !r.alignsWithShiftBoundaries
         : Number(r.van) !== Number(r.originalVan) || Number(r.tot) !== Number(r.originalTot);
 
     return {

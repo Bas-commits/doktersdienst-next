@@ -823,14 +823,15 @@ export function ShiftBlock({
             const { Icon } = preferenceFill!;
             const showInitialsWithPreferenceFill =
               !hideInitialsInPreferenceFill && Boolean(displayShortName);
+            // Position against the whole shift, never the day-segment. A shift crossing
+            // midnight draws as two touching blocks of one colour, so centring within the
+            // visible segment puts the chip off to one side of what the eye reads as a
+            // single block. spanLabelPositionStyle uses the shift's own midpoint, and falls
+            // back to plain centring when the block was never split.
             return (
               <div
                 className="flex flex-col items-center justify-center min-w-0 max-w-full gap-0.5"
-                style={
-                  showInitialsWithPreferenceFill
-                    ? spanLabelPositionStyle
-                    : { position: 'relative', zIndex: 2 }
-                }
+                style={spanLabelPositionStyle}
               >
                 {showInitialsWithPreferenceFill ? (
                   <span className="flex items-center">

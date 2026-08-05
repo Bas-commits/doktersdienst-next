@@ -266,6 +266,9 @@ export default function DeelnemerToevoegenPage() {
     });
   }, [leden, activeWaarneemgroepId, toonAfgemelde]);
 
+  /** The members table and the note that explains its read-only Email column show together. */
+  const toonLedenlijst = !ledenLoading && !ledenError && sortedLeden.length > 0;
+
   const validateClient = (): string | null => {
     const em = email.trim().toLowerCase();
     if (!em) return 'Vul een e-mailadres in.';
@@ -865,7 +868,16 @@ export default function DeelnemerToevoegenPage() {
                       : 'Geen deelnemers gevonden voor deze groep.'}
                   </p>
                 )}
-                {!ledenLoading && !ledenError && sortedLeden.length > 0 && (
+                {toonLedenlijst && (
+                  /* The Email column is the only read-only one in a table where every other
+                     column can be edited, so it needs to say why. The card wrote "dDd", which
+                     is shorthand used on the board; the interface spells the product out. */
+                  <p className="text-sm text-muted-foreground">
+                    Het e-mailadres voor inloggen kan alleen door de beheerder van de DoktersDienst
+                    worden gewijzigd.
+                  </p>
+                )}
+                {toonLedenlijst && (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>

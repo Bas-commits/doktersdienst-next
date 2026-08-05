@@ -4,6 +4,10 @@ import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { alias } from 'drizzle-orm/pg-core';
 import { deelnemerChipInitials, formatDeelnemerDisplayName } from '@/lib/deelnemer-display';
+import {
+  formatAmsterdamDateLabelFromUnixSeconds,
+  formatAmsterdamTimeFromUnixSeconds,
+} from '@/lib/amsterdamWallTime';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers, waarneemgroepen } = schema;
 const GROEP_SECRETARIS = 2;
@@ -148,18 +152,15 @@ export default async function handler(
     .where(pendingFilter);
 
   const verzoeken = rows.map((r) => {
-    const vanDate = new Date(Number(r.van ?? 0) * 1000);
-    const totDate = new Date(Number(r.tot ?? 0) * 1000);
-    const datumVan = vanDate.toLocaleDateString('nl-NL', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    });
-    const datumTot = totDate.toLocaleDateString('nl-NL', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    });
+    const vanUnix = Number(r.van ?? 0);
+    const totUnix = Number(r.tot ?? 0);
+    const vanDate = new Date(vanUnix * 1000);
+    // Formatted in Amsterdam explicitly. These strings are built on the server, so
+    // anything host-zone-dependent renders correctly on a developer machine and two
+    // hours early in the UTC container — which is how the same overname ended up
+    // reading 18:00 here and 20:00 in the shift tooltip.
+    const datumVan = formatAmsterdamDateLabelFromUnixSeconds(vanUnix);
+    const datumTot = formatAmsterdamDateLabelFromUnixSeconds(totUnix);
     // ISO week number
     const d = new Date(vanDate);
     d.setHours(0, 0, 0, 0);
@@ -214,8 +215,8 @@ export default async function handler(
       datum: datumVan,
       datumVan,
       datumTot,
-      van: `${String(vanDate.getHours()).padStart(2, '0')}:${String(vanDate.getMinutes()).padStart(2, '0')}`,
-      tot: `${String(totDate.getHours()).padStart(2, '0')}:${String(totDate.getMinutes()).padStart(2, '0')}`,
+      van: formatAmsterdamTimeFromUnixSeconds(vanUnix),
+      tot: formatAmsterdamTimeFromUnixSeconds(totUnix),
       isPartial,
       week,
       waarneemgroep: r.waarneemgroepNaam ?? `Groep ${r.idwaarneemgroep ?? '?'}`,

@@ -840,8 +840,11 @@ export function ShiftBlock({
                     >
                       {displayShortName}
                     </span>
+                    {/* One icon, sized to the block: the 12px version only exists because
+                        a narrow block has to fit initials beside it. Container queries, not
+                        viewport ones, because the block width comes from the shift's duration. */}
                     <Icon
-                      className="h-3 w-3 shrink-0 pr-0.5"
+                      className="h-3 w-3 @[40px]:h-4 @[40px]:w-4 shrink-0 pr-0.5"
                       style={{ color: preferenceTextColor! }}
                       aria-hidden
                     />

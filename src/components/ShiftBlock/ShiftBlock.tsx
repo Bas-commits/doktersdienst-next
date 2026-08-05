@@ -816,18 +816,20 @@ export function ShiftBlock({
           }
         >
           {showPreferenceFill ? (() => {
+            // A shift crossing midnight is drawn as one segment per day. Draw the chip
+            // once, on the segment holding the shift's midpoint, exactly as the initials
+            // path below already does -- otherwise the icon appears on both days.
+            if (!showSpanLabels) return null;
             const { Icon } = preferenceFill!;
             const showInitialsWithPreferenceFill =
-              showSpanLabels && !hideInitialsInPreferenceFill && Boolean(displayShortName);
+              !hideInitialsInPreferenceFill && Boolean(displayShortName);
             return (
               <div
                 className="flex flex-col items-center justify-center min-w-0 max-w-full gap-0.5"
                 style={
                   showInitialsWithPreferenceFill
                     ? spanLabelPositionStyle
-                    : showSpanLabels
-                      ? { position: 'relative', zIndex: 2 }
-                      : undefined
+                    : { position: 'relative', zIndex: 2 }
                 }
               >
                 {showInitialsWithPreferenceFill ? (

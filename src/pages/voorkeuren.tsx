@@ -17,6 +17,7 @@ import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { shiftKeyFromBlock, getChipByCode } from '@/types/voorkeuren';
 import type { ShiftBlockView } from '@/types/diensten';
 import { shiftBlockToastDescription } from '@/utils/shiftToastContext';
+import { hasShiftEnded, SHIFT_ENDED_MESSAGE } from '@/lib/shift-window';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -270,6 +271,15 @@ export default function VoorkeurenPage() {
     async (block: ShiftBlockView) => {
       if (selectedChipCode === null) return;
       if (block.idwaarneemgroep == null) return;
+      // The grid renders ended blocks inert, but it re-checks the clock only once a
+      // minute. Catching the gap here keeps the request from being sent at all, so the
+      // user gets the reason instead of a failed round-trip.
+      if (hasShiftEnded(block.tot)) {
+        toast.error('Voorkeur niet opgeslagen', {
+          description: `${shiftBlockToastDescription(block)}\n${SHIFT_ENDED_MESSAGE}`,
+        });
+        return;
+      }
       const key = shiftKeyFromBlock(block);
       if (inFlightKeysRef.current.has(key)) return;
       inFlightKeysRef.current.add(key);
@@ -561,6 +571,7 @@ export default function VoorkeurenPage() {
                     enablePreferencePaintAssign={Boolean(selectedChipCode)}
                     onPreferencePaintSessionStart={onPreferencePaintSessionStart}
                     onPreferencePaintSessionEnd={onPreferencePaintSessionEnd}
+                    disableEndedShiftBlocks
                     vakanties={calendarVakanties}
                   />
                 </div>

@@ -9,6 +9,7 @@ import { BsFillQuestionSquareFill } from "react-icons/bs";
 import { TbSwitch3 } from 'react-icons/tb';
 import type { ShiftBlockView } from '@/types/diensten';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
+import { hasShiftEnded } from '@/lib/shift-window';
 
 /** Returns whether the given date lies within the shift's start and end (inclusive). Exported for testing. */
 export function isShiftActiveAt(block: ShiftBlockView, when: Date): boolean {
@@ -159,6 +160,15 @@ export interface ShiftBlockProps {
    * - hover tooltip
    */
   hideUnassignedAantekening?: boolean;
+  /**
+   * When true, a block whose end moment has passed renders dimmed and inert: every
+   * strip drops its click and paint handlers and shows a not-allowed cursor. The block
+   * stays on screen so past preferences remain readable.
+   *
+   * Evaluated against the same clock that drives the active-shift border, so a block
+   * turns inert within a minute of its shift ending without a page reload.
+   */
+  disableWhenEnded?: boolean;
 }
 
 export function ShiftBlock({
@@ -192,6 +202,7 @@ export function ShiftBlock({
   onMiddlePointerEnter,
   hideOwnerNameInTooltip = false,
   hideUnassignedAantekening = false,
+  disableWhenEnded = false,
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
   const [isHovered, setIsHovered] = useState(false);
@@ -335,6 +346,10 @@ export function ShiftBlock({
     () => !disableActiveHighlight && isShiftActiveAt(block, now),
     [block, now, disableActiveHighlight],
   );
+  const isEnded = useMemo(
+    () => disableWhenEnded && hasShiftEnded(block.tot, now.getTime()),
+    [disableWhenEnded, block.tot, now],
+  );
 
   const primaryDoctorForBlock =
     overnameType === 'voorstelOvername' || overnameType === 'vraagtekenOvername'
@@ -471,12 +486,15 @@ export function ShiftBlock({
   const topStripClickable = useSectionClick ? !!showEmptyTopStripBorder : activeSection === 'top';
   const middleStripClickable = useSectionClick ? true : (activeSection === undefined || activeSection === 'middle');
   const bottomStripClickable = useSectionClick ? !!showEmptyBottomStripBorder : activeSection === 'bottom';
-  const topHasClick = topStripClickable && (useSectionClick ? onSectionClick : onClick);
-  const middleUsesPointerPaint = !useSectionClick && onMiddlePointerDown != null;
+  // isEnded gates here rather than at each call site so no strip, and no paint-drag
+  // entry, can reach a handler on a shift that is already over.
+  const topHasClick = !isEnded && topStripClickable && (useSectionClick ? onSectionClick : onClick);
+  const middleUsesPointerPaint = !isEnded && !useSectionClick && onMiddlePointerDown != null;
   const middleHasClick =
+    !isEnded &&
     middleStripClickable &&
     (useSectionClick ? onSectionClick : onClick || onMiddlePointerDown);
-  const bottomHasClick = bottomStripClickable && (useSectionClick ? onSectionClick : onClick);
+  const bottomHasClick = !isEnded && bottomStripClickable && (useSectionClick ? onSectionClick : onClick);
 
   const topPending = achterw === 0 && pendingDoctorTop;
   const bottomPending = extra === 0 && pendingDoctorBottom;
@@ -647,10 +665,13 @@ export function ShiftBlock({
       className="absolute"
       data-box-type="morning"
       data-active-shift={isActive ? 'true' : undefined}
+      data-shift-ended={isEnded ? 'true' : undefined}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
         top: '50%',
+        // Dimmed rather than hidden: a past preference is still worth reading.
+        opacity: isEnded ? 0.45 : undefined,
         // Extend 1px on connecting sides to visually cover the 1px day-column divider border
         width: usePixelLayout
           ? `${widthPx + (continuesFromPrev ? 1 : 0) + (continuesToNext ? 1 : 0)}px`
@@ -703,7 +724,7 @@ export function ShiftBlock({
             style={{
               background: topPending ? pendingDoctorTop!.color : 'transparent',
               border: achterwDoc ? undefined : 'solid 1px #dcdcdc',
-              cursor: topHasClick ? 'pointer' : undefined,
+              cursor: isEnded ? 'not-allowed' : topHasClick ? 'pointer' : undefined,
               opacity: dimTop ? 0.35 : undefined,
               color: topStripTextColor ?? '#ffffff',
             }}
@@ -720,7 +741,7 @@ export function ShiftBlock({
             data-testid="shift-block-top"
             style={{
               background: achterwDoc?.color ?? 'transparent',
-              cursor: topHasClick ? 'pointer' : undefined,
+              cursor: isEnded ? 'not-allowed' : topHasClick ? 'pointer' : undefined,
               opacity: dimTop ? 0.35 : undefined,
               color: topStripTextColor ?? '#ffffff',
             }}
@@ -745,6 +766,8 @@ export function ShiftBlock({
           }}
           className={`@container flex mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] ${middleRoundedClass} ${doctorId ? 'active-day' : ''} ${showPreferenceFill ? 'justify-center' : ''}`}
           data-testid="shift-block-middle"
+          aria-disabled={isEnded || undefined}
+          data-shift-ended={isEnded ? 'true' : undefined}
           data-doctor={doctorId}
           data-current-date={block.currentDate}
           data-next-date={block.nextDate}
@@ -766,7 +789,11 @@ export function ShiftBlock({
             // so we must restore 'none' afterwards for multi-day blocks to connect seamlessly.
             ...(continuesFromPrev ? { borderLeftStyle: 'none' as const } : {}),
             ...(continuesToNext ? { borderRightStyle: 'none' as const } : {}),
-            ...(middleHasClick ? { cursor: 'pointer' as const } : {}),
+            ...(isEnded
+              ? { cursor: 'not-allowed' as const }
+              : middleHasClick
+                ? { cursor: 'pointer' as const }
+                : {}),
             ...(dimMiddle ? { opacity: 0.35 } : {}),
             ...(isActive ? {
               borderColor: '#dc2626',
@@ -996,7 +1023,7 @@ export function ShiftBlock({
             style={{
               background: bottomPending ? pendingDoctorBottom!.color : 'transparent',
               border: extraDoc ? undefined : 'solid 1px #dcdcdc',
-              cursor: bottomHasClick ? 'pointer' : undefined,
+              cursor: isEnded ? 'not-allowed' : bottomHasClick ? 'pointer' : undefined,
               opacity: dimBottom ? 0.35 : undefined,
               color: bottomStripTextColor ?? '#ffffff',
             }}
@@ -1013,7 +1040,7 @@ export function ShiftBlock({
             data-testid="shift-block-bottom"
             style={{
               background: extraDoc?.color ?? 'transparent',
-              cursor: bottomHasClick ? 'pointer' : undefined,
+              cursor: isEnded ? 'not-allowed' : bottomHasClick ? 'pointer' : undefined,
               opacity: dimBottom ? 0.35 : undefined,
               color: bottomStripTextColor ?? '#ffffff',
             }}

@@ -63,6 +63,8 @@ export interface CalendarGridWithNavStateProps {
   onShiftDelete?: (block: ShiftBlockView) => void;
   /** Optional: public holidays / vakanties (e.g. from useCalendarVakanties). */
   vakanties?: CalendarVakantieItem[];
+  /** When true, shift blocks whose end moment has passed render dimmed and inert. */
+  disableEndedShiftBlocks?: boolean;
 }
 
 /**
@@ -97,6 +99,7 @@ export function CalendarGridWithNavState({
   plannerDoctorPreferenceMap,
   onShiftDelete,
   vakanties,
+  disableEndedShiftBlocks,
 }: CalendarGridWithNavStateProps) {
   const [internalViewMonth, setInternalViewMonth] = useState(initialViewMonth);
   const [internalViewYear, setInternalViewYear] = useState(initialViewYear);
@@ -144,6 +147,7 @@ export function CalendarGridWithNavState({
       plannerDoctorPreferenceMap={plannerDoctorPreferenceMap}
       onShiftDelete={onShiftDelete}
       vakanties={vakanties}
+      disableEndedShiftBlocks={disableEndedShiftBlocks}
     />
   );
 }

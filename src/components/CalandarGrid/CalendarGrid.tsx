@@ -84,6 +84,11 @@ export interface CalendarGridProps {
   hideOwnerNameInTooltip?: boolean;
   /** When true, aantekening text is hidden for unassigned blocks (type=1 slots). */
   hideUnassignedAantekening?: boolean;
+  /**
+   * When true, shift blocks whose end moment has passed render dimmed and inert.
+   * Set on /voorkeuren; roster views leave it off so history stays clickable there.
+   */
+  disableEndedShiftBlocks?: boolean;
 }
 
 /** Width of the right-hand column that shows waarneemgroep names per row (when multiple rows). */
@@ -435,6 +440,7 @@ export function CalendarGrid({
   onPreferencePaintSessionEnd,
   hideOwnerNameInTooltip = false,
   hideUnassignedAantekening = false,
+  disableEndedShiftBlocks = false,
 }: CalendarGridProps) {
   const paintSessionRef = useRef<{ active: boolean; keysTouched: Set<string> }>({
     active: false,
@@ -718,6 +724,7 @@ export function CalendarGrid({
                                     overnameType={block.overnameType}
                                     hideOwnerNameInTooltip={hideOwnerNameInTooltip}
                                     hideUnassignedAantekening={hideUnassignedAantekening}
+                                    disableWhenEnded={disableEndedShiftBlocks}
                                   />
                                 );
                               })}

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { SHIFT_ENDED_MESSAGE } from '@/lib/shift-window';
 
 // --- Mocks ---
 
@@ -48,14 +49,22 @@ vi.mock('drizzle-orm', () => ({
 
 // --- Helpers ---
 
+const HOUR = 60 * 60;
+/** Derived from the clock, not hardcoded, so these stay future/past as the suite ages. */
+const nowSeconds = () => Math.floor(Date.now() / 1000);
+const FUTURE_VAN = nowSeconds() + 24 * HOUR;
+const FUTURE_TOT = FUTURE_VAN + 8 * HOUR;
+const PAST_VAN = nowSeconds() - 32 * HOUR;
+const PAST_TOT = PAST_VAN + 8 * HOUR;
+
 function createMockReq(overrides: Partial<NextApiRequest> = {}): NextApiRequest {
   return {
     method: 'POST',
     headers: { cookie: 'session=abc' },
     body: {
       action: 'add',
-      van: 1000,
-      tot: 2000,
+      van: FUTURE_VAN,
+      tot: FUTURE_TOT,
       idwaarneemgroep: 9,
       type: 3,
       currentDate: '2026-03-01 08:00:00',
@@ -136,6 +145,48 @@ describe('POST /api/diensten/preference', () => {
     expect(res._json).toEqual({ error: 'Missing or invalid van, tot, or idwaarneemgroep' });
   });
 
+  // --- Shifts that have already ended ---
+
+  it('rejects adding a preference to a shift that has ended', async () => {
+    const req = createMockReq({
+      body: { action: 'add', van: PAST_VAN, tot: PAST_TOT, idwaarneemgroep: 9, type: 3 },
+    });
+    const res = createMockRes();
+    await handler(req, res);
+    expect(res.statusCode).toBe(400);
+    expect(res._json).toEqual({ error: SHIFT_ENDED_MESSAGE });
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects removing a preference from a shift that has ended', async () => {
+    const req = createMockReq({
+      body: { action: 'remove', van: PAST_VAN, tot: PAST_TOT, idwaarneemgroep: 9 },
+    });
+    const res = createMockRes();
+    await handler(req, res);
+    expect(res.statusCode).toBe(400);
+    expect(res._json).toEqual({ error: SHIFT_ENDED_MESSAGE });
+    // The add path deletes before inserting, so an unguarded remove would destroy the row.
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it('allows a shift that is running but has not ended yet', async () => {
+    const startedAnHourAgo = nowSeconds() - HOUR;
+    const req = createMockReq({
+      body: {
+        action: 'add',
+        van: startedAnHourAgo,
+        tot: startedAnHourAgo + 8 * HOUR,
+        idwaarneemgroep: 9,
+        type: 3,
+      },
+    });
+    const res = createMockRes();
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(mockInsert).toHaveBeenCalled();
+  });
+
   // --- Successful operations ---
 
   it('successfully adds a preference', async () => {
@@ -150,7 +201,7 @@ describe('POST /api/diensten/preference', () => {
   });
 
   it('successfully removes a preference', async () => {
-    const req = createMockReq({ body: { action: 'remove', van: 1000, tot: 2000, idwaarneemgroep: 9 } });
+    const req = createMockReq({ body: { action: 'remove', van: FUTURE_VAN, tot: FUTURE_TOT, idwaarneemgroep: 9 } });
     const res = createMockRes();
     await handler(req, res);
     expect(res.statusCode).toBe(200);
@@ -178,8 +229,8 @@ describe('POST /api/diensten/preference', () => {
     expect(message).toBe('Failed to save preference');
     expect(context.err).toBe(dbError);
     expect(context.action).toBe('add');
-    expect(context.van).toBe(1000);
-    expect(context.tot).toBe(2000);
+    expect(context.van).toBe(FUTURE_VAN);
+    expect(context.tot).toBe(FUTURE_TOT);
     expect(context.idwaarneemgroep).toBe(9);
     expect(context.idDeelnemer).toBe(119);
   });

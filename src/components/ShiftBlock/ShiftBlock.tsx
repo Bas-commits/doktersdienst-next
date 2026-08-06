@@ -866,6 +866,20 @@ export function ShiftBlock({
               />
               {showSpanLabels ? (() => {
                 const primaryLabel = showPendingDoctor ? pendingDoctor!.shortName : displayShortName;
+                // An approved partial takeover is drawn as an overlay sitting exactly on
+                // top of the original doctor's block, which centres its own initials in
+                // the same spot -- so the giver is in the DOM but never visible. This is
+                // the only place both names appear without hovering.
+                //
+                // Measured, not guessed: the longest initials in use render at 22px at
+                // 8px, and a "van " prefix costs another 14px, more than the name itself.
+                // So the prefix is dropped and the line is gated at 28px, below which the
+                // taker's own initials already truncate and a second line would only
+                // compete for space the block does not have.
+                const handoverLabel =
+                  overnameType === 'overname' && block.isPartial
+                    ? vanArts?.shortName?.trim() || null
+                    : null;
                 return (
                   <div
                     className="hidden @[1px]:flex flex-col items-center justify-center min-w-0 max-w-full gap-0 px-0.5"
@@ -879,6 +893,21 @@ export function ShiftBlock({
                         style={middleStripTextColor ? { color: middleStripTextColor } : undefined}
                       >
                         {primaryLabel}
+                      </span>
+                    ) : null}
+                    {handoverLabel && primaryLabel ? (
+                      <span
+                        className={`hidden @[28px]:inline text-[8px] font-medium leading-tight text-center truncate max-w-full ${
+                          middleStripTextColor ? '' : 'text-[#a0a0a0]'
+                        }`}
+                        style={
+                          middleStripTextColor
+                            ? { color: middleStripTextColor, opacity: 0.85 }
+                            : { opacity: 0.85 }
+                        }
+                        title={`Overgenomen van ${vanArts?.name ?? handoverLabel}`}
+                      >
+                        {handoverLabel}
                       </span>
                     ) : null}
                     {!primaryLabel && aantekeningLabel ? (

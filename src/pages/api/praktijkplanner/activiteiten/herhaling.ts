@@ -445,12 +445,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         })
         .from(schema.planningherhalingen)
         .where(
-          iddeelnemer
-            ? and(
-                eq(schema.planningherhalingen.idwaarneemgroep, accessResult.access.idwaarneemgroep),
-                eq(schema.planningherhalingen.iddeelnemer, iddeelnemer)
-              )
-            : eq(schema.planningherhalingen.idwaarneemgroep, accessResult.access.idwaarneemgroep)
+          and(
+            eq(schema.planningherhalingen.idwaarneemgroep, accessResult.access.idwaarneemgroep),
+            // Week copies live in this table too, but they are not patterns the planner can
+            // edit or extend. Listing them offered a Verwijderen that deletes real planning.
+            eq(schema.planningherhalingen.isKopie, false),
+            ...(iddeelnemer
+              ? [eq(schema.planningherhalingen.iddeelnemer, iddeelnemer)]
+              : [])
+          )
         )
         .orderBy(asc(schema.planningherhalingen.startdatum));
       return res.status(200).json({
@@ -551,6 +554,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             startdatum,
             einddatum: startdatum,
             frequentieWeken: 1,
+            // A copy is a one-off, not a pattern. The row exists only so the copied slots
+            // have a parent to link to; the flag keeps it out of "Herhalingen beheren".
+            isKopie: true,
             createdBy: accessResult.access.user.id,
             updatedBy: accessResult.access.user.id,
           })

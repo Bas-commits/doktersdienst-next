@@ -664,6 +664,15 @@ export const planningherhalingen = pgTable("planningherhalingen", {
 	startdatum: date().notNull(),
 	einddatum: date().notNull(),
 	frequentieWeken: smallint("frequentie_weken").notNull(),
+	/**
+	 * A one-off week copy, not a recurrence. Copying borrows this table because
+	 * planningherhalingslots.idherhaling is NOT NULL and part of the primary key, so a
+	 * copied slot cannot be linked without a parent row here. Without this flag those
+	 * rows are indistinguishable from a real series: a copy stores
+	 * startdatum = einddatum with frequentie 1, and the repeat modal allows exactly that
+	 * shape for a genuine one-week series too.
+	 */
+	isKopie: boolean("is_kopie").notNull().default(false),
 	createdBy: integer("created_by").references(() => deelnemers.id),
 	createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
 	updatedBy: integer("updated_by").references(() => deelnemers.id),

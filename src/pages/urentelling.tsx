@@ -98,6 +98,15 @@ const URENTELLING_ACTION_GRADIENT =
 const URENTELLING_ACTION_GRADIENT_HOVER =
   'linear-gradient(90deg, rgb(56, 19, 108) 0%, rgb(45, 34, 69) 100%)';
 
+/**
+ * The FTE column sits between Naam and the aantekening columns, but it is a property
+ * of the deelnemer rather than a shift, and it is what the coloured dots are measured
+ * against. Without a divider it reads as one more shift column, which is what the
+ * urentelling card reported ("Rare foute kolommen FTE en Test01, dit zijn geen
+ * shiftnamen"). Applied to every row shape, so the line runs the height of the table.
+ */
+const FTE_COLUMN_CLASS = 'border-r border-border pr-6';
+
 const COMMITMENT_DOT_CLASS: Record<
   Exclude<UrentellingCommitmentCell['level'], 'none'>,
   string
@@ -405,7 +414,7 @@ export default function UrentellingPage() {
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="pb-2 pr-4 font-medium">Naam</th>
-                      <th className="pb-2 pr-4 font-medium text-right">FTE</th>
+                      <th className={`pb-2 font-medium text-right ${FTE_COLUMN_CLASS}`}>FTE</th>
                       {columns.map((column) => (
                         <th key={column.id} className="pb-2 pr-4 font-medium text-right">
                           {column.tekst}
@@ -467,7 +476,9 @@ export default function UrentellingPage() {
                                 </button>
                               </div>
                             </td>
-                            <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
+                            <td
+                              className={`py-2.5 text-right tabular-nums text-muted-foreground ${FTE_COLUMN_CLASS}`}
+                            >
                               {formatFte(row.fte)}
                             </td>
                             {row.urenPerAantekening.map((uren, index) => (
@@ -493,7 +504,7 @@ export default function UrentellingPage() {
                               className={`border-b text-muted-foreground ${rowGroupClass ?? ''} ${isExpanded ? '' : 'last:border-0'}`}
                             >
                               <td className="py-1.5 pr-4 pl-12 text-sm italic">als achterwacht</td>
-                              <td className="py-1.5 pr-4" />
+                              <td className={`py-1.5 ${FTE_COLUMN_CLASS}`} />
                               {row.achterwachtPerAantekening.map((uren, index) => (
                                 <td
                                   key={`${row.iddeelnemer}-achterwacht-${columns[index]?.id ?? index}`}
@@ -510,7 +521,7 @@ export default function UrentellingPage() {
                           {isExpanded && rowDetails.length === 0 && (
                             <tr className={`border-b text-xs text-muted-foreground last:border-0 ${rowGroupClass ?? ''}`}>
                               <td className="py-1.5 pr-4 pl-12">Geen diensten in deze periode.</td>
-                              <td className="py-1.5 pr-4" />
+                              <td className={`py-1.5 ${FTE_COLUMN_CLASS}`} />
                               {columns.map((column) => (
                                 <td key={`${row.iddeelnemer}-empty-${column.id}`} className="py-1.5 pr-4" />
                               ))}
@@ -528,7 +539,7 @@ export default function UrentellingPage() {
                                 <td className="py-1.5 pr-4 pl-12 whitespace-nowrap">
                                   {formatDetailLabel(detail)}
                                 </td>
-                                <td className="py-1.5 pr-4" />
+                                <td className={`py-1.5 ${FTE_COLUMN_CLASS}`} />
                                 {columns.map((column) => (
                                   <td
                                     key={`${row.iddeelnemer}-detail-${detailIndex}-${column.id}`}

@@ -873,9 +873,14 @@ export function ShiftBlock({
                 //
                 // Measured, not guessed: the longest initials in use render at 22px at
                 // 8px, and a "van " prefix costs another 14px, more than the name itself.
-                // So the prefix is dropped and the line is gated at 28px, below which the
-                // taker's own initials already truncate and a second line would only
-                // compete for space the block does not have.
+                // So the prefix is dropped and the line carries the initials alone.
+                //
+                // The 24px gate is the container width at which those 22px still fit
+                // inside the 2px padding either side. It is deliberately low: the first
+                // attempt gated at 28px and missed the reported block, an 04:00 handover
+                // whose overlay is exactly 27px, by a single pixel. Below 24px even the
+                // shortest initials would render as an ellipsis, which is worse than
+                // leaving the line out.
                 const handoverLabel =
                   overnameType === 'overname' && block.isPartial
                     ? vanArts?.shortName?.trim() || null
@@ -897,7 +902,7 @@ export function ShiftBlock({
                     ) : null}
                     {handoverLabel && primaryLabel ? (
                       <span
-                        className={`hidden @[28px]:inline text-[8px] font-medium leading-tight text-center truncate max-w-full ${
+                        className={`hidden @[24px]:inline text-[8px] font-medium leading-tight text-center truncate max-w-full ${
                           middleStripTextColor ? '' : 'text-[#a0a0a0]'
                         }`}
                         style={

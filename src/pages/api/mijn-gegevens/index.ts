@@ -6,6 +6,10 @@ import { legacyMD5Hash } from '@/lib/legacy-password';
 import { getAuthenticatedUser } from '@/lib/api-auth';
 import { hasDelegatedProfileAccess, canEditEchtedeelnemer } from '@/lib/mijn-gegevens-access';
 import { normalizeAccountEmail } from '@/lib/account-email-tokens';
+import {
+  BEHEERDER_WIJZIGT_EMAIL_TEKST,
+  BEHEERDER_WIJZIGT_WACHTWOORD_TEKST,
+} from '@/lib/beheerder-contact';
 import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
 import type {
   MijnGegevensProfile,
@@ -485,7 +489,7 @@ export default async function handler(
         lookup,
         isDelegatedEdit,
         canEditEchtedeelnemer: mayEditEchtedeelnemer,
-        canAdminEditEmail: isDelegatedEdit && actor.isAdmin,
+        canEditEmail: actor.isAdmin,
         emailVerified: deelnemer.emailVerified ?? null,
         targetDeelnemerId,
         actingDeelnemerId: actor.id,
@@ -506,16 +510,16 @@ export default async function handler(
   }
 
   try {
-    if (isDelegatedEdit) {
-      if (body.passa !== undefined || body.passb !== undefined) {
+    if (body.passa !== undefined || body.passb !== undefined) {
+      if (isDelegatedEdit) {
         return res.status(403).json({
           error: 'Wachtwoord kan niet worden aangepast voor deze deelnemer',
         });
       }
-      if (body.huisemail !== undefined && !actor.isAdmin) {
-        return res.status(403).json({
-          error: 'E-mail en wachtwoord kunnen niet worden aangepast voor deze deelnemer',
-        });
+      // Het scherm toont de knop Wijzig wachtwoord alleen aan de beheerder,
+      // maar dat is presentatie. De weigering hoort hier.
+      if (!actor.isAdmin) {
+        return res.status(403).json({ error: BEHEERDER_WIJZIGT_WACHTWOORD_TEKST });
       }
     }
 
@@ -593,17 +597,26 @@ export default async function handler(
         .where(eq(deelnemers.id, targetDeelnemerId))
         .limit(1);
 
-      if (!isDelegatedEdit && currentDeelnemer?.emailVerified === true) {
-        const currentLogin = (currentDeelnemer.login || '').trim().toLowerCase();
-        const currentHuisemail = (currentDeelnemer.huisemail || '').trim().toLowerCase();
-        const normalizedNew = (newEmail || '').trim().toLowerCase();
-        if (normalizedNew !== currentLogin && normalizedNew !== currentHuisemail) {
-          return res.status(400).json({
-            error:
-              'E-mailwijzigingen vereisen bevestiging via een verificatielink. Gebruik het aparte e-mailwijzigingsproces.',
-            code: 'EMAIL_CHANGE_REQUIRES_VERIFICATION',
-          });
-        }
+      const currentLogin = (currentDeelnemer?.login || '').trim().toLowerCase();
+      const currentHuisemail = (currentDeelnemer?.huisemail || '').trim().toLowerCase();
+      const normalizedNew = (newEmail || '').trim().toLowerCase();
+      const emailWijzigt = normalizedNew !== currentLogin && normalizedNew !== currentHuisemail;
+
+      // Het scherm stuurt het huidige adres gewoon mee, ook als het niet is
+      // aangepast. Daarom wordt hier op de waarde vergeleken en niet op de
+      // aanwezigheid van het veld: alleen een echte wijziging is beheerderswerk.
+      if (emailWijzigt && !actor.isAdmin) {
+        return res.status(403).json({
+          error: BEHEERDER_WIJZIGT_EMAIL_TEKST,
+        });
+      }
+
+      if (emailWijzigt && !isDelegatedEdit && currentDeelnemer?.emailVerified === true) {
+        return res.status(400).json({
+          error:
+            'E-mailwijzigingen vereisen bevestiging via een verificatielink. Gebruik het aparte e-mailwijzigingsproces.',
+          code: 'EMAIL_CHANGE_REQUIRES_VERIFICATION',
+        });
       }
 
       update.huisemail = newEmail;

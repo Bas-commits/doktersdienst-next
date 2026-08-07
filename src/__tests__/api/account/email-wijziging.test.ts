@@ -131,7 +131,7 @@ describe('account email change flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     selectQueue.length = 0;
-    mockGetAuthenticatedUser.mockResolvedValue({ id: 7, email: 'old@example.com', isAdmin: false });
+    mockGetAuthenticatedUser.mockResolvedValue({ id: 7, email: 'old@example.com', isAdmin: true });
     mockGetAccountStatusForUser.mockResolvedValue({
       emailVerified: true,
       password: 'ba-upgraded:v1',
@@ -153,6 +153,19 @@ describe('account email change flow', () => {
     expect(mockSendEmailChangeConfirmationEmailViaResend).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'new@example.com' })
     );
+  });
+
+  it('POST weigert iedereen die geen beheerder is', async () => {
+    mockGetAuthenticatedUser.mockResolvedValueOnce({
+      id: 7,
+      email: 'old@example.com',
+      isAdmin: false,
+    });
+    const { default: handler } = await import('@/pages/api/account/email-wijziging-aanvragen');
+    const res = makeRes();
+    await handler(makePostReq({ newEmail: 'new@example.com' }), res);
+    expect(res._status).toBe(403);
+    expect(mockSendEmailChangeConfirmationEmailViaResend).not.toHaveBeenCalled();
   });
 
   it('POST rejects unverified users', async () => {

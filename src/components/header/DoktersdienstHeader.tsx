@@ -8,6 +8,7 @@ import { Trash2, CircleQuestionMark } from 'lucide-react';
 import { FaRedo } from "react-icons/fa";
 import { toast } from 'sonner';
 
+import { BEHEERDER_EMAIL, BEHEERDER_TELEFOON } from '@/lib/beheerder-contact';
 import { computeOvernameCaps, OVERNAME_ACTION_FORBIDDEN_TOAST } from '@/lib/overname-ui-access';
 import { deriveEffectiveRoleTier, GROEP_DEELNEMER } from '@/lib/roles';
 import type { AppSection } from '@/lib/route-access';
@@ -397,6 +398,22 @@ export function DoktersdienstHeader({
               className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 text-[#333333] pointer-events-none"
               aria-hidden
             />
+          </div>
+
+          <div
+            className="mr-3 hidden flex-col items-end whitespace-nowrap text-[13px] leading-4 md:flex"
+            data-testid="header-beheerder-contact"
+          >
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#a5a5a5]">
+              Beheerder
+            </span>
+            <a
+              href={`mailto:${BEHEERDER_EMAIL}`}
+              className="text-[#23303F] no-underline hover:underline"
+            >
+              {BEHEERDER_EMAIL}
+            </a>
+            <span className="text-[#23303F]">{BEHEERDER_TELEFOON}</span>
           </div>
 
           <ul className="flex flex-row items-center list-none p-0 mb-0">

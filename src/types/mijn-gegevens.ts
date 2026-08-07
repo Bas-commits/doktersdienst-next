@@ -76,7 +76,8 @@ export interface MijnGegevensPageData {
   lookup: MijnGegevensLookup;
   isDelegatedEdit?: boolean;
   canEditEchtedeelnemer?: boolean;
-  canAdminEditEmail?: boolean;
+  /** Alleen de beheerder mag een login-e-mailadres wijzigen, van zichzelf en van anderen. */
+  canEditEmail?: boolean;
   emailVerified?: boolean | null;
   targetDeelnemerId?: number;
   actingDeelnemerId?: number;

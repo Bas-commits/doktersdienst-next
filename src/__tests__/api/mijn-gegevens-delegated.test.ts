@@ -1,5 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  BEHEERDER_WIJZIGT_EMAIL_TEKST,
+  BEHEERDER_WIJZIGT_WACHTWOORD_TEKST,
+} from '@/lib/beheerder-contact';
 
 const mockGetAuthenticatedUser = vi.fn();
 const mockHasDelegatedProfileAccess = vi.fn();
@@ -141,7 +145,7 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
     expect(res._json).toEqual({ success: true, loginUpdated: false });
   });
 
-  it('rejects delegated PATCH attempts to change email or password', async () => {
+  it('rejects delegated PATCH attempts to change email', async () => {
     const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
     const res = makeRes();
 
@@ -154,9 +158,45 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
     );
 
     expect(res._status).toBe(403);
+    expect(res._json).toEqual({ error: BEHEERDER_WIJZIGT_EMAIL_TEKST });
+  });
+
+  it('rejects delegated PATCH attempts to change the password', async () => {
+    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
+    const res = makeRes();
+
+    await handler(
+      makeReq('PATCH', {
+        query: { deelnemerId: '22' },
+        body: { passa: 'geheim', passb: 'geheim' },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(403);
     expect(res._json).toEqual({
-      error: 'E-mail en wachtwoord kunnen niet worden aangepast voor deze deelnemer',
+      error: 'Wachtwoord kan niet worden aangepast voor deze deelnemer',
     });
+  });
+
+  it('accepts a delegated PATCH that echoes the unchanged email back', async () => {
+    selectQueue.push(
+      [{ login: 'old@example.com', huisemail: 'old@example.com', emailVerified: true }],
+      []
+    );
+
+    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
+    const res = makeRes();
+
+    await handler(
+      makeReq('PATCH', {
+        query: { deelnemerId: '22' },
+        body: { huisemail: 'old@example.com' },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(200);
   });
 
   it('allows admin delegated PATCH to change email immediately', async () => {
@@ -193,7 +233,32 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
     );
   });
 
-  it('blocks verified self PATCH from changing email directly', async () => {
+  it('blocks a self PATCH from changing email when the actor is not an administrator', async () => {
+    selectQueue.push([
+      { login: 'old@example.com', huisemail: 'old@example.com', emailVerified: true },
+    ]);
+
+    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
+    const res = makeRes();
+
+    await handler(
+      makeReq('PATCH', {
+        body: { huisemail: 'new@example.com' },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(403);
+    expect(res._json).toEqual({ error: BEHEERDER_WIJZIGT_EMAIL_TEKST });
+  });
+
+  it('sends a verified administrator changing their own email through the confirmation flow', async () => {
+    mockGetAuthenticatedUser.mockResolvedValueOnce({
+      id: 10,
+      email: 'admin@test.nl',
+      idgroep: 5,
+      isAdmin: true,
+    });
     selectQueue.push([
       { login: 'old@example.com', huisemail: 'old@example.com', emailVerified: true },
     ]);
@@ -212,6 +277,21 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
     expect(res._json).toMatchObject({
       code: 'EMAIL_CHANGE_REQUIRES_VERIFICATION',
     });
+  });
+
+  it('blocks a self PATCH from changing the password when the actor is not an administrator', async () => {
+    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
+    const res = makeRes();
+
+    await handler(
+      makeReq('PATCH', {
+        body: { passa: 'geheim', passb: 'geheim' },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(403);
+    expect(res._json).toEqual({ error: BEHEERDER_WIJZIGT_WACHTWOORD_TEKST });
   });
 
   it('rejects invalid phone fields on PATCH', async () => {

@@ -13,6 +13,7 @@ import {
   needsEmailOnboarding,
 } from '@/lib/account-status';
 import { getAuthenticatedUser } from '@/lib/api-auth';
+import { BEHEERDER_WIJZIGT_EMAIL_TEKST } from '@/lib/beheerder-contact';
 import { getEffectivePublicSiteOriginForInvite } from '@/lib/better-auth-url';
 import { sendEmailChangeConfirmationEmailViaResend } from '@/lib/resend-email';
 
@@ -34,6 +35,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const user = await getAuthenticatedUser(req);
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Vergrendelen op het scherm alleen is geen slot: dit endpoint verstuurt de
+  // bevestigingsmail waarmee de login daadwerkelijk verandert, dus de
+  // beheerderscontrole hoort hier te staan en niet in de knop die het aanroept.
+  if (!user.isAdmin) {
+    return res.status(403).json({ error: BEHEERDER_WIJZIGT_EMAIL_TEKST });
   }
 
   const row = await getAccountStatusForUser(user.id);

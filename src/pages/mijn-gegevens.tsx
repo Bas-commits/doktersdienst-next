@@ -3,7 +3,7 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { ChevronRight, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Lock, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,7 @@ import { UnsavedChangesModal } from '@/components/mijn-gegevens/UnsavedChangesMo
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import type { MijnGegevensProfile, MijnGegevensLookup, MijnGegevensUpdateBody, TelnrSlot } from '@/types/mijn-gegevens';
 import { ROL_LABELS } from '@/lib/rol-labels';
+import { BEHEERDER_WIJZIGT_EMAIL_TEKST } from '@/lib/beheerder-contact';
 
 const TELNR_SPECIAL_TYPES = [
   { id: 1001, naam: 'Mobiel' },
@@ -200,7 +201,7 @@ export default function MijnGegevensPage() {
   const [lookup, setLookup] = useState<MijnGegevensLookup | null>(null);
   const [isDelegatedEdit, setIsDelegatedEdit] = useState(false);
   const [canEditEchtedeelnemer, setCanEditEchtedeelnemer] = useState(false);
-  const [canAdminEditEmail, setCanAdminEditEmail] = useState(false);
+  const [canEditEmail, setCanEditEmail] = useState(false);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const [pendingEmailChange, setPendingEmailChange] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -209,7 +210,6 @@ export default function MijnGegevensPage() {
   const [savedSnapshot, setSavedSnapshot] = useState<FormSnapshot | null>(null);
 
   // Form state – initialised from profile when loaded
-  const [login, setLogin] = useState('');
   const [color, setColor] = useState('#cccccc');
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [waarneemgroepenOpen, setWaarneemgroepenOpen] = useState(false);
@@ -274,7 +274,7 @@ export default function MijnGegevensPage() {
         const { profile: profileRes, lookup: lookupRes } = data;
         setIsDelegatedEdit(data.isDelegatedEdit === true);
         setCanEditEchtedeelnemer(data.canEditEchtedeelnemer === true);
-        setCanAdminEditEmail(data.canAdminEditEmail === true);
+        setCanEditEmail(data.canEditEmail === true);
         setEmailVerified(data.emailVerified ?? null);
         setPendingEmailChange(null);
         setProfile(profileRes);
@@ -285,7 +285,6 @@ export default function MijnGegevensPage() {
           (profileRes.deelnemer.huisemail ?? '').trim() ||
           (initialLogin.includes('@') ? initialLogin : '') ||
           (typeof session.user.email === 'string' ? session.user.email.trim() : '');
-        setLogin(initialLogin);
         setColor(profileRes.deelnemer.color ?? '#cccccc');
         setAchternaam(profileRes.deelnemer.achternaam ?? '');
         setVoorletterstussenvoegsel(profileRes.deelnemer.voorletterstussenvoegsel ?? '');
@@ -490,7 +489,7 @@ export default function MijnGegevensPage() {
     const savedEmail = savedSnapshot?.huisemail.trim() ?? '';
     const emailChanged = trimmedEmail.toLowerCase() !== savedEmail.toLowerCase();
     const useVerifiedEmailChangeFlow =
-      !isDelegatedEdit && emailVerified === true && emailChanged;
+      canEditEmail && !isDelegatedEdit && emailVerified === true && emailChanged;
 
     if (useVerifiedEmailChangeFlow) {
       const emailRes = await fetch('/api/account/email-wijziging-aanvragen', {
@@ -552,9 +551,9 @@ export default function MijnGegevensPage() {
             }))
           : undefined,
     };
-    if (!isDelegatedEdit && !useVerifiedEmailChangeFlow) {
-      body.huisemail = trimmedEmail || undefined;
-    } else if (isDelegatedEdit && canAdminEditEmail) {
+    // Wie het veld niet mag aanpassen stuurt het ook niet mee, anders zou het
+    // scherm het onveranderde adres blijven terugschrijven bij elke opslag.
+    if (canEditEmail && !useVerifiedEmailChangeFlow) {
       body.huisemail = trimmedEmail || undefined;
     }
 
@@ -573,7 +572,6 @@ export default function MijnGegevensPage() {
     }
 
     if (!isDelegatedEdit && data.loginUpdated) {
-      setLogin(trimmedEmail);
       toast.success('Gegevens opgeslagen. Uw loginnaam is bijgewerkt naar uw e-mailadres.');
     } else if (!useVerifiedEmailChangeFlow) {
       toast.success('Gegevens opgeslagen.');
@@ -685,79 +683,75 @@ export default function MijnGegevensPage() {
                 
 
                 <div className={formSectionClass}>
-                  {!isDelegatedEdit || canAdminEditEmail ? (
-                    <>
-                      <div className="flex flex-col gap-4 sm:flex-row">
-                        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                          <Label htmlFor="huisemail">E-mailadres/loginnaam <RequiredAsterisk /></Label>
-                          <Input
-                            id="huisemail"
-                            type="email"
-                            value={huisemail}
-                            onChange={(e) => setHuisemail(e.target.value)}
-                            required
-                            disabled={isSubmitting}
-                          />
-                          {!isDelegatedEdit && emailVerified === true && (
-                            <p className="text-xs text-muted-foreground">
-                              Wijzigingen aan uw e-mailadres vereisen bevestiging via een link in uw inbox.
-                              Uw wachtwoord blijft hetzelfde.
-                            </p>
-                          )}
-                          {pendingEmailChange && (
-                            <p className="text-xs text-amber-800 dark:text-amber-200" role="status">
-                              Verificatiemail verstuurd naar {pendingEmailChange}. Uw login wijzigt pas na
-                              bevestiging.
-                            </p>
-                          )}
-                        </div>
-                        {!isDelegatedEdit && (
-                          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                            <Label htmlFor="login" className="text-muted-foreground">
-                              Loginnaam
-                            </Label>
-                            <Input
-                              id="login"
-                              type="text"
-                              value={login}
-                              autoComplete="username"
-                              disabled
-                              className="text-muted-foreground"
-                            />
-                            {login !== huisemail && login !== '' && (
-                              <p className="text-xs text-muted-foreground">
-                                Uw loginnaam verschilt van uw e-mailadres en wordt automatisch bijgewerkt na
-                                e-mailbevestiging.
-                              </p>
-                            )}
-                          </div>
+                  <div className="flex flex-col gap-4 sm:flex-row">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <Label htmlFor="huisemail" className="flex items-center gap-1.5">
+                        E-mailadres/loginnaam{' '}
+                        {canEditEmail ? (
+                          <RequiredAsterisk />
+                        ) : (
+                          <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                        )}
+                      </Label>
+                      {/* De hover hangt aan de omhullende div, want een disabled input
+                          geeft zelf geen muisgebeurtenissen door. Geen title erbij: dat
+                          zou de tekst een tweede keer tonen in het kadertje van de browser. */}
+                      <div className="group relative" data-testid="huisemail-veld">
+                        <Input
+                          id="huisemail"
+                          type="email"
+                          value={huisemail}
+                          onChange={(e) => setHuisemail(e.target.value)}
+                          required={canEditEmail}
+                          disabled={isSubmitting || !canEditEmail}
+                          aria-describedby={canEditEmail ? undefined : 'huisemail-uitleg'}
+                          className={canEditEmail ? undefined : 'text-muted-foreground'}
+                        />
+                        {!canEditEmail && (
+                          <span
+                            role="tooltip"
+                            id="huisemail-uitleg"
+                            data-testid="huisemail-uitleg"
+                            className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden w-full rounded-md bg-neutral-900 px-3 py-2 text-xs leading-snug text-white shadow-lg group-hover:block dark:bg-neutral-700"
+                          >
+                            {BEHEERDER_WIJZIGT_EMAIL_TEKST}
+                          </span>
                         )}
                       </div>
-                      {!isDelegatedEdit ? (
-                        <div className="flex flex-col gap-1.5 border-t border-border/60 pt-4">
-                          <Label>Wachtwoord</Label>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-fit"
-                            onClick={() => setPasswordModalOpen(true)}
-                            disabled={isSubmitting}
-                          >
-                            Wijzig wachtwoord
-                          </Button>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          Als administrator kunt u het e-mailadres direct wijzigen zonder verificatie.
+                      {canEditEmail && !isDelegatedEdit && emailVerified === true && (
+                        <p className="text-xs text-muted-foreground">
+                          Wijzigingen aan uw e-mailadres vereisen bevestiging via een link in uw inbox.
+                          Uw wachtwoord blijft hetzelfde.
                         </p>
                       )}
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      E-mail en wachtwoord kunnen niet worden aangepast bij het bewerken van een andere deelnemer.
-                    </p>
-                  )}
+                      {pendingEmailChange && (
+                        <p className="text-xs text-amber-800 dark:text-amber-200" role="status">
+                          Verificatiemail verstuurd naar {pendingEmailChange}. Uw login wijzigt pas na
+                          bevestiging.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {canEditEmail &&
+                    (!isDelegatedEdit ? (
+                      <div className="flex flex-col gap-1.5 border-t border-border/60 pt-4">
+                        <Label>Wachtwoord</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-fit"
+                          onClick={() => setPasswordModalOpen(true)}
+                          disabled={isSubmitting}
+                        >
+                          Wijzig wachtwoord
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Als beheerder kunt u het e-mailadres direct wijzigen zonder verificatie.
+                      </p>
+                    ))}
                 </div>
 
                 <div className={formSectionClass}>

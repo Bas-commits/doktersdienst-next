@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { addDays, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { addDays, startOfIsoWeek, weekRangeLabel } from '@/lib/praktijkplanner/dates';
 import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 
 export function PlannerRepeatWeekModal({
@@ -149,6 +149,13 @@ export function PlannerRepeatWeekModal({
         </p>
 
         <div className="grid gap-3">
+          {/*
+            De datumvelden kiezen geen dag maar een week: de invoer schuift naar de maandag
+            van die week. Dat gebeurde tot nu toe zonder het te tonen, waardoor het veld een
+            datum liet zien terwijl de weeknavigatie bovenin het scherm weken als "10 - 16 aug"
+            schrijft. Het label eronder toont dezelfde notatie, zodat zichtbaar is welke week
+            er daadwerkelijk gekozen is.
+          */}
           <label className="grid gap-1 text-sm">
             <span className="font-medium">Beginweek</span>
             <input
@@ -158,6 +165,9 @@ export function PlannerRepeatWeekModal({
               onChange={(event) => setBeginWeek(startOfIsoWeek(event.target.value || beginWeek))}
               className="h-9 rounded-md border bg-background px-2"
             />
+            <span className="text-muted-foreground" data-testid="repeat-begin-week-label">
+              {weekRangeLabel(normalizedBegin, { withYear: true })}
+            </span>
           </label>
           <label className="grid gap-1 text-sm">
             <span className="font-medium">Eindweek</span>
@@ -168,6 +178,9 @@ export function PlannerRepeatWeekModal({
               onChange={(event) => setEndWeek(startOfIsoWeek(event.target.value || endWeek))}
               className="h-9 rounded-md border bg-background px-2"
             />
+            <span className="text-muted-foreground" data-testid="repeat-end-week-label">
+              {weekRangeLabel(normalizedEnd, { withYear: true })}
+            </span>
           </label>
           <label className="grid gap-1 text-sm">
             <span className="font-medium">Frequentie</span>

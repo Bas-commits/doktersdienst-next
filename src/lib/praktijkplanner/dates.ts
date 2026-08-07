@@ -17,7 +17,10 @@ export function parseNonNegativeInteger(value: unknown): number | null {
 }
 
 export function formatIsoDate(date: Date): string {
-  const year = date.getFullYear();
+  // Het jaar wordt net als maand en dag aangevuld tot vier cijfers. Een datumveld levert
+  // tijdens het typen tussenstanden als jaar 2 of 202 op; zonder aanvulling werd daar
+  // "2-08-24" van gemaakt, wat geen ISO-datum is en verderop een ongeldige datum oplevert.
+  const year = String(date.getFullYear()).padStart(4, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
@@ -62,19 +65,30 @@ export function weeksOverlappingMonth(year: number, monthOneBased: number): stri
   return weeks;
 }
 
-export function weekRangeLabel(weekStart: string): string {
+/**
+ * The one week notation in the planner. The weeknavigatie above the grid sits under the
+ * month and year tabs and leaves the year out; anywhere without that context, such as the
+ * herhaal popup, passes withYear so a week in a later year cannot be misread.
+ */
+export function weekRangeLabel(weekStart: string, options: { withYear?: boolean } = {}): string {
   const start = new Date(`${weekStart}T12:00:00`);
   const end = new Date(`${addDays(weekStart, 6)}T12:00:00`);
+  // Een label hoort de planner nooit onderuit te halen. Intl gooit op een ongeldige datum,
+  // en die kwam hier binnen via een half ingetypte datum in de herhaal popup.
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
+
   const dayFormatter = new Intl.DateTimeFormat('nl-NL', { day: 'numeric' });
   const monthFormatter = new Intl.DateTimeFormat('nl-NL', { month: 'short' });
 
   const formatMonth = (date: Date) => monthFormatter.format(date).replace('.', '');
+  // The year of the last day, so a week crossing new year reads "29 dec - 4 jan 2027".
+  const yearSuffix = options.withYear ? ` ${end.getFullYear()}` : '';
 
   if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
-    return `${dayFormatter.format(start)} – ${dayFormatter.format(end)} ${formatMonth(start)}`;
+    return `${dayFormatter.format(start)} – ${dayFormatter.format(end)} ${formatMonth(start)}${yearSuffix}`;
   }
 
-  return `${dayFormatter.format(start)} ${formatMonth(start)} – ${dayFormatter.format(end)} ${formatMonth(end)}`;
+  return `${dayFormatter.format(start)} ${formatMonth(start)} – ${dayFormatter.format(end)} ${formatMonth(end)}${yearSuffix}`;
 }
 
 export function monthBounds(year: number, monthOneBased: number): { start: string; end: string } | null {

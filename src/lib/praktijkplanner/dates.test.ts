@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addDays,
   datesBetweenInclusive,
+  formatIsoDate,
   isIsoDate,
   monthCalendarBounds,
   monthBounds,
@@ -44,5 +45,17 @@ describe('Praktijkplanner date helpers', () => {
     ]);
     expect(weekRangeLabel('2026-07-13')).toBe('13 – 19 jul');
     expect(weekRangeLabel('2026-06-29')).toBe('29 jun – 5 jul');
+  });
+
+  it('pads the year so a half-typed date stays an ISO date', () => {
+    expect(formatIsoDate(new Date('0002-08-24T12:00:00'))).toBe('0002-08-24');
+    expect(isIsoDate(startOfIsoWeek('0002-08-24'))).toBe(true);
+    expect(weekRangeLabel('not-a-date')).toBe('');
+  });
+
+  it('adds the year of the last day when asked', () => {
+    expect(weekRangeLabel('2026-07-13', { withYear: true })).toBe('13 – 19 jul 2026');
+    expect(weekRangeLabel('2026-06-29', { withYear: true })).toBe('29 jun – 5 jul 2026');
+    expect(weekRangeLabel('2026-12-28', { withYear: true })).toBe('28 dec – 3 jan 2027');
   });
 });

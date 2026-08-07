@@ -18,8 +18,8 @@ import { PlannerDaypartHoverPreview } from '@/components/praktijkplanner/Planner
 import { PlannerManageHerhalingModal } from '@/components/praktijkplanner/PlannerManageHerhalingModal';
 import { PlannerNotifyPlanningModal } from '@/components/praktijkplanner/PlannerNotifyPlanningModal';
 import { PlannerRepeatWeekModal } from '@/components/praktijkplanner/PlannerRepeatWeekModal';
-import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
-import { plannerWeekGridNavOffsetPx } from '@/components/praktijkplanner/planner-grid-layout';
+import { PlannerWeekNavigation } from '@/components/praktijkplanner/PlannerWeekNavigation';
+import { PraktijkplannerPage, PraktijkplannerTitleAside, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import {
   buildActivityAssignmentSlot,
@@ -883,19 +883,24 @@ export function ActivitiesContent({
   );
 
   return (
-    <div className="space-y-4">
-      
+    <div className="flex min-h-0 flex-1 flex-col space-y-4">
+      {/*
+        De maand- en weekregel staan in de koprij van de pagina, naast de titel. Ze stonden
+        boven het rooster en dat kostte twee regels hoogte die de titel al gebruikte.
+      */}
+      <PraktijkplannerTitleAside>
+        <PlannerWeekNavigation weekStart={weekStart} onWeekStartChange={setWeekStart} />
+      </PraktijkplannerTitleAside>
 
-      
-
-      <div className="flex items-start gap-4">
+      <div className="flex min-h-0 flex-1 items-stretch gap-4">
         {canEdit ? (
           <div className="shrink-0 self-stretch">
-            <div
-              className="sticky top-4"
-              style={{ marginTop: `${plannerWeekGridNavOffsetPx()}px` }}
-              data-planner-tool-keep-active
-            >
+            {/*
+              Vroeger stond het palet vastgeplakt mee te scrollen met de pagina. Nu scrollt
+              het rooster zelf en blijft de pagina staan, dus het palet vult gewoon de
+              kolomhoogte en scrollt vanbinnen als de lijst langer is.
+            */}
+            <div className="h-full" data-planner-tool-keep-active>
               <PlannerActivityAssignmentBuilder
                 activities={data.masterData.activities}
                 specifications={data.masterData.specifications}
@@ -938,14 +943,13 @@ export function ActivitiesContent({
           </div>
         ) : null}
 
-        <div className="min-w-0 flex-1 space-y-4">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
           {slotError ? <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{slotError}</p> : null}
           {loadingSlots ? <p className="text-sm text-muted-foreground">Planning laden…</p> : null}
           <PlannerDaypartGrid
             participants={visibleParticipants}
             dayparts={visibleDayparts}
             weekStart={weekStart}
-            onWeekStartChange={setWeekStart}
             zoom={zoom}
             renderCell={({ participant, datum, daypart }) =>
               renderSlot({

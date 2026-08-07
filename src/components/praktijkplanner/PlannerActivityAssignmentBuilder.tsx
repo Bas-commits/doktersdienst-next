@@ -264,7 +264,10 @@ export function PlannerActivityAssignmentBuilder({
 
   return (
     <aside
-      className="max-h-[calc(100vh-2rem)] w-60 overflow-y-auto rounded-xl border bg-card p-3 shadow-sm"
+      // Hoogte van de kolom waar hij in staat, niet van het venster. Met een venstermaat
+      // stak het palet onder de pagina uit en scrollde de pagina alsnog, terwijl juist het
+      // rooster zelf hoort te scrollen.
+      className="max-h-full w-60 overflow-y-auto rounded-xl border bg-card p-3 shadow-sm"
       aria-label="Dagdeel samenstellen"
     >
       <div className="mb-3">

@@ -65,17 +65,27 @@ export function PraktijkplannerPage({
   }
 
   return (
-    <div className="min-w-[1024px] space-y-5 p-6">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-          {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
-        </div>
-        <div ref={setTitleAsideSlot} className="flex flex-wrap items-center justify-center gap-3 self-center" />
-        <div className="flex justify-end self-start">
-          <span className="rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
-            {context.groupName ?? 'Waarneemgroep'}
-          </span>
+    // h-full plus min-h-0 geeft de inhoud een echte hoogte om binnen te scrollen. Schermen
+    // die daar niets mee doen stapelen gewoon zoals eerst.
+    <div className="flex h-full min-h-0 min-w-[1024px] flex-col space-y-5 p-6">
+      {/*
+        De koprij blijft staan tijdens het scrollen. Schermen zetten hun weeknavigatie in het
+        middenvak hiernaast, en die moet bereikbaar blijven als je halverwege de deelnemers
+        zit. De negatieve marges trekken de achtergrond door de paginamarge heen, anders
+        schuift het rooster langs de zijkanten van de vastgezette rij omhoog.
+      */}
+      <div className="sticky top-0 z-40 -mx-6 -mt-6 bg-background px-6 pb-3 pt-6">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+            {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+          </div>
+          <div ref={setTitleAsideSlot} className="flex flex-wrap items-center justify-center gap-3 self-center" />
+          <div className="flex justify-end self-start">
+            <span className="rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
+              {context.groupName ?? 'Waarneemgroep'}
+            </span>
+          </div>
         </div>
       </div>
       <TitleAsideSlotContext.Provider value={titleAsideSlot}>

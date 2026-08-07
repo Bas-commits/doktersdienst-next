@@ -47,29 +47,6 @@ export function weekDates(weekStart: string): string[] {
   return Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
 }
 
-export function weeksOverlappingMonth(year: number, monthOneBased: number): string[] {
-  const bounds = monthBounds(year, monthOneBased);
-  if (!bounds) return [];
-
-  const weeks: string[] = [];
-  let weekStart = startOfIsoWeek(bounds.start);
-
-  while (weekStart <= bounds.end) {
-    const weekEnd = addDays(weekStart, 6);
-    if (weekEnd >= bounds.start) {
-      weeks.push(weekStart);
-    }
-    weekStart = addDays(weekStart, 7);
-  }
-
-  return weeks;
-}
-
-/**
- * The one week notation in the planner. The weeknavigatie above the grid sits under the
- * month and year tabs and leaves the year out; anywhere without that context, such as the
- * herhaal popup, passes withYear so a week in a later year cannot be misread.
- */
 export function weekRangeLabel(weekStart: string, options: { withYear?: boolean } = {}): string {
   const start = new Date(`${weekStart}T12:00:00`);
   const end = new Date(`${addDays(weekStart, 6)}T12:00:00`);

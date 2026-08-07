@@ -18,7 +18,7 @@ import { PlannerDaypartHoverPreview } from '@/components/praktijkplanner/Planner
 import { PlannerManageHerhalingModal } from '@/components/praktijkplanner/PlannerManageHerhalingModal';
 import { PlannerNotifyPlanningModal } from '@/components/praktijkplanner/PlannerNotifyPlanningModal';
 import { PlannerRepeatWeekModal } from '@/components/praktijkplanner/PlannerRepeatWeekModal';
-import { PlannerWeekNavigation } from '@/components/praktijkplanner/PlannerWeekNavigation';
+import { PlannerWeekBar } from '@/components/praktijkplanner/PlannerWeekBar';
 import { PraktijkplannerPage, PraktijkplannerTitleAside, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import {
@@ -889,7 +889,7 @@ export function ActivitiesContent({
         boven het rooster en dat kostte twee regels hoogte die de titel al gebruikte.
       */}
       <PraktijkplannerTitleAside>
-        <PlannerWeekNavigation weekStart={weekStart} onWeekStartChange={setWeekStart} />
+        <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
       </PraktijkplannerTitleAside>
 
       <div className="flex min-h-0 flex-1 items-stretch gap-4">

@@ -75,7 +75,7 @@ export function PraktijkplannerPage({
         schuift het rooster langs de zijkanten van de vastgezette rij omhoog.
       */}
       <div className="sticky top-0 z-40 -mx-6 -mt-6 bg-background px-6 pb-3 pt-6">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
             {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}

@@ -13,7 +13,7 @@ import {
   usePlannerCursorTool,
   type PlannerCursorTool,
 } from './PlannerCursorTool';
-import { PlannerWeekNavigation } from './PlannerWeekNavigation';
+import { PlannerWeekBar } from './PlannerWeekBar';
 import { PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX, PLANNER_GRID_NAV_MARGIN_PX } from './planner-grid-layout';
 
 export const UNAVAILABLE_DAYPART_TOAST =
@@ -125,7 +125,7 @@ export function PlannerDaypartGrid({
       {onWeekStartChange ? (
         <div style={{ paddingBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}>
           <div className="ml-44">
-            <PlannerWeekNavigation weekStart={weekStart} onWeekStartChange={onWeekStartChange} />
+            <PlannerWeekBar weekStart={weekStart} onWeekStartChange={onWeekStartChange} />
           </div>
         </div>
       ) : null}
@@ -143,21 +143,32 @@ export function PlannerDaypartGrid({
           <div
             // De ondergrens houdt het rooster bruikbaar op een laag venster. Past het dan
             // niet meer, dan scrollt de pagina eromheen zoals vroeger.
-            className="min-h-80 flex-1 overflow-auto rounded-xl border bg-card shadow-sm"
-            style={zoom ? { zoom: `${zoom}%` } : undefined}
+            className="min-h-80 flex-1 snap-y snap-mandatory overflow-auto rounded-xl border bg-card shadow-sm"
+            style={{
+              ...(zoom ? { zoom: `${zoom}%` } : {}),
+              // Scrollen stopt op een deelnemersregel, nooit halverwege een regel. De
+              // opvulling houdt daarbij rekening met de kopregel die bovenaan blijft staan;
+              // zonder dat legt de kop de bovenkant van de regel waar je op stopt weer af.
+              scrollPaddingTop: `${PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX}px`,
+            }}
           >
       <div className={cn('flex w-fit min-w-full', renderParticipantActions && 'gap-1')}>
         {renderParticipantActions ? (
           <div className="sticky left-0 z-40 flex w-fit shrink-0 flex-col bg-card">
+            {/*
+              Dit blok staat op de hoogte van de kopregel en blijft daar staan. De kopregel
+              zelf loopt niet door over deze kolom, dus zonder dit blok schoven de knoppen
+              van de bovenste deelnemers gewoon naast DEELNEMER in beeld.
+            */}
             <div
               aria-hidden
-              className="border-b border-transparent"
+              className="sticky top-0 z-10 border-b border-transparent bg-card"
               style={{ height: `${PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX}px` }}
             />
             {participants.map((participant) => (
               <div
                 key={participant.id}
-                className="flex min-h-30 w-fit items-center justify-center border-b border-transparent last:border-b-0"
+                className="flex min-h-30 w-fit snap-start items-center justify-center border-b border-transparent last:border-b-0"
               >
                 {renderParticipantActions(participant)}
               </div>
@@ -202,7 +213,7 @@ export function PlannerDaypartGrid({
           return (
           <div
             key={participant.id}
-            className="grid grid-cols-[minmax(11rem,1fr)_repeat(7,minmax(9.5rem,1fr))] border-b last:border-b-0"
+            className="grid snap-start grid-cols-[minmax(11rem,1fr)_repeat(7,minmax(9.5rem,1fr))] border-b last:border-b-0"
           >
             <div className="flex min-h-30 items-center gap-2 p-3 text-left">
               <span

@@ -8,7 +8,6 @@ import {
   monthBounds,
   startOfIsoWeek,
   weekRangeLabel,
-  weeksOverlappingMonth,
   weekdayFromIsoDate,
 } from './dates';
 
@@ -35,14 +34,7 @@ describe('Praktijkplanner date helpers', () => {
     expect(weekdayFromIsoDate('2026-07-12')).toBe(7);
   });
 
-  it('lists ISO weeks overlapping a month and formats week labels', () => {
-    expect(weeksOverlappingMonth(2026, 7)).toEqual([
-      '2026-06-29',
-      '2026-07-06',
-      '2026-07-13',
-      '2026-07-20',
-      '2026-07-27',
-    ]);
+  it('formats week labels', () => {
     expect(weekRangeLabel('2026-07-13')).toBe('13 – 19 jul');
     expect(weekRangeLabel('2026-06-29')).toBe('29 jun – 5 jul');
   });

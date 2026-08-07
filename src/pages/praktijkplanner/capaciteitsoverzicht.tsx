@@ -4,7 +4,7 @@ import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CapacityRequirementList } from '@/components/praktijkplanner/CapacityRequirementList';
 import { CapacityWeekGrid } from '@/components/praktijkplanner/CapacityWeekGrid';
-import { PlannerWeekNavigation } from '@/components/praktijkplanner/PlannerWeekNavigation';
+import { PlannerWeekBar } from '@/components/praktijkplanner/PlannerWeekBar';
 import {
   PraktijkplannerPage,
   PraktijkplannerTitleAside,
@@ -171,7 +171,7 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
         </label>
       </PraktijkplannerTitleAside>
 
-      <PlannerWeekNavigation weekStart={weekStart} onWeekStartChange={setWeekStart} />
+      <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
 
       {data.masterData.locations.length === 0 ? (
         <p className="rounded-lg border p-4 text-sm text-muted-foreground">

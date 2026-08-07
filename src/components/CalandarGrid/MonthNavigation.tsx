@@ -70,7 +70,11 @@ export function MonthNavigation({ month, year, onSelectMonth }: MonthNavigationP
   return (
     <div
       className="flex min-w-0 items-center justify-center"
-      style={{ height: `${PLANNER_MONTH_NAV_HEIGHT_PX}px` }}
+      // Een minimale hoogte, geen vaste. De maanden staan in een flex-wrap lijst en gaan op
+      // een smaller scherm over twee regels. In een vast vakje puilt die tweede regel er aan
+      // beide kanten uit, wat opviel zodra de navigatie bovenaan werd vastgezet: de eerste
+      // regel viel dan buiten het scherm.
+      style={{ minHeight: `${PLANNER_MONTH_NAV_HEIGHT_PX}px` }}
     >
       <nav className="flex items-center min-w-0" aria-label="Maandnavigatie">
         <ul className="list-none flex flex-wrap items-center justify-center gap-y-2 gap-x-4 p-0 m-0">

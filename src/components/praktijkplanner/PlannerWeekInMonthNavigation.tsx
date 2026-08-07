@@ -40,7 +40,9 @@ export function PlannerWeekInMonthNavigation({
   return (
     <div
       className="flex min-w-0 items-center justify-center"
-      style={{ height: `${PLANNER_WEEK_IN_MONTH_NAV_HEIGHT_PX}px` }}
+      // Minimale hoogte om dezelfde reden als bij de maandnavigatie: de weken wikkelen op een
+      // smal scherm naar een tweede regel.
+      style={{ minHeight: `${PLANNER_WEEK_IN_MONTH_NAV_HEIGHT_PX}px` }}
     >
       <nav className="flex min-w-0 items-center" aria-label="Weeknavigatie">
         <ul className="m-0 flex list-none flex-wrap items-center justify-center gap-x-3 gap-y-2 p-0">

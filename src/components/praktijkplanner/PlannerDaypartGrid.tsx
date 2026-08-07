@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { weekDates } from '@/lib/praktijkplanner/dates';
 import { cn } from '@/lib/utils';
@@ -109,6 +109,23 @@ export function PlannerDaypartGrid({
     onDismiss: onCursorToolDismiss,
   });
 
+  // De navigatie is niet altijd even hoog: op een smal scherm gaan de maanden of de weken
+  // over twee regels. De opvuller in de knoppenkolom hiernaast moet dan meegroeien, anders
+  // staan de knoppen niet meer op de hoogte van hun eigen deelnemer. De vaste maat uit
+  // planner-grid-layout is de beginwaarde tot we echt gemeten hebben.
+  const navRef = useRef<HTMLDivElement>(null);
+  const [navHeight, setNavHeight] = useState(plannerWeekGridNavOffsetPx());
+
+  useEffect(() => {
+    const element = navRef.current;
+    if (!element) return;
+    const measure = () => setNavHeight(element.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [onWeekStartChange]);
+
   const followerTool = unavailableCursor ? UNAVAILABLE_DAYPART_CURSOR_TOOL : cursorTool ?? null;
   const followerPosition = unavailableCursor ?? cursorPosition;
 
@@ -121,8 +138,17 @@ export function PlannerDaypartGrid({
       <div className={cn('flex', renderParticipantActions && 'gap-1')}>
         {renderParticipantActions ? (
           <div className="flex w-fit shrink-0 flex-col">
+            {/*
+              Even hoog als de weeknavigatie ernaast, en net zo blijven staan. Zonder dat
+              schuiven de knoppen van de bovenste deelnemers straks naast de vastgezette
+              navigatie in beeld.
+            */}
             {onWeekStartChange ? (
-              <div aria-hidden style={{ height: `${plannerWeekGridNavOffsetPx()}px` }} />
+              <div
+                aria-hidden
+                className="sticky top-0 z-30 bg-background"
+                style={{ height: `${navHeight}px` }}
+              />
             ) : null}
             <div
               aria-hidden
@@ -140,9 +166,25 @@ export function PlannerDaypartGrid({
           </div>
         ) : null}
         <div className="min-w-0 flex-1">
+          {/*
+            De maand- en weekregels blijven bovenaan staan tijdens het scrollen. Ze stonden
+            gewoon boven het rooster, dus wie halverwege de deelnemers zat moest eerst
+            helemaal omhoog om van week te wisselen en daarna zijn plek terugzoeken. De
+            maandregel hoort erbij: de pijl Volgende week stopt bij de laatste week van de
+            maand, dus zonder die tabs kom je de maandgrens niet over.
+
+            De ondermarge zit binnen het vastgezette blok, anders schuift het rooster door
+            die zestien pixels heen zodra de regel blijft staan.
+          */}
           {onWeekStartChange ? (
-            <div className="ml-44" style={{ marginBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}>
-              <PlannerWeekNavigation weekStart={weekStart} onWeekStartChange={onWeekStartChange} />
+            <div
+              ref={navRef}
+              className="sticky top-0 z-30 bg-background"
+              style={{ paddingBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}
+            >
+              <div className="ml-44">
+                <PlannerWeekNavigation weekStart={weekStart} onWeekStartChange={onWeekStartChange} />
+              </div>
             </div>
           ) : null}
           <div

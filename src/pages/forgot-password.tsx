@@ -57,8 +57,18 @@ export default function ForgotPasswordPage() {
             </div>
 
             <h1 className="mb-2 text-center text-xl font-semibold tracking-tight">Wachtwoord resetten</h1>
-            <p className="mb-6 text-center text-sm text-neutral-600">
+            <p className="mb-4 text-center text-sm text-neutral-600">
               Vul uw e-mailadres in. Als dit bij ons bekend is, ontvangt u een link om een nieuw wachtwoord te kiezen.
+            </p>
+            <p className="mb-6 text-center text-sm text-neutral-600">
+              Wilt u alleen deze keer inloggen en uw wachtwoord houden? Gebruik dan de inloglink op de{' '}
+              <Link
+                href="/login"
+                className="font-medium text-foreground underline underline-offset-2 hover:text-[#d1262c]"
+              >
+                inlogpagina
+              </Link>
+              .
             </p>
 
             {done ? (

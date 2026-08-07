@@ -18,6 +18,28 @@ import {
 const DEFAULT_AFTER_LOGIN_URL = '/rooster-inzien';
 const BRAND_RED = '#d1262c';
 
+/**
+ * Adres waar de laatste inloglink naartoe ging. Strandt de link, dan komt de gebruiker terug
+ * op een leeg formulier en vult de browserkluis daar een willekeurig bewaard account in. Dat
+ * adres heeft niets te maken met de link die net is aangevraagd, en dat leest als een fout.
+ * Opgeslagen in localStorage en niet in sessionStorage, omdat de link vrijwel altijd in een
+ * nieuw tabblad wordt geopend en sessionStorage dan leeg is.
+ */
+const MAGIC_LINK_EMAIL_KEY = 'doktersdienst.inloglink-adres';
+
+/** Foutcodes die Better Auth aan de terugkeer-URL hangt als /magic-link/verify strandt. */
+const MAGIC_LINK_ERROR_TEXTS: Record<string, string> = {
+  INVALID_TOKEN:
+    'Deze inloglink werkt niet meer. Een inloglink is eenmalig, dus na gebruik moet u een nieuwe aanvragen.',
+  EXPIRED_TOKEN: 'Deze inloglink is verlopen. Vraag hieronder een nieuwe aan.',
+  ATTEMPTS_EXCEEDED: 'Deze inloglink is te vaak geopend. Vraag hieronder een nieuwe aan.',
+  new_user_signup_disabled:
+    'Wij kennen dit e-mailadres niet. Controleer de schrijfwijze, of log in met uw wachtwoord.',
+};
+
+const MAGIC_LINK_ERROR_FALLBACK =
+  'Inloggen via de link is niet gelukt. Vraag hieronder een nieuwe link aan of log in met uw wachtwoord.';
+
 type LoginCarouselSlide = {
   /** Path under `public/`, e.g. `/checkboxes.png` */
   imageSrc: string;
@@ -154,6 +176,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [magicLinkLoading, setMagicLinkLoading] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [magicLinkErrorDismissed, setMagicLinkErrorDismissed] = useState(false);
 
   const afterLoginUrl = useMemo(() => {
     const raw = router.query.callbackUrl;
@@ -173,24 +196,50 @@ export default function LoginPage() {
     router.isReady &&
     (router.query.emailChanged === 'invalid' || router.query.emailChanged === 'taken');
 
+  const magicLinkErrorCode =
+    router.isReady && typeof router.query.error === 'string' ? router.query.error : null;
+  const magicLinkError =
+    magicLinkErrorCode && !magicLinkErrorDismissed
+      ? MAGIC_LINK_ERROR_TEXTS[magicLinkErrorCode] ?? MAGIC_LINK_ERROR_FALLBACK
+      : null;
+
+  useEffect(() => {
+    if (!magicLinkErrorCode) return;
+    const requested = window.localStorage.getItem(MAGIC_LINK_EMAIL_KEY);
+    if (!requested) return;
+
+    // Het formulier toont het adres waar de link naartoe ging. Zonder deze regel vult de
+    // browserkluis hier een willekeurig bewaard account in, en dat leest als een fout.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- eenmalig uitlezen van localStorage, dat kan alleen na hydratie
+    setEmail(requested);
+    window.localStorage.removeItem(MAGIC_LINK_EMAIL_KEY);
+  }, [magicLinkErrorCode]);
+
   async function handleMagicLink() {
     setError(null);
     setLoginErrorCode(null);
     setMagicLinkSent(false);
-    if (!email.trim()) {
+    setMagicLinkErrorDismissed(true);
+    const requested = email.trim();
+    if (!requested) {
       setError('Vul uw e-mailadres in voor de inloglink.');
       return;
     }
     setMagicLinkLoading(true);
     const { error: mlError } = await authClient.signIn.magicLink({
-      email: email.trim(),
+      email: requested,
       callbackURL: afterLoginUrl,
+      // Zonder eigen terugkeer-URL stuurt Better Auth een mislukte link naar callbackURL, een
+      // beschermde pagina. De middleware maakt daar een schone /login van en de foutcode gaat
+      // onderweg verloren, waardoor de gebruiker zonder uitleg op het inlogformulier belandt.
+      errorCallbackURL: '/login',
     });
     setMagicLinkLoading(false);
     if (mlError) {
       setError(mlError.message ?? 'Inloglink versturen mislukt');
       return;
     }
+    window.localStorage.setItem(MAGIC_LINK_EMAIL_KEY, requested);
     setMagicLinkSent(true);
   }
 
@@ -198,6 +247,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoginErrorCode(null);
+    setMagicLinkErrorDismissed(true);
     setIsLoading(true);
 
     const { data, error: signInError } = await authClient.signIn.email(
@@ -285,9 +335,15 @@ export default function LoginPage() {
                     : 'De bevestigingslink is ongeldig of verlopen. Vraag opnieuw een e-mailwijziging aan.'}
                 </p>
               )}
+              {magicLinkError && (
+                <p className="text-sm text-destructive" role="alert" data-testid="magic-link-error">
+                  {magicLinkError}
+                </p>
+              )}
               {magicLinkSent && (
                 <p className="text-sm text-neutral-800" role="status">
-                  Als dit e-mailadres bij ons bekend is, is er een inloglink naar u verstuurd. Controleer uw inbox.
+                  Als dit e-mailadres bij ons bekend is, is er een inloglink naar u verstuurd. Controleer uw
+                  inbox. De link werkt eenmalig en is kort geldig; uw wachtwoord verandert er niet door.
                 </p>
               )}
               {error && (
@@ -363,26 +419,32 @@ export default function LoginPage() {
                 <span className="relative bg-white px-2">of</span>
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isLoading || magicLinkLoading}
-                onClick={handleMagicLink}
-                className="mx-auto h-11 min-w-[200px] rounded-xl border-neutral-300"
-              >
-                {magicLinkLoading ? 'Bezig…' : 'Stuur inloglink per e-mail'}
-              </Button>
+              <div className="flex flex-col items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isLoading || magicLinkLoading}
+                  onClick={handleMagicLink}
+                  className="h-11 min-w-[200px] rounded-xl border-neutral-300"
+                >
+                  {magicLinkLoading ? 'Bezig…' : 'Stuur inloglink per e-mail'}
+                </Button>
+                <p className="max-w-sm text-center text-sm text-neutral-600">
+                  U ontvangt een link waarmee u deze keer zonder wachtwoord inlogt. Uw wachtwoord blijft
+                  gewoon werken.
+                </p>
+              </div>
             </form>
 
             <p className="mt-8 text-center text-sm text-neutral-600">
-              Wachtwoord vergeten?{' '}
+              Wachtwoord vergeten, of wilt u een ander wachtwoord?{' '}
               <Link
                 href="/forgot-password"
                 className="font-medium text-foreground underline underline-offset-2 hover:text-[#d1262c]"
               >
                 Vraag een resetlink aan
               </Link>
-              .
+              . Daarmee stelt u zelf een nieuw wachtwoord in.
             </p>
           </div>
         </main>

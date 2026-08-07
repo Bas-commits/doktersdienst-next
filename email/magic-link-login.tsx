@@ -39,8 +39,9 @@ export default function MagicLinkLoginEmail({
       </Heading>
       <Text style={paragraphStyle}>{greeting}</Text>
       <Text style={paragraphStyle}>
-        Je hebt een magische inloglink voor De Doktersdienst aangevraagd. Met één klik log je direct in —
-        zo hoef je je wachtwoord niet te typen tijdens deze stap.
+        Je hebt een inloglink voor De Doktersdienst aangevraagd. Met één klik log je direct in, zonder
+        je wachtwoord te typen. Je wachtwoord verandert hier niet door en blijft gewoon werken. Wil je
+        juist een nieuw wachtwoord kiezen, gebruik dan &quot;wachtwoord vergeten&quot; op de inlogpagina.
       </Text>
       <Text style={paragraphStyle}>
         De onderstaande knop werkt maar één keer en is slechts korte tijd geldig. Open de link daarom zo

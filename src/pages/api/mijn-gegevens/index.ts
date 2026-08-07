@@ -5,6 +5,7 @@ import { pool } from '@/lib/db';
 import { legacyMD5Hash } from '@/lib/legacy-password';
 import { getAuthenticatedUser } from '@/lib/api-auth';
 import { hasDelegatedProfileAccess, canEditEchtedeelnemer } from '@/lib/mijn-gegevens-access';
+import { normalizeAccountEmail } from '@/lib/account-email-tokens';
 import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
 import type {
   MijnGegevensProfile,
@@ -607,17 +608,21 @@ export default async function handler(
 
       update.huisemail = newEmail;
       if (newEmail) {
-        if (currentDeelnemer && currentDeelnemer.login !== newEmail) {
+        // De login gaat in kleine letters de database in. Better Auth zoekt een gebruiker op
+        // met email.toLowerCase() en vergelijkt dat exact met deze kolom, dus een hoofdletter
+        // hier maakt het account onvindbaar voor de resetlink en de magische inloglink.
+        const newLogin = normalizeAccountEmail(newEmail);
+        if (currentDeelnemer && normalizeAccountEmail(currentDeelnemer.login ?? '') !== newLogin) {
           const [dupe] = await db
             .select({ id: deelnemers.id })
             .from(deelnemers)
-            .where(and(eq(deelnemers.login, newEmail), ne(deelnemers.id, targetDeelnemerId)))
+            .where(and(eq(deelnemers.login, newLogin), ne(deelnemers.id, targetDeelnemerId)))
             .limit(1);
           if (dupe) {
             return res.status(400).json({ error: 'Dit e-mailadres is al in gebruik als loginnaam' });
           }
-          update.login = newEmail;
-          update.email = newEmail;
+          update.login = newLogin;
+          update.email = newLogin;
           loginUpdated = true;
           if (isDelegatedEdit && actor.isAdmin) {
             update.emailVerified = true;

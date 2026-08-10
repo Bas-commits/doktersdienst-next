@@ -90,6 +90,23 @@ export function monthCalendarBounds(year: number, monthOneBased: number): { star
   return { start, end: addDays(bounds.end, daysUntilSunday) };
 }
 
+/**
+ * Het ISO-weeknummer van een datum.
+ *
+ * ISO telt de week waarin de donderdag valt, dus 1 januari kan week 52 of 53 van het vorige
+ * jaar zijn. Dat is precies de reden dat dit niet uit de dagnummers te rekenen valt en hier
+ * staat: de maandweergave zet de weeknummers boven de dagen en die moeten kloppen met de
+ * weekbalk.
+ */
+export function isoWeekNumber(isoDate: string): number {
+  const date = new Date(`${isoDate}T12:00:00`);
+  const weekday = date.getDay() || 7;
+  date.setDate(date.getDate() - weekday + 4);
+  const eersteJanuari = new Date(date.getFullYear(), 0, 1, 12);
+  const dagen = Math.round((date.getTime() - eersteJanuari.getTime()) / (24 * 60 * 60 * 1000));
+  return Math.ceil((dagen + 1) / 7);
+}
+
 export function weekdayFromIsoDate(isoDate: string): number {
   const day = new Date(`${isoDate}T12:00:00`).getDay();
   return day === 0 ? 7 : day;

@@ -4,6 +4,7 @@ import {
   datesBetweenInclusive,
   formatIsoDate,
   isIsoDate,
+  isoWeekNumber,
   monthCalendarBounds,
   monthBounds,
   startOfIsoWeek,
@@ -49,5 +50,21 @@ describe('Praktijkplanner date helpers', () => {
     expect(weekRangeLabel('2026-07-13', { withYear: true })).toBe('13 – 19 jul 2026');
     expect(weekRangeLabel('2026-06-29', { withYear: true })).toBe('29 jun – 5 jul 2026');
     expect(weekRangeLabel('2026-12-28', { withYear: true })).toBe('28 dec – 3 jan 2027');
+  });
+});
+
+describe('isoWeekNumber', () => {
+  it('telt de week waarin de donderdag valt', () => {
+    expect(isoWeekNumber('2026-08-10')).toBe(33);
+    expect(isoWeekNumber('2026-08-16')).toBe(33);
+    expect(isoWeekNumber('2026-08-17')).toBe(34);
+  });
+
+  it('rekent de jaarwisseling naar het jaar van de donderdag', () => {
+    // 1 januari 2027 is een vrijdag, dus die dag hoort nog bij week 53 van 2026.
+    expect(isoWeekNumber('2027-01-01')).toBe(53);
+    expect(isoWeekNumber('2027-01-04')).toBe(1);
+    // 1 januari 2026 is een donderdag en begint dus wel gewoon week 1.
+    expect(isoWeekNumber('2026-01-01')).toBe(1);
   });
 });

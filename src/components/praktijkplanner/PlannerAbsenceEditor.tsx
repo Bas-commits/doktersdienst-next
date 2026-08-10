@@ -13,13 +13,16 @@ import type { PlannerCursorTool } from './PlannerCursorTool';
 import { plannerMonthGridNavOffsetPx, plannerWeekGridNavOffsetPx } from './planner-grid-layout';
 import { PlannerDaypartGrid } from './PlannerDaypartGrid';
 import { PlannerMonthDaypartGrid } from './PlannerMonthDaypartGrid';
+import { PlannerMonthCell, PlannerMonthOverviewGrid } from './PlannerMonthOverviewGrid';
+import { PlannerViewModeSwitch } from './PlannerViewModeSwitch';
+import { PlannerWeekBar } from './PlannerWeekBar';
 import { MonthNavigation } from '@/components/CalandarGrid/MonthNavigation';
 import { PLANNER_GRID_NAV_MARGIN_PX } from './planner-grid-layout';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { usePlannerHolidayData } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
-import { addDays, formatIsoDate, monthCalendarBounds, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { addDays, formatIsoDate, monthBounds, monthCalendarBounds, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 import {
   isDaypartSchedulableForParticipant,
@@ -96,16 +99,37 @@ export function PlannerAbsenceEditor({
   const [showDay, setShowDay] = useState(true);
   const [showNight, setShowNight] = useState(true);
   const [zoom, setZoom] = useState(100);
+  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
+
+  // Dezelfde regel als in de Activiteiten planner: de maand van de donderdag, want dat is de
+  // maand waar de ISO-week bij hoort. weekStart blijft zo de enige plek waar staat waar je bent.
+  const overviewMonth = useMemo(() => {
+    const donderdag = new Date(`${addDays(weekStart, 3)}T12:00:00`);
+    return { year: donderdag.getFullYear(), month: donderdag.getMonth() + 1 };
+  }, [weekStart]);
+  const overviewMonthLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat('nl-NL', { month: 'long', year: 'numeric' }).format(
+        new Date(overviewMonth.year, overviewMonth.month - 1, 1, 12)
+      ),
+    [overviewMonth]
+  );
 
   const range = useMemo(() => {
-    if (!isDoctorMode) return { start: weekStart, end: addDays(weekStart, 6) };
+    if (!isDoctorMode) {
+      if (viewMode === 'month') {
+        const bounds = monthBounds(overviewMonth.year, overviewMonth.month);
+        if (bounds) return bounds;
+      }
+      return { start: weekStart, end: addDays(weekStart, 6) };
+    }
     return (
       monthCalendarBounds(year, month) ?? {
         start: `${year}-${String(month).padStart(2, '0')}-01`,
         end: `${year}-${String(month).padStart(2, '0')}-28`,
       }
     );
-  }, [isDoctorMode, month, weekStart, year]);
+  }, [isDoctorMode, month, overviewMonth, viewMode, weekStart, year]);
   const holidayData = usePlannerHolidayData(range.start, range.end);
   const participants = isDoctorMode
     ? data.participants.filter((participant) => participant.id === data.userId)
@@ -223,7 +247,10 @@ export function PlannerAbsenceEditor({
     (
       participant: PraktijkplannerPageContext['data']['participants'][number],
       datum: string,
-      daypart: PraktijkplannerDaypart
+      daypart: PraktijkplannerDaypart,
+      // In de maandweergave is een dag 34 pixels breed; daar past het gekleurde vakje met het
+      // icoon niet in. De hoverkaart eronder blijft dezelfde en toont het wel.
+      variant: 'week' | 'month' = 'week'
     ) => {
       const { absence, provisional } = resolveAbsence(participant.id, datum, daypart.id);
       if (!absence) {
@@ -256,7 +283,15 @@ export function PlannerAbsenceEditor({
           showParticipant={!isDoctorMode}
           chip={<div className="relative h-full w-full">{cell}</div>}
         >
-          {cell}
+          {variant === 'month' ? (
+            <PlannerMonthCell
+              label={absence.naam}
+              color={absence.kleur}
+              provisional={provisional === true}
+            />
+          ) : (
+            cell
+          )}
         </PlannerDaypartHoverPreview>
       );
     },
@@ -514,7 +549,12 @@ export function PlannerAbsenceEditor({
   
 
       <div className="flex items-start gap-4">
-      {editable ? (
+      {/*
+        In de maandweergave van de beheerder is er niets aan te klikken, dus het palet zou
+        alleen maar uitnodigen tot iets wat niet werkt. De dokterversie heeft zijn eigen
+        maandkalender waarin je wel kunt kiezen, en houdt het palet dus.
+      */}
+      {editable && !(!isDoctorMode && viewMode === 'month') ? (
         <div className="shrink-0 self-stretch">
           <aside
             className="sticky top-0"
@@ -549,6 +589,38 @@ export function PlannerAbsenceEditor({
       <div className="min-w-0 flex-1 space-y-4">
       {loading ? <p className="text-sm text-muted-foreground">Afwezigheden laden…</p> : null}
       {!isDoctorMode ? (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {/*
+              In de maandweergave staat de weekbalk hier, want die zit normaal in het
+              weekrooster zelf. Zonder hem is de maand niet te verzetten.
+            */}
+            {viewMode === 'month' ? (
+              <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
+            ) : null}
+            <PlannerViewModeSwitch
+              value={viewMode}
+              onChange={setViewMode}
+              monthLabel={overviewMonthLabel}
+            />
+          </div>
+          {editable && viewMode === 'month' ? (
+            <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">
+              De maand is om te kijken. Zet de weergave op Week om een afwezigheid te zetten.
+            </p>
+          ) : null}
+          {viewMode === 'month' ? (
+            <PlannerMonthOverviewGrid
+              participants={participants}
+              dayparts={data.masterData.dayparts}
+              year={overviewMonth.year}
+              month={overviewMonth.month}
+              renderCell={({ participant, datum, daypart }) =>
+                renderCell(participant, datum, daypart, 'month')
+              }
+              holidayLabels={holidayData.labels}
+            />
+          ) : (
         <PlannerDaypartGrid
           participants={participants}
           dayparts={data.masterData.dayparts}
@@ -573,6 +645,8 @@ export function PlannerAbsenceEditor({
           cursorTool={cursorTool}
           onCursorToolDismiss={dismissCursorTool}
         />
+          )}
+        </div>
       ) : participants[0] ? (
         <div>
           <div className="ml-44" style={{ marginBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}>

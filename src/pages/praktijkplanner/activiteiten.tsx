@@ -16,8 +16,13 @@ import { PlannerCopyWeekModal } from '@/components/praktijkplanner/PlannerCopyWe
 import { PlannerDaypartGrid } from '@/components/praktijkplanner/PlannerDaypartGrid';
 import { PlannerDaypartHoverPreview } from '@/components/praktijkplanner/PlannerDaypartHoverPreview';
 import { PlannerManageHerhalingModal } from '@/components/praktijkplanner/PlannerManageHerhalingModal';
+import {
+  PlannerMonthCell,
+  PlannerMonthOverviewGrid,
+} from '@/components/praktijkplanner/PlannerMonthOverviewGrid';
 import { PlannerNotifyPlanningModal } from '@/components/praktijkplanner/PlannerNotifyPlanningModal';
 import { PlannerRepeatWeekModal } from '@/components/praktijkplanner/PlannerRepeatWeekModal';
+import { PlannerViewModeSwitch } from '@/components/praktijkplanner/PlannerViewModeSwitch';
 import { PlannerWeekBar } from '@/components/praktijkplanner/PlannerWeekBar';
 import { PraktijkplannerPage, PraktijkplannerTitleAside, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
@@ -31,7 +36,7 @@ import {
 } from '@/lib/praktijkplanner/activity-assignment';
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
-import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { addDays, formatIsoDate, monthBounds, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import { absentieTekst } from '@/lib/praktijkplanner/absentie-tekst';
 import { afwijkingTekst } from '@/lib/praktijkplanner/herhaling-tekst';
 import {
@@ -100,10 +105,38 @@ export function ActivitiesContent({
   const [showNight, setShowNight] = useState(true);
   const [participantFilter, setParticipantFilter] = useState<number | 'all'>('all');
   const [zoom, setZoom] = useState('100');
+  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [actionModal, setActionModal] = useState<ParticipantActionModal | null>(null);
 
   const end = useMemo(() => addDays(weekStart, 6), [weekStart]);
-  const holidays = usePlannerHolidays(weekStart, end);
+
+  // De maand van de donderdag, want dat is de maand waar de ISO-week bij hoort. Zo blijft
+  // weekStart de enige plek waar staat waar je bent en kan week en maand niet uit elkaar lopen.
+  const monthAnchor = useMemo(() => {
+    const donderdag = new Date(`${addDays(weekStart, 3)}T12:00:00`);
+    return { year: donderdag.getFullYear(), month: donderdag.getMonth() + 1 };
+  }, [weekStart]);
+  const monthRange = useMemo(
+    () => monthBounds(monthAnchor.year, monthAnchor.month),
+    [monthAnchor]
+  );
+  const rangeStart = viewMode === 'month' && monthRange ? monthRange.start : weekStart;
+  const rangeEnd = viewMode === 'month' && monthRange ? monthRange.end : end;
+
+  // In een cel van 34 pixels is geen fiche neer te zetten, dus de maand is altijd om te
+  // kijken. Op de planner blijft de schakelaar staan, maar het palet verdwijnt en er staat
+  // bij dat wijzigen per week gaat; een scherm waarin de helft van de knoppen niets doet is
+  // verwarrender dan geen maand.
+  const showsPalette = canEdit && viewMode === 'week';
+  const monthLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat('nl-NL', { month: 'long', year: 'numeric' }).format(
+        new Date(monthAnchor.year, monthAnchor.month - 1, 1, 12)
+      ),
+    [monthAnchor]
+  );
+
+  const holidays = usePlannerHolidays(rangeStart, rangeEnd);
   const visibleDayparts = useMemo(
     () =>
       data.masterData.dayparts.filter((daypart) =>
@@ -170,7 +203,7 @@ export function ActivitiesContent({
     setLoadingSlots(true);
     setSlotError(null);
     fetch(
-      `/api/praktijkplanner/activiteiten?idwaarneemgroep=${groupId}&start=${weekStart}&end=${end}`,
+      `/api/praktijkplanner/activiteiten?idwaarneemgroep=${groupId}&start=${rangeStart}&end=${rangeEnd}`,
       { credentials: 'include', signal: abortController.signal }
     )
       .then(async (response) => {
@@ -192,11 +225,11 @@ export function ActivitiesContent({
         if (!abortController.signal.aborted) setLoadingSlots(false);
       });
     return () => abortController.abort();
-  }, [end, groupId, weekStart]);
+  }, [groupId, rangeEnd, rangeStart]);
 
   const refreshSlots = useCallback(async () => {
     const response = await fetch(
-      `/api/praktijkplanner/activiteiten?idwaarneemgroep=${groupId}&start=${weekStart}&end=${end}`,
+      `/api/praktijkplanner/activiteiten?idwaarneemgroep=${groupId}&start=${rangeStart}&end=${rangeEnd}`,
       { credentials: 'include' }
     );
     const payload = (await response.json()) as { slots?: PraktijkplannerPlanningSlot[]; error?: string };
@@ -204,12 +237,12 @@ export function ActivitiesContent({
       throw new Error(payload.error || 'De activiteitenplanning kon niet worden geladen.');
     }
     setSlots(payload.slots);
-  }, [end, groupId, weekStart]);
+  }, [groupId, rangeEnd, rangeStart]);
 
   const loadAbsences = useCallback(() => {
     const abortController = new AbortController();
     fetch(
-      `/api/praktijkplanner/afwezigheden?idwaarneemgroep=${groupId}&start=${weekStart}&end=${end}`,
+      `/api/praktijkplanner/afwezigheden?idwaarneemgroep=${groupId}&start=${rangeStart}&end=${rangeEnd}`,
       { credentials: 'include', signal: abortController.signal }
     )
       .then(async (response) => {
@@ -228,7 +261,7 @@ export function ActivitiesContent({
         }
       });
     return () => abortController.abort();
-  }, [end, groupId, weekStart]);
+  }, [groupId, rangeEnd, rangeStart]);
 
   useEffect(() => loadSlots(), [loadSlots]);
   useEffect(() => loadAbsences(), [loadAbsences]);
@@ -275,11 +308,18 @@ export function ActivitiesContent({
       datum,
       daypart,
       hoverEnabled,
+      variant = 'week',
     }: {
       participant: PraktijkplannerParticipant;
       datum: string;
       daypart: { id: number; naam: string };
       hoverEnabled: boolean;
+      /**
+       * In de maandweergave is een dag maar 34 pixels breed. Daar past de fiche niet in, dus
+       * toont de cel één afkorting in de kleur van de activiteit. De hoverkaart eronder blijft
+       * dezelfde en toont wel de hele fiche, zodat er geen informatie verdwijnt.
+       */
+      variant?: 'week' | 'month';
     }) => {
       const key = slotKey(participant.id, datum, daypart.id);
       const existing = baseSlotMap.get(key);
@@ -315,7 +355,15 @@ export function ActivitiesContent({
             showPlanningDetails={false}
             chip={<div className="relative h-full w-full">{cell}</div>}
           >
-            {cell}
+            {variant === 'month' ? (
+              <PlannerMonthCell
+                label={absence.absenceType.naam}
+                color={absence.absenceType.kleur}
+                provisional={provisional}
+              />
+            ) : (
+              cell
+            )}
           </PlannerDaypartHoverPreview>
         );
       }
@@ -442,7 +490,15 @@ export function ActivitiesContent({
             </div>
           }
         >
-          {chip}
+          {variant === 'month' ? (
+            <PlannerMonthCell
+              label={activityItem?.label ?? taskItems[0]?.label ?? locationItem?.label ?? ''}
+              color={activityItem?.color ?? taskItems[0]?.color ?? locationItem?.color ?? null}
+              provisional={provisionalOverlay}
+            />
+          ) : (
+            chip
+          )}
         </PlannerDaypartHoverPreview>
       );
     },
@@ -921,11 +977,23 @@ export function ActivitiesContent({
         boven het rooster en dat kostte twee regels hoogte die de titel al gebruikte.
       */}
       <PraktijkplannerTitleAside>
-        <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
+        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+          <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
+          {/*
+            De weekbalk blijft ook in de maandweergave de navigatie: een week aanwijzen kiest
+            de maand waar die week bij hoort. Twee losse navigaties zouden uit elkaar kunnen
+            lopen en dan weet je niet meer welke van de twee je aan het verzetten bent.
+          */}
+          <PlannerViewModeSwitch
+            value={viewMode}
+            onChange={setViewMode}
+            monthLabel={monthLabel}
+          />
+        </div>
       </PraktijkplannerTitleAside>
 
       <div className="flex min-h-0 flex-1 items-stretch gap-4">
-        {canEdit ? (
+        {showsPalette ? (
           <div className="shrink-0 self-stretch">
             {/*
               Vroeger stond het palet vastgeplakt mee te scrollen met de pagina. Nu scrollt
@@ -978,6 +1046,30 @@ export function ActivitiesContent({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
           {slotError ? <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{slotError}</p> : null}
           {loadingSlots ? <p className="text-sm text-muted-foreground">Planning laden…</p> : null}
+          {canEdit && viewMode === 'month' ? (
+            <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">
+              De maand is om te kijken. Zet de weergave op Week om een dagdeel te plannen.
+            </p>
+          ) : null}
+          {viewMode === 'month' ? (
+            <PlannerMonthOverviewGrid
+              participants={visibleParticipants}
+              dayparts={visibleDayparts}
+              year={monthAnchor.year}
+              month={monthAnchor.month}
+              renderCell={({ participant, datum, daypart }) =>
+                renderSlot({
+                  participant,
+                  datum,
+                  daypart,
+                  hoverEnabled: cursorTool == null,
+                  variant: 'month',
+                })
+              }
+              holidayLabels={holidays}
+              onParticipantNameClick={readOnly ? undefined : openDeelnemerGegevens}
+            />
+          ) : (
           <PlannerDaypartGrid
             participants={visibleParticipants}
             dayparts={visibleDayparts}
@@ -1002,6 +1094,7 @@ export function ActivitiesContent({
             renderParticipantActions={canEdit ? renderParticipantActions : undefined}
             onParticipantNameClick={readOnly ? undefined : openDeelnemerGegevens}
           />
+          )}
         </div>
       </div>
 

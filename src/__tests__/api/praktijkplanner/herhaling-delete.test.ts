@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { inArray } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockResolveAccess = vi.fn();
@@ -142,6 +143,47 @@ describe('POST herhaling delete modes', () => {
     expect(res._status).toBe(200);
     expect(deletedTargets).toContainEqual({ id: 'series' });
     expect(deletedTargets).not.toContainEqual({ id: 'planning' });
+  });
+
+  it('deletePlanning spares the planning of the source week', async () => {
+    selectQueue.push([
+      {
+        id: 9,
+        iddeelnemer: 7,
+        startdatum: '2026-07-20',
+        einddatum: '2026-08-10',
+        frequentieWeken: 1,
+        bronstartdatum: '2026-07-13',
+      },
+    ]);
+    selectQueue.push([
+      { idplanning: 50, reeksdatum: '2026-07-15' },
+      { idplanning: 100, reeksdatum: '2026-07-20' },
+    ]);
+
+    const { default: handler } = await import('@/pages/api/praktijkplanner/activiteiten/herhaling');
+    const res = makeRes();
+    await handler(
+      {
+        method: 'POST',
+        headers: { cookie: 's=1' },
+        body: {
+          action: 'delete',
+          mode: 'deletePlanning',
+          idwaarneemgroep: 77,
+          idherhaling: 9,
+        },
+      } as unknown as NextApiRequest,
+      res
+    );
+
+    expect(res._status).toBe(200);
+    const planningDeletes = vi
+      .mocked(inArray)
+      .mock.calls.filter(([column]) => column === 'planning');
+    expect(planningDeletes).toHaveLength(1);
+    expect(planningDeletes[0][1]).toEqual([100]);
+    expect(deletedTargets).toContainEqual({ id: 'series' });
   });
 
   it('deletePlanning removes linked planning rows', async () => {

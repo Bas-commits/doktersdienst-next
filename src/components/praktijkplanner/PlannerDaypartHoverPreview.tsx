@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { TriangleAlert } from 'lucide-react';
+import { afwijkingTekst, herhalingWeekLabel } from '@/lib/praktijkplanner/herhaling-tekst';
 import { cn } from '@/lib/utils';
 
 const CURSOR_GAP = 50;
@@ -75,6 +76,7 @@ export function PlannerDaypartHoverPreview({
   daypartName,
   fromRepetition,
   isException,
+  recurrenceSourceWeek,
   activityName,
   locationName,
   absenceRequested,
@@ -90,6 +92,8 @@ export function PlannerDaypartHoverPreview({
   daypartName: string;
   fromRepetition: boolean;
   isException: boolean;
+  /** Maandag van de week waarvan herhaald is; null bij herhalingen van voor die kolom. */
+  recurrenceSourceWeek?: string | null;
   activityName?: string | null;
   locationName?: string | null;
   absenceRequested?: boolean;
@@ -206,26 +210,30 @@ export function PlannerDaypartHoverPreview({
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">Herhaling</dt>
-                  <dd className="font-medium">{fromRepetition ? 'Ja' : 'Nee'}</dd>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <dt className="text-muted-foreground">Uitzondering op herhaling</dt>
-                  <dd
-                    className={cn(
-                      'inline-flex items-center gap-1 font-medium',
-                      isException && 'text-amber-600'
-                    )}
-                  >
-                    {isException ? (
-                      <>
-                        <TriangleAlert className="size-3.5" aria-hidden />
-                        Ja
-                      </>
-                    ) : (
-                      'Nee'
-                    )}
+                  <dd className="text-right font-medium" data-testid="hover-herhaling">
+                    {fromRepetition
+                      ? recurrenceSourceWeek
+                        ? `Ja, van week ${herhalingWeekLabel(recurrenceSourceWeek)}`
+                        : 'Ja'
+                      : 'Nee'}
                   </dd>
                 </div>
+                {/*
+                  Het bordje op de fiche zegt alleen dat er iets afwijkt. Hier hoort te staan
+                  waarom het er staat en van welke week is afgeweken, anders moet de planner
+                  dat zelf uitzoeken.
+                */}
+                {isException ? (
+                  <div
+                    className="flex items-start gap-1.5 rounded-md bg-amber-50 p-2 text-amber-700"
+                    data-testid="hover-afwijking"
+                  >
+                    <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                    <span className="font-medium">
+                      {afwijkingTekst(recurrenceSourceWeek ?? null)}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">Taken</dt>
                   <dd className="text-right font-medium">

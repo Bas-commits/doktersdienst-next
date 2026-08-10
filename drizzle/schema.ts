@@ -665,6 +665,13 @@ export const planningherhalingen = pgTable("planningherhalingen", {
 	einddatum: date().notNull(),
 	frequentieWeken: smallint("frequentie_weken").notNull(),
 	/**
+	 * Monday of the week the planner repeated. Null on series created before this column
+	 * existed: the source week cannot be derived afterwards, and guessing "the week before
+	 * startdatum" is wrong for anyone who left a gap, so those series simply have no week
+	 * to show.
+	 */
+	bronstartdatum: date(),
+	/**
 	 * A one-off week copy, not a recurrence. Copying borrows this table because
 	 * planningherhalingslots.idherhaling is NOT NULL and part of the primary key, so a
 	 * copied slot cannot be linked without a parent row here. Without this flag those

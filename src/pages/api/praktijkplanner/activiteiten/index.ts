@@ -192,6 +192,7 @@ async function loadSlots(
       recurrenceId: schema.planningherhalingslots.idherhaling,
       isBronslot: schema.planningherhalingslots.isBronslot,
       isUitzondering: schema.planningherhalingslots.isUitzondering,
+      recurrenceSourceWeek: schema.planningherhalingen.bronstartdatum,
     })
     .from(schema.planning)
     .leftJoin(schema.activiteiten, eq(schema.planning.idactiviteit, schema.activiteiten.id))
@@ -214,6 +215,12 @@ async function loadSlots(
     .leftJoin(
       schema.planningherhalingslots,
       eq(schema.planningherhalingslots.idplanning, schema.planning.id)
+    )
+    // Carries the week the pattern was copied from, so the warning on a changed slot can
+    // name it instead of only stating that something deviates.
+    .leftJoin(
+      schema.planningherhalingen,
+      eq(schema.planningherhalingen.id, schema.planningherhalingslots.idherhaling)
     )
     .where(and(...conditions))
     .orderBy(asc(schema.planning.datum), asc(schema.planning.iddagdeel), asc(schema.planning.iddeelnemer));
@@ -319,6 +326,7 @@ async function loadSlots(
       recurrenceId: row.recurrenceId ?? null,
       isBronslot: row.recurrenceId != null ? Boolean(row.isBronslot) : null,
       isUitzondering: row.recurrenceId != null ? Boolean(row.isUitzondering) : null,
+      recurrenceSourceWeek: row.recurrenceId != null ? (row.recurrenceSourceWeek ?? null) : null,
     }));
 }
 

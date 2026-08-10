@@ -42,6 +42,86 @@ describe('PlannerManageHerhalingModal', () => {
     expect(screen.getByText(/Herhalingen — Ada Lovelace/)).toBeInTheDocument();
   });
 
+  it('names the repeated week and promises to keep it when deleting planning', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          series: [
+            {
+              id: 9,
+              iddeelnemer: 7,
+              startdatum: '2026-08-17',
+              einddatum: '2026-09-21',
+              frequentieWeken: 1,
+              bronstartdatum: '2026-08-10',
+            },
+          ],
+        }),
+      })
+    );
+
+    render(
+      <PlannerManageHerhalingModal
+        open
+        onClose={vi.fn()}
+        groupId={1}
+        participantId={7}
+        participantName="Ada Lovelace"
+        defaultVanafWeekStart="2026-08-17"
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manage-herhaling-bron-9')).toHaveTextContent(
+        'Herhaling van week 10 – 16 aug 2026'
+      );
+    });
+
+    fireEvent.click(within(screen.getByTestId('manage-herhaling-item-9')).getByText('Verwijderen'));
+    expect(screen.getByTestId('manage-herhaling-bron-blijft')).toHaveTextContent(
+      '10 – 16 aug 2026, blijft staan'
+    );
+  });
+
+  it('leaves the week out for a series recorded before the source week was stored', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          series: [
+            {
+              id: 9,
+              iddeelnemer: 7,
+              startdatum: '2026-08-17',
+              einddatum: '2026-09-21',
+              frequentieWeken: 1,
+              bronstartdatum: null,
+            },
+          ],
+        }),
+      })
+    );
+
+    render(
+      <PlannerManageHerhalingModal
+        open
+        onClose={vi.fn()}
+        groupId={1}
+        participantId={7}
+        participantName="Ada Lovelace"
+        defaultVanafWeekStart="2026-08-17"
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manage-herhaling-bron-9')).toHaveTextContent('Herhaling');
+    });
+    expect(screen.getByTestId('manage-herhaling-bron-9')).not.toHaveTextContent('van week');
+  });
+
   it('saves edits with action edit', async () => {
     const fetchMock = vi
       .fn()

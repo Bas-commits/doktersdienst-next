@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, asc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import {
   canAccessPraktijkplannerParticipant,
@@ -26,6 +26,7 @@ type Data =
         startdatum: string;
         einddatum: string;
         frequentieWeken: number;
+        bronstartdatum: string | null;
       }>;
     }
   | { success: true; id?: number }
@@ -52,6 +53,68 @@ function datesForFrequency(start: string, end: string, frequencyWeeks: number): 
     result.push(next);
   }
   return result;
+}
+
+/**
+ * The source week is part of the series, but it is never regenerated or deleted along with
+ * it: the planner typed that week in by hand and every repeated week is derived from it.
+ * Rebuilding or clearing a pattern must leave it standing.
+ */
+function isInSourceWeek(reeksdatum: string, bronstartdatum: string | null): boolean {
+  if (!bronstartdatum) return false;
+  return reeksdatum >= bronstartdatum && reeksdatum <= addDays(bronstartdatum, 6);
+}
+
+/**
+ * Ties the hand-made planning of the source week to the new series, so pasting a fiche over
+ * that week is flagged as a deviation just like pasting over a repeated week.
+ *
+ * Slots that already belong to another series are left alone. `planningherhalingslots`
+ * permits one series per planning row, so claiming them would move those slots out of their
+ * own pattern (and violate the unique constraint on the way).
+ */
+async function linkSourceWeek(
+  // Drizzle transaction client — same insert/query surface as `db`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  input: {
+    idherhaling: number;
+    idwaarneemgroep: number;
+    iddeelnemer: number;
+    sourceStart: string;
+  }
+): Promise<void> {
+  const unlinked = await tx
+    .select({ id: schema.planning.id, datum: schema.planning.datum })
+    .from(schema.planning)
+    .leftJoin(
+      schema.planningherhalingslots,
+      eq(schema.planningherhalingslots.idplanning, schema.planning.id)
+    )
+    .where(
+      and(
+        eq(schema.planning.idwaarneemgroep, input.idwaarneemgroep),
+        eq(schema.planning.iddeelnemer, input.iddeelnemer),
+        gte(schema.planning.datum, input.sourceStart),
+        lte(schema.planning.datum, addDays(input.sourceStart, 6)),
+        isNull(schema.planningherhalingslots.idplanning)
+      )
+    );
+
+  const links = (unlinked as Array<{ id: number | null; datum: string | null }>)
+    .filter((row): row is { id: number; datum: string } => row.id != null && row.datum != null)
+    .map((row) => ({
+      idherhaling: input.idherhaling,
+      idplanning: row.id,
+      reeksdatum: row.datum,
+      // Not a bronslot: that flag marks the stored template copy, and a slot carrying it is
+      // exempt from the deviation warning — exactly what this week now needs to get.
+      isBronslot: false,
+      isUitzondering: false,
+    }));
+  if (links.length > 0) {
+    await tx.insert(schema.planningherhalingslots).values(links);
+  }
 }
 
 async function getTemplates(
@@ -304,8 +367,18 @@ async function materializeSeriesWithTx(
     templates: PlannerTemplate[];
     userId: number;
     skipKeys?: ReadonlySet<string>;
+    includeSourceWeek?: boolean;
   }
 ) {
+  if (input.includeSourceWeek) {
+    await linkSourceWeek(tx, {
+      idherhaling: input.idherhaling,
+      idwaarneemgroep: input.idwaarneemgroep,
+      iddeelnemer: input.iddeelnemer,
+      sourceStart: input.sourceStart,
+    });
+  }
+
   const plans = buildMaterializePlans({
     sourceStart: input.sourceStart,
     targetStarts: input.targetStarts,
@@ -415,6 +488,7 @@ async function materializeSeries(input: {
   templates: PlannerTemplate[];
   userId: number;
   skipKeys?: ReadonlySet<string>;
+  includeSourceWeek?: boolean;
 }) {
   await db.transaction(async (tx) => {
     await materializeSeriesWithTx(tx, input);
@@ -442,6 +516,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           startdatum: schema.planningherhalingen.startdatum,
           einddatum: schema.planningherhalingen.einddatum,
           frequentieWeken: schema.planningherhalingen.frequentieWeken,
+          bronstartdatum: schema.planningherhalingen.bronstartdatum,
         })
         .from(schema.planningherhalingen)
         .where(
@@ -480,6 +555,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             startdatum: row.startdatum,
             einddatum: row.einddatum,
             frequentieWeken: row.frequentieWeken,
+            bronstartdatum: row.bronstartdatum ?? null,
           })),
       });
     } catch (error) {
@@ -582,6 +658,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           startdatum,
           einddatum,
           frequentieWeken: frequencyWeeks,
+          bronstartdatum: bronStartdatum,
           createdBy: accessResult.access.user.id,
           updatedBy: accessResult.access.user.id,
         })
@@ -595,6 +672,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         targetStarts,
         templates,
         userId: accessResult.access.user.id,
+        // A copy is a one-off and gets no source week: linking it would put a pattern on a
+        // week the planner never asked to repeat.
+        includeSourceWeek: true,
       });
       return res.status(201).json({ success: true, id: series.id });
     }
@@ -608,6 +688,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         startdatum: schema.planningherhalingen.startdatum,
         einddatum: schema.planningherhalingen.einddatum,
         frequentieWeken: schema.planningherhalingen.frequentieWeken,
+        bronstartdatum: schema.planningherhalingen.bronstartdatum,
       })
       .from(schema.planningherhalingen)
       .where(
@@ -626,6 +707,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     ) {
       throw new RecurrenceError('Herhaling niet gevonden.', 404);
     }
+    const bronstartdatum = series.bronstartdatum ?? null;
 
     if (action === 'delete') {
       const mode = body.mode === 'deletePlanning' ? 'deletePlanning' : 'unlink';
@@ -680,12 +762,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             .select({ reeksdatum: schema.planningherhalingslots.reeksdatum })
             .from(schema.planningherhalingslots)
             .where(eq(schema.planningherhalingslots.idherhaling, idherhaling));
-          if (remaining.length === 0) {
+          // The source week is not one of the repeated weeks, so it must not drag the
+          // series range back onto the week the pattern was copied from.
+          const remainingRepeated = remaining.filter(
+            (row) => row.reeksdatum != null && !isInSourceWeek(row.reeksdatum, bronstartdatum)
+          );
+          if (remainingRepeated.length === 0) {
             await tx
               .delete(schema.planningherhalingen)
               .where(eq(schema.planningherhalingen.id, idherhaling));
           } else {
-            const values = remaining
+            const values = remainingRepeated
               .map((row) => row.reeksdatum)
               .filter((value): value is string => value != null)
               .sort();
@@ -704,6 +791,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       }
 
       // deletePlanning: remove linked planning (cascades links), then series if empty.
+      // The source week is spared: it was planned by hand and is where every repeated week
+      // came from, so clearing a pattern must not take it down as well.
+      const deletableIds = matching
+        .filter((row) => !isInSourceWeek(row.reeksdatum as string, bronstartdatum))
+        .map((row) => row.idplanning as number);
+
       if (idsInRange.length === 0 && !vanaf && !tot) {
         await db
           .delete(schema.planningherhalingen)
@@ -713,20 +806,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       if (idsInRange.length === 0) {
         throw new RecurrenceError('Er zijn geen herhalingsslots in dit bereik.', 404);
       }
+      if (!vanaf && !tot) {
+        // Deleting the whole series: the leftover source-week links must go with it, or the
+        // pattern would survive as a one-week series covering the week it started from.
+        await db.transaction(async (tx) => {
+          if (deletableIds.length > 0) {
+            await tx.delete(schema.planning).where(inArray(schema.planning.id, deletableIds));
+          }
+          await tx
+            .delete(schema.planningherhalingen)
+            .where(eq(schema.planningherhalingen.id, idherhaling));
+        });
+        return res.status(200).json({ success: true });
+      }
       await db.transaction(async (tx) => {
-        await tx.delete(schema.planning).where(inArray(schema.planning.id, idsInRange));
+        if (deletableIds.length > 0) {
+          await tx.delete(schema.planning).where(inArray(schema.planning.id, deletableIds));
+        }
         const remaining = await tx
           .select({ reeksdatum: schema.planningherhalingslots.reeksdatum })
           .from(schema.planningherhalingslots)
           .where(eq(schema.planningherhalingslots.idherhaling, idherhaling));
-        if (remaining.length === 0) {
+        const remainingRepeated = remaining.filter(
+          (row: { reeksdatum: string | null }) =>
+            row.reeksdatum != null && !isInSourceWeek(row.reeksdatum, bronstartdatum)
+        );
+        if (remainingRepeated.length === 0) {
           await tx
             .delete(schema.planningherhalingen)
             .where(eq(schema.planningherhalingen.id, idherhaling));
         } else {
-          const values = remaining
-            .map((row) => row.reeksdatum)
-            .filter((value): value is string => value != null)
+          const values = remainingRepeated
+            .map((row: { reeksdatum: string | null }) => row.reeksdatum)
+            .filter((value: string | null): value is string => value != null)
             .sort();
           await tx
             .update(schema.planningherhalingen)
@@ -755,19 +867,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         db
           .select({
             idplanning: schema.planningherhalingslots.idplanning,
+            reeksdatum: schema.planningherhalingslots.reeksdatum,
             isUitzondering: schema.planningherhalingslots.isUitzondering,
           })
           .from(schema.planningherhalingslots)
           .where(eq(schema.planningherhalingslots.idherhaling, idherhaling)),
         loadSkipKeys(idherhaling),
       ]);
+      // Rebuilding a series throws its planning away and re-creates it from the template.
+      // The source week is not re-creatable that way — it is the hand-made week the pattern
+      // was taken from — so it is kept, exactly like a slot the planner already changed.
+      const isSourceWeekSlot = (row: { reeksdatum: string | null }) =>
+        row.reeksdatum != null && isInSourceWeek(row.reeksdatum, bronstartdatum);
       const linkedPlanningIds = linked
-        .filter((row) => row.idplanning != null && !row.isUitzondering)
+        .filter((row) => row.idplanning != null && !row.isUitzondering && !isSourceWeekSlot(row))
         .map((row) => row.idplanning as number);
       const keepPlanningIds = linked
         .filter((row) => row.idplanning != null && row.isUitzondering)
         .map((row) => row.idplanning as number);
       const targetStarts = datesForFrequency(startdatum, einddatum, frequentieWeken);
+      // The source week is deliberately absent from the ignore list. A range that reaches
+      // back over it must still collide, otherwise the rebuild would drop a second copy of
+      // the planning on top of the week it was copied from.
       await assertNoTargetCollision(
         accessResult.access.idwaarneemgroep,
         series.iddeelnemer,

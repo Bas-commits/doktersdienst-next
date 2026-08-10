@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { herhalingWeekLabel } from '@/lib/praktijkplanner/herhaling-tekst';
 import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 
 export type ManagedHerhalingSeries = {
@@ -12,6 +13,8 @@ export type ManagedHerhalingSeries = {
   startdatum: string;
   einddatum: string;
   frequentieWeken: number;
+  /** Maandag van de herhaalde week; null bij reeksen van voor die kolom bestond. */
+  bronstartdatum?: string | null;
 };
 
 type DeleteScope = 'entire' | 'fromWeek';
@@ -32,6 +35,14 @@ function frequencyLabel(weeks: number): string {
   if (weeks === 1) return 'elke week';
   if (weeks === 2) return 'om de week';
   return `elke ${weeks} weken`;
+}
+
+/**
+ * Een herhaling zonder de week waarvan hij komt is niet te controleren: je ziet wel waar de
+ * planning terechtkomt, maar niet waar hij vandaan is gehaald.
+ */
+function sourceWeekLabel(bronstartdatum: string | null | undefined): string {
+  return bronstartdatum ? `Herhaling van week ${herhalingWeekLabel(bronstartdatum)}` : 'Herhaling';
 }
 
 function formatDate(iso: string): string {
@@ -182,6 +193,8 @@ export function PlannerManageHerhalingModal({
             Herhaling verwijderen?
           </h2>
           <p className="mb-4 text-sm text-muted-foreground">
+            {sourceWeekLabel(view.series.bronstartdatum)}
+            <br />
             {formatDate(view.series.startdatum)} t/m {formatDate(view.series.einddatum)} ·{' '}
             {frequencyLabel(view.series.frequentieWeken)}
           </p>
@@ -247,6 +260,12 @@ export function PlannerManageHerhalingModal({
               />
               <span>Ook planning verwijderen</span>
             </label>
+            {view.series.bronstartdatum ? (
+              <p className="text-xs text-muted-foreground" data-testid="manage-herhaling-bron-blijft">
+                De herhaalde week zelf, {herhalingWeekLabel(view.series.bronstartdatum)}, blijft
+                staan. Die is met de hand gepland en alle andere weken komen daaruit voort.
+              </p>
+            ) : null}
           </fieldset>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
@@ -395,9 +414,14 @@ export function PlannerManageHerhalingModal({
                   className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
                   data-testid={`manage-herhaling-item-${item.id}`}
                 >
-                  <span>
-                    {formatDate(item.startdatum)} t/m {formatDate(item.einddatum)} ·{' '}
-                    {frequencyLabel(item.frequentieWeken)}
+                  <span className="flex flex-col">
+                    <span className="font-medium" data-testid={`manage-herhaling-bron-${item.id}`}>
+                      {sourceWeekLabel(item.bronstartdatum)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {formatDate(item.startdatum)} t/m {formatDate(item.einddatum)} ·{' '}
+                      {frequencyLabel(item.frequentieWeken)}
+                    </span>
                   </span>
                   <span className="flex gap-2">
                     <Button

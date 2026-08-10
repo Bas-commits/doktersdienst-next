@@ -32,6 +32,7 @@ import {
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { afwijkingTekst } from '@/lib/praktijkplanner/herhaling-tekst';
 import {
   notifyPlannerChanged,
   subscribePlannerChanged,
@@ -368,7 +369,7 @@ export function ActivitiesContent({
           {existing?.isUitzondering ? (
             <span
               className="pointer-events-none absolute top-0.5 left-0.5 z-20 rounded bg-background/90 p-0.5 text-amber-500"
-              title="Uitzondering op herhaling"
+              title={afwijkingTekst(existing.recurrenceSourceWeek)}
             >
               <TriangleAlert className="size-3.5" aria-hidden />
             </span>
@@ -393,6 +394,7 @@ export function ActivitiesContent({
           daypartName={daypart.naam}
           fromRepetition={existing?.recurrenceId != null}
           isException={Boolean(existing?.isUitzondering)}
+          recurrenceSourceWeek={existing?.recurrenceSourceWeek ?? null}
           activityName={activityItem?.label}
           locationName={locationItem?.label}
           absenceRequested={provisionalOverlay}
@@ -771,6 +773,7 @@ export function ActivitiesContent({
             existingSlot?.recurrenceId != null && existingSlot.isBronslot === false
               ? true
               : (existingSlot?.isUitzondering ?? null),
+          recurrenceSourceWeek: existingSlot?.recurrenceSourceWeek ?? null,
         });
         return updated;
       });

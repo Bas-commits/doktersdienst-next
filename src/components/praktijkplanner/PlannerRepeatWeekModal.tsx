@@ -144,8 +144,12 @@ export function PlannerRepeatWeekModal({
           Week herhalen — {participantName}
         </h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          De planning van de huidige week wordt herhaald vanaf de gekozen beginweek tot en met
-          de eindweek.
+          De planning van week{' '}
+          <span className="font-medium text-foreground" data-testid="repeat-source-week-label">
+            {weekRangeLabel(sourceWeekStart, { withYear: true })}
+          </span>{' '}
+          wordt herhaald vanaf de gekozen beginweek tot en met de eindweek. Die week hoort
+          daarna bij de herhaling: past u er iets in aan, dan ziet u dat aan het gele bordje.
         </p>
 
         <div className="grid gap-3">

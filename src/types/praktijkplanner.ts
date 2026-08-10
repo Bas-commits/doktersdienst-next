@@ -137,6 +137,12 @@ export type PraktijkplannerPlanningSlot = {
   recurrenceId: number | null;
   isBronslot: boolean | null;
   isUitzondering: boolean | null;
+  /**
+   * Monday of the week this slot's recurrence was copied from. Null for series created
+   * before the source week was recorded; the warning then names no week rather than a
+   * guessed one.
+   */
+  recurrenceSourceWeek: string | null;
 };
 
 export type PraktijkplannerAbsenceSlot = {

@@ -553,6 +553,25 @@ export function PlannerAbsenceEditor({
 
   const paletteTopOffsetPx = isDoctorMode ? plannerMonthGridNavOffsetPx() : plannerWeekGridNavOffsetPx();
 
+  // Week- en maandweergave hangen de knoppen op een andere plek op, maar het moeten wel
+  // dezelfde knoppen in dezelfde volgorde zijn.
+  const weergaveKnoppen = (
+    <>
+      {editable ? (
+        <PlannerAvondNachtToggle
+          aan={showNight}
+          heeftInhoud={heeftAvondNachtInhoud}
+          onChange={updateVisibility}
+        />
+      ) : null}
+      <PlannerViewModeSwitch
+        value={viewMode}
+        onChange={setViewMode}
+        monthLabel={overviewMonthLabel}
+      />
+    </>
+  );
+
   return (
     <div className="space-y-4">
   
@@ -599,27 +618,19 @@ export function PlannerAbsenceEditor({
       {loading ? <p className="text-sm text-muted-foreground">Afwezigheden laden…</p> : null}
       {!isDoctorMode ? (
         <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {/*
-              In de maandweergave staat de weekbalk hier, want die zit normaal in het
-              weekrooster zelf. Zonder hem is de maand niet te verzetten.
-            */}
-            {viewMode === 'month' ? (
-              <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
-            ) : null}
-            {editable ? (
-              <PlannerAvondNachtToggle
-                aan={showNight}
-                heeftInhoud={heeftAvondNachtInhoud}
-                onChange={updateVisibility}
-              />
-            ) : null}
-            <PlannerViewModeSwitch
-              value={viewMode}
-              onChange={setViewMode}
-              monthLabel={overviewMonthLabel}
-            />
-          </div>
+          {/*
+            In de maandweergave staat de weekbalk hier, want die zit normaal in het
+            weekrooster zelf. Zonder hem is de maand niet te verzetten. In de weekweergave
+            gaan dezelfde knoppen mee naar binnen, naast de weekbalk van het rooster.
+          */}
+          {viewMode === 'month' ? (
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
+              </div>
+              <div className="flex shrink-0 items-center gap-2">{weergaveKnoppen}</div>
+            </div>
+          ) : null}
           {editable && viewMode === 'month' ? (
             <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">
               De maand is om te kijken. Zet de weergave op Week om een afwezigheid te zetten.
@@ -642,6 +653,7 @@ export function PlannerAbsenceEditor({
           dayparts={visibleDayparts}
           weekStart={weekStart}
           onWeekStartChange={setWeekStart}
+          navAside={weergaveKnoppen}
           renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}
           isCellFilled={({ participant, datum, daypart }) => isCellFilled(participant.id, datum, daypart)}
           onCellClick={applyCell}

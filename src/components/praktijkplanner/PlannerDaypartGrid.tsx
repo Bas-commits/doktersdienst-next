@@ -68,6 +68,7 @@ export function PlannerDaypartGrid({
   dayparts,
   weekStart,
   onWeekStartChange,
+  navAside,
   zoom,
   renderCell,
   onCellClick,
@@ -85,6 +86,8 @@ export function PlannerDaypartGrid({
   dayparts: PraktijkplannerDaypart[];
   weekStart: string;
   onWeekStartChange?: (weekStart: string) => void;
+  /** Knoppen die rechts van de weekbalk horen, op dezelfde regel. */
+  navAside?: ReactNode;
   zoom?: string | number;
   renderCell: (cell: PlannerDaypartCell) => ReactNode;
   onCellClick?: (cell: PlannerDaypartCell) => void;
@@ -126,8 +129,21 @@ export function PlannerDaypartGrid({
       */}
       {onWeekStartChange ? (
         <div style={{ paddingBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}>
-          <div className="ml-44">
-            <PlannerWeekBar weekStart={weekStart} onWeekStartChange={onWeekStartChange} />
+          {/*
+            Knoppen die bij het rooster horen staan naast de weekbalk, niet op een eigen regel
+            erboven: los van de weken lezen ze als losse instellingen van de pagina.
+
+            De inspringing zet de weekbalk boven de dagkolommen in plaats van boven de
+            namenkolom. Staan er knoppen naast, dan gaat die inspringing eraf, want anders past
+            de weekbalk niet meer op een regel en breekt hij in tweeen.
+          */}
+          <div className={cn('flex items-center gap-3', navAside ? undefined : 'ml-44')}>
+            <div className="min-w-0 flex-1">
+              <PlannerWeekBar weekStart={weekStart} onWeekStartChange={onWeekStartChange} />
+            </div>
+            {navAside ? (
+              <div className="flex shrink-0 items-center gap-2">{navAside}</div>
+            ) : null}
           </div>
         </div>
       ) : null}

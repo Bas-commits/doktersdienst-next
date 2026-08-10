@@ -8,7 +8,6 @@ import { PlannerWeekBar } from '@/components/praktijkplanner/PlannerWeekBar';
 import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
 import {
   PraktijkplannerPage,
-  PraktijkplannerTitleAside,
   type PraktijkplannerPageContext,
 } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
@@ -164,8 +163,15 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
 
   return (
     <div className="space-y-4">
-      <PraktijkplannerTitleAside>
-        <label className="flex items-center gap-2 text-base">
+      {/*
+        De locatiekeuze hoort naast de weken en niet in de paginakop: het is een filter op
+        wat je in dit rooster ziet, net als de week die je kiest.
+      */}
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
+        </div>
+        <label className="flex shrink-0 items-center gap-2 text-base">
           <span className="font-medium">Locatie</span>
           <select
             value={effectiveLocationId ?? ''}
@@ -179,9 +185,7 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
             ))}
           </select>
         </label>
-      </PraktijkplannerTitleAside>
-
-      <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
+      </div>
 
       {data.masterData.locations.length === 0 ? (
         <p className="rounded-lg border p-4 text-sm text-muted-foreground">

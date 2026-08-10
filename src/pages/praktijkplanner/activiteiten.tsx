@@ -35,6 +35,10 @@ import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/da
 import { absentieTekst } from '@/lib/praktijkplanner/absentie-tekst';
 import { afwijkingTekst } from '@/lib/praktijkplanner/herhaling-tekst';
 import {
+  volledigeActiviteitNaam,
+  volledigeTaakNaam,
+} from '@/lib/praktijkplanner/volledige-naam';
+import {
   notifyPlannerChanged,
   subscribePlannerChanged,
 } from '@/lib/praktijkplanner/planner-change-broadcast';
@@ -412,11 +416,11 @@ export function ActivitiesContent({
           fromRepetition={existing?.recurrenceId != null}
           isException={Boolean(existing?.isUitzondering)}
           recurrenceSourceWeek={existing?.recurrenceSourceWeek ?? null}
-          activityName={activityItem?.label}
+          activityName={volledigeActiviteitNaam(activity, specification)}
           locationName={locationItem?.label}
           absence={provisionalOverlay ? { type: absenceTypeName, aangevraagd: true } : null}
           availabilityName={availability?.naam}
-          taskNames={taskItems.map((task) => task.label)}
+          taskNames={tasks.map(volledigeTaakNaam)}
           chip={
             // De fiche in de kaart moet dezelfde fiche zijn als in het rooster. Zonder de
             // grijze sluier en het vraagteken wijst de planner iets aan dat er anders uitziet

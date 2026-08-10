@@ -73,6 +73,40 @@ describe('PlannerDaypartHoverPreview', () => {
     expect(screen.getByText('Veltenaar, Bart, B')).toBeInTheDocument();
   });
 
+  it('zet elke taak op zijn eigen regel en noemt een enkele taak enkelvoud', async () => {
+    render(
+      <PlannerDaypartHoverPreview
+        {...basis}
+        activityName="OK Longtransplantatie"
+        taskNames={['Spoedsein Utrecht', 'Consulten Utrecht']}
+      >
+        <span>fiche</span>
+      </PlannerDaypartHoverPreview>
+    );
+
+    openHover();
+
+    const taken = await waitFor(() => screen.getByTestId('hover-taken'));
+    expect(taken.querySelectorAll('p')).toHaveLength(2);
+    expect(taken).toHaveTextContent('Spoedsein Utrecht');
+    expect(taken).toHaveTextContent('Consulten Utrecht');
+    expect(screen.getByText('Taken')).toBeInTheDocument();
+    expect(screen.getByTestId('hover-activiteit')).toHaveTextContent('OK Longtransplantatie');
+  });
+
+  it('noemt een dagdeel met een enkele taak Taak', async () => {
+    render(
+      <PlannerDaypartHoverPreview {...basis} taskNames={['Spoedsein Utrecht']}>
+        <span>fiche</span>
+      </PlannerDaypartHoverPreview>
+    );
+
+    openHover();
+
+    await waitFor(() => screen.getByTestId('hover-taken'));
+    expect(screen.getByText('Taak')).toBeInTheDocument();
+  });
+
   it('zegt niets over absentie als er niets is aangevraagd', async () => {
     render(
       <PlannerDaypartHoverPreview {...basis}>

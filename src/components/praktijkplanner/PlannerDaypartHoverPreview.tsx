@@ -97,6 +97,11 @@ export function PlannerDaypartHoverPreview({
   isException: boolean;
   /** Maandag van de week waarvan herhaald is; null bij herhalingen van voor die kolom. */
   recurrenceSourceWeek?: string | null;
+  /**
+   * De activiteit voluit, dus de naam en niet de afkorting die op de fiche staat. Op de fiche
+   * is er plek voor een paar tekens, hier is er plek voor de hele naam en heeft de planner er
+   * ook iets aan.
+   */
   activityName?: string | null;
   locationName?: string | null;
   /**
@@ -105,6 +110,7 @@ export function PlannerDaypartHoverPreview({
    */
   absence?: { type: string | null; aangevraagd: boolean } | null;
   availabilityName?: string | null;
+  /** De taken voluit: de omschrijving van elk taaktype, niet de afkorting. */
   taskNames?: string[];
   /**
    * Uit op een dagdeel dat alleen een absentieaanvraag is. Activiteit, locatie, herhaling en
@@ -188,7 +194,11 @@ export function PlannerDaypartHoverPreview({
             <div
               ref={popupRef}
               className={cn(
-                'pointer-events-none fixed z-[110] w-64 rounded-xl border bg-background p-3 shadow-xl',
+                // Breder dan de rest van de kaart nodig heeft, want activiteit en taken staan
+                // hier voluit naast hun label. Bij de oude breedte bleef er voor de waarde te
+                // weinig over en viel een omschrijving als Supervisie verpleegafdeling
+                // Leidserijn Oncologie in losse stukjes uiteen.
+                'pointer-events-none fixed z-[110] w-80 rounded-xl border bg-background p-3 shadow-xl',
                 isException && 'border-amber-400'
               )}
               style={{
@@ -221,8 +231,10 @@ export function PlannerDaypartHoverPreview({
                 {showPlanningDetails ? (
                   <>
                     <div className="flex justify-between gap-2">
-                      <dt className="text-muted-foreground">Activiteit</dt>
-                      <dd className="text-right font-medium">{activityName || '—'}</dd>
+                      <dt className="shrink-0 text-muted-foreground">Activiteit</dt>
+                      <dd className="text-right font-medium" data-testid="hover-activiteit">
+                        {activityName || '—'}
+                      </dd>
                     </div>
                     <div className="flex justify-between gap-2">
                       <dt className="text-muted-foreground">Locatie</dt>
@@ -258,9 +270,15 @@ export function PlannerDaypartHoverPreview({
                 ) : null}
                 {showPlanningDetails ? (
                   <div className="flex justify-between gap-2">
-                    <dt className="text-muted-foreground">Taken</dt>
-                    <dd className="text-right font-medium">
-                      {taskNames && taskNames.length > 0 ? taskNames.join(', ') : '—'}
+                    <dt className="shrink-0 text-muted-foreground">
+                      {taskNames && taskNames.length > 1 ? 'Taken' : 'Taak'}
+                    </dt>
+                    <dd className="text-right font-medium" data-testid="hover-taken">
+                      {taskNames && taskNames.length > 0
+                        ? // Elke taak op zijn eigen regel. Achter elkaar met een komma ertussen
+                          // lopen twee volledige omschrijvingen in elkaar over.
+                          taskNames.map((naam, index) => <p key={`${naam}-${index}`}>{naam}</p>)
+                        : '—'}
                     </dd>
                   </div>
                 ) : null}

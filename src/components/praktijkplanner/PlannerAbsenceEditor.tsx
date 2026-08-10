@@ -14,6 +14,7 @@ import { plannerMonthGridNavOffsetPx, plannerWeekGridNavOffsetPx } from './plann
 import { PlannerDaypartGrid } from './PlannerDaypartGrid';
 import { PlannerMonthDaypartGrid } from './PlannerMonthDaypartGrid';
 import { PlannerMonthCell, PlannerMonthOverviewGrid } from './PlannerMonthOverviewGrid';
+import { PlannerAvondNachtToggle } from './PlannerAvondNachtToggle';
 import { PlannerViewModeSwitch } from './PlannerViewModeSwitch';
 import { PlannerWeekBar } from './PlannerWeekBar';
 import { MonthNavigation } from '@/components/CalandarGrid/MonthNavigation';
@@ -22,6 +23,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { usePlannerHolidayData } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import {
+  heeftAvondOfNachtInhoud,
+  zichtbareDagdelen,
+} from '@/lib/praktijkplanner/dagdeel-zichtbaarheid';
 import { addDays, formatIsoDate, monthBounds, monthCalendarBounds, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 import {
@@ -96,8 +101,7 @@ export function PlannerAbsenceEditor({
   const [isVoorlopig, setIsVoorlopig] = useState(isDoctorMode);
   const [clearMode, setClearMode] = useState(false);
   const [emailParticipantId, setEmailParticipantId] = useState<number | null>(null);
-  const [showDay, setShowDay] = useState(true);
-  const [showNight, setShowNight] = useState(true);
+  const [showNight, setShowNight] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
 
@@ -135,12 +139,23 @@ export function PlannerAbsenceEditor({
     ? data.participants.filter((participant) => participant.id === data.userId)
     : data.participants;
   const editable = isDoctorMode || data.isManager;
-  const visibleMonthDayparts = useMemo(
+  const heeftAvondNachtInhoud = useMemo(
     () =>
-      data.masterData.dayparts.filter((daypart) =>
-        daypart.volgorde <= 2 ? showDay : showNight
+      heeftAvondOfNachtInhoud(
+        [],
+        slots,
+        data.masterData.dayparts,
+        new Set(participants.map((participant) => participant.id))
       ),
-    [data.masterData.dayparts, showDay, showNight]
+    [data.masterData.dayparts, participants, slots]
+  );
+  const visibleDayparts = useMemo(
+    () =>
+      zichtbareDagdelen(data.masterData.dayparts, {
+        heeftInhoud: heeftAvondNachtInhoud,
+        toonAvondNacht: showNight,
+      }),
+    [data.masterData.dayparts, heeftAvondNachtInhoud, showNight]
   );
 
   useEffect(() => {
@@ -148,35 +163,29 @@ export function PlannerAbsenceEditor({
     setEmailParticipantId(data.participants[0].id);
   }, [data.participants, emailParticipantId]);
 
+  // Nu ook in beheerdersmodus. De voorkeur werd hier alleen voor de dokter opgehaald, want
+  // alleen diens maandkalender deed er iets mee; het weekrooster toonde altijd alle vier.
   useEffect(() => {
-    if (!isDoctorMode) return;
-
     const abortController = new AbortController();
     fetch(`/api/praktijkplanner/voorkeuren?idwaarneemgroep=${groupId}`, {
       credentials: 'include',
       signal: abortController.signal,
     })
       .then(async (response) => {
-        const payload = (await response.json()) as { toonDag?: boolean; toonNacht?: boolean };
+        const payload = (await response.json()) as { toonNacht?: boolean };
         if (!response.ok || abortController.signal.aborted) return;
-        const nextDay = typeof payload.toonDag === 'boolean' ? payload.toonDag : true;
-        const nextNight = typeof payload.toonNacht === 'boolean' ? payload.toonNacht : true;
-        setShowDay(nextDay || !nextNight);
-        setShowNight(nextNight);
+        if (typeof payload.toonNacht === 'boolean') setShowNight(payload.toonNacht);
       })
       .catch(() => undefined);
 
     return () => abortController.abort();
-  }, [groupId, isDoctorMode]);
+  }, [groupId]);
 
+  // toonDag gaat altijd als true mee: ochtend en middag zijn niet meer uit te zetten. De
+  // oude regel "kies minimaal Dag of Nacht" is daarmee ook weg, want er valt niets meer te
+  // kiezen wat het rooster leeg kan maken.
   const updateVisibility = useCallback(
-    (nextDay: boolean, nextNight: boolean) => {
-      if (!nextDay && !nextNight) {
-        toast.error('Kies minimaal Dag of Nacht.');
-        return;
-      }
-
-      setShowDay(nextDay);
+    (nextNight: boolean) => {
       setShowNight(nextNight);
       void fetch('/api/praktijkplanner/voorkeuren', {
         method: 'POST',
@@ -184,7 +193,7 @@ export function PlannerAbsenceEditor({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           idwaarneemgroep: groupId,
-          toonDag: nextDay,
+          toonDag: true,
           toonNacht: nextNight,
         }),
       }).catch(() => toast.error('De weergavevoorkeur kon niet worden opgeslagen.'));
@@ -598,6 +607,13 @@ export function PlannerAbsenceEditor({
             {viewMode === 'month' ? (
               <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
             ) : null}
+            {editable ? (
+              <PlannerAvondNachtToggle
+                aan={showNight}
+                heeftInhoud={heeftAvondNachtInhoud}
+                onChange={updateVisibility}
+              />
+            ) : null}
             <PlannerViewModeSwitch
               value={viewMode}
               onChange={setViewMode}
@@ -612,7 +628,7 @@ export function PlannerAbsenceEditor({
           {viewMode === 'month' ? (
             <PlannerMonthOverviewGrid
               participants={participants}
-              dayparts={data.masterData.dayparts}
+              dayparts={visibleDayparts}
               year={overviewMonth.year}
               month={overviewMonth.month}
               renderCell={({ participant, datum, daypart }) =>
@@ -623,7 +639,7 @@ export function PlannerAbsenceEditor({
           ) : (
         <PlannerDaypartGrid
           participants={participants}
-          dayparts={data.masterData.dayparts}
+          dayparts={visibleDayparts}
           weekStart={weekStart}
           onWeekStartChange={setWeekStart}
           renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}
@@ -649,7 +665,17 @@ export function PlannerAbsenceEditor({
         </div>
       ) : participants[0] ? (
         <div>
-          <div className="ml-44" style={{ marginBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}>
+          <div
+            className="ml-44 flex flex-wrap items-center gap-3"
+            style={{ marginBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}
+          >
+            {editable ? (
+              <PlannerAvondNachtToggle
+                aan={showNight}
+                heeftInhoud={heeftAvondNachtInhoud}
+                onChange={updateVisibility}
+              />
+            ) : null}
             <MonthNavigation
               month={month - 1}
               year={year}
@@ -665,7 +691,7 @@ export function PlannerAbsenceEditor({
           >
             <PlannerMonthDaypartGrid
               participant={participants[0]}
-              dayparts={visibleMonthDayparts}
+              dayparts={visibleDayparts}
               year={year}
               month={month}
               renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}

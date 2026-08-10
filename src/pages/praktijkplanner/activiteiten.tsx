@@ -7,6 +7,7 @@ import { Copy, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-reac
 import { toast } from 'sonner';
 import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartCell';
 import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
+import { PlannerAvondNachtToggle } from '@/components/praktijkplanner/PlannerAvondNachtToggle';
 import {
   PlannerCombinedDaypartChip,
   type PlannerDaypartChipItem,
@@ -35,6 +36,10 @@ import {
   type CurrentActivityAssignment,
 } from '@/lib/praktijkplanner/activity-assignment';
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
+import {
+  heeftAvondOfNachtInhoud,
+  zichtbareDagdelen,
+} from '@/lib/praktijkplanner/dagdeel-zichtbaarheid';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { addDays, formatIsoDate, monthBounds, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import { absentieTekst } from '@/lib/praktijkplanner/absentie-tekst';
@@ -101,8 +106,7 @@ export function ActivitiesContent({
   const [selectedAvailabilityId, setSelectedAvailabilityId] = useState<number | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
   const [clearMode, setClearMode] = useState(false);
-  const [showDay, setShowDay] = useState(true);
-  const [showNight, setShowNight] = useState(true);
+  const [showNight, setShowNight] = useState(false);
   const [participantFilter, setParticipantFilter] = useState<number | 'all'>('all');
   const [zoom, setZoom] = useState('100');
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
@@ -137,19 +141,24 @@ export function ActivitiesContent({
   );
 
   const holidays = usePlannerHolidays(rangeStart, rangeEnd);
-  const visibleDayparts = useMemo(
-    () =>
-      data.masterData.dayparts.filter((daypart) =>
-        daypart.volgorde >= 4 ? showNight : showDay
-      ),
-    [data.masterData.dayparts, showDay, showNight]
-  );
   const visibleParticipants = useMemo(
     () =>
       participantFilter === 'all'
         ? data.participants
         : data.participants.filter((participant) => participant.id === participantFilter),
     [data.participants, participantFilter]
+  );
+  const heeftAvondNachtInhoud = useMemo(() => {
+    const zichtbaar = new Set(visibleParticipants.map((participant) => participant.id));
+    return heeftAvondOfNachtInhoud(slots, absenceSlots, data.masterData.dayparts, zichtbaar);
+  }, [absenceSlots, data.masterData.dayparts, slots, visibleParticipants]);
+  const visibleDayparts = useMemo(
+    () =>
+      zichtbareDagdelen(data.masterData.dayparts, {
+        heeftInhoud: heeftAvondNachtInhoud,
+        toonAvondNacht: showNight,
+      }),
+    [data.masterData.dayparts, heeftAvondNachtInhoud, showNight]
   );
 
   useEffect(() => {
@@ -171,18 +180,19 @@ export function ActivitiesContent({
       signal: abortController.signal,
     })
       .then(async (response) => {
-        const payload = (await response.json()) as { toonDag?: boolean; toonNacht?: boolean };
+        const payload = (await response.json()) as { toonNacht?: boolean };
         if (!response.ok) return;
-        if (typeof payload.toonDag === 'boolean') setShowDay(payload.toonDag);
         if (typeof payload.toonNacht === 'boolean') setShowNight(payload.toonNacht);
       })
       .catch(() => undefined);
     return () => abortController.abort();
   }, [groupId]);
 
+  // toonDag gaat altijd als true mee: ochtend en middag zijn niet meer uit te zetten, want
+  // een rooster zonder de dagdelen waar bijna alles in staat is geen rooster. De kolom blijft
+  // in de API en in de tabel staan, hij heeft alleen geen betekenis meer.
   const updateVisibility = useCallback(
-    (nextDay: boolean, nextNight: boolean) => {
-      setShowDay(nextDay);
+    (nextNight: boolean) => {
       setShowNight(nextNight);
       void fetch('/api/praktijkplanner/voorkeuren', {
         method: 'POST',
@@ -190,7 +200,7 @@ export function ActivitiesContent({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           idwaarneemgroep: groupId,
-          toonDag: nextDay,
+          toonDag: true,
           toonNacht: nextNight,
         }),
       });
@@ -984,6 +994,17 @@ export function ActivitiesContent({
             de maand waar die week bij hoort. Twee losse navigaties zouden uit elkaar kunnen
             lopen en dan weet je niet meer welke van de twee je aan het verzetten bent.
           */}
+          {/*
+            Alleen voor wie plant. Wie het rooster inziet heeft niets aan een lege rij, en
+            heeft er ook geen eerste avond in te zetten.
+          */}
+          {canEdit ? (
+            <PlannerAvondNachtToggle
+                aan={showNight}
+                heeftInhoud={heeftAvondNachtInhoud}
+                onChange={updateVisibility}
+              />
+          ) : null}
           <PlannerViewModeSwitch
             value={viewMode}
             onChange={setViewMode}

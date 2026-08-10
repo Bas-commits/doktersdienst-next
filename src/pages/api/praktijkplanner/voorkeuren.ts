@@ -44,7 +44,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         .limit(1);
       return res.status(200).json({
         toonDag: preference?.toonDag ?? true,
-        toonNacht: preference?.toonNacht ?? true,
+        // Zonder rij staat de knop uit: avond en nacht verschijnen dan vanzelf zodra er iets
+        // in staat, en blijven anders weg. Dat is het gedrag dat de meeste weken wil.
+        toonNacht: preference?.toonNacht ?? false,
       });
     } catch (error) {
       console.error('[praktijkplanner/voorkeuren GET]', error);

@@ -1,7 +1,7 @@
 'use client';
 
-import Image from 'next/image';
 import type { ReactNode } from 'react';
+import { PlannerIconImage } from './PlannerIconImage';
 
 export type PlannerPaletteItem = {
   id: number | string;
@@ -36,10 +36,10 @@ function iconWrapperClass(isSidebar: boolean) {
 function renderItemIcon(icon: string | ReactNode, isSidebar: boolean) {
   const sizeClass = isSidebar ? 'size-8' : 'size-5';
   if (typeof icon === 'string') {
+    // Zonder terugval, want de naam van het type staat er in het palet al naast.
     return (
-      <Image
+      <PlannerIconImage
         src={icon}
-        alt=""
         width={isSidebar ? 32 : 20}
         height={isSidebar ? 32 : 20}
         className={`${sizeClass} object-contain`}

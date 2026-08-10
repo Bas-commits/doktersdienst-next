@@ -1,9 +1,9 @@
 'use client';
 
-import Image from 'next/image';
 import { Ban } from 'lucide-react';
 import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { PlannerIconImage } from './PlannerIconImage';
 
 export type PlannerCursorTool = {
   icon: string | ReactNode | null;
@@ -96,7 +96,13 @@ export function PlannerCursorToolFollower({
     >
       {tool.preview ?? (tool.icon ? (
         typeof tool.icon === 'string' ? (
-          <Image src={tool.icon} alt="" width={24} height={24} className="size-6 object-contain" />
+          <PlannerIconImage
+            src={tool.icon}
+            width={24}
+            height={24}
+            className="size-6 object-contain"
+            fallback={<span className="px-1 text-[10px] font-bold text-white">{tool.label.slice(0, 2)}</span>}
+          />
         ) : (
           <span className="size-6 [&_svg]:size-full">{tool.icon}</span>
         )

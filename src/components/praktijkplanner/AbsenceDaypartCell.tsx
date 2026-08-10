@@ -1,7 +1,7 @@
 'use client';
 
-import Image from 'next/image';
 import { absenceDisplayBackground, absenceForegroundIconPath } from './absence-icons';
+import { PlannerIconImage } from './PlannerIconImage';
 import type { PraktijkplannerAbsenceType } from '@/types/praktijkplanner';
 
 type AbsenceDaypartCellType = Pick<PraktijkplannerAbsenceType, 'naam' | 'code' | 'kleur' | 'icon'>;
@@ -20,6 +20,10 @@ export function AbsenceDaypartCell({
   const background = absenceDisplayBackground(absence.code, absence.kleur, provisional === true);
   const label = `${absence.naam}${provisional ? '?' : ''}`;
   const icon = absenceForegroundIconPath(absence.code, absence.icon, provisional === true);
+  // Ook de terugval als het icoonbestand er wel is volgens de database maar niet in public.
+  const naamKort = (
+    <span className="px-1 text-center text-[10px] font-bold text-white">{absence.naam.slice(0, 3)}</span>
+  );
 
   return (
     <span
@@ -31,9 +35,15 @@ export function AbsenceDaypartCell({
       title={label}
     >
       {icon ? (
-        <Image src={icon} alt="" width={28} height={28} className="size-7 object-contain" />
+        <PlannerIconImage
+          src={icon}
+          width={28}
+          height={28}
+          className="size-7 object-contain"
+          fallback={naamKort}
+        />
       ) : (
-        <span className="px-1 text-center text-[10px] font-bold text-white">{absence.naam.slice(0, 3)}</span>
+        naamKort
       )}
       {participantInitials ? (
         <span

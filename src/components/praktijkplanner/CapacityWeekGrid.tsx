@@ -29,6 +29,11 @@ type CapacityWeekGridProps = {
   weekdayHeaders?: ReactNode[];
   renderCell: (weekday: CapacityWeekday, daypart: PraktijkplannerDaypart) => ReactNode;
   isCellUnavailable?: (weekday: CapacityWeekday, daypart: PraktijkplannerDaypart) => boolean;
+  /**
+   * Het vakje waar de klok nu in staat. Alleen ingevuld door schermen die echte datums
+   * tonen; de capaciteitsplanner is een sjabloon per weekdag en kent geen vandaag.
+   */
+  isCurrentCell?: (weekday: CapacityWeekday, daypart: PraktijkplannerDaypart) => boolean;
   className?: string;
 };
 
@@ -37,6 +42,7 @@ export function CapacityWeekGrid({
   weekdayHeaders,
   renderCell,
   isCellUnavailable,
+  isCurrentCell,
   className,
 }: CapacityWeekGridProps) {
   const headers = weekdayHeaders ?? CAPACITY_WEEKDAYS.map((day) => day.label);
@@ -76,12 +82,14 @@ export function CapacityWeekGrid({
                 </th>
                 {CAPACITY_WEEKDAYS.map((weekday) => {
                   const unavailable = isCellUnavailable?.(weekday, daypart) ?? false;
+                  const isNu = isCurrentCell?.(weekday, daypart) ?? false;
                   return (
                     <td
                       key={`${weekday.id}:${daypart.id}`}
                       className={[
                         'border-l p-2 align-top',
                         unavailable ? 'bg-muted/40 opacity-50' : '',
+                        isNu ? 'ring-2 ring-inset ring-emerald-600' : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}

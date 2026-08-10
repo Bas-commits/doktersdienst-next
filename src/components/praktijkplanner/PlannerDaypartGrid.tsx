@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
+import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
 import { weekDates } from '@/lib/praktijkplanner/dates';
 import { cn } from '@/lib/utils';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
@@ -101,6 +102,7 @@ export function PlannerDaypartGrid({
 }) {
   const days = weekDates(weekStart);
   const orderedDayparts = [...dayparts].sort((a, b) => a.volgorde - b.volgorde);
+  const huidigMoment = useHuidigMoment();
   const gridRootRef = useRef<HTMLDivElement>(null);
   const [unavailableCursor, setUnavailableCursor] = useState<{ x: number; y: number } | null>(null);
   const cursorPosition = usePlannerCursorTool({
@@ -192,9 +194,15 @@ export function PlannerDaypartGrid({
           {days.map((date) => {
             const label = dayLabel(date);
             const holidays = holidayLabels?.get(date) ?? [];
+            const isVandaag = date === huidigMoment?.datum;
             return (
               <div key={date} className="flex h-full flex-col justify-center overflow-hidden border-l px-3 py-2 text-center">
-                <p className="truncate text-s font-semibold uppercase tracking-wide text-muted-foreground">
+                <p
+                  className={cn(
+                    'truncate text-s font-semibold uppercase tracking-wide',
+                    isVandaag ? 'text-emerald-600' : 'text-muted-foreground'
+                  )}
+                >
                   {label.weekday} {label.day}
                 </p>
                 {holidays.length > 0 ? (
@@ -259,6 +267,10 @@ export function PlannerDaypartGrid({
                     const unavailable = isCellUnavailable?.(cell) ?? false;
                     const disabled = !unavailable && ((isCellDisabled?.(cell) ?? false) || !onCellClick);
                     const filled = !unavailable && (isCellFilled?.(cell) ?? false);
+                    // Het dagdeel waar de klok nu in staat, op de dag van vandaag. Een rand
+                    // en geen vulling: in het vakje staat een fiche die zichtbaar moet blijven.
+                    const isNu =
+                      datum === huidigMoment?.datum && daypart.volgorde === huidigMoment.volgorde;
                     return (
                       <button
                         key={`${participant.id}-${datum}-${daypart.id}`}
@@ -286,6 +298,7 @@ export function PlannerDaypartGrid({
                             ? 'cursor-none border-border/40 bg-muted/40 opacity-50'
                             : 'border-border/70 disabled:opacity-80',
                           filled ? 'items-stretch p-0.5' : 'items-center justify-center p-1',
+                          isNu ? 'ring-2 ring-inset ring-emerald-600' : '',
                           !unavailable ? getCellClassName?.(cell) : undefined
                         )}
                         aria-label={`${participantLabel(participant)} ${datum} ${daypart.naam}${unavailable ? ' niet inplanbaar' : ''}`}

@@ -2,7 +2,8 @@
 
 import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { datesBetweenInclusive, formatIsoDate, monthCalendarBounds } from '@/lib/praktijkplanner/dates';
+import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
+import { datesBetweenInclusive, monthCalendarBounds } from '@/lib/praktijkplanner/dates';
 import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
 import type { PlannerDaypartCell } from './PlannerDaypartGrid';
 import { UNAVAILABLE_DAYPART_TOAST } from './PlannerDaypartGrid';
@@ -64,11 +65,11 @@ export function PlannerMonthDaypartGrid({
     containerRef: gridRootRef,
     onDismiss: onCursorToolDismiss,
   });
+  const huidigMoment = useHuidigMoment();
   if (!bounds) return null;
 
   const dates = datesBetweenInclusive(bounds.start, bounds.end);
   const orderedDayparts = [...dayparts].sort(compareDayparts);
-  const today = formatIsoDate(new Date());
   const followerTool = unavailableCursor ? UNAVAILABLE_DAYPART_CURSOR_TOOL : cursorTool ?? null;
   const followerPosition = unavailableCursor ?? cursorPosition;
 
@@ -99,7 +100,7 @@ export function PlannerMonthDaypartGrid({
                 className={[
                   'min-h-36 border-r border-b p-1 last:border-r-0',
                   inMonth ? 'bg-card' : 'bg-muted/30 text-muted-foreground',
-                  datum === today ? 'ring-2 ring-inset ring-emerald-600' : '',
+                  datum === huidigMoment?.datum ? 'ring-2 ring-inset ring-emerald-600' : '',
                 ].join(' ')}
               >
                 <div className="mb-1 flex items-start justify-between gap-1 px-1">
@@ -113,6 +114,10 @@ export function PlannerMonthDaypartGrid({
                 <div className="grid grid-cols-2 gap-1">
                   {orderedDayparts.map((daypart) => {
                     const cell = { participant, datum, daypart };
+                    // De dag had al een groene rand, het dagdeel nog niet. Zonder dat weet je
+                    // wel welke dag het is, maar niet waar in die dag je staat.
+                    const isNu =
+                      datum === huidigMoment?.datum && daypart.volgorde === huidigMoment.volgorde;
                     const unavailable = isCellUnavailable?.(cell) ?? false;
                     const disabled =
                       !unavailable && (blocked || isCellDisabled?.(cell) || !onCellClick);
@@ -146,6 +151,7 @@ export function PlannerMonthDaypartGrid({
                           unavailable
                             ? 'cursor-none border-border/40 bg-muted/40 opacity-50'
                             : 'border-border/70 disabled:opacity-80',
+                          isNu ? 'ring-2 ring-inset ring-emerald-600' : '',
                         ].join(' ')}
                         aria-label={`${datum} ${daypart.naam}${unavailable ? ' niet inplanbaar' : ''}${blocked ? ' feestdag' : ''}`}
                       >

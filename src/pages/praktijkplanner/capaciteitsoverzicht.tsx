@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CapacityRequirementList } from '@/components/praktijkplanner/CapacityRequirementList';
 import { CapacityWeekGrid } from '@/components/praktijkplanner/CapacityWeekGrid';
 import { PlannerWeekBar } from '@/components/praktijkplanner/PlannerWeekBar';
+import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
 import {
   PraktijkplannerPage,
   PraktijkplannerTitleAside,
@@ -55,16 +56,25 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
     [weekStart]
   );
 
+  const huidigMoment = useHuidigMoment();
+
   const weekdayHeaders = useMemo(
     () =>
       weekDates.map((date) => (
-        <span key={date} className="block normal-case tracking-normal">
+        <span
+          key={date}
+          className={
+            date === huidigMoment?.datum
+              ? 'block normal-case tracking-normal text-emerald-600'
+              : 'block normal-case tracking-normal'
+          }
+        >
           {new Intl.DateTimeFormat('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' }).format(
             new Date(`${date}T12:00:00`)
           )}
         </span>
       )),
-    [weekDates]
+    [huidigMoment?.datum, weekDates]
   );
 
   const load = useCallback(
@@ -185,6 +195,10 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
             weekdayHeaders={weekdayHeaders}
             isCellUnavailable={(weekday, daypart) =>
               !isDaypartSchedulable(data.masterData.schedulableDayparts ?? [], weekday.id, daypart.id)
+            }
+            isCurrentCell={(weekday, daypart) =>
+              weekDates[weekday.id - 1] === huidigMoment?.datum &&
+              daypart.volgorde === huidigMoment.volgorde
             }
             renderCell={(weekday, daypart) => {
               const date = weekDates[weekday.id - 1];

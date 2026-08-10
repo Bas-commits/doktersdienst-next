@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { toast } from 'sonner';
 import type { PraktijkplannerPageContext } from './PraktijkplannerPage';
 import { AbsenceDaypartCell } from './AbsenceDaypartCell';
+import { PlannerDaypartHoverPreview } from './PlannerDaypartHoverPreview';
 import { absenceDisplayBackground, absenceDisplayColor, absenceForegroundIconPath, absencePaletteIconPath, DAYPART_ICONS, sortAbsenceTypesForPalette } from './absence-icons';
 import { PlannerChipPalette } from './PlannerChipPalette';
 import type { PlannerCursorTool } from './PlannerCursorTool';
@@ -17,6 +18,7 @@ import { PLANNER_GRID_NAV_MARGIN_PX } from './planner-grid-layout';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { usePlannerHolidayData } from '@/hooks/praktijkplanner/usePlannerHolidays';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { addDays, formatIsoDate, monthCalendarBounds, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 import {
@@ -218,8 +220,12 @@ export function PlannerAbsenceEditor({
   );
 
   const renderCell = useCallback(
-    (iddeelnemer: number, datum: string, daypart: PraktijkplannerDaypart) => {
-      const { absence, provisional } = resolveAbsence(iddeelnemer, datum, daypart.id);
+    (
+      participant: PraktijkplannerPageContext['data']['participants'][number],
+      datum: string,
+      daypart: PraktijkplannerDaypart
+    ) => {
+      const { absence, provisional } = resolveAbsence(participant.id, datum, daypart.id);
       if (!absence) {
         if (isDoctorMode) {
           const icon = DAYPART_ICONS[daypart.volgorde];
@@ -232,15 +238,29 @@ export function PlannerAbsenceEditor({
         return null;
       }
 
+      const cell = <AbsenceDaypartCell absence={absence} provisional={provisional} fill />;
+
+      // Zonder deze kaart vertelt het vakje alleen zijn kleur. De dokterversie toont maar één
+      // deelnemer, dus daar zou de naam iedere keer dezelfde regel zijn.
       return (
-        <AbsenceDaypartCell
-          absence={absence}
-          provisional={provisional}
-          fill
-        />
+        <PlannerDaypartHoverPreview
+          enabled={!(editable && (clearMode || selectedTypeId != null))}
+          participantName={participantName(participant)}
+          initials={deelnemerChipInitials(participant)}
+          datum={datum}
+          daypartName={daypart.naam}
+          fromRepetition={false}
+          isException={false}
+          absence={{ type: absence.naam, aangevraagd: provisional === true }}
+          showPlanningDetails={false}
+          showParticipant={!isDoctorMode}
+          chip={<div className="relative h-full w-full">{cell}</div>}
+        >
+          {cell}
+        </PlannerDaypartHoverPreview>
       );
     },
-    [isDoctorMode, resolveAbsence]
+    [clearMode, editable, isDoctorMode, resolveAbsence, selectedTypeId]
   );
 
   const isCellFilled = useCallback(
@@ -534,7 +554,7 @@ export function PlannerAbsenceEditor({
           dayparts={data.masterData.dayparts}
           weekStart={weekStart}
           onWeekStartChange={setWeekStart}
-          renderCell={({ participant, datum, daypart }) => renderCell(participant.id, datum, daypart)}
+          renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}
           isCellFilled={({ participant, datum, daypart }) => isCellFilled(participant.id, datum, daypart)}
           onCellClick={applyCell}
           isCellDisabled={() => !editable}
@@ -574,7 +594,7 @@ export function PlannerAbsenceEditor({
               dayparts={visibleMonthDayparts}
               year={year}
               month={month}
-              renderCell={({ participant, datum, daypart }) => renderCell(participant.id, datum, daypart)}
+              renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}
               onCellClick={applyCell}
               onCellPointerEnter={(cell, event) => {
                 if (event.ctrlKey) void applyCell(cell);

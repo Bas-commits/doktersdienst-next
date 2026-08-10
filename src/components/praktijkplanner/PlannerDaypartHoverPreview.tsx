@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { TriangleAlert } from 'lucide-react';
+import { absentieTekst } from '@/lib/praktijkplanner/absentie-tekst';
 import { afwijkingTekst, herhalingWeekLabel } from '@/lib/praktijkplanner/herhaling-tekst';
 import { cn } from '@/lib/utils';
 
@@ -79,9 +80,11 @@ export function PlannerDaypartHoverPreview({
   recurrenceSourceWeek,
   activityName,
   locationName,
-  absenceRequested,
+  absence,
   availabilityName,
   taskNames,
+  showPlanningDetails = true,
+  showParticipant = true,
   chip,
   children,
 }: {
@@ -96,9 +99,20 @@ export function PlannerDaypartHoverPreview({
   recurrenceSourceWeek?: string | null;
   activityName?: string | null;
   locationName?: string | null;
-  absenceRequested?: boolean;
+  /**
+   * De absentie op dit dagdeel, met de naam van het type en of hij nog een aanvraag is. Eén
+   * veld en geen twee vlaggen, want aangevraagd en goedgekeurd sluiten elkaar uit.
+   */
+  absence?: { type: string | null; aangevraagd: boolean } | null;
   availabilityName?: string | null;
   taskNames?: string[];
+  /**
+   * Uit op een dagdeel dat alleen een absentieaanvraag is. Activiteit, locatie, herhaling en
+   * taken zijn daar per definitie leeg, en vier regels met een streepje zeggen niets.
+   */
+  showPlanningDetails?: boolean;
+  /** Uit in een scherm dat maar één deelnemer toont; die naam herhalen zegt niets. */
+  showParticipant?: boolean;
   chip: ReactNode;
   children: ReactNode;
 }) {
@@ -131,7 +145,7 @@ export function PlannerDaypartHoverPreview({
     daypartName,
     activityName,
     locationName,
-    absenceRequested,
+    absence,
   ]);
 
   useEffect(() => {
@@ -186,38 +200,46 @@ export function PlannerDaypartHoverPreview({
             >
               <div className="mx-auto mb-3 h-28 w-44 pb-2">{chip}</div>
               <dl className="mt-3 space-y-1.5 text-xs">
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Naam</dt>
-                  <dd className="text-right font-medium">{participantName}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Initialen</dt>
-                  <dd className="font-medium">{initials || '—'}</dd>
-                </div>
+                {showParticipant ? (
+                  <>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Naam</dt>
+                      <dd className="text-right font-medium">{participantName}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Initialen</dt>
+                      <dd className="font-medium">{initials || '—'}</dd>
+                    </div>
+                  </>
+                ) : null}
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">Datum / dagdeel</dt>
                   <dd className="text-right font-medium">
                     {formatDateLabel(datum)} · {daypartName}
                   </dd>
                 </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Activiteit</dt>
-                  <dd className="text-right font-medium">{activityName || '—'}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Locatie</dt>
-                  <dd className="text-right font-medium">{locationName || '—'}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Herhaling</dt>
-                  <dd className="text-right font-medium" data-testid="hover-herhaling">
-                    {fromRepetition
-                      ? recurrenceSourceWeek
-                        ? `Ja, van week ${herhalingWeekLabel(recurrenceSourceWeek)}`
-                        : 'Ja'
-                      : 'Nee'}
-                  </dd>
-                </div>
+                {showPlanningDetails ? (
+                  <>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Activiteit</dt>
+                      <dd className="text-right font-medium">{activityName || '—'}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Locatie</dt>
+                      <dd className="text-right font-medium">{locationName || '—'}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Herhaling</dt>
+                      <dd className="text-right font-medium" data-testid="hover-herhaling">
+                        {fromRepetition
+                          ? recurrenceSourceWeek
+                            ? `Ja, van week ${herhalingWeekLabel(recurrenceSourceWeek)}`
+                            : 'Ja'
+                          : 'Nee'}
+                      </dd>
+                    </div>
+                  </>
+                ) : null}
                 {/*
                   Het bordje op de fiche zegt alleen dat er iets afwijkt. Hier hoort te staan
                   waarom het er staat en van welke week is afgeweken, anders moet de planner
@@ -234,22 +256,41 @@ export function PlannerDaypartHoverPreview({
                     </span>
                   </div>
                 ) : null}
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Taken</dt>
-                  <dd className="text-right font-medium">
-                    {taskNames && taskNames.length > 0 ? taskNames.join(', ') : '—'}
-                  </dd>
-                </div>
+                {showPlanningDetails ? (
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted-foreground">Taken</dt>
+                    <dd className="text-right font-medium">
+                      {taskNames && taskNames.length > 0 ? taskNames.join(', ') : '—'}
+                    </dd>
+                  </div>
+                ) : null}
                 {availabilityName ? (
                   <div className="flex justify-between gap-2">
                     <dt className="text-muted-foreground">Beschikbaarheid</dt>
                     <dd className="text-right font-medium">{availabilityName}</dd>
                   </div>
                 ) : null}
-                {absenceRequested ? (
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-muted-foreground">Absentie aangevraagd</dt>
-                    <dd className="font-medium">Ja</dd>
+                {/*
+                  Het vraagteken op de fiche zegt alleen dat er iets is aangevraagd. Hier hoort
+                  te staan wat er is aangevraagd en dat het nog niet vaststaat, net als bij het
+                  driehoekje hierboven.
+                */}
+                {absence ? (
+                  <div
+                    className="flex items-start gap-1.5 rounded-md bg-muted p-2"
+                    data-testid="hover-absentie"
+                  >
+                    {absence.aangevraagd ? (
+                      <span
+                        className="mt-0.5 flex size-3.5 shrink-0 items-center justify-center rounded bg-background text-[10px] leading-none font-bold ring-1 ring-border"
+                        aria-hidden
+                      >
+                        ?
+                      </span>
+                    ) : null}
+                    <span className="font-medium">
+                      {absentieTekst(absence.type, absence.aangevraagd)}
+                    </span>
                   </div>
                 ) : null}
               </dl>

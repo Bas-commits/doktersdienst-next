@@ -32,6 +32,7 @@ import {
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { absentieTekst } from '@/lib/praktijkplanner/absentie-tekst';
 import { afwijkingTekst } from '@/lib/praktijkplanner/herhaling-tekst';
 import {
   notifyPlannerChanged,
@@ -290,12 +291,29 @@ export function ActivitiesContent({
         activity || location || tasks.length > 0 || availability
       );
 
-      if (absence && !absence.isVoorlopig) {
-        return <AbsenceDaypartCell absence={absence.absenceType} fill />;
-      }
-
-      if (absence?.isVoorlopig && !hasActivityContent) {
-        return <AbsenceDaypartCell absence={absence.absenceType} provisional fill />;
+      // Zo'n dagdeel is niets anders dan de absentie zelf, dus daar is de hoverkaart juist
+      // het enige dat vertelt wie het is en wat er staat.
+      if (absence && (!absence.isVoorlopig || !hasActivityContent)) {
+        const provisional = absence.isVoorlopig;
+        const cell = (
+          <AbsenceDaypartCell absence={absence.absenceType} provisional={provisional} fill />
+        );
+        return (
+          <PlannerDaypartHoverPreview
+            enabled={hoverEnabled}
+            participantName={participantName}
+            initials={initials}
+            datum={datum}
+            daypartName={daypart.naam}
+            fromRepetition={false}
+            isException={false}
+            absence={{ type: absence.absenceType.naam, aangevraagd: provisional }}
+            showPlanningDetails={false}
+            chip={<div className="relative h-full w-full">{cell}</div>}
+          >
+            {cell}
+          </PlannerDaypartHoverPreview>
+        );
       }
 
       if (!hasActivityContent) {
@@ -335,9 +353,15 @@ export function ActivitiesContent({
         : null;
 
       const provisionalOverlay = Boolean(absence?.isVoorlopig);
-      const absenceLabel = absence
-        ? `${absence.absenceType.naam}${absence.isVoorlopig ? '?' : ''}`
-        : null;
+      const absenceTypeName = absence?.absenceType.naam ?? null;
+      const provisionalBadge = (
+        <span
+          className="pointer-events-none absolute top-0.5 right-0.5 z-20 flex size-4 items-center justify-center rounded bg-background/90 text-[11px] font-bold text-muted-foreground ring-1 ring-border"
+          title={absentieTekst(absenceTypeName, true)}
+        >
+          ?
+        </span>
+      );
 
       const chip = (
         <div className="relative h-full w-full min-w-0">
@@ -374,14 +398,7 @@ export function ActivitiesContent({
               <TriangleAlert className="size-3.5" aria-hidden />
             </span>
           ) : null}
-          {provisionalOverlay ? (
-            <span
-              className="pointer-events-none absolute top-0.5 right-0.5 z-20 flex size-4 items-center justify-center rounded bg-background/90 text-[11px] font-bold text-muted-foreground ring-1 ring-border"
-              title={absenceLabel ?? 'Voorlopige afwezigheid'}
-            >
-              ?
-            </span>
-          ) : null}
+          {provisionalOverlay ? provisionalBadge : null}
         </div>
       );
 
@@ -397,20 +414,28 @@ export function ActivitiesContent({
           recurrenceSourceWeek={existing?.recurrenceSourceWeek ?? null}
           activityName={activityItem?.label}
           locationName={locationItem?.label}
-          absenceRequested={provisionalOverlay}
+          absence={provisionalOverlay ? { type: absenceTypeName, aangevraagd: true } : null}
           availabilityName={availability?.naam}
           taskNames={taskItems.map((task) => task.label)}
           chip={
-            <PlannerCombinedDaypartChip
-              tasks={taskItems}
-              activity={activityItem}
-              location={locationItem}
-              fill
-              participantColor={participant.color}
-              initials={initials}
-              initialsVariant="popover"
-              className="shadow-sm"
-            />
+            // De fiche in de kaart moet dezelfde fiche zijn als in het rooster. Zonder de
+            // grijze sluier en het vraagteken wijst de planner iets aan dat er anders uitziet
+            // dan wat hij te zien krijgt.
+            <div className="relative h-full w-full">
+              <div className={provisionalOverlay ? 'h-full w-full opacity-45 grayscale' : 'h-full w-full'}>
+                <PlannerCombinedDaypartChip
+                  tasks={taskItems}
+                  activity={activityItem}
+                  location={locationItem}
+                  fill
+                  participantColor={participant.color}
+                  initials={initials}
+                  initialsVariant="popover"
+                  className="shadow-sm"
+                />
+              </div>
+              {provisionalOverlay ? provisionalBadge : null}
+            </div>
           }
         >
           {chip}

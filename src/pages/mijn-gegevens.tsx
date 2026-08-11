@@ -190,6 +190,21 @@ function commitFteNumber(n: number): number {
   return Math.round(clamped * 10 ** FTE_DECIMAL_PLACES) / 10 ** FTE_DECIMAL_PLACES;
 }
 
+const STANDAARDKLEUR = '#cccccc';
+
+/**
+ * Geeft de opgeslagen kleur terug, of null als er niets bruikbaars staat.
+ *
+ * 180 deelnemers hebben een lege string in de kolom staan, geen NULL. Die
+ * glipte langs `?? STANDAARDKLEUR` heen en werd zo teruggestuurd naar de
+ * server, die alleen zes hexcijfers accepteert. Daardoor kon het profiel van
+ * die deelnemers helemaal niet meer worden opgeslagen.
+ */
+function geldigeKleur(waarde: string | null): string | null {
+  const kleur = (waarde ?? '').trim();
+  return /^#[0-9a-fA-F]{6}$/.test(kleur) ? kleur : null;
+}
+
 function RequiredAsterisk() {
   return <span className="text-[#c91b23]">*</span>;
 }
@@ -212,7 +227,13 @@ export default function MijnGegevensPage() {
   const [savedSnapshot, setSavedSnapshot] = useState<FormSnapshot | null>(null);
 
   // Form state – initialised from profile when loaded
-  const [color, setColor] = useState('#cccccc');
+  const [color, setColor] = useState(STANDAARDKLEUR);
+  /**
+   * Onwaar zolang er geen kleur op de deelnemer staat. Het scherm toont dan de
+   * standaardkleur, maar schrijft die niet weg: een kleur die niemand heeft
+   * gekozen hoort geen kleur te worden alleen omdat er iets anders is opgeslagen.
+   */
+  const [kleurGekozen, setKleurGekozen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [waarneemgroepenOpen, setWaarneemgroepenOpen] = useState(false);
   const [expertisesOpen, setExpertisesOpen] = useState(false);
@@ -295,7 +316,9 @@ export default function MijnGegevensPage() {
           (profileRes.deelnemer.huisemail ?? '').trim() ||
           (initialLogin.includes('@') ? initialLogin : '') ||
           (data.isDelegatedEdit === true ? '' : eigenSessieEmail);
-        setColor(profileRes.deelnemer.color ?? '#cccccc');
+        const opgeslagenKleur = geldigeKleur(profileRes.deelnemer.color);
+        setColor(opgeslagenKleur ?? STANDAARDKLEUR);
+        setKleurGekozen(opgeslagenKleur !== null);
         setAchternaam(profileRes.deelnemer.achternaam ?? '');
         setVoorletterstussenvoegsel(profileRes.deelnemer.voorletterstussenvoegsel ?? '');
         setVoornaam(profileRes.deelnemer.voornaam ?? '');
@@ -325,7 +348,7 @@ export default function MijnGegevensPage() {
         setExpertiseIdsByWaarneemgroepId(initialExpertises);
         setFteDraftByWgId({});
         setSavedSnapshot({
-          color: profileRes.deelnemer.color ?? '#cccccc',
+          color: opgeslagenKleur ?? STANDAARDKLEUR,
           achternaam: profileRes.deelnemer.achternaam ?? '',
           voorletterstussenvoegsel: profileRes.deelnemer.voorletterstussenvoegsel ?? '',
           voornaam: profileRes.deelnemer.voornaam ?? '',
@@ -527,7 +550,9 @@ export default function MijnGegevensPage() {
     }
 
     const body: MijnGegevensUpdateBody = {
-      color,
+      // Staat er nog geen kleur en heeft niemand er een gekozen, dan gaat het
+      // veld niet mee. De standaardkleur is wat het scherm laat zien, geen keuze.
+      color: kleurGekozen ? color : undefined,
       achternaam: achternaam.trim() || undefined,
       voorletterstussenvoegsel: voorletterstussenvoegsel.trim() || undefined,
       voornaam: voornaam.trim() || undefined,
@@ -838,14 +863,17 @@ export default function MijnGegevensPage() {
                           onClick={() => colorInputRef.current?.click()}
                           disabled={isSubmitting}
                           className="h-6 w-10 rounded border border-input shadow-sm transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
-                          style={{ backgroundColor: color || '#cccccc' }}
+                          style={{ backgroundColor: color }}
                         />
                         <input
                           ref={colorInputRef}
                           type="color"
                           className="sr-only"
-                          value={color || '#cccccc'}
-                          onChange={(e) => setColor(e.target.value)}
+                          value={color}
+                          onChange={(e) => {
+                            setColor(e.target.value);
+                            setKleurGekozen(true);
+                          }}
                           disabled={isSubmitting}
                         />
                         <button

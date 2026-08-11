@@ -61,12 +61,15 @@ export async function renderVerificationBodies(params: {
   invitedByName?: string | null;
 }): Promise<{ html: string; text: string }> {
   const siteUrl = getEmailTemplateSiteUrl();
+  // Alleen de uitnodiging kent de ontvanger nog niet bij naam. De andere twee
+  // sjablonen hebben een begroeting met naam, dus die hoort er wel in.
+  const accountName = params.variant === 'invite' ? undefined : params.userName ?? null;
   return toHtmlAndText(
     <InviteVerifyEmail
       verifyUrl={params.url}
       siteUrl={siteUrl}
       variant={params.variant}
-      accountName={params.variant === 'signup' ? params.userName ?? null : undefined}
+      accountName={accountName}
       invitedByName={params.invitedByName}
     />
   );

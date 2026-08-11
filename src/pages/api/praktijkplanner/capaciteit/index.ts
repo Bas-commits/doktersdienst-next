@@ -10,7 +10,10 @@ import { isDaypartSchedulable } from '@/lib/praktijkplanner/schedulable-dayparts
 import { loadSchedulableDayparts } from '@/lib/praktijkplanner/schedulable-dayparts-db';
 import type { PraktijkplannerCapacityCell } from '@/types/praktijkplanner';
 
-type Data = { cells: PraktijkplannerCapacityCell[] } | { success: true } | { error: string };
+type Data =
+  | { cells: PraktijkplannerCapacityCell[]; groepCells: PraktijkplannerCapacityCell[] }
+  | { success: true }
+  | { error: string };
 
 type CellMutation = {
   weekdag: unknown;
@@ -22,8 +25,61 @@ type CellMutation = {
   specifications?: unknown;
 };
 
+type Requirement = { id: number; aantal: number };
+
+type ParsedCell = {
+  weekdag: number;
+  iddagdeel: number;
+  aantalDeelnemers: number;
+  expertises: Requirement[];
+  tasks: Requirement[];
+  activities: Requirement[];
+  specifications: Requirement[];
+};
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+type SaveOptions = {
+  idwaarneemgroep: number;
+  /** Leeg is de eis voor de hele waarneemgroep. */
+  idplannerlocatie: number | null;
+  idregime: number | null;
+  cells: ParsedCell[];
+  updatedBy: number;
+  updatedAt: string;
+};
+
 function oneQueryValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+/** Gooit `invalid-cell` zodat de handler er een 400 met een leesbare reden van maakt. */
+function parseCells(raw: unknown): ParsedCell[] {
+  if (!Array.isArray(raw)) throw new Error('invalid-cell');
+  return raw.map((item) => {
+    const input = item as CellMutation;
+    const weekdag = Number(input.weekdag);
+    const iddagdeel = parsePositiveInteger(input.iddagdeel);
+    const aantalDeelnemers = parseNonNegativeInteger(input.aantalDeelnemers);
+    const expertises = parseRequirements(input.expertises);
+    const tasks = parseRequirements(input.tasks);
+    const activities = parseRequirements(input.activities);
+    const specifications = parseRequirements(input.specifications);
+    if (
+      !Number.isInteger(weekdag) ||
+      weekdag < 1 ||
+      weekdag > 7 ||
+      !iddagdeel ||
+      aantalDeelnemers == null ||
+      !expertises ||
+      !tasks ||
+      !activities ||
+      !specifications
+    ) {
+      throw new Error('invalid-cell');
+    }
+    return { weekdag, iddagdeel, aantalDeelnemers, expertises, tasks, activities, specifications };
+  });
 }
 
 function parseRequirements(value: unknown): Array<{ id: number; aantal: number }> | null {
@@ -52,6 +108,29 @@ function regimeFilter(idregime: number | null) {
   return idregime == null
     ? isNull(schema.capaciteitsjablonen.idregime)
     : eq(schema.capaciteitsjablonen.idregime, idregime);
+}
+
+/** Idem voor de locatie: leeg is de eis die voor de hele waarneemgroep geldt. */
+function locatieFilter(idplannerlocatie: number | null) {
+  return idplannerlocatie == null
+    ? isNull(schema.capaciteitsjablonen.idplannerlocatie)
+    : eq(schema.capaciteitsjablonen.idplannerlocatie, idplannerlocatie);
+}
+
+/**
+ * De taken die op elke locatie mogen gebeuren, als set met hun ids.
+ *
+ * Waar een eis hoort volgt uit het taaktype, dus de server hoeft het scherm niet te geloven:
+ * een locatiegebonden taak in het groepsblok en andersom worden allebei geweigerd.
+ */
+async function nietLocatieGebondenTaken(idwaarneemgroep: number): Promise<Set<number>> {
+  const rows = await db
+    .select({ id: schema.taaktypen.id, niet: schema.taaktypen.nietLocatieGebonden })
+    .from(schema.taaktypen)
+    .where(eq(schema.taaktypen.idwaarneemgroep, idwaarneemgroep));
+  return new Set(
+    rows.filter((row) => row.niet === true && row.id != null).map((row) => row.id as number)
+  );
 }
 
 async function regimeInGroup(idregime: number, idwaarneemgroep: number) {
@@ -153,7 +232,7 @@ async function assertRequirementIds(input: {
 
 async function loadCapacity(
   idwaarneemgroep: number,
-  idplannerlocatie: number,
+  idplannerlocatie: number | null,
   idregime: number | null
 ): Promise<PraktijkplannerCapacityCell[]> {
   const templates = await db
@@ -167,7 +246,7 @@ async function loadCapacity(
     .where(
       and(
         eq(schema.capaciteitsjablonen.idwaarneemgroep, idwaarneemgroep),
-        eq(schema.capaciteitsjablonen.idplannerlocatie, idplannerlocatie),
+        locatieFilter(idplannerlocatie),
         regimeFilter(idregime)
       )
     );
@@ -275,9 +354,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       }
     }
     try {
-      return res.status(200).json({
-        cells: await loadCapacity(accessResult.access.idwaarneemgroep, idplannerlocatie, idregime),
-      });
+      const [cells, groepCells] = await Promise.all([
+        loadCapacity(accessResult.access.idwaarneemgroep, idplannerlocatie, idregime),
+        loadCapacity(accessResult.access.idwaarneemgroep, null, idregime),
+      ]);
+      return res.status(200).json({ cells, groepCells });
     } catch (error) {
       console.error('[praktijkplanner/capaciteit GET]', error);
       return res.status(500).json({ error: 'De capaciteitsplanning kon niet worden geladen.' });
@@ -311,35 +392,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }
   }
 
-  try {
-    const cells = body.cells.map((raw) => {
-      const input = raw as CellMutation;
-      const weekdag = Number(input.weekdag);
-      const iddagdeel = parsePositiveInteger(input.iddagdeel);
-      const aantalDeelnemers = parseNonNegativeInteger(input.aantalDeelnemers);
-      const expertises = parseRequirements(input.expertises);
-      const tasks = parseRequirements(input.tasks);
-      const activities = parseRequirements(input.activities);
-      const specifications = parseRequirements(input.specifications);
-      if (
-        !Number.isInteger(weekdag) ||
-        weekdag < 1 ||
-        weekdag > 7 ||
-        !iddagdeel ||
-        aantalDeelnemers == null ||
-        !expertises ||
-        !tasks ||
-        !activities ||
-        !specifications
-      ) {
-        throw new Error('invalid-cell');
-      }
-      return { weekdag, iddagdeel, aantalDeelnemers, expertises, tasks, activities, specifications };
-    });
-    const identifiers = new Set(cells.map((cell) => `${cell.weekdag}:${cell.iddagdeel}`));
-    if (identifiers.size !== cells.length) return res.status(400).json({ error: 'Een dagdeel komt dubbel voor.' });
+  if (body.groepCells !== undefined && (!Array.isArray(body.groepCells) || body.groepCells.length > 28)) {
+    return res.status(400).json({ error: 'De capaciteit bevat maximaal 28 dagdelen.' });
+  }
 
-    const daypartIds = [...new Set(cells.map((cell) => cell.iddagdeel))];
+  try {
+    const cells = parseCells(body.cells);
+    const groepCells = body.groepCells === undefined ? null : parseCells(body.groepCells);
+    const alleCellen = groepCells ? [...cells, ...groepCells] : cells;
+
+    for (const set of [cells, groepCells ?? []]) {
+      const identifiers = new Set(set.map((cell) => `${cell.weekdag}:${cell.iddagdeel}`));
+      if (identifiers.size !== set.length) {
+        return res.status(400).json({ error: 'Een dagdeel komt dubbel voor.' });
+      }
+    }
+
+    const daypartIds = [...new Set(alleCellen.map((cell) => cell.iddagdeel))];
     const [dayparts] = await Promise.all([
       db
         .select({ id: schema.dagdelen.id })
@@ -347,21 +416,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         .where(inArray(schema.dagdelen.id, daypartIds)),
       assertRequirementIds({
         idwaarneemgroep: accessResult.access.idwaarneemgroep,
-        expertises: [...new Set(cells.flatMap((cell) => cell.expertises.map((item) => item.id)))],
-        tasks: [...new Set(cells.flatMap((cell) => cell.tasks.map((item) => item.id)))],
-        activities: [...new Set(cells.flatMap((cell) => cell.activities.map((item) => item.id)))],
-        specifications: [...new Set(cells.flatMap((cell) => cell.specifications.map((item) => item.id)))],
+        expertises: [...new Set(alleCellen.flatMap((cell) => cell.expertises.map((item) => item.id)))],
+        tasks: [...new Set(alleCellen.flatMap((cell) => cell.tasks.map((item) => item.id)))],
+        activities: [...new Set(alleCellen.flatMap((cell) => cell.activities.map((item) => item.id)))],
+        specifications: [...new Set(alleCellen.flatMap((cell) => cell.specifications.map((item) => item.id)))],
       }),
     ]);
     if (dayparts.length !== daypartIds.length) {
       return res.status(400).json({ error: 'Een gekozen dagdeel bestaat niet.' });
     }
 
-    const schedulableMatrix = await loadSchedulableDayparts(accessResult.access.idwaarneemgroep);
-    const schedulableCells = cells.filter((cell) =>
-      isDaypartSchedulable(schedulableMatrix, cell.weekdag, cell.iddagdeel)
-    );
+    // Waar een taak-eis hoort volgt uit het taaktype. De server controleert dat zelf, zodat een
+    // oude tab of een tweede scherm dezelfde eis niet op twee plekken kan zetten.
+    const overalToegestaan = await nietLocatieGebondenTaken(accessResult.access.idwaarneemgroep);
     for (const cell of cells) {
+      if (cell.tasks.some((item) => overalToegestaan.has(item.id))) {
+        return res.status(400).json({
+          error: 'Een taak die op elke locatie mag gebeuren hoort bij de eis voor de hele groep.',
+        });
+      }
+    }
+    for (const cell of groepCells ?? []) {
+      if (cell.tasks.some((item) => !overalToegestaan.has(item.id))) {
+        return res.status(400).json({
+          error: 'Deze taak is locatiegebonden en hoort bij een locatie.',
+        });
+      }
+      // De groepsrij draagt alleen taken. Een aantal dokters of een expertise zou daar een
+      // tweede, onzichtbare eis worden naast die van de locaties.
+      const anders =
+        cell.aantalDeelnemers > 0 ||
+        cell.expertises.some((item) => item.aantal > 0) ||
+        cell.activities.some((item) => item.aantal > 0) ||
+        cell.specifications.some((item) => item.aantal > 0);
+      if (anders) {
+        return res.status(400).json({
+          error: 'Voor de hele groep kunnen alleen taken worden opgegeven.',
+        });
+      }
+    }
+
+    const schedulableMatrix = await loadSchedulableDayparts(accessResult.access.idwaarneemgroep);
+    for (const cell of alleCellen) {
       if (isDaypartSchedulable(schedulableMatrix, cell.weekdag, cell.iddagdeel)) continue;
       const hasContent =
         cell.aantalDeelnemers > 0 ||
@@ -376,12 +472,60 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       }
     }
 
-    const cellByKey = new Map(schedulableCells.map((cell) => [`${cell.weekdag}:${cell.iddagdeel}`, cell]));
+    const schedulableCells = cells.filter((cell) =>
+      isDaypartSchedulable(schedulableMatrix, cell.weekdag, cell.iddagdeel)
+    );
+    const schedulableGroepCells = (groepCells ?? []).filter((cell) =>
+      isDaypartSchedulable(schedulableMatrix, cell.weekdag, cell.iddagdeel)
+    );
     const updatedAt = new Date().toISOString();
     const updatedBy = accessResult.access.user.id;
 
     await db.transaction(async (tx) => {
-      // One upsert for the whole week×daypart matrix instead of per-cell select/update.
+      await bewaarCellen(tx, {
+        idwaarneemgroep: accessResult.access.idwaarneemgroep,
+        idplannerlocatie,
+        idregime,
+        cells: schedulableCells,
+        updatedBy,
+        updatedAt,
+      });
+      if (groepCells) {
+        await bewaarCellen(tx, {
+          idwaarneemgroep: accessResult.access.idwaarneemgroep,
+          idplannerlocatie: null,
+          idregime,
+          cells: schedulableGroepCells,
+          updatedBy,
+          updatedAt,
+        });
+      }
+    });
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'invalid-requirement') {
+      return res.status(400).json({ error: 'Een capaciteitseis hoort niet bij deze waarneemgroep.' });
+    }
+    if (error instanceof Error && error.message === 'invalid-cell') {
+      return res.status(400).json({ error: 'Een capaciteitcel bevat ongeldige waarden.' });
+    }
+    console.error('[praktijkplanner/capaciteit POST]', error);
+    return res.status(500).json({ error: 'De capaciteitsplanning kon niet worden opgeslagen.' });
+  }
+}
+
+/**
+ * Zet een hele week aan eisen neer voor een locatie, of voor de groep als de locatie leeg is.
+ *
+ * De weekdag maal dagdeel matrix gaat in een upsert in plaats van per cel een select en een
+ * update, en de eisen eronder worden weggegooid en opnieuw gezet: het scherm stuurt altijd de
+ * volledige stand.
+ */
+async function bewaarCellen(tx: Tx, options: SaveOptions) {
+  const { idwaarneemgroep, idplannerlocatie, idregime, cells: schedulableCells, updatedBy, updatedAt } = options;
+  const cellByKey = new Map(schedulableCells.map((cell) => [`${cell.weekdag}:${cell.iddagdeel}`, cell]));
+  {
+    {
       if (schedulableCells.length === 0) {
         return;
       }
@@ -389,7 +533,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         .insert(schema.capaciteitsjablonen)
         .values(
           schedulableCells.map((cell) => ({
-            idwaarneemgroep: accessResult.access.idwaarneemgroep,
+            idwaarneemgroep,
             idplannerlocatie,
             weekdag: cell.weekdag,
             iddagdeel: cell.iddagdeel,
@@ -482,16 +626,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           ? tx.insert(schema.capaciteitsjabloonspecificaties).values(specificationRows)
           : Promise.resolve(),
       ]);
-    });
-    return res.status(200).json({ success: true });
-  } catch (error) {
-    if (error instanceof Error && error.message === 'invalid-requirement') {
-      return res.status(400).json({ error: 'Een capaciteitseis hoort niet bij deze waarneemgroep.' });
     }
-    if (error instanceof Error && error.message === 'invalid-cell') {
-      return res.status(400).json({ error: 'Een capaciteitcel bevat ongeldige waarden.' });
-    }
-    console.error('[praktijkplanner/capaciteit POST]', error);
-    return res.status(500).json({ error: 'De capaciteitsplanning kon niet worden opgeslagen.' });
   }
 }

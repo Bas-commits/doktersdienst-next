@@ -85,14 +85,22 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
   const [cells, setCells] = useState<Map<string, CapacityDraft>>(() =>
     buildEmptyCells(data.masterData.dayparts)
   );
+  // De eisen die voor de hele waarneemgroep gelden, zonder locatie.
+  const [groepCells, setGroepCells] = useState<Map<string, CapacityDraft>>(() =>
+    buildEmptyCells(data.masterData.dayparts)
+  );
   // De normale week naast het regime, zodat bij elke eis het verschil kan worden getoond.
   const [normalCells, setNormalCells] = useState<Map<string, CapacityDraft> | null>(null);
+  const [normalGroepCells, setNormalGroepCells] = useState<Map<string, CapacityDraft> | null>(null);
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
   const saveTimerRef = useRef<number | null>(null);
   const saveInFlightRef = useRef(false);
-  const pendingCellsRef = useRef<Map<string, CapacityDraft> | null>(null);
+  const pendingCellsRef = useRef<{
+    cells: Map<string, CapacityDraft>;
+    groepCells: Map<string, CapacityDraft>;
+  } | null>(null);
   const locationIdRef = useRef(locationId);
   locationIdRef.current = locationId;
   const regimeIdRef = useRef(regimeId);
@@ -116,10 +124,12 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
       {
         key: 'tasks',
         title: 'Taken',
-        items: data.masterData.tasks.map((task) => ({
-          id: task.id,
-          label: task.afkorting || task.omschrijving || `Taak ${task.id}`,
-        })),
+        items: data.masterData.tasks
+          .filter((task) => !task.nietLocatieGebonden)
+          .map((task) => ({
+            id: task.id,
+            label: task.afkorting || task.omschrijving || `Taak ${task.id}`,
+          })),
       },
       {
         key: 'activities',
@@ -140,6 +150,24 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
     ],
     [data.masterData]
   );
+
+  /** Taken die overal mogen gebeuren staan in een eigen blok, want die eis geldt groepsbreed. */
+  const groepSections: CapacityRequirementSection[] = useMemo(
+    () => [
+      {
+        key: 'tasks',
+        title: 'Taken',
+        items: data.masterData.tasks
+          .filter((task) => task.nietLocatieGebonden)
+          .map((task) => ({
+            id: task.id,
+            label: task.afkorting || task.omschrijving || `Taak ${task.id}`,
+          })),
+      },
+    ],
+    [data.masterData]
+  );
+  const heeftGroepsTaken = groepSections[0].items.length > 0;
 
   const gekozenRegime = useMemo(
     () => regimes.find((regime) => regime.id === regimeId) ?? null,
@@ -162,7 +190,7 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
 
   const persist = useCallback(
     async (
-      cellsToSave: Map<string, CapacityDraft>,
+      teBewaren: { cells: Map<string, CapacityDraft>; groepCells: Map<string, CapacityDraft> },
       idplannerlocatie: number,
       idregime: number | null
     ) => {
@@ -181,7 +209,8 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
             idwaarneemgroep: groupId,
             idplannerlocatie,
             idregime,
-            cells: serializeCells(cellsToSave),
+            cells: serializeCells(teBewaren.cells),
+            groepCells: serializeCells(teBewaren.groepCells),
           }),
         });
         const payload = (await response.json()) as { error?: string };
@@ -222,9 +251,9 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
   }, [persist]);
 
   const scheduleSave = useCallback(
-    (nextCells: Map<string, CapacityDraft>) => {
+    (next: { cells: Map<string, CapacityDraft>; groepCells: Map<string, CapacityDraft> }) => {
       if (!locationIdRef.current) return;
-      pendingCellsRef.current = nextCells;
+      pendingCellsRef.current = next;
       if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = window.setTimeout(() => {
         saveTimerRef.current = null;
@@ -238,7 +267,9 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
     if (!locationId) {
       cancelPendingSave();
       setCells(buildEmptyCells(data.masterData.dayparts));
+      setGroepCells(buildEmptyCells(data.masterData.dayparts));
       setNormalCells(null);
+      setNormalGroepCells(null);
       setSaveStatus('idle');
       return;
     }
@@ -258,22 +289,31 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
         credentials: 'include',
         signal: abortController.signal,
       });
-      const payload = (await response.json()) as { cells?: PraktijkplannerCapacityCell[]; error?: string };
-      if (!response.ok || !payload.cells) {
+      const payload = (await response.json()) as {
+        cells?: PraktijkplannerCapacityCell[];
+        groepCells?: PraktijkplannerCapacityCell[];
+        error?: string;
+      };
+      if (!response.ok || !payload.cells || !payload.groepCells) {
         throw new Error(payload.error || 'Capaciteit kon niet worden geladen.');
       }
-      const map = buildEmptyCells(data.masterData.dayparts);
-      for (const cell of payload.cells) {
-        map.set(keyFor(cell.weekdag, cell.iddagdeel), { ...cell });
-      }
-      return map;
+      const naarMap = (rijen: PraktijkplannerCapacityCell[]) => {
+        const map = buildEmptyCells(data.masterData.dayparts);
+        for (const cell of rijen) {
+          map.set(keyFor(cell.weekdag, cell.iddagdeel), { ...cell });
+        }
+        return map;
+      };
+      return { cells: naarMap(payload.cells), groepCells: naarMap(payload.groepCells) };
     };
 
     Promise.all([laad(regimeId), regimeId == null ? Promise.resolve(null) : laad(null)])
       .then(([gekozen, normaal]) => {
         if (abortController.signal.aborted) return;
-        setCells(gekozen);
-        setNormalCells(normaal);
+        setCells(gekozen.cells);
+        setGroepCells(gekozen.groepCells);
+        setNormalCells(normaal?.cells ?? null);
+        setNormalGroepCells(normaal?.groepCells ?? null);
       })
       .catch((error: unknown) => {
         if (!abortController.signal.aborted) {
@@ -327,12 +367,18 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
    */
   const neemNormaleWeekOver = () => {
     if (!normalCells) return;
-    const next = new Map<string, CapacityDraft>();
-    for (const [key, cell] of normalCells) {
-      next.set(key, { ...cell, id: cells.get(key)?.id ?? null });
-    }
+    const overnemen = (bron: Map<string, CapacityDraft>, huidig: Map<string, CapacityDraft>) => {
+      const next = new Map<string, CapacityDraft>();
+      for (const [key, cell] of bron) {
+        next.set(key, { ...cell, id: huidig.get(key)?.id ?? null });
+      }
+      return next;
+    };
+    const next = overnemen(normalCells, cells);
+    const nextGroep = normalGroepCells ? overnemen(normalGroepCells, groepCells) : groepCells;
     setCells(next);
-    scheduleSave(next);
+    setGroepCells(nextGroep);
+    scheduleSave({ cells: next, groepCells: nextGroep });
   };
 
   const updateCell = (key: string, update: (current: CapacityDraft) => CapacityDraft) => {
@@ -341,7 +387,18 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
       if (!cell) return current;
       const next = new Map(current);
       next.set(key, update(cell));
-      scheduleSave(next);
+      scheduleSave({ cells: next, groepCells });
+      return next;
+    });
+  };
+
+  const updateGroepCell = (key: string, update: (current: CapacityDraft) => CapacityDraft) => {
+    setGroepCells((current) => {
+      const cell = current.get(key);
+      if (!cell) return current;
+      const next = new Map(current);
+      next.set(key, update(cell));
+      scheduleSave({ cells, groepCells: next });
       return next;
     });
   };
@@ -448,7 +505,10 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
               const cell = cells.get(key);
               if (!cell) return null;
               const normaalCell = normalCells?.get(key) ?? null;
+              const groepCell = groepCells.get(key);
+              const normaalGroepCell = normalGroepCells?.get(key) ?? null;
               return (
+                <div className="space-y-1.5">
                 <CapacityRequirementList
                   mode="edit"
                   normaal={
@@ -479,6 +539,46 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
                     }));
                   }}
                 />
+                {heeftGroepsTaken && groepCell ? (
+                  <div className="rounded border border-dashed border-border bg-muted/30 p-1.5">
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Hele groep
+                    </p>
+                    <CapacityRequirementList
+                      mode="edit"
+                      toonAantalDeelnemers={false}
+                      normaal={
+                        normaalGroepCell
+                          ? {
+                              aantalDeelnemers: normaalGroepCell.aantalDeelnemers,
+                              getValue: (sectionKey, itemId) =>
+                                requirementValue(
+                                  normaalGroepCell[sectionKey as RequirementField] as Requirement[],
+                                  itemId
+                                ),
+                            }
+                          : undefined
+                      }
+                      aantalDeelnemers={0}
+                      onAantalDeelnemersChange={() => undefined}
+                      sections={groepSections}
+                      getValue={(sectionKey, itemId) =>
+                        requirementValue(
+                          groepCell[sectionKey as RequirementField] as Requirement[],
+                          itemId
+                        )
+                      }
+                      onValueChange={(sectionKey, itemId, value) => {
+                        const field = sectionKey as RequirementField;
+                        updateGroepCell(key, (current) => ({
+                          ...current,
+                          [field]: setRequirement(current[field] as Requirement[], itemId, value),
+                        }));
+                      }}
+                    />
+                  </div>
+                ) : null}
+                </div>
               );
             }}
           />

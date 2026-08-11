@@ -747,7 +747,8 @@ export const capaciteitsregimeweken = pgTable("capaciteitsregimeweken", {
 export const capaciteitsjablonen = pgTable("capaciteitsjablonen", {
 	id: serial().primaryKey().notNull(),
 	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
-	idplannerlocatie: integer().notNull().references(() => praktijkplannerlocaties.id, { onDelete: "cascade" }),
+	// Leeg geldt voor de hele waarneemgroep, voor taken die op elke locatie mogen gebeuren.
+	idplannerlocatie: integer().references(() => praktijkplannerlocaties.id, { onDelete: "cascade" }),
 	weekdag: smallint().notNull(),
 	iddagdeel: integer().notNull().references(() => dagdelen.id),
 	// Leeg is de normale week. Een regime vervangt die week voor de weken die eraan hangen.

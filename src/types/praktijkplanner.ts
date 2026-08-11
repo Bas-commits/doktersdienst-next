@@ -56,6 +56,8 @@ export type PraktijkplannerTaskType = {
   omschrijving: string | null;
   kleur: string | null;
   idexpertise: number | null;
+  /** Mag op elke locatie gebeuren; de eis geldt dan voor de hele waarneemgroep. */
+  nietLocatieGebonden: boolean;
   actief: boolean;
 };
 

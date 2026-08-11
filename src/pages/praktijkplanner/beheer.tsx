@@ -39,7 +39,7 @@ const TABS: Array<{ id: BeheerTab; label: string }> = [
 ];
 
 function initialForm(): Form {
-  return { actief: true };
+  return { actief: true, nietLocatieGebonden: false };
 }
 
 function getItems(masterData: PraktijkplannerMasterData, entity: Entity) {
@@ -189,6 +189,7 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
       idactiviteit: item.idactiviteit ? String(item.idactiviteit) : '',
       idlocatie: item.idlocatie ? String(item.idlocatie) : '',
       actief: item.actief !== false,
+      nietLocatieGebonden: item.nietLocatieGebonden === true,
       omschrijving: String(item.omschrijving ?? ''),
       naam: String(item.naam ?? ''),
       afkorting: String(item.afkorting ?? ''),
@@ -482,6 +483,22 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
               <input className="h-9 rounded border bg-background px-2" inputMode="numeric" value={String(form.idlocatie ?? '')} onChange={(event) => setForm((current) => ({ ...current, idlocatie: event.target.value }))} />
             </label>
           ) : null} */}
+          {entity === 'task' ? (
+            <label className="flex items-start gap-2 text-sm md:col-span-2">
+              <Checkbox
+                className="mt-0.5"
+                checked={form.nietLocatieGebonden === true}
+                onCheckedChange={(value) => setForm((current) => ({ ...current, nietLocatieGebonden: !!value }))}
+              />
+              <span className="grid gap-0.5">
+                <Label className="cursor-pointer">Kan op elke locatie</Label>
+                <span className="text-xs text-muted-foreground">
+                  Bijvoorbeeld een telefonisch extern consult. In de Capaciteitsplanner vult u zulke
+                  taken een keer in voor de hele waarneemgroep in plaats van bij elke locatie apart.
+                </span>
+              </span>
+            </label>
+          ) : null}
           {editingId ? (
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={form.actief !== false} onCheckedChange={(value) => setForm((current) => ({ ...current, actief: !!value }))} />

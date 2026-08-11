@@ -34,6 +34,11 @@ type EditableProps = {
     aantalDeelnemers: number;
     getValue: (sectionKey: string, itemId: number) => number;
   };
+  /**
+   * Uit voor het groepsblok. Daar staan alleen taken die overal mogen gebeuren; een aantal
+   * dokters zou daar een tweede eis worden naast die van de locaties.
+   */
+  toonAantalDeelnemers?: boolean;
 };
 
 type StatusProps = {
@@ -102,19 +107,21 @@ export function CapacityRequirementList(props: CapacityRequirementListProps) {
       props;
     return (
       <div className="min-w-[140px] space-y-1.5 text-xs">
-        <div>
-          <label className="flex items-center justify-between gap-2 font-medium">
-            <span>Aantal dokters:</span>
-            <NumberInput
-              value={aantalDeelnemers}
-              onChange={onAantalDeelnemersChange}
-              ariaLabel="Aantal dokters"
-            />
-          </label>
-          {normaal ? (
-            <NormaalHint waarde={aantalDeelnemers} normaal={normaal.aantalDeelnemers} />
-          ) : null}
-        </div>
+        {props.toonAantalDeelnemers === false ? null : (
+          <div>
+            <label className="flex items-center justify-between gap-2 font-medium">
+              <span>Aantal dokters:</span>
+              <NumberInput
+                value={aantalDeelnemers}
+                onChange={onAantalDeelnemersChange}
+                ariaLabel="Aantal dokters"
+              />
+            </label>
+            {normaal ? (
+              <NormaalHint waarde={aantalDeelnemers} normaal={normaal.aantalDeelnemers} />
+            ) : null}
+          </div>
+        )}
         {sections.map((section) =>
           section.items.length === 0 ? null : (
             <div key={section.key} className="space-y-1 border-t border-border/60 pt-1.5">

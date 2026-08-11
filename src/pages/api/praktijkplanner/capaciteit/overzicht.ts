@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq, gte, inArray, lte } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import {
   resolvePraktijkplannerAccess,
@@ -90,13 +90,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           weekdag: schema.capaciteitsjablonen.weekdag,
           iddagdeel: schema.capaciteitsjablonen.iddagdeel,
           idregime: schema.capaciteitsjablonen.idregime,
+          idplannerlocatie: schema.capaciteitsjablonen.idplannerlocatie,
           aantalDeelnemers: schema.capaciteitsjablonen.aantalDeelnemers,
         })
         .from(schema.capaciteitsjablonen)
+        // Ook de rijen zonder locatie: dat zijn de eisen voor taken die overal mogen gebeuren.
         .where(
           and(
             eq(schema.capaciteitsjablonen.idwaarneemgroep, accessResult.access.idwaarneemgroep),
-            eq(schema.capaciteitsjablonen.idplannerlocatie, idplannerlocatie)
+            or(
+              eq(schema.capaciteitsjablonen.idplannerlocatie, idplannerlocatie),
+              isNull(schema.capaciteitsjablonen.idplannerlocatie)
+            )
           )
         ),
       db
@@ -176,12 +181,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             iddagdeel: schema.planning.iddagdeel,
             idactiviteit: schema.planning.idactiviteit,
             idactiviteitspecificatie: schema.planning.idactiviteitspecificatie,
+            idplannerlocatie: schema.planning.idplannerlocatie,
           })
           .from(schema.planning)
+          // Zonder locatiefilter: een taak die overal mag gebeuren telt over de hele groep, en
+          // dan tellen ook de regels mee waar helemaal geen locatie op staat. Op de locatie
+          // wordt hieronder in het geheugen gefilterd.
           .where(
             and(
               eq(schema.planning.idwaarneemgroep, accessResult.access.idwaarneemgroep),
-              eq(schema.planning.idplannerlocatie, idplannerlocatie),
               gte(schema.planning.datum, start),
               lte(schema.planning.datum, end)
             )
@@ -266,15 +274,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     };
     // Het regime hoort bij de sleutel, want dezelfde maandagochtend bestaat nu een keer voor de
     // normale week en een keer voor elk regime.
+    const bruikbareTemplates = templates.filter(
+      (template): template is typeof template & { id: number; weekdag: number; iddagdeel: number; aantalDeelnemers: number } =>
+        template.id != null &&
+        template.weekdag != null &&
+        template.iddagdeel != null &&
+        template.aantalDeelnemers != null
+    );
     const templateByKey = new Map(
-      templates
-        .filter(
-          (template): template is typeof template & { id: number; weekdag: number; iddagdeel: number; aantalDeelnemers: number } =>
-            template.id != null &&
-            template.weekdag != null &&
-            template.iddagdeel != null &&
-            template.aantalDeelnemers != null
-        )
+      bruikbareTemplates
+        .filter((template) => template.idplannerlocatie != null)
+        .map((template) => [
+          `${template.idregime ?? 'normaal'}:${template.weekdag}:${template.iddagdeel}`,
+          template,
+        ])
+    );
+    const groepTemplateByKey = new Map(
+      bruikbareTemplates
+        .filter((template) => template.idplannerlocatie == null)
         .map((template) => [
           `${template.idregime ?? 'normaal'}:${template.weekdag}:${template.iddagdeel}`,
           template,
@@ -317,6 +334,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       );
     const expertiseLabels = labels(expertiseRows);
     const taskLabels = labels(taskRows);
+    const groepTaskLabels = new Map(
+      [...taskLabels].map(([id, waarde]) => [id, { ...waarde, label: `${waarde.label} (groep)` }])
+    );
     const activityLabels = labels(activityRows);
     const specificationLabels = labels(specificationRows);
     const requiredExpertises = requirementsByTemplate(templateExpertises);
@@ -348,13 +368,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const template = templateByKey.get(
           `${regime?.id ?? 'normaal'}:${weekdayFromIsoDate(datum)}:${daypart.id}`
         );
-        const activeSlots = (slotsByDateDaypart.get(`${datum}:${daypart.id}`) ?? []).filter(
+        const groepTemplate = groepTemplateByKey.get(
+          `${regime?.id ?? 'normaal'}:${weekdayFromIsoDate(datum)}:${daypart.id}`
+        );
+        const aanwezigeSlots = (slotsByDateDaypart.get(`${datum}:${daypart.id}`) ?? []).filter(
           (slot) =>
             slot.iddeelnemer != null &&
             !absenceKeys.has(`${slot.iddeelnemer}:${datum}:${daypart.id}`)
         );
+        const activeSlots = aanwezigeSlots.filter(
+          (slot) => slot.idplannerlocatie === idplannerlocatie
+        );
         const expertiseCounts = new Map<number, number>();
         const taskCounts = new Map<number, number>();
+        // Over de hele groep, dus ook de deelnemers zonder locatie en die op een andere locatie.
+        const groepTaskCounts = new Map<number, number>();
+        for (const slot of aanwezigeSlots) {
+          if (slot.id == null) continue;
+          for (const id of tasksByPlanning.get(slot.id) ?? []) {
+            groepTaskCounts.set(id, (groepTaskCounts.get(id) ?? 0) + 1);
+          }
+        }
         const activityCounts = new Map<number, number>();
         const specificationCounts = new Map<number, number>();
         for (const slot of activeSlots) {
@@ -396,12 +430,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             expertiseLabels,
             'expertise'
           ),
-          taken: countsToComparisons(
-            templateId != null ? requiredTasks.get(templateId) ?? [] : [],
-            taskCounts,
-            taskLabels,
-            'taak'
-          ),
+          taken: [
+            ...countsToComparisons(
+              templateId != null ? requiredTasks.get(templateId) ?? [] : [],
+              taskCounts,
+              taskLabels,
+              'taak'
+            ),
+            // De groepseisen erachter, met "groep" in het label. Zonder dat zou de planner niet
+            // kunnen zien waarom deze regel op elke locatie hetzelfde staat.
+            ...countsToComparisons(
+              groepTemplate?.id != null ? requiredTasks.get(groepTemplate.id) ?? [] : [],
+              groepTaskCounts,
+              groepTaskLabels,
+              'groepstaak'
+            ),
+          ],
           activiteiten: countsToComparisons(
             templateId != null ? requiredActivities.get(templateId) ?? [] : [],
             activityCounts,

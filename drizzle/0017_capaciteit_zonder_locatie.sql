@@ -1,0 +1,12 @@
+-- Een taak-eis hing altijd aan een locatie. Voor een taak die overal mag gebeuren, zoals een
+-- telefonisch extern consult, klopt dat niet: die moest bij elke locatie apart worden ingevuld
+-- en het overzicht telde alleen de planning van die ene locatie mee. Iemand die het consult op
+-- Hoofddorp deed liet de eis op Noord en Zuid rood staan terwijl er niets ontbrak.
+--
+-- Een lege locatie betekent nu "geldt voor de hele waarneemgroep", hetzelfde patroon als het
+-- lege idregime voor de normale week. De unieke sleutel staat al op NULLS NOT DISTINCT, dus die
+-- houdt ook van deze rijen er maar een over.
+--
+-- Welke taken zo werken staat op het taaktype (taaktypen.niet_locatie_gebonden), niet op de
+-- eis. Anders zou dezelfde taak op maandag wel en op dinsdag niet locatiegebonden kunnen zijn.
+ALTER TABLE "capaciteitsjablonen" ALTER COLUMN "idplannerlocatie" DROP NOT NULL;

@@ -116,6 +116,7 @@ export async function getPraktijkplannerMasterData(
         omschrijving: schema.taaktypen.omschrijving,
         kleur: schema.taaktypen.kleur,
         idexpertise: schema.taaktypen.idexpertise,
+        nietLocatieGebonden: schema.taaktypen.nietLocatieGebonden,
         verwijderd: schema.taaktypen.verwijderd,
       })
       .from(schema.taaktypen)
@@ -223,6 +224,9 @@ export async function getPraktijkplannerMasterData(
         omschrijving: row.omschrijving,
         kleur: row.kleur,
         idexpertise: row.idexpertise,
+        // De kolom komt uit het oude systeem en staat daar meestal leeg. Leeg betekent gewoon
+        // locatiegebonden, dus dat is hier false en niet null.
+        nietLocatieGebonden: row.nietLocatieGebonden === true,
         actief: row.verwijderd !== 1,
       })),
     locations: locationRows

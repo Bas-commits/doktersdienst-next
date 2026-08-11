@@ -668,22 +668,31 @@ export function PlannerAbsenceEditor({
         </div>
       ) : participants[0] ? (
         <div>
+          {/*
+            Dezelfde indeling als bij de weekbalk: de navigatie krijgt de ruimte en de knoppen
+            staan er rechts naast. Hier stond de knop links van de maanden, en dan leest hij
+            als iets wat vooraf gaat aan de navigatie in plaats van erbij te horen.
+          */}
           <div
-            className="ml-44 flex flex-wrap items-center gap-3"
+            className="flex items-center gap-3"
             style={{ marginBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}
           >
-            {editable ? (
-              <PlannerAvondNachtToggle
-                aan={showNight}
-                heeftInhoud={heeftAvondNachtInhoud}
-                onChange={updateVisibility}
+            <div className="min-w-0 flex-1">
+              <MonthNavigation
+                month={overviewMonth.month - 1}
+                year={overviewMonth.year}
+                onSelectMonth={(selectedMonth, selectedYear) => changeMonth(selectedYear, selectedMonth + 1)}
               />
+            </div>
+            {editable ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <PlannerAvondNachtToggle
+                  aan={showNight}
+                  heeftInhoud={heeftAvondNachtInhoud}
+                  onChange={updateVisibility}
+                />
+              </div>
             ) : null}
-            <MonthNavigation
-              month={overviewMonth.month - 1}
-              year={overviewMonth.year}
-              onSelectMonth={(selectedMonth, selectedYear) => changeMonth(selectedYear, selectedMonth + 1)}
-            />
           </div>
           <div className="overflow-x-auto pb-2">
           <div

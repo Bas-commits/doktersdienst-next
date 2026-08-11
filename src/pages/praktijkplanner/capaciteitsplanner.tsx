@@ -7,14 +7,19 @@ import {
   CapacityRequirementList,
   type CapacityRequirementSection,
 } from '@/components/praktijkplanner/CapacityRequirementList';
+import { CapacityRegimeModal } from '@/components/praktijkplanner/CapacityRegimeModal';
 import { CAPACITY_WEEKDAYS, CapacityWeekGrid } from '@/components/praktijkplanner/CapacityWeekGrid';
 import {
   PraktijkplannerPage,
   PraktijkplannerTitleAside,
   type PraktijkplannerPageContext,
 } from '@/components/praktijkplanner/PraktijkplannerPage';
+import { Button } from '@/components/ui/button';
 import { isDaypartSchedulable } from '@/lib/praktijkplanner/schedulable-dayparts';
-import type { PraktijkplannerCapacityCell } from '@/types/praktijkplanner';
+import type {
+  PraktijkplannerCapacityCell,
+  PraktijkplannerCapacityRegime,
+} from '@/types/praktijkplanner';
 
 type Requirement = { id: number; aantal: number };
 type CapacityDraft = Omit<PraktijkplannerCapacityCell, 'id'> & { id: number | null };
@@ -74,9 +79,14 @@ function setRequirement(items: Requirement[], id: number, aantal: number): Requi
 function CapacityPlannerContent(context: PraktijkplannerPageContext) {
   const { groupId, data } = context;
   const [locationId, setLocationId] = useState<number | null>(null);
+  const [regimes, setRegimes] = useState<PraktijkplannerCapacityRegime[]>([]);
+  const [regimeId, setRegimeId] = useState<number | null>(null);
+  const [regimesOpen, setRegimesOpen] = useState(false);
   const [cells, setCells] = useState<Map<string, CapacityDraft>>(() =>
     buildEmptyCells(data.masterData.dayparts)
   );
+  // De normale week naast het regime, zodat bij elke eis het verschil kan worden getoond.
+  const [normalCells, setNormalCells] = useState<Map<string, CapacityDraft> | null>(null);
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
@@ -85,6 +95,8 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
   const pendingCellsRef = useRef<Map<string, CapacityDraft> | null>(null);
   const locationIdRef = useRef(locationId);
   locationIdRef.current = locationId;
+  const regimeIdRef = useRef(regimeId);
+  regimeIdRef.current = regimeId;
 
   const dayparts = useMemo(
     () => [...data.masterData.dayparts].sort((left, right) => left.volgorde - right.volgorde),
@@ -129,6 +141,11 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
     [data.masterData]
   );
 
+  const gekozenRegime = useMemo(
+    () => regimes.find((regime) => regime.id === regimeId) ?? null,
+    [regimeId, regimes]
+  );
+
   useEffect(() => {
     if (locationId == null && data.masterData.locations[0]) {
       setLocationId(data.masterData.locations[0].id);
@@ -144,7 +161,16 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
   }, []);
 
   const persist = useCallback(
-    async (cellsToSave: Map<string, CapacityDraft>, idplannerlocatie: number) => {
+    async (
+      cellsToSave: Map<string, CapacityDraft>,
+      idplannerlocatie: number,
+      idregime: number | null
+    ) => {
+      // Het regime hoort net als de locatie bij de vraag of dit antwoord nog gaat over wat er
+      // nu op het scherm staat. Zonder die tweede vergelijking meldt een trage opslag van de
+      // zomer "Opgeslagen" terwijl de secretaris allang naar de normale week is geschakeld.
+      const nogActueel = () =>
+        locationIdRef.current === idplannerlocatie && regimeIdRef.current === idregime;
       setSaveStatus('saving');
       try {
         const response = await fetch('/api/praktijkplanner/capaciteit', {
@@ -154,15 +180,16 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
           body: JSON.stringify({
             idwaarneemgroep: groupId,
             idplannerlocatie,
+            idregime,
             cells: serializeCells(cellsToSave),
           }),
         });
         const payload = (await response.json()) as { error?: string };
         if (!response.ok) throw new Error(payload.error || 'Opslaan mislukt.');
-        if (locationIdRef.current !== idplannerlocatie) return;
+        if (!nogActueel()) return;
         setSaveStatus('saved');
       } catch (error) {
-        if (locationIdRef.current !== idplannerlocatie) return;
+        if (!nogActueel()) return;
         setSaveStatus('error');
         toast.error(error instanceof Error ? error.message : 'Opslaan mislukt.');
       }
@@ -173,17 +200,22 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
   const flushSave = useCallback(async () => {
     if (saveInFlightRef.current) return;
     const idplannerlocatie = locationIdRef.current;
+    const idregime = regimeIdRef.current;
     const cellsToSave = pendingCellsRef.current;
     if (!idplannerlocatie || !cellsToSave) return;
 
     pendingCellsRef.current = null;
     saveInFlightRef.current = true;
     try {
-      await persist(cellsToSave, idplannerlocatie);
+      await persist(cellsToSave, idplannerlocatie, idregime);
     } finally {
       saveInFlightRef.current = false;
       // If the user changed values during the request, persist the latest snapshot once.
-      if (pendingCellsRef.current && locationIdRef.current === idplannerlocatie) {
+      if (
+        pendingCellsRef.current &&
+        locationIdRef.current === idplannerlocatie &&
+        regimeIdRef.current === idregime
+      ) {
         void flushSave();
       }
     }
@@ -206,6 +238,7 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
     if (!locationId) {
       cancelPendingSave();
       setCells(buildEmptyCells(data.masterData.dayparts));
+      setNormalCells(null);
       setSaveStatus('idle');
       return;
     }
@@ -214,22 +247,33 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
     const abortController = new AbortController();
     setLoading(true);
     setSaveStatus('idle');
-    fetch(`/api/praktijkplanner/capaciteit?idwaarneemgroep=${groupId}&idplannerlocatie=${locationId}`, {
-      credentials: 'include',
-      signal: abortController.signal,
-    })
-      .then(async (response) => {
-        const payload = (await response.json()) as { cells?: PraktijkplannerCapacityCell[]; error?: string };
-        if (!response.ok || !payload.cells) throw new Error(payload.error || 'Capaciteit kon niet worden geladen.');
-        return payload.cells;
-      })
-      .then((loaded) => {
+
+    const laad = async (idregime: number | null) => {
+      const query = new URLSearchParams({
+        idwaarneemgroep: String(groupId),
+        idplannerlocatie: String(locationId),
+      });
+      if (idregime != null) query.set('idregime', String(idregime));
+      const response = await fetch(`/api/praktijkplanner/capaciteit?${query.toString()}`, {
+        credentials: 'include',
+        signal: abortController.signal,
+      });
+      const payload = (await response.json()) as { cells?: PraktijkplannerCapacityCell[]; error?: string };
+      if (!response.ok || !payload.cells) {
+        throw new Error(payload.error || 'Capaciteit kon niet worden geladen.');
+      }
+      const map = buildEmptyCells(data.masterData.dayparts);
+      for (const cell of payload.cells) {
+        map.set(keyFor(cell.weekdag, cell.iddagdeel), { ...cell });
+      }
+      return map;
+    };
+
+    Promise.all([laad(regimeId), regimeId == null ? Promise.resolve(null) : laad(null)])
+      .then(([gekozen, normaal]) => {
         if (abortController.signal.aborted) return;
-        const next = buildEmptyCells(data.masterData.dayparts);
-        for (const cell of loaded) {
-          next.set(keyFor(cell.weekdag, cell.iddagdeel), { ...cell });
-        }
-        setCells(next);
+        setCells(gekozen);
+        setNormalCells(normaal);
       })
       .catch((error: unknown) => {
         if (!abortController.signal.aborted) {
@@ -244,7 +288,52 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
       abortController.abort();
       cancelPendingSave();
     };
-  }, [cancelPendingSave, data.masterData.dayparts, groupId, locationId]);
+  }, [cancelPendingSave, data.masterData.dayparts, groupId, locationId, regimeId]);
+
+  useEffect(() => {
+    const abortController = new AbortController();
+    fetch(`/api/praktijkplanner/capaciteit/regimes?idwaarneemgroep=${groupId}`, {
+      credentials: 'include',
+      signal: abortController.signal,
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as {
+          regimes?: PraktijkplannerCapacityRegime[];
+          error?: string;
+        };
+        if (!response.ok || !payload.regimes) {
+          throw new Error(payload.error || 'De afwijkende weken konden niet worden geladen.');
+        }
+        return payload.regimes;
+      })
+      .then((loaded) => {
+        if (!abortController.signal.aborted) setRegimes(loaded);
+      })
+      .catch((error: unknown) => {
+        if (!abortController.signal.aborted) {
+          toast.error(
+            error instanceof Error ? error.message : 'De afwijkende weken konden niet worden geladen.'
+          );
+        }
+      });
+    return () => abortController.abort();
+  }, [groupId]);
+
+  /**
+   * Zet het regime op de normale week als beginpunt.
+   *
+   * Nodig omdat een regime de normale week vervangt: zonder dit begint elke afwijkende week
+   * leeg en moet alles wat wel gewoon doorgaat opnieuw worden ingetypt.
+   */
+  const neemNormaleWeekOver = () => {
+    if (!normalCells) return;
+    const next = new Map<string, CapacityDraft>();
+    for (const [key, cell] of normalCells) {
+      next.set(key, { ...cell, id: cells.get(key)?.id ?? null });
+    }
+    setCells(next);
+    scheduleSave(next);
+  };
 
   const updateCell = (key: string, update: (current: CapacityDraft) => CapacityDraft) => {
     setCells((current) => {
@@ -291,6 +380,25 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
             ))}
           </select>
         </label>
+        <label className="flex items-center gap-2 text-base">
+          <span className="font-medium">Week</span>
+          <select
+            value={regimeId ?? ''}
+            onChange={(event) => setRegimeId(Number(event.target.value) || null)}
+            className="h-10 min-w-48 rounded border bg-background px-3 text-base"
+            data-testid="capaciteit-regime-keuze"
+          >
+            <option value="">Normale week</option>
+            {regimes.map((regime) => (
+              <option key={regime.id} value={regime.id}>
+                {regime.naam}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button type="button" variant="outline" size="sm" onClick={() => setRegimesOpen(true)}>
+          Afwijkende weken
+        </Button>
         {saveStatusLabel ? (
           <p
             className={[
@@ -311,6 +419,25 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
       ) : (
         <>
           {loading ? <p className="text-sm text-muted-foreground">Capaciteit laden…</p> : null}
+          {gekozenRegime ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+              <p className="flex-1 text-muted-foreground">
+                {gekozenRegime.weken.length === 0
+                  ? `${gekozenRegime.naam} geldt nog voor geen enkele week. Wijs weken aan bij Afwijkende weken.`
+                  : `${gekozenRegime.naam} vervangt de normale week in ${gekozenRegime.weken.length === 1 ? '1 week' : `${gekozenRegime.weken.length} weken`}. Wat hier staat is wat er geldt.`}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!normalCells || loading}
+                onClick={neemNormaleWeekOver}
+                data-testid="capaciteit-neem-normale-week-over"
+              >
+                Neem de normale week over
+              </Button>
+            </div>
+          ) : null}
           <CapacityWeekGrid
             dayparts={dayparts}
             isCellUnavailable={(weekday, daypart) =>
@@ -320,9 +447,22 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
               const key = keyFor(weekday.id, daypart.id);
               const cell = cells.get(key);
               if (!cell) return null;
+              const normaalCell = normalCells?.get(key) ?? null;
               return (
                 <CapacityRequirementList
                   mode="edit"
+                  normaal={
+                    normaalCell
+                      ? {
+                          aantalDeelnemers: normaalCell.aantalDeelnemers,
+                          getValue: (sectionKey, itemId) =>
+                            requirementValue(
+                              normaalCell[sectionKey as RequirementField] as Requirement[],
+                              itemId
+                            ),
+                        }
+                      : undefined
+                  }
                   aantalDeelnemers={cell.aantalDeelnemers}
                   onAantalDeelnemersChange={(value) =>
                     updateCell(key, (current) => ({ ...current, aantalDeelnemers: value }))
@@ -344,6 +484,21 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
           />
         </>
       )}
+
+      <CapacityRegimeModal
+        open={regimesOpen}
+        onClose={() => setRegimesOpen(false)}
+        groupId={groupId}
+        regimes={regimes}
+        onChanged={(volgende) => {
+          setRegimes(volgende);
+          // Het regime dat op het scherm staat kan zojuist zijn verwijderd. Dan terug naar de
+          // normale week, anders blijft er een sjabloon staan dat nergens meer geldt.
+          if (regimeId != null && !volgende.some((regime) => regime.id === regimeId)) {
+            setRegimeId(null);
+          }
+        }}
+      />
     </div>
   );
 }

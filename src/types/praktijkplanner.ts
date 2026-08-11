@@ -189,6 +189,19 @@ export type PraktijkplannerCapacityCell = {
   specifications: PraktijkplannerCapacityRequirement[];
 };
 
+/**
+ * Een benoemde afwijking op de normale week, met de maandagen van de weken waarin hij geldt.
+ *
+ * Een regime vervangt de normale week, het vult hem niet aan: wat in het regime staat is wat
+ * geldt. Weken staan als maandag en niet als jaar plus weeknummer, want een week over de
+ * jaargrens hoort bij twee jaartallen.
+ */
+export type PraktijkplannerCapacityRegime = {
+  id: number;
+  naam: string;
+  weken: string[];
+};
+
 export type PraktijkplannerCapacityComparison = {
   key: string;
   label: string;

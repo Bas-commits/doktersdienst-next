@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import {
   resolvePraktijkplannerAccess,
@@ -40,6 +40,32 @@ function parseRequirements(value: unknown): Array<{ id: number; aantal: number }
     result.push({ id, aantal });
   }
   return result;
+}
+
+/**
+ * Het sjabloon van een regime, of dat van de normale week als er geen regime is gekozen.
+ *
+ * De normale week is de rij met idregime leeg. Dat moet met IS NULL, niet met een vergelijking:
+ * `= NULL` levert in SQL geen enkele rij op en het scherm zou dan leeg blijven.
+ */
+function regimeFilter(idregime: number | null) {
+  return idregime == null
+    ? isNull(schema.capaciteitsjablonen.idregime)
+    : eq(schema.capaciteitsjablonen.idregime, idregime);
+}
+
+async function regimeInGroup(idregime: number, idwaarneemgroep: number) {
+  const [regime] = await db
+    .select({ id: schema.capaciteitsregimes.id })
+    .from(schema.capaciteitsregimes)
+    .where(
+      and(
+        eq(schema.capaciteitsregimes.id, idregime),
+        eq(schema.capaciteitsregimes.idwaarneemgroep, idwaarneemgroep)
+      )
+    )
+    .limit(1);
+  return regime?.id != null;
 }
 
 async function locationInGroup(idplannerlocatie: number, idwaarneemgroep: number) {
@@ -127,7 +153,8 @@ async function assertRequirementIds(input: {
 
 async function loadCapacity(
   idwaarneemgroep: number,
-  idplannerlocatie: number
+  idplannerlocatie: number,
+  idregime: number | null
 ): Promise<PraktijkplannerCapacityCell[]> {
   const templates = await db
     .select({
@@ -140,7 +167,8 @@ async function loadCapacity(
     .where(
       and(
         eq(schema.capaciteitsjablonen.idwaarneemgroep, idwaarneemgroep),
-        eq(schema.capaciteitsjablonen.idplannerlocatie, idplannerlocatie)
+        eq(schema.capaciteitsjablonen.idplannerlocatie, idplannerlocatie),
+        regimeFilter(idregime)
       )
     );
   const ids = templates.map((template) => template.id).filter((id): id is number => id != null);
@@ -238,9 +266,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     if (!idplannerlocatie || !(await locationInGroup(idplannerlocatie, accessResult.access.idwaarneemgroep))) {
       return res.status(400).json({ error: 'Kies een geldige plannerlocatie.' });
     }
+    const gevraagdRegime = oneQueryValue(req.query.idregime);
+    let idregime: number | null = null;
+    if (gevraagdRegime !== undefined && gevraagdRegime !== '') {
+      idregime = parsePositiveInteger(gevraagdRegime);
+      if (!idregime || !(await regimeInGroup(idregime, accessResult.access.idwaarneemgroep))) {
+        return res.status(400).json({ error: 'Dit regime bestaat niet.' });
+      }
+    }
     try {
       return res.status(200).json({
-        cells: await loadCapacity(accessResult.access.idwaarneemgroep, idplannerlocatie),
+        cells: await loadCapacity(accessResult.access.idwaarneemgroep, idplannerlocatie, idregime),
       });
     } catch (error) {
       console.error('[praktijkplanner/capaciteit GET]', error);
@@ -266,6 +302,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
   if (!Array.isArray(body.cells) || body.cells.length > 28) {
     return res.status(400).json({ error: 'De capaciteit bevat maximaal 28 dagdelen.' });
+  }
+  let idregime: number | null = null;
+  if (body.idregime != null) {
+    idregime = parsePositiveInteger(body.idregime);
+    if (!idregime || !(await regimeInGroup(idregime, accessResult.access.idwaarneemgroep))) {
+      return res.status(400).json({ error: 'Dit regime bestaat niet.' });
+    }
   }
 
   try {
@@ -350,6 +393,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             idplannerlocatie,
             weekdag: cell.weekdag,
             iddagdeel: cell.iddagdeel,
+            idregime,
             aantalDeelnemers: cell.aantalDeelnemers,
             updatedBy,
             updatedAt,
@@ -361,6 +405,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             schema.capaciteitsjablonen.idplannerlocatie,
             schema.capaciteitsjablonen.weekdag,
             schema.capaciteitsjablonen.iddagdeel,
+            schema.capaciteitsjablonen.idregime,
           ],
           set: {
             aantalDeelnemers: sql`excluded.aantal_deelnemers`,

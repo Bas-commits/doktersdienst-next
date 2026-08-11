@@ -21,6 +21,8 @@ type OverviewCell = {
   datum: string;
   iddagdeel: number;
   dagdeel: string;
+  /** Het regime dat deze week geldt, of leeg als het de normale week is. */
+  regime: string | null;
   totaal: PraktijkplannerCapacityComparison;
   expertises: PraktijkplannerCapacityComparison[];
   taken: PraktijkplannerCapacityComparison[];
@@ -152,6 +154,11 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
     return map;
   }, [cells]);
 
+  // Dit scherm toont precies een week, dus het regime geldt voor alle cellen tegelijk. Daarom
+  // staat het boven het rooster en niet in elke cel: naast gepland en benodigd zou een derde
+  // getal per cel niet meer te lezen zijn.
+  const weekRegime = useMemo(() => cells.find((cell) => cell.regime)?.regime ?? null, [cells]);
+
   if (!data.isManager) {
     return (
       <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
@@ -196,6 +203,14 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
       ) : (
         <>
           {loading ? <p className="text-sm text-muted-foreground">Overzicht laden…</p> : null}
+          {weekRegime ? (
+            <p
+              className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground"
+              data-testid="capaciteit-overzicht-regime"
+            >
+              Deze week geldt {weekRegime}, niet de normale bezetting.
+            </p>
+          ) : null}
           <CapacityWeekGrid
             dayparts={dayparts}
             weekdayHeaders={weekdayHeaders}

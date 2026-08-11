@@ -6,13 +6,21 @@ import {
   sendPraktijkplannerAccessError,
 } from '@/lib/praktijkplanner/access';
 import { compareCapacity } from '@/lib/praktijkplanner/capacity';
-import { datesBetweenInclusive, isIsoDate, parsePositiveInteger, weekdayFromIsoDate } from '@/lib/praktijkplanner/dates';
+import {
+  datesBetweenInclusive,
+  isIsoDate,
+  parsePositiveInteger,
+  startOfIsoWeek,
+  weekdayFromIsoDate,
+} from '@/lib/praktijkplanner/dates';
 
 type Comparison = ReturnType<typeof compareCapacity>;
 type OverviewCell = {
   datum: string;
   iddagdeel: number;
   dagdeel: string;
+  /** De naam van het regime dat deze week geldt, of leeg als de normale week geldt. */
+  regime: string | null;
   totaal: Comparison;
   expertises: Comparison[];
   taken: Comparison[];
@@ -65,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
 
   try {
-    const [location, templates, dayparts] = await Promise.all([
+    const [location, templates, dayparts, regimeWeken] = await Promise.all([
       db
         .select({ id: schema.praktijkplannerlocaties.id })
         .from(schema.praktijkplannerlocaties)
@@ -81,6 +89,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           id: schema.capaciteitsjablonen.id,
           weekdag: schema.capaciteitsjablonen.weekdag,
           iddagdeel: schema.capaciteitsjablonen.iddagdeel,
+          idregime: schema.capaciteitsjablonen.idregime,
           aantalDeelnemers: schema.capaciteitsjablonen.aantalDeelnemers,
         })
         .from(schema.capaciteitsjablonen)
@@ -93,6 +102,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       db
         .select({ id: schema.dagdelen.id, naam: schema.dagdelen.naam, volgorde: schema.dagdelen.volgorde })
         .from(schema.dagdelen),
+      // Vanaf de maandag van de eerste dag, want een bereik begint zelden op een maandag en de
+      // week eromheen bepaalt wel welk regime die dagen gelden.
+      db
+        .select({
+          maandag: schema.capaciteitsregimeweken.maandag,
+          idregime: schema.capaciteitsregimeweken.idregime,
+          naam: schema.capaciteitsregimes.naam,
+        })
+        .from(schema.capaciteitsregimeweken)
+        .innerJoin(
+          schema.capaciteitsregimes,
+          eq(schema.capaciteitsregimeweken.idregime, schema.capaciteitsregimes.id)
+        )
+        .where(
+          and(
+            eq(schema.capaciteitsregimeweken.idwaarneemgroep, accessResult.access.idwaarneemgroep),
+            gte(schema.capaciteitsregimeweken.maandag, startOfIsoWeek(start)),
+            lte(schema.capaciteitsregimeweken.maandag, end)
+          )
+        ),
     ]);
     if (!location[0]?.id) return res.status(400).json({ error: 'De plannerlocatie bestaat niet.' });
 
@@ -235,6 +264,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       }
       return map;
     };
+    // Het regime hoort bij de sleutel, want dezelfde maandagochtend bestaat nu een keer voor de
+    // normale week en een keer voor elk regime.
     const templateByKey = new Map(
       templates
         .filter(
@@ -244,7 +275,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             template.iddagdeel != null &&
             template.aantalDeelnemers != null
         )
-        .map((template) => [`${template.weekdag}:${template.iddagdeel}`, template])
+        .map((template) => [
+          `${template.idregime ?? 'normaal'}:${template.weekdag}:${template.iddagdeel}`,
+          template,
+        ])
+    );
+    const regimeByWeek = new Map(
+      regimeWeken
+        .filter((week): week is typeof week & { maandag: string; idregime: number; naam: string } =>
+          week.maandag != null && week.idregime != null && week.naam != null
+        )
+        .map((week) => [week.maandag, { id: week.idregime, naam: week.naam }])
     );
     const absenceKeys = new Set(
       absenceRows
@@ -300,7 +341,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const cells: OverviewCell[] = [];
     for (const datum of datesBetweenInclusive(start, end)) {
       for (const daypart of daypartList) {
-        const template = templateByKey.get(`${weekdayFromIsoDate(datum)}:${daypart.id}`);
+        const regime = regimeByWeek.get(startOfIsoWeek(datum)) ?? null;
+        // Een regime vervangt de normale week. Heeft het geen rij voor dit dagdeel, dan wordt er
+        // niets geeist; terugvallen op de normale week zou juist de eis terugbrengen die de
+        // secretaris daar bewust heeft weggehaald.
+        const template = templateByKey.get(
+          `${regime?.id ?? 'normaal'}:${weekdayFromIsoDate(datum)}:${daypart.id}`
+        );
         const activeSlots = (slotsByDateDaypart.get(`${datum}:${daypart.id}`) ?? []).filter(
           (slot) =>
             slot.iddeelnemer != null &&
@@ -336,6 +383,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           datum,
           iddagdeel: daypart.id,
           dagdeel: daypart.naam,
+          regime: regime?.naam ?? null,
           totaal: compareCapacity({
             key: `totaal:${datum}:${daypart.id}`,
             label: 'Aantal deelnemers',

@@ -24,6 +24,16 @@ type EditableProps = {
   sections: CapacityRequirementSection[];
   getValue: (sectionKey: string, itemId: number) => number;
   onValueChange: (sectionKey: string, itemId: number, value: number) => void;
+  /**
+   * De normale week, als er een regime wordt bewerkt.
+   *
+   * Een regime vervangt de normale week, dus na het invullen is niet meer te zien wat er is
+   * weggehaald. Dit zet de normale waarde en het verschil erbij.
+   */
+  normaal?: {
+    aantalDeelnemers: number;
+    getValue: (sectionKey: string, itemId: number) => number;
+  };
 };
 
 type StatusProps = {
@@ -59,6 +69,23 @@ function NumberInput({
   );
 }
 
+/**
+ * De normale waarde bij een eis in een regime, met het verschil erachter.
+ *
+ * Staat er niets in het regime en ook niets in de normale week, dan valt de regel weg: een
+ * cel met bij elke eis "normaal 0" is niet te lezen en zegt niets.
+ */
+function NormaalHint({ waarde, normaal }: { waarde: number; normaal: number }) {
+  if (waarde === 0 && normaal === 0) return null;
+  const verschil = waarde - normaal;
+  return (
+    <span className="block text-right text-[10px] leading-tight text-muted-foreground tabular-nums">
+      normaal {normaal}
+      {verschil === 0 ? '' : `, ${verschil > 0 ? '+' : ''}${verschil}`}
+    </span>
+  );
+}
+
 function StatusBadge({ comparison }: { comparison: PraktijkplannerCapacityComparison }) {
   return (
     <span
@@ -71,30 +98,44 @@ function StatusBadge({ comparison }: { comparison: PraktijkplannerCapacityCompar
 
 export function CapacityRequirementList(props: CapacityRequirementListProps) {
   if (props.mode === 'edit') {
-    const { aantalDeelnemers, onAantalDeelnemersChange, sections, getValue, onValueChange } = props;
+    const { aantalDeelnemers, onAantalDeelnemersChange, sections, getValue, onValueChange, normaal } =
+      props;
     return (
       <div className="min-w-[140px] space-y-1.5 text-xs">
-        <label className="flex items-center justify-between gap-2 font-medium">
-          <span>Aantal dokters:</span>
-          <NumberInput
-            value={aantalDeelnemers}
-            onChange={onAantalDeelnemersChange}
-            ariaLabel="Aantal dokters"
-          />
-        </label>
+        <div>
+          <label className="flex items-center justify-between gap-2 font-medium">
+            <span>Aantal dokters:</span>
+            <NumberInput
+              value={aantalDeelnemers}
+              onChange={onAantalDeelnemersChange}
+              ariaLabel="Aantal dokters"
+            />
+          </label>
+          {normaal ? (
+            <NormaalHint waarde={aantalDeelnemers} normaal={normaal.aantalDeelnemers} />
+          ) : null}
+        </div>
         {sections.map((section) =>
           section.items.length === 0 ? null : (
             <div key={section.key} className="space-y-1 border-t border-border/60 pt-1.5">
               <p className="font-semibold text-muted-foreground">{section.title}</p>
               {section.items.map((item) => (
-                <label key={item.id} className="flex items-center justify-between gap-2">
-                  <span className="truncate">{item.label}</span>
-                  <NumberInput
-                    value={getValue(section.key, item.id)}
-                    onChange={(value) => onValueChange(section.key, item.id, value)}
-                    ariaLabel={`${section.title} ${item.label}`}
-                  />
-                </label>
+                <div key={item.id}>
+                  <label className="flex items-center justify-between gap-2">
+                    <span className="truncate">{item.label}</span>
+                    <NumberInput
+                      value={getValue(section.key, item.id)}
+                      onChange={(value) => onValueChange(section.key, item.id, value)}
+                      ariaLabel={`${section.title} ${item.label}`}
+                    />
+                  </label>
+                  {normaal ? (
+                    <NormaalHint
+                      waarde={getValue(section.key, item.id)}
+                      normaal={normaal.getValue(section.key, item.id)}
+                    />
+                  ) : null}
+                </div>
               ))}
             </div>
           )

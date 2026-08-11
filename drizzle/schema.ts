@@ -720,25 +720,57 @@ export const planningherhalinguitzonderingen = pgTable("planningherhalinguitzond
 	),
 ]);
 
+export const capaciteitsregimes = pgTable("capaciteitsregimes", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id, { onDelete: "cascade" }),
+	naam: varchar({ length: 60 }).notNull(),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	unique("capaciteitsregimes_group_naam_unique").on(table.idwaarneemgroep, table.naam),
+	index("capaciteitsregimes_group_idx").on(table.idwaarneemgroep),
+]);
+
+export const capaciteitsregimeweken = pgTable("capaciteitsregimeweken", {
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id, { onDelete: "cascade" }),
+	idregime: integer().notNull().references(() => capaciteitsregimes.id, { onDelete: "cascade" }),
+	maandag: date().notNull(),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	// De sleutel op de week, niet op het regime: zo kan een week nooit aan twee regimes hangen.
+	primaryKey({ name: "capaciteitsregimeweken_group_maandag_pk", columns: [table.idwaarneemgroep, table.maandag] }),
+	check("capaciteitsregimeweken_maandag_check", sql`EXTRACT(ISODOW FROM ${table.maandag}) = 1`),
+	index("capaciteitsregimeweken_regime_idx").on(table.idregime),
+]);
+
 export const capaciteitsjablonen = pgTable("capaciteitsjablonen", {
 	id: serial().primaryKey().notNull(),
 	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
 	idplannerlocatie: integer().notNull().references(() => praktijkplannerlocaties.id, { onDelete: "cascade" }),
 	weekdag: smallint().notNull(),
 	iddagdeel: integer().notNull().references(() => dagdelen.id),
+	// Leeg is de normale week. Een regime vervangt die week voor de weken die eraan hangen.
+	idregime: integer().references(() => capaciteitsregimes.id, { onDelete: "cascade" }),
 	aantalDeelnemers: integer("aantal_deelnemers").notNull().default(0),
 	updatedBy: integer("updated_by").references(() => deelnemers.id),
 	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
 }, (table) => [
-	unique("capaciteitsjablonen_group_location_weekday_daypart_unique").on(
-		table.idwaarneemgroep,
-		table.idplannerlocatie,
-		table.weekdag,
-		table.iddagdeel
-	),
+	// Postgres kapt een naam boven 63 tekens af, dus die past hier niet voluit.
+	unique("capaciteitsjablonen_group_location_weekday_daypart_regime_uq")
+		.on(
+			table.idwaarneemgroep,
+			table.idplannerlocatie,
+			table.weekdag,
+			table.iddagdeel,
+			table.idregime
+		)
+		// Zonder dit telt Postgres twee normale weken als verschillend, want hun idregime is NULL.
+		.nullsNotDistinct(),
 	check("capaciteitsjablonen_weekdag_check", sql`${table.weekdag} >= 1 AND ${table.weekdag} <= 7`),
 	check("capaciteitsjablonen_participants_check", sql`${table.aantalDeelnemers} >= 0`),
 	index("capaciteitsjablonen_group_location_idx").on(table.idwaarneemgroep, table.idplannerlocatie),
+	index("capaciteitsjablonen_regime_idx").on(table.idregime),
 ]);
 
 export const capaciteitsjabloonexpertises = pgTable("capaciteitsjabloonexpertises", {

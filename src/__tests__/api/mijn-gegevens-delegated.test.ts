@@ -1,9 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  BEHEERDER_WIJZIGT_EMAIL_TEKST,
-  BEHEERDER_WIJZIGT_WACHTWOORD_TEKST,
+  BEHEERDER_WIJZIGT_ANDERMANS_EMAIL_TEKST,
+  BEHEERDER_WIJZIGT_ANDERMANS_WACHTWOORD_TEKST,
 } from '@/lib/beheerder-contact';
+
+const STERK_WACHTWOORD = 'Zeergeheim!2026';
 
 const mockGetAuthenticatedUser = vi.fn();
 const mockHasDelegatedProfileAccess = vi.fn();
@@ -64,6 +66,15 @@ vi.mock('@/lib/legacy-password', () => ({
   legacyMD5Hash: vi.fn((value: string) => `hashed-${value}`),
 }));
 
+const mockVerifyStoredCredentialHash = vi.fn(async () => true);
+
+vi.mock('@/lib/legacy-credential', () => ({
+  resolveStoredCredentialHash: vi.fn((row: { encrypted_password: string | null }) =>
+    row.encrypted_password
+  ),
+  verifyStoredCredentialHash: (...args: unknown[]) => mockVerifyStoredCredentialHash(...args),
+}));
+
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((a: unknown, b: unknown) => [a, b]),
   and: vi.fn((...args: unknown[]) => args),
@@ -116,6 +127,8 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
     });
     mockHasDelegatedProfileAccess.mockResolvedValue(true);
     mockCanEditEchtedeelnemer.mockResolvedValue(true);
+    mockVerifyStoredCredentialHash.mockResolvedValue(true);
+    mockPoolQuery.mockResolvedValue({ rows: [] });
   });
 
   it('blocks delegated GET when secretaris has no access to target participant', async () => {
@@ -158,25 +171,49 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
     );
 
     expect(res._status).toBe(403);
-    expect(res._json).toEqual({ error: BEHEERDER_WIJZIGT_EMAIL_TEKST });
+    expect(res._json).toEqual({ error: BEHEERDER_WIJZIGT_ANDERMANS_EMAIL_TEKST });
   });
 
-  it('rejects delegated PATCH attempts to change the password', async () => {
+  it('rejects a secretaris setting the password of another participant', async () => {
     const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
     const res = makeRes();
 
     await handler(
       makeReq('PATCH', {
         query: { deelnemerId: '22' },
-        body: { passa: 'geheim', passb: 'geheim' },
+        body: { passa: STERK_WACHTWOORD, passb: STERK_WACHTWOORD },
       }),
       res
     );
 
     expect(res._status).toBe(403);
-    expect(res._json).toEqual({
-      error: 'Wachtwoord kan niet worden aangepast voor deze deelnemer',
+    expect(res._json).toEqual({ error: BEHEERDER_WIJZIGT_ANDERMANS_WACHTWOORD_TEKST });
+  });
+
+  it('lets an administrator set another password without knowing the current one', async () => {
+    mockGetAuthenticatedUser.mockResolvedValueOnce({
+      id: 1,
+      email: 'admin@test.nl',
+      idgroep: 5,
+      isAdmin: true,
     });
+
+    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
+    const res = makeRes();
+
+    await handler(
+      makeReq('PATCH', {
+        query: { deelnemerId: '22' },
+        body: { passa: STERK_WACHTWOORD, passb: STERK_WACHTWOORD },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(200);
+    expect(mockVerifyStoredCredentialHash).not.toHaveBeenCalled();
+    expect(mockUpdateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ encryptedPassword: `hashed-${STERK_WACHTWOORD}` })
+    );
   });
 
   it('accepts a delegated PATCH that echoes the unchanged email back', async () => {
@@ -199,7 +236,7 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
     expect(res._status).toBe(200);
   });
 
-  it('allows admin delegated PATCH to change email immediately', async () => {
+  it('sends an administrator changing another email through the confirmation flow too', async () => {
     mockGetAuthenticatedUser.mockResolvedValueOnce({
       id: 1,
       email: 'admin@test.nl',
@@ -222,18 +259,12 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
       res
     );
 
-    expect(res._status).toBe(200);
-    expect(res._json).toEqual({ success: true, loginUpdated: true });
-    expect(mockUpdateSet).toHaveBeenCalledWith(
-      expect.objectContaining({
-        login: 'new@example.com',
-        email: 'new@example.com',
-        emailVerified: true,
-      })
-    );
+    expect(res._status).toBe(400);
+    expect(res._json).toMatchObject({ code: 'EMAIL_CHANGE_REQUIRES_VERIFICATION' });
+    expect(mockUpdateSet).not.toHaveBeenCalled();
   });
 
-  it('blocks a self PATCH from changing email when the actor is not an administrator', async () => {
+  it('sends a participant changing their own email through the confirmation flow', async () => {
     selectQueue.push([
       { login: 'old@example.com', huisemail: 'old@example.com', emailVerified: true },
     ]);
@@ -248,8 +279,9 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
       res
     );
 
-    expect(res._status).toBe(403);
-    expect(res._json).toEqual({ error: BEHEERDER_WIJZIGT_EMAIL_TEKST });
+    expect(res._status).toBe(400);
+    expect(res._json).toMatchObject({ code: 'EMAIL_CHANGE_REQUIRES_VERIFICATION' });
+    expect(mockUpdateSet).not.toHaveBeenCalled();
   });
 
   it('sends a verified administrator changing their own email through the confirmation flow', async () => {
@@ -279,19 +311,75 @@ describe('/api/mijn-gegevens delegated profile editing', () => {
     });
   });
 
-  it('blocks a self PATCH from changing the password when the actor is not an administrator', async () => {
+  it('lets a participant change their own password with the current one', async () => {
+    selectQueue.push([{ encryptedPassword: 'OUDEHASH', password: null }]);
+
     const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
     const res = makeRes();
 
     await handler(
       makeReq('PATCH', {
-        body: { passa: 'geheim', passb: 'geheim' },
+        body: { passa: STERK_WACHTWOORD, passb: STERK_WACHTWOORD, huidigWachtwoord: 'oud' },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(200);
+    expect(mockVerifyStoredCredentialHash).toHaveBeenCalledWith('OUDEHASH', 'oud');
+    expect(mockUpdateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ encryptedPassword: `hashed-${STERK_WACHTWOORD}` })
+    );
+  });
+
+  it('refuses an own password change without the current password', async () => {
+    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
+    const res = makeRes();
+
+    await handler(
+      makeReq('PATCH', {
+        body: { passa: STERK_WACHTWOORD, passb: STERK_WACHTWOORD },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({ error: 'Vul uw huidige wachtwoord in' });
+    expect(mockUpdateSet).not.toHaveBeenCalled();
+  });
+
+  it('refuses an own password change when the current password is wrong', async () => {
+    mockVerifyStoredCredentialHash.mockResolvedValueOnce(false);
+    selectQueue.push([{ encryptedPassword: 'OUDEHASH', password: null }]);
+
+    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
+    const res = makeRes();
+
+    await handler(
+      makeReq('PATCH', {
+        body: { passa: STERK_WACHTWOORD, passb: STERK_WACHTWOORD, huidigWachtwoord: 'fout' },
       }),
       res
     );
 
     expect(res._status).toBe(403);
-    expect(res._json).toEqual({ error: BEHEERDER_WIJZIGT_WACHTWOORD_TEKST });
+    expect(res._json).toEqual({ error: 'Uw huidige wachtwoord klopt niet' });
+    expect(mockUpdateSet).not.toHaveBeenCalled();
+  });
+
+  it('refuses a new password that does not meet the rules', async () => {
+    const { default: handler } = await import('@/pages/api/mijn-gegevens/index');
+    const res = makeRes();
+
+    await handler(
+      makeReq('PATCH', {
+        body: { passa: 'geheim', passb: 'geheim', huidigWachtwoord: 'oud' },
+      }),
+      res
+    );
+
+    expect(res._status).toBe(400);
+    expect(String((res._json as { error: string }).error)).toContain('sterker wachtwoord');
+    expect(mockVerifyStoredCredentialHash).not.toHaveBeenCalled();
   });
 
   it('rejects invalid phone fields on PATCH', async () => {

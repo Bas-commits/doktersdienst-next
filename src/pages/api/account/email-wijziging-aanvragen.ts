@@ -13,9 +13,12 @@ import {
   needsEmailOnboarding,
 } from '@/lib/account-status';
 import { getAuthenticatedUser } from '@/lib/api-auth';
-import { BEHEERDER_WIJZIGT_EMAIL_TEKST } from '@/lib/beheerder-contact';
+import { BEHEERDER_WIJZIGT_ANDERMANS_EMAIL_TEKST } from '@/lib/beheerder-contact';
 import { getEffectivePublicSiteOriginForInvite } from '@/lib/better-auth-url';
-import { sendEmailChangeConfirmationEmailViaResend } from '@/lib/resend-email';
+import {
+  sendEmailChangeConfirmationEmailViaResend,
+  sendEmailChangeNoticeEmailViaResend,
+} from '@/lib/resend-email';
 
 const { deelnemers } = schema;
 
@@ -23,6 +26,8 @@ const MAX_LOGIN_EMAIL = 50;
 
 type PostBody = {
   newEmail?: unknown;
+  /** Alleen de beheerder mag dit meesturen: het account dat gewijzigd wordt. */
+  deelnemerId?: unknown;
 };
 
 type Data = { ok: true; message: string } | { error: string };
@@ -37,24 +42,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  // Vergrendelen op het scherm alleen is geen slot: dit endpoint verstuurt de
-  // bevestigingsmail waarmee de login daadwerkelijk verandert, dus de
-  // beheerderscontrole hoort hier te staan en niet in de knop die het aanroept.
-  if (!user.isAdmin) {
-    return res.status(403).json({ error: BEHEERDER_WIJZIGT_EMAIL_TEKST });
+  // Elke adreswijziging loopt hierlangs, ook die van de beheerder voor een
+  // ander. Anders zou hij een login kunnen zetten op een adres waarvan niemand
+  // heeft aangetoond dat de deelnemer erbij kan.
+  const body = req.body as PostBody;
+  const gevraagdeId = Number(body.deelnemerId);
+  const targetId =
+    Number.isInteger(gevraagdeId) && gevraagdeId > 0 ? gevraagdeId : user.id;
+  const isDelegated = targetId !== user.id;
+  if (isDelegated && !user.isAdmin) {
+    return res.status(403).json({ error: BEHEERDER_WIJZIGT_ANDERMANS_EMAIL_TEKST });
   }
 
-  const row = await getAccountStatusForUser(user.id);
+  const row = await getAccountStatusForUser(targetId);
   if (!row) {
     return res.status(404).json({ error: 'Deelnemer niet gevonden' });
   }
-  if (needsEmailOnboarding(row)) {
+  // Je eigen adres wijzigen kan pas als je het huidige hebt bevestigd; anders
+  // hoor je in het onboarding-scherm. Die eis geldt niet voor de beheerder: een
+  // account dat daar juist op vastloopt is precies wat hij komt losmaken.
+  if (!isDelegated && needsEmailOnboarding(row)) {
     return res.status(400).json({
       error: 'Voltooi eerst de e-mailverificatie via het onboarding-scherm.',
     });
   }
 
-  const body = req.body as PostBody;
   const emailRaw = typeof body.newEmail === 'string' ? body.newEmail.trim() : '';
   if (!emailRaw || !isValidAccountEmail(emailRaw)) {
     return res.status(400).json({ error: 'Vul een geldig e-mailadres in.' });
@@ -74,7 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const [dupe] = await db
     .select({ id: deelnemers.id })
     .from(deelnemers)
-    .where(and(eq(deelnemers.login, newEmail), ne(deelnemers.id, user.id)))
+    .where(and(eq(deelnemers.login, newEmail), ne(deelnemers.id, targetId)))
     .limit(1);
   if (dupe) {
     return res.status(400).json({ error: 'Dit e-mailadres is al in gebruik als loginnaam.' });
@@ -95,7 +107,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
   let confirmUrl: string;
   try {
-    const token = await signEmailChangeToken(user.id, newEmail);
+    const token = await signEmailChangeToken(targetId, newEmail);
     confirmUrl = `${siteOrigin.replace(/\/+$/, '')}/api/account/bevestig-email-wijziging?token=${encodeURIComponent(token)}`;
   } catch (err) {
     console.error('account/email-wijziging-aanvragen: sign JWT failed', err);
@@ -114,6 +126,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     return res.status(502).json({
       error: `De bevestigingsmail kon niet worden verstuurd: ${detail}`,
     });
+  }
+
+  // Pas melden nadat de bevestiging eruit is. Andersom zou het oude adres een
+  // wijziging aangekondigd krijgen die daarna alsnog op een 502 strandt.
+  // Mislukt de melding zelf, dan gaat de aanvraag door: de bevestigingsmail is
+  // wat de wijziging tegenhoudt, niet deze.
+  if (currentLogin.includes('@')) {
+    try {
+      await sendEmailChangeNoticeEmailViaResend({
+        to: currentLogin,
+        newEmail,
+        userName: displayNameFromDeelnemer(row),
+      });
+    } catch (err) {
+      console.error('account/email-wijziging-aanvragen: notice to old address failed', err);
+    }
   }
 
   return res.status(200).json({

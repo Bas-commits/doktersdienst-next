@@ -16,7 +16,7 @@ import { UnsavedChangesModal } from '@/components/mijn-gegevens/UnsavedChangesMo
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import type { MijnGegevensProfile, MijnGegevensLookup, MijnGegevensUpdateBody, TelnrSlot } from '@/types/mijn-gegevens';
 import { ROL_LABELS } from '@/lib/rol-labels';
-import { BEHEERDER_WIJZIGT_EMAIL_TEKST } from '@/lib/beheerder-contact';
+import { BEHEERDER_WIJZIGT_ANDERMANS_EMAIL_TEKST } from '@/lib/beheerder-contact';
 
 const TELNR_SPECIAL_TYPES = [
   { id: 1001, naam: 'Mobiel' },
@@ -202,6 +202,8 @@ export default function MijnGegevensPage() {
   const [isDelegatedEdit, setIsDelegatedEdit] = useState(false);
   const [canEditEchtedeelnemer, setCanEditEchtedeelnemer] = useState(false);
   const [canEditEmail, setCanEditEmail] = useState(false);
+  const [canEditPassword, setCanEditPassword] = useState(false);
+  const [requiresCurrentPassword, setRequiresCurrentPassword] = useState(true);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const [pendingEmailChange, setPendingEmailChange] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -275,6 +277,8 @@ export default function MijnGegevensPage() {
         setIsDelegatedEdit(data.isDelegatedEdit === true);
         setCanEditEchtedeelnemer(data.canEditEchtedeelnemer === true);
         setCanEditEmail(data.canEditEmail === true);
+        setCanEditPassword(data.canEditPassword === true);
+        setRequiresCurrentPassword(data.requiresCurrentPassword !== false);
         setEmailVerified(data.emailVerified ?? null);
         setPendingEmailChange(null);
         setProfile(profileRes);
@@ -488,15 +492,20 @@ export default function MijnGegevensPage() {
     const trimmedEmail = huisemail.trim();
     const savedEmail = savedSnapshot?.huisemail.trim() ?? '';
     const emailChanged = trimmedEmail.toLowerCase() !== savedEmail.toLowerCase();
-    const useVerifiedEmailChangeFlow =
-      canEditEmail && !isDelegatedEdit && emailVerified === true && emailChanged;
+    // Elk adres gaat via de bevestigingsmail, ook dat wat de beheerder voor een
+    // ander invult. Anders zou niemand hebben aangetoond dat de deelnemer bij
+    // dat nieuwe adres kan.
+    const useVerifiedEmailChangeFlow = canEditEmail && emailChanged;
 
     if (useVerifiedEmailChangeFlow) {
       const emailRes = await fetch('/api/account/email-wijziging-aanvragen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ newEmail: trimmedEmail }),
+        body: JSON.stringify({
+          newEmail: trimmedEmail,
+          ...(isDelegatedEdit ? { deelnemerId: delegatedDeelnemerId } : {}),
+        }),
       });
       const emailData = await emailRes.json();
       if (!emailRes.ok) {
@@ -628,6 +637,8 @@ export default function MijnGegevensPage() {
       <PasswordChangeModal
         open={passwordModalOpen}
         onClose={() => setPasswordModalOpen(false)}
+        vraagHuidigWachtwoord={requiresCurrentPassword}
+        deelnemerId={isDelegatedEdit ? delegatedDeelnemerId : null}
       />
       <UnsavedChangesModal
         open={pendingNavUrl != null}
@@ -714,44 +725,58 @@ export default function MijnGegevensPage() {
                             data-testid="huisemail-uitleg"
                             className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden w-full rounded-md bg-neutral-900 px-3 py-2 text-xs leading-snug text-white shadow-lg group-hover:block dark:bg-neutral-700"
                           >
-                            {BEHEERDER_WIJZIGT_EMAIL_TEKST}
+                            {BEHEERDER_WIJZIGT_ANDERMANS_EMAIL_TEKST}
                           </span>
                         )}
                       </div>
-                      {canEditEmail && !isDelegatedEdit && emailVerified === true && (
+                      {!isDelegatedEdit && emailVerified === true && (
                         <p className="text-xs text-muted-foreground">
-                          Wijzigingen aan uw e-mailadres vereisen bevestiging via een link in uw inbox.
-                          Uw wachtwoord blijft hetzelfde.
+                          Een nieuw adres gaat pas in nadat u de bevestigingslink volgt die u
+                          daarop krijgt. Uw huidige adres krijgt een melding dat de wijziging
+                          loopt. Uw wachtwoord blijft hetzelfde.
+                        </p>
+                      )}
+                      {!isDelegatedEdit && emailVerified !== true && (
+                        <p className="text-xs text-muted-foreground">
+                          Bevestig eerst uw huidige e-mailadres. Daarna kunt u het hier wijzigen.
+                        </p>
+                      )}
+                      {isDelegatedEdit && canEditEmail && (
+                        <p className="text-xs text-muted-foreground">
+                          Het nieuwe adres krijgt een bevestigingsmail en gaat pas in als de
+                          deelnemer die link volgt. Zo blijkt of hij er echt bij kan. Het
+                          huidige adres krijgt een melding.
                         </p>
                       )}
                       {pendingEmailChange && (
                         <p className="text-xs text-amber-800 dark:text-amber-200" role="status">
-                          Verificatiemail verstuurd naar {pendingEmailChange}. Uw login wijzigt pas na
-                          bevestiging.
+                          Bevestigingsmail verstuurd naar {pendingEmailChange}. De login wijzigt pas
+                          na bevestiging.
                         </p>
                       )}
                     </div>
                   </div>
-                  {canEditEmail &&
-                    (!isDelegatedEdit ? (
-                      <div className="flex flex-col gap-1.5 border-t border-border/60 pt-4">
-                        <Label>Wachtwoord</Label>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-fit"
-                          onClick={() => setPasswordModalOpen(true)}
-                          disabled={isSubmitting}
-                        >
-                          Wijzig wachtwoord
-                        </Button>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Als beheerder kunt u het e-mailadres direct wijzigen zonder verificatie.
-                      </p>
-                    ))}
+                  {canEditPassword && (
+                    <div className="flex flex-col gap-1.5 border-t border-border/60 pt-4">
+                      <Label>Wachtwoord</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-fit"
+                        onClick={() => setPasswordModalOpen(true)}
+                        disabled={isSubmitting}
+                      >
+                        Wijzig wachtwoord
+                      </Button>
+                      {isDelegatedEdit && (
+                        <p className="text-xs text-muted-foreground">
+                          Als beheerder zet u hier een nieuw wachtwoord zonder het huidige te
+                          kennen.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className={formSectionClass}>

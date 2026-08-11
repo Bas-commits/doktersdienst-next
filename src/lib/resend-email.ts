@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import { logger } from '@/lib/logger';
 import {
+  renderEmailChangeNoticeBodies,
   renderMagicLinkBodies,
   renderPasswordResetBodies,
   renderPraktijkplannerPlanningAvailableBodies,
@@ -230,6 +231,37 @@ export async function sendEmailChangeConfirmationEmailViaResend(params: {
     text,
     devLogPayload: { to: params.to, subject, url: params.url, flow: 'email-change-strict' },
     errorLabel: 'Resend email change confirmation failed',
+  });
+}
+
+/**
+ * Waarschuwt het huidige adres dat er een adreswijziging loopt.
+ *
+ * Bewust zonder bevestigingslink en zonder leveringsbewijs: dit adres hoeft
+ * niets te bevestigen, en een mailbox die niet meer werkt is vaak juist de reden
+ * dat iemand zijn adres wijzigt. De wijziging blokkeren omdat deze mail niet
+ * aankomt zou die mensen buitensluiten.
+ */
+export async function sendEmailChangeNoticeEmailViaResend(params: {
+  to: string;
+  newEmail: string;
+  userName: string | null;
+}): Promise<void> {
+  const { html, text } = await renderEmailChangeNoticeBodies({
+    oldEmail: params.to,
+    newEmail: params.newEmail,
+    userName: params.userName,
+  });
+  const subject = 'Wijziging van uw e-mailadres aangevraagd — De Doktersdienst';
+
+  await sendRenderedEmail({
+    to: params.to,
+    subject,
+    html,
+    text,
+    devLogPayload: { to: params.to, subject, flow: 'email-change-notice' },
+    warnMessage: 'Resend niet geconfigureerd; melding naar oud adres alleen gelogd',
+    errorLabel: 'Resend email change notice failed',
   });
 }
 

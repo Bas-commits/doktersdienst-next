@@ -10,7 +10,11 @@ import {
 } from '@/lib/legacy-credential';
 import { pool as appPool } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import { assertStrongPasswordOrThrow } from '@/lib/password-policy';
+import {
+  assertStrongPasswordOrThrow,
+  STRONG_PASSWORD_MAX_LENGTH,
+  STRONG_PASSWORD_MIN_LENGTH,
+} from '@/lib/password-policy';
 import { PASSWORD_UPGRADED_MARKER } from '@/lib/account-password-upgrade';
 import {
   sendMagicLinkEmailViaResend,
@@ -155,8 +159,8 @@ export const auth = betterAuth({
     onPasswordReset: async ({ user }) => {
       await syncDeelnemerPasswordFromAccount(user.id);
     },
-    minPasswordLength: 12,
-    maxPasswordLength: 128,
+    minPasswordLength: STRONG_PASSWORD_MIN_LENGTH,
+    maxPasswordLength: STRONG_PASSWORD_MAX_LENGTH,
     password: {
       hash: async (password: string) => legacyMD5Hash(password),
       verify: async ({ hash, password }) => {

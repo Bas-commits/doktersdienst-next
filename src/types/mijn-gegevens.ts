@@ -76,8 +76,15 @@ export interface MijnGegevensPageData {
   lookup: MijnGegevensLookup;
   isDelegatedEdit?: boolean;
   canEditEchtedeelnemer?: boolean;
-  /** Alleen de beheerder mag een login-e-mailadres wijzigen, van zichzelf en van anderen. */
+  /** Je eigen e-mailadres mag je zelf wijzigen; dat van een ander alleen de beheerder. */
   canEditEmail?: boolean;
+  /** Zelfde verdeling als canEditEmail, maar voor het wachtwoord. */
+  canEditPassword?: boolean;
+  /**
+   * Vraagt het venster om het huidige wachtwoord? Waar bij het eigen account,
+   * onwaar voor de beheerder die een ander helpt: die kent het niet.
+   */
+  requiresCurrentPassword?: boolean;
   emailVerified?: boolean | null;
   targetDeelnemerId?: number;
   actingDeelnemerId?: number;
@@ -86,6 +93,8 @@ export interface MijnGegevensPageData {
 export interface MijnGegevensUpdateBody {
   passa?: string;
   passb?: string;
+  /** Verplicht bij een wachtwoordwijziging op het eigen account. */
+  huidigWachtwoord?: string;
   color?: string;
   achternaam?: string;
   voorletterstussenvoegsel?: string;

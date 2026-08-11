@@ -7,9 +7,14 @@ import { getAuthenticatedUser } from '@/lib/api-auth';
 import { hasDelegatedProfileAccess, canEditEchtedeelnemer } from '@/lib/mijn-gegevens-access';
 import { normalizeAccountEmail } from '@/lib/account-email-tokens';
 import {
-  BEHEERDER_WIJZIGT_EMAIL_TEKST,
-  BEHEERDER_WIJZIGT_WACHTWOORD_TEKST,
+  BEHEERDER_WIJZIGT_ANDERMANS_EMAIL_TEKST,
+  BEHEERDER_WIJZIGT_ANDERMANS_WACHTWOORD_TEKST,
 } from '@/lib/beheerder-contact';
+import {
+  resolveStoredCredentialHash,
+  verifyStoredCredentialHash,
+} from '@/lib/legacy-credential';
+import { getStrongPasswordError } from '@/lib/password-policy';
 import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
 import type {
   MijnGegevensProfile,
@@ -33,8 +38,6 @@ const {
 
 const LOGIN_MIN = 3;
 const LOGIN_MAX = 50;
-const PASSWORD_MIN = 3;
-const PASSWORD_MAX = 16;
 const STRING_MAX = 50;
 const POSTCODE_MAX = 10;
 const PLAATS_MAX = 40;
@@ -49,6 +52,52 @@ function normaliseLocatieId(raw: number): number {
 }
 
 const GELDIGE_WAARNEEMGROEP_FUNCTIES = new Set([1, 2, 3, 4]);
+
+/**
+ * Controleert het meegestuurde huidige wachtwoord tegen de opgeslagen hash.
+ *
+ * Geeft null terug als het klopt, anders het antwoord dat de route moet sturen.
+ * Wie nog nooit een wachtwoord heeft gezet kan hier niets bewijzen en wordt naar
+ * de resetlink gestuurd. Zou een leeg veld hier slagen, dan was het juist bij de
+ * accounts zonder wachtwoord dat iedereen langs de controle liep.
+ */
+async function controleerHuidigWachtwoord(
+  deelnemerId: number,
+  ingevuld: unknown
+): Promise<{ status: number; error: string } | null> {
+  const plain = typeof ingevuld === 'string' ? ingevuld : '';
+  if (!plain) {
+    return { status: 400, error: 'Vul uw huidige wachtwoord in' };
+  }
+
+  const [row] = await db
+    .select({
+      encryptedPassword: deelnemers.encryptedPassword,
+      password: deelnemers.password,
+    })
+    .from(deelnemers)
+    .where(eq(deelnemers.id, deelnemerId))
+    .limit(1);
+
+  const hash = row
+    ? resolveStoredCredentialHash({
+        encrypted_password: row.encryptedPassword,
+        password: row.password,
+      })
+    : null;
+  if (!hash) {
+    return {
+      status: 400,
+      error:
+        'Er staat nog geen wachtwoord op dit account. Gebruik "wachtwoord vergeten" op de inlogpagina om er een te kiezen.',
+    };
+  }
+
+  if (!(await verifyStoredCredentialHash(hash, plain))) {
+    return { status: 403, error: 'Uw huidige wachtwoord klopt niet' };
+  }
+  return null;
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -489,7 +538,9 @@ export default async function handler(
         lookup,
         isDelegatedEdit,
         canEditEchtedeelnemer: mayEditEchtedeelnemer,
-        canEditEmail: actor.isAdmin,
+        canEditEmail: !isDelegatedEdit || actor.isAdmin,
+        canEditPassword: !isDelegatedEdit || actor.isAdmin,
+        requiresCurrentPassword: !isDelegatedEdit,
         emailVerified: deelnemer.emailVerified ?? null,
         targetDeelnemerId,
         actingDeelnemerId: actor.id,
@@ -510,29 +561,33 @@ export default async function handler(
   }
 
   try {
-    if (body.passa !== undefined || body.passb !== undefined) {
-      if (isDelegatedEdit) {
-        return res.status(403).json({
-          error: 'Wachtwoord kan niet worden aangepast voor deze deelnemer',
-        });
-      }
-      // Het scherm toont de knop Wijzig wachtwoord alleen aan de beheerder,
-      // maar dat is presentatie. De weigering hoort hier.
-      if (!actor.isAdmin) {
-        return res.status(403).json({ error: BEHEERDER_WIJZIGT_WACHTWOORD_TEKST });
-      }
-    }
-
     const passa = typeof body.passa === 'string' ? body.passa : undefined;
     const passb = typeof body.passb === 'string' ? body.passb : undefined;
-    if (passa !== undefined && passb !== undefined) {
+
+    if (body.passa !== undefined || body.passb !== undefined) {
+      // Het scherm toont de knop Wijzig wachtwoord alleen waar het mag, maar dat
+      // is presentatie. De weigering hoort hier.
+      if (isDelegatedEdit && !actor.isAdmin) {
+        return res.status(403).json({ error: BEHEERDER_WIJZIGT_ANDERMANS_WACHTWOORD_TEKST });
+      }
+      if (passa === undefined || passb === undefined) {
+        return res.status(400).json({ error: 'Vul het nieuwe wachtwoord twee keer in' });
+      }
       if (passa !== passb) {
         return res.status(400).json({ error: 'Nieuw password en herhaling komen niet overeen' });
       }
-      if (passa.length < PASSWORD_MIN || passa.length > PASSWORD_MAX) {
-        return res.status(400).json({
-          error: `Nieuw password moet tussen ${PASSWORD_MIN} en ${PASSWORD_MAX} tekens zijn`,
-        });
+      const regelFout = getStrongPasswordError(passa);
+      if (regelFout) {
+        return res.status(400).json({ error: regelFout });
+      }
+      // Op je eigen account is het huidige wachtwoord het bewijs dat jij het bent
+      // en niet iemand die je scherm open aantrof. De beheerder die een ander
+      // helpt kan dat wachtwoord niet weten: dat is juist waarom hij gebeld wordt.
+      if (!isDelegatedEdit) {
+        const fout = await controleerHuidigWachtwoord(targetDeelnemerId, body.huidigWachtwoord);
+        if (fout) {
+          return res.status(fout.status).json({ error: fout.error });
+        }
       }
     }
 
@@ -604,14 +659,18 @@ export default async function handler(
 
       // Het scherm stuurt het huidige adres gewoon mee, ook als het niet is
       // aangepast. Daarom wordt hier op de waarde vergeleken en niet op de
-      // aanwezigheid van het veld: alleen een echte wijziging is beheerderswerk.
-      if (emailWijzigt && !actor.isAdmin) {
+      // aanwezigheid van het veld: alleen een echte wijziging telt.
+      if (emailWijzigt && isDelegatedEdit && !actor.isAdmin) {
         return res.status(403).json({
-          error: BEHEERDER_WIJZIGT_EMAIL_TEKST,
+          error: BEHEERDER_WIJZIGT_ANDERMANS_EMAIL_TEKST,
         });
       }
 
-      if (emailWijzigt && !isDelegatedEdit && currentDeelnemer?.emailVerified === true) {
+      // Geen enkele adreswijziging loopt hierlangs, ook niet die van de
+      // beheerder. Dit endpoint zou de login meteen omzetten naar een adres
+      // waarvan niemand weet of de deelnemer erbij kan. Dat bewijs levert
+      // alleen de bevestigingsmail naar dat nieuwe adres.
+      if (emailWijzigt) {
         return res.status(400).json({
           error:
             'E-mailwijzigingen vereisen bevestiging via een verificatielink. Gebruik het aparte e-mailwijzigingsproces.',
@@ -634,12 +693,13 @@ export default async function handler(
           if (dupe) {
             return res.status(400).json({ error: 'Dit e-mailadres is al in gebruik als loginnaam' });
           }
+          // Hier komt alleen nog de oude situatie langs waarin login en
+          // huisemail uit elkaar liepen: het adres zelf verandert niet, de
+          // login wordt gelijkgetrokken. emailVerified blijft eraf, want dat
+          // zet alleen de bevestigingslink.
           update.login = newLogin;
           update.email = newLogin;
           loginUpdated = true;
-          if (isDelegatedEdit && actor.isAdmin) {
-            update.emailVerified = true;
-          }
         }
       }
     }

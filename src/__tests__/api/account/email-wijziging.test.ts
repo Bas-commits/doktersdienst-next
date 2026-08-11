@@ -5,6 +5,7 @@ const mockGetAuthenticatedUser = vi.fn();
 const mockGetAccountStatusForUser = vi.fn();
 const mockSignEmailChangeToken = vi.fn(async () => 'change-jwt');
 const mockSendEmailChangeConfirmationEmailViaResend = vi.fn(async () => ({ resendEmailId: 're_2' }));
+const mockSendEmailChangeNoticeEmailViaResend = vi.fn(async () => undefined);
 const mockVerifyEmailChangeToken = vi.fn();
 const mockSignOut = vi.fn(async () => ({}));
 
@@ -50,6 +51,8 @@ vi.mock('@/lib/better-auth-url', () => ({
 vi.mock('@/lib/resend-email', () => ({
   sendEmailChangeConfirmationEmailViaResend: (...args: unknown[]) =>
     mockSendEmailChangeConfirmationEmailViaResend(...args),
+  sendEmailChangeNoticeEmailViaResend: (...args: unknown[]) =>
+    mockSendEmailChangeNoticeEmailViaResend(...args),
 }));
 
 vi.mock('@/lib/auth', () => ({
@@ -144,7 +147,7 @@ describe('account email change flow', () => {
     });
   });
 
-  it('POST email-wijziging-aanvragen sends confirmation email', async () => {
+  it('POST email-wijziging-aanvragen mails both the new and the old address', async () => {
     const { default: handler } = await import('@/pages/api/account/email-wijziging-aanvragen');
     const res = makeRes();
     await handler(makePostReq({ newEmail: 'new@example.com' }), res);
@@ -153,9 +156,12 @@ describe('account email change flow', () => {
     expect(mockSendEmailChangeConfirmationEmailViaResend).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'new@example.com' })
     );
+    expect(mockSendEmailChangeNoticeEmailViaResend).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'old@example.com', newEmail: 'new@example.com' })
+    );
   });
 
-  it('POST weigert iedereen die geen beheerder is', async () => {
+  it('POST staat een deelnemer zonder beheerdersrol toe zijn eigen adres te wijzigen', async () => {
     mockGetAuthenticatedUser.mockResolvedValueOnce({
       id: 7,
       email: 'old@example.com',
@@ -164,8 +170,43 @@ describe('account email change flow', () => {
     const { default: handler } = await import('@/pages/api/account/email-wijziging-aanvragen');
     const res = makeRes();
     await handler(makePostReq({ newEmail: 'new@example.com' }), res);
+    expect(res._status).toBe(200);
+    expect(mockSendEmailChangeConfirmationEmailViaResend).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'new@example.com' })
+    );
+  });
+
+  it('POST laat de aanvraag doorgaan als de melding naar het oude adres mislukt', async () => {
+    mockSendEmailChangeNoticeEmailViaResend.mockRejectedValueOnce(new Error('mailbox weg'));
+    const { default: handler } = await import('@/pages/api/account/email-wijziging-aanvragen');
+    const res = makeRes();
+    await handler(makePostReq({ newEmail: 'new@example.com' }), res);
+    expect(res._status).toBe(200);
+  });
+
+  it('POST laat de beheerder het adres van een ander aanvragen, mét bevestiging', async () => {
+    const { default: handler } = await import('@/pages/api/account/email-wijziging-aanvragen');
+    const res = makeRes();
+    await handler(makePostReq({ newEmail: 'new@example.com', deelnemerId: 22 }), res);
+    expect(res._status).toBe(200);
+    expect(mockSignEmailChangeToken).toHaveBeenCalledWith(22, 'new@example.com');
+    expect(mockSendEmailChangeConfirmationEmailViaResend).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'new@example.com' })
+    );
+  });
+
+  it('POST weigert een secretaris die het adres van een ander aanvraagt', async () => {
+    mockGetAuthenticatedUser.mockResolvedValueOnce({
+      id: 7,
+      email: 'sec@example.com',
+      isAdmin: false,
+    });
+    const { default: handler } = await import('@/pages/api/account/email-wijziging-aanvragen');
+    const res = makeRes();
+    await handler(makePostReq({ newEmail: 'new@example.com', deelnemerId: 22 }), res);
     expect(res._status).toBe(403);
     expect(mockSendEmailChangeConfirmationEmailViaResend).not.toHaveBeenCalled();
+    expect(mockSendEmailChangeNoticeEmailViaResend).not.toHaveBeenCalled();
   });
 
   it('POST rejects unverified users', async () => {

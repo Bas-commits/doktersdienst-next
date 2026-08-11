@@ -5,6 +5,8 @@ import ResetPasswordEmail from '@email/reset-password';
 import type { ResetPasswordPurpose } from '@email/reset-password';
 import InviteVerifyEmail from '@email/invite-verify-email';
 import type { VerifyEmailVariant } from '@email/invite-verify-email';
+import EmailChangeNoticeEmail from '@email/email-change-notice';
+import { BEHEERDER_EMAIL, BEHEERDER_TELEFOON } from '@/lib/beheerder-contact';
 import PraktijkplannerScheduleEmail from '@email/praktijkplanner-schedule';
 import type { PraktijkplannerScheduleEmailProps } from '@email/praktijkplanner-schedule';
 import PraktijkplannerPlanningAvailableEmail from '@email/praktijkplanner-planning-available';
@@ -66,6 +68,24 @@ export async function renderVerificationBodies(params: {
       variant={params.variant}
       accountName={params.variant === 'signup' ? params.userName ?? null : undefined}
       invitedByName={params.invitedByName}
+    />
+  );
+}
+
+export async function renderEmailChangeNoticeBodies(params: {
+  oldEmail: string;
+  newEmail: string;
+  userName: string | null;
+}): Promise<{ html: string; text: string }> {
+  const siteUrl = getEmailTemplateSiteUrl();
+  return toHtmlAndText(
+    <EmailChangeNoticeEmail
+      oldEmail={params.oldEmail}
+      newEmail={params.newEmail}
+      userName={params.userName}
+      beheerderEmail={BEHEERDER_EMAIL}
+      beheerderTelefoon={BEHEERDER_TELEFOON}
+      siteUrl={siteUrl}
     />
   );
 }

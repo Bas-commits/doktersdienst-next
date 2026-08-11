@@ -9,6 +9,7 @@ import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
 import { usePlannerWeergave } from '@/hooks/praktijkplanner/usePlannerWeergave';
 import {
   PraktijkplannerPage,
+  PraktijkplannerTitleAside,
   type PraktijkplannerPageContext,
 } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { addDays } from '@/lib/praktijkplanner/dates';
@@ -162,19 +163,22 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
   return (
     <div className="space-y-4">
       {/*
-        De locatiekeuze hoort naast de weken en niet in de paginakop: het is een filter op
-        wat je in dit rooster ziet, net als de week die je kiest.
+        Weekbalk en locatiekeuze staan samen in de paginakop, net als op de andere
+        roosterschermen. De locatie hoort naast de weken: het is een filter op wat je hier
+        ziet, net als de week die je kiest.
       */}
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
-        </div>
-        <label className="flex shrink-0 items-center gap-2 text-base">
+      <PraktijkplannerTitleAside>
+        <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
+        {/*
+          Vaste breedte in plaats van min-w: de lijst groeide mee met de langste locatienaam,
+          en dan paste hij naast de weekbalk net niet meer en viel hij op een eigen regel.
+        */}
+        <label className="flex min-w-0 items-center gap-2 text-base">
           <span className="font-medium">Locatie</span>
           <select
             value={effectiveLocationId ?? ''}
             onChange={(event) => setLocationId(Number(event.target.value) || null)}
-            className="h-10 min-w-56 rounded border bg-background px-3 text-base"
+            className="h-10 w-56 max-w-full rounded border bg-background px-3 text-base"
           >
             {data.masterData.locations.map((location) => (
               <option key={location.id} value={location.id}>
@@ -183,7 +187,7 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
             ))}
           </select>
         </label>
-      </div>
+      </PraktijkplannerTitleAside>
 
       {data.masterData.locations.length === 0 ? (
         <p className="rounded-lg border p-4 text-sm text-muted-foreground">

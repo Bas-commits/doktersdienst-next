@@ -118,7 +118,10 @@ describe('PlannerAbsenceEditor doctor mode', () => {
   it('uses a full self-only month view with preliminary absence choices', async () => {
     render(<PlannerAbsenceEditor context={context} mode="doctor" />);
 
-    expect(screen.getByText('Maandnavigatie')).toBeInTheDocument();
+    // De maandnavigatie zit in de paginakop en komt daar via een portal terecht, dus buiten
+    // PraktijkplannerPage verschijnt hij niet. Wat hier telt is dat dit scherm een
+    // maandkalender toont en geen weekrooster.
+    expect(screen.getByText('Maandag')).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Weeknavigatie' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Vakantie?' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Vakantie' })).not.toBeInTheDocument();

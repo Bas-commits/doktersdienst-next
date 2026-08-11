@@ -4,13 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Mail, Minus, Moon, Plus, RotateCcw, Sun, Trash2 } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
-import type { PraktijkplannerPageContext } from './PraktijkplannerPage';
+import { PraktijkplannerTitleAside, type PraktijkplannerPageContext } from './PraktijkplannerPage';
 import { AbsenceDaypartCell } from './AbsenceDaypartCell';
 import { PlannerDaypartHoverPreview } from './PlannerDaypartHoverPreview';
 import { absenceDisplayBackground, absenceDisplayColor, absenceForegroundIconPath, absencePaletteIconPath, DAYPART_ICONS, sortAbsenceTypesForPalette } from './absence-icons';
 import { PlannerChipPalette } from './PlannerChipPalette';
 import type { PlannerCursorTool } from './PlannerCursorTool';
-import { plannerMonthGridNavOffsetPx, plannerWeekGridNavOffsetPx } from './planner-grid-layout';
 import { PlannerDaypartGrid } from './PlannerDaypartGrid';
 import { PlannerMonthDaypartGrid } from './PlannerMonthDaypartGrid';
 import { PlannerMonthCell, PlannerMonthOverviewGrid } from './PlannerMonthOverviewGrid';
@@ -18,7 +17,6 @@ import { PlannerAvondNachtToggle } from './PlannerAvondNachtToggle';
 import { PlannerViewModeSwitch } from './PlannerViewModeSwitch';
 import { PlannerWeekBar } from './PlannerWeekBar';
 import { MonthNavigation } from '@/components/CalandarGrid/MonthNavigation';
-import { PLANNER_GRID_NAV_MARGIN_PX } from './planner-grid-layout';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { usePlannerHolidayData } from '@/hooks/praktijkplanner/usePlannerHolidays';
@@ -542,10 +540,8 @@ export function PlannerAbsenceEditor({
     };
   }, [clearMode, data.masterData.absenceTypes, editable, isDoctorMode, isVoorlopig, selectedTypeId]);
 
-  const paletteTopOffsetPx = isDoctorMode ? plannerMonthGridNavOffsetPx() : plannerWeekGridNavOffsetPx();
-
-  // Week- en maandweergave hangen de knoppen op een andere plek op, maar het moeten wel
-  // dezelfde knoppen in dezelfde volgorde zijn.
+  // Week en maand hangen dezelfde knoppen op, en het moeten dezelfde knoppen in dezelfde
+  // volgorde blijven.
   const weergaveKnoppen = (
     <>
       {editable ? (
@@ -575,11 +571,12 @@ export function PlannerAbsenceEditor({
       */}
       {editable && !(!isDoctorMode && viewMode === 'month') ? (
         <div className="shrink-0 self-stretch">
-          <aside
-            className="sticky top-0"
-            style={{ marginTop: `${paletteTopOffsetPx}px` }}
-            data-planner-tool-keep-active
-          >
+          {/*
+            Het palet begint bovenaan. Het sloeg eerder de hoogte van de navigatie over, want
+            die stond boven het rooster; nu staat die in de paginakop en valt er niets meer
+            over te slaan.
+          */}
+          <aside className="sticky top-0" data-planner-tool-keep-active>
             <PlannerChipPalette
             variant="sidebar"
             title={isDoctorMode ? 'Afwezigheid aangeven' : 'Afwezigheidstypen'}
@@ -610,18 +607,15 @@ export function PlannerAbsenceEditor({
       {!isDoctorMode ? (
         <div className="space-y-2">
           {/*
-            In de maandweergave staat de weekbalk hier, want die zit normaal in het
-            weekrooster zelf. Zonder hem is de maand niet te verzetten. In de weekweergave
-            gaan dezelfde knoppen mee naar binnen, naast de weekbalk van het rooster.
+            De weekbalk staat in de paginakop, net als bij de Activiteiten planner. Binnen het
+            rooster begint hij pas naast het palet, en dan is er met de zijbalk open te weinig
+            breedte over: de balk brak dan in tweeen terwijl hij op de Activiteiten planner
+            gewoon op een regel bleef staan.
           */}
-          {viewMode === 'month' ? (
-            <div className="flex items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
-              </div>
-              <div className="flex shrink-0 items-center gap-2">{weergaveKnoppen}</div>
-            </div>
-          ) : null}
+          <PraktijkplannerTitleAside>
+            <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
+            {weergaveKnoppen}
+          </PraktijkplannerTitleAside>
           {editable && viewMode === 'month' ? (
             <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">
               De maand is om te kijken. Zet de weergave op Week om een afwezigheid te zetten.
@@ -643,8 +637,6 @@ export function PlannerAbsenceEditor({
           participants={participants}
           dayparts={visibleDayparts}
           weekStart={weekStart}
-          onWeekStartChange={setWeekStart}
-          navAside={weergaveKnoppen}
           renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}
           isCellFilled={({ participant, datum, daypart }) => isCellFilled(participant.id, datum, daypart)}
           onCellClick={applyCell}
@@ -669,31 +661,24 @@ export function PlannerAbsenceEditor({
       ) : participants[0] ? (
         <div>
           {/*
-            Dezelfde indeling als bij de weekbalk: de navigatie krijgt de ruimte en de knoppen
-            staan er rechts naast. Hier stond de knop links van de maanden, en dan leest hij
-            als iets wat vooraf gaat aan de navigatie in plaats van erbij te horen.
+            Ook deze navigatie staat in de paginakop. Naast het palet is er met de zijbalk
+            open te weinig breedte, en dan breekt de maandenrij net zo in tweeen als de
+            weekbalk deed.
           */}
-          <div
-            className="flex items-center gap-3"
-            style={{ marginBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}
-          >
-            <div className="min-w-0 flex-1">
-              <MonthNavigation
-                month={overviewMonth.month - 1}
-                year={overviewMonth.year}
-                onSelectMonth={(selectedMonth, selectedYear) => changeMonth(selectedYear, selectedMonth + 1)}
-              />
-            </div>
+          <PraktijkplannerTitleAside>
+            <MonthNavigation
+              month={overviewMonth.month - 1}
+              year={overviewMonth.year}
+              onSelectMonth={(selectedMonth, selectedYear) => changeMonth(selectedYear, selectedMonth + 1)}
+            />
             {editable ? (
-              <div className="flex shrink-0 items-center gap-2">
-                <PlannerAvondNachtToggle
-                  aan={showNight}
-                  heeftInhoud={heeftAvondNachtInhoud}
-                  onChange={updateVisibility}
-                />
-              </div>
+              <PlannerAvondNachtToggle
+                aan={showNight}
+                heeftInhoud={heeftAvondNachtInhoud}
+                onChange={updateVisibility}
+              />
             ) : null}
-          </div>
+          </PraktijkplannerTitleAside>
           <div className="overflow-x-auto pb-2">
           <div
             style={{

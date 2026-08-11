@@ -68,7 +68,6 @@ export function PlannerDaypartGrid({
   dayparts,
   weekStart,
   onWeekStartChange,
-  navAside,
   zoom,
   renderCell,
   onCellClick,
@@ -86,8 +85,6 @@ export function PlannerDaypartGrid({
   dayparts: PraktijkplannerDaypart[];
   weekStart: string;
   onWeekStartChange?: (weekStart: string) => void;
-  /** Knoppen die rechts van de weekbalk horen, op dezelfde regel. */
-  navAside?: ReactNode;
   zoom?: string | number;
   renderCell: (cell: PlannerDaypartCell) => ReactNode;
   onCellClick?: (cell: PlannerDaypartCell) => void;
@@ -124,26 +121,13 @@ export function PlannerDaypartGrid({
   return (
     <div ref={gridRootRef} className="flex min-h-0 flex-1 flex-col">
       {/*
-        Schermen die de weeknavigatie zelf in hun koprij zetten geven onWeekStartChange niet
-        mee. De rest houdt hem hier, boven het rooster.
+        Alle schermen zetten hun weeknavigatie in de paginakop en geven onWeekStartChange dus
+        niet mee. Alleen de kopieer-popup heeft geen paginakop en houdt de balk hier.
       */}
       {onWeekStartChange ? (
         <div style={{ paddingBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}>
-          {/*
-            Knoppen die bij het rooster horen staan naast de weekbalk, niet op een eigen regel
-            erboven: los van de weken lezen ze als losse instellingen van de pagina.
-
-            De inspringing zet de weekbalk boven de dagkolommen in plaats van boven de
-            namenkolom. Staan er knoppen naast, dan gaat die inspringing eraf, want anders past
-            de weekbalk niet meer op een regel en breekt hij in tweeen.
-          */}
-          <div className={cn('flex items-center gap-3', navAside ? undefined : 'ml-44')}>
-            <div className="min-w-0 flex-1">
-              <PlannerWeekBar weekStart={weekStart} onWeekStartChange={onWeekStartChange} />
-            </div>
-            {navAside ? (
-              <div className="flex shrink-0 items-center gap-2">{navAside}</div>
-            ) : null}
+          <div className="ml-44">
+            <PlannerWeekBar weekStart={weekStart} onWeekStartChange={onWeekStartChange} />
           </div>
         </div>
       ) : null}

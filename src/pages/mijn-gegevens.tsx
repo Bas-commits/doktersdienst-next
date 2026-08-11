@@ -284,11 +284,17 @@ export default function MijnGegevensPage() {
         setProfile(profileRes);
         setLookup(lookupRes);
         const initialLogin = profileRes.deelnemer.login ?? '';
-        // Prefill email from login when huisemail is empty so the required field doesn't block the form
+        // Is huisemail leeg, dan is de login het beste alternatief; die is bij de
+        // meeste deelnemers hetzelfde adres. Het adres van de ingelogde gebruiker
+        // is dat alleen op je eigen profiel. Op dat van een ander vulde het jouw
+        // adres in bij iedereen die er zelf geen had, en dat is niet leeg maar
+        // onwaar: het scherm beweerde iets over een deelnemer dat niet klopte.
+        const eigenSessieEmail =
+          typeof session.user.email === 'string' ? session.user.email.trim() : '';
         const initialHuisemail =
           (profileRes.deelnemer.huisemail ?? '').trim() ||
           (initialLogin.includes('@') ? initialLogin : '') ||
-          (typeof session.user.email === 'string' ? session.user.email.trim() : '');
+          (data.isDelegatedEdit === true ? '' : eigenSessieEmail);
         setColor(profileRes.deelnemer.color ?? '#cccccc');
         setAchternaam(profileRes.deelnemer.achternaam ?? '');
         setVoorletterstussenvoegsel(profileRes.deelnemer.voorletterstussenvoegsel ?? '');
@@ -696,12 +702,16 @@ export default function MijnGegevensPage() {
                 <div className={formSectionClass}>
                   <div className="flex flex-col gap-4 sm:flex-row">
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      {/* Verplicht op je eigen profiel: daar log je mee in. Op dat van
+                          een ander niet, want er zijn deelnemers zonder adres, en dan
+                          zou de beheerder er een moeten verzinnen om iets anders te
+                          kunnen opslaan. */}
                       <Label htmlFor="huisemail" className="flex items-center gap-1.5">
                         E-mailadres/loginnaam{' '}
-                        {canEditEmail ? (
-                          <RequiredAsterisk />
-                        ) : (
+                        {!canEditEmail ? (
                           <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                        ) : isDelegatedEdit ? null : (
+                          <RequiredAsterisk />
                         )}
                       </Label>
                       {/* De hover hangt aan de omhullende div, want een disabled input
@@ -713,7 +723,7 @@ export default function MijnGegevensPage() {
                           type="email"
                           value={huisemail}
                           onChange={(e) => setHuisemail(e.target.value)}
-                          required={canEditEmail}
+                          required={canEditEmail && !isDelegatedEdit}
                           disabled={isSubmitting || !canEditEmail}
                           aria-describedby={canEditEmail ? undefined : 'huisemail-uitleg'}
                           className={canEditEmail ? undefined : 'text-muted-foreground'}

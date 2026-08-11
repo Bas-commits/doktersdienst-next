@@ -6,11 +6,12 @@ import { CapacityRequirementList } from '@/components/praktijkplanner/CapacityRe
 import { CapacityWeekGrid } from '@/components/praktijkplanner/CapacityWeekGrid';
 import { PlannerWeekBar } from '@/components/praktijkplanner/PlannerWeekBar';
 import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
+import { usePlannerWeergave } from '@/hooks/praktijkplanner/usePlannerWeergave';
 import {
   PraktijkplannerPage,
   type PraktijkplannerPageContext,
 } from '@/components/praktijkplanner/PraktijkplannerPage';
-import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { addDays } from '@/lib/praktijkplanner/dates';
 import { subscribePlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 import { isDaypartSchedulable } from '@/lib/praktijkplanner/schedulable-dayparts';
 import type { PraktijkplannerCapacityComparison } from '@/types/praktijkplanner';
@@ -26,10 +27,6 @@ type OverviewCell = {
   specificaties: PraktijkplannerCapacityComparison[];
 };
 
-function currentWeekStart() {
-  return startOfIsoWeek(formatIsoDate(new Date()));
-}
-
 function emptyComparison(key: string, label: string): PraktijkplannerCapacityComparison {
   return { key, label, gepland: 0, benodigd: 0, status: 'groen' };
 }
@@ -38,7 +35,8 @@ const REFETCH_DEBOUNCE_MS = 300;
 
 function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) {
   const [locationId, setLocationId] = useState<number | null>(null);
-  const [weekStart, setWeekStart] = useState(currentWeekStart);
+  // Dit scherm kent geen maandweergave, dus alleen de week doet hier iets.
+  const { weekStart, setWeekStart } = usePlannerWeergave(groupId);
   const [cells, setCells] = useState<OverviewCell[]>([]);
   const [loading, setLoading] = useState(false);
   const hasLoadedRef = useRef(false);

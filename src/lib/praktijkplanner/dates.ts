@@ -107,6 +107,28 @@ export function isoWeekNumber(isoDate: string): number {
   return Math.ceil((dagen + 1) / 7);
 }
 
+/**
+ * De maand waar een ISO-week bij hoort: die van de donderdag.
+ *
+ * Een week ligt bijna altijd over een maandgrens, dus zonder vaste regel zou een scherm dat
+ * van week naar maand schakelt bij dezelfde week in twee verschillende maanden uit kunnen
+ * komen. ISO kiest de donderdag, en dat is dezelfde regel als in isoWeekNumber.
+ */
+export function maandVanWeek(weekStart: string): { year: number; month: number } {
+  const donderdag = new Date(`${addDays(weekStart, 3)}T12:00:00`);
+  return { year: donderdag.getFullYear(), month: donderdag.getMonth() + 1 };
+}
+
+/**
+ * De eerste ISO-week van een maand, als omkering van maandVanWeek.
+ *
+ * De week van de 4e is de enige die altijd werkt: de donderdag daarvan valt gegarandeerd in
+ * de maand zelf, ook als de 1e nog in de laatste week van de vorige maand zit.
+ */
+export function weekVanMaand(year: number, monthOneBased: number): string {
+  return startOfIsoWeek(formatIsoDate(new Date(year, monthOneBased - 1, 4, 12)));
+}
+
 export function weekdayFromIsoDate(isoDate: string): number {
   const day = new Date(`${isoDate}T12:00:00`).getDay();
   return day === 0 ? 7 : day;

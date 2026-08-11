@@ -22,12 +22,13 @@ import { PLANNER_GRID_NAV_MARGIN_PX } from './planner-grid-layout';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { usePlannerHolidayData } from '@/hooks/praktijkplanner/usePlannerHolidays';
+import { usePlannerWeergave } from '@/hooks/praktijkplanner/usePlannerWeergave';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import {
   heeftAvondOfNachtInhoud,
   zichtbareDagdelen,
 } from '@/lib/praktijkplanner/dagdeel-zichtbaarheid';
-import { addDays, formatIsoDate, monthBounds, monthCalendarBounds, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { addDays, maandVanWeek, monthBounds, monthCalendarBounds, weekVanMaand } from '@/lib/praktijkplanner/dates';
 import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 import {
   isDaypartSchedulableForParticipant,
@@ -41,10 +42,6 @@ const TOAST_POSITION = 'bottom-right' as const;
 
 function keyFor(iddeelnemer: number, datum: string, iddagdeel: number) {
   return `${iddeelnemer}:${datum}:${iddagdeel}`;
-}
-
-function currentWeekStart() {
-  return startOfIsoWeek(formatIsoDate(new Date()));
 }
 
 function participantName(participant: PraktijkplannerPageContext['data']['participants'][number]) {
@@ -91,10 +88,7 @@ export function PlannerAbsenceEditor({
 }) {
   const { groupId, data } = context;
   const isDoctorMode = mode === 'doctor';
-  const now = useMemo(() => new Date(), []);
-  const [weekStart, setWeekStart] = useState(currentWeekStart);
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
+  const { weekStart, setWeekStart, viewMode, setViewMode } = usePlannerWeergave(groupId);
   const [slots, setSlots] = useState<PraktijkplannerAbsenceSlot[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
@@ -103,14 +97,10 @@ export function PlannerAbsenceEditor({
   const [emailParticipantId, setEmailParticipantId] = useState<number | null>(null);
   const [showNight, setShowNight] = useState(false);
   const [zoom, setZoom] = useState(100);
-  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
 
-  // Dezelfde regel als in de Activiteiten planner: de maand van de donderdag, want dat is de
-  // maand waar de ISO-week bij hoort. weekStart blijft zo de enige plek waar staat waar je bent.
-  const overviewMonth = useMemo(() => {
-    const donderdag = new Date(`${addDays(weekStart, 3)}T12:00:00`);
-    return { year: donderdag.getFullYear(), month: donderdag.getMonth() + 1 };
-  }, [weekStart]);
+  // Ook de maandkalender van de dokterversie hangt aan weekStart. Die had een eigen maand en
+  // jaar, en dan is er niets wat die twee bij elkaar houdt zodra de schermen elkaar volgen.
+  const overviewMonth = useMemo(() => maandVanWeek(weekStart), [weekStart]);
   const overviewMonthLabel = useMemo(
     () =>
       new Intl.DateTimeFormat('nl-NL', { month: 'long', year: 'numeric' }).format(
@@ -127,13 +117,14 @@ export function PlannerAbsenceEditor({
       }
       return { start: weekStart, end: addDays(weekStart, 6) };
     }
+    const { year, month } = overviewMonth;
     return (
       monthCalendarBounds(year, month) ?? {
         start: `${year}-${String(month).padStart(2, '0')}-01`,
         end: `${year}-${String(month).padStart(2, '0')}-28`,
       }
     );
-  }, [isDoctorMode, month, overviewMonth, viewMode, weekStart, year]);
+  }, [isDoctorMode, overviewMonth, viewMode, weekStart]);
   const holidayData = usePlannerHolidayData(range.start, range.end);
   const participants = isDoctorMode
     ? data.participants.filter((participant) => participant.id === data.userId)
@@ -475,11 +466,11 @@ export function PlannerAbsenceEditor({
     }
   }, [data.isManager, emailParticipantId, groupId, range.end, range.start]);
 
+  // De maandkeuze wordt een week, want dat is wat de schermen delen. weekVanMaand pakt de week
+  // van de 4e, zodat de donderdag gegarandeerd in de gekozen maand valt.
   const changeMonth = useCallback((nextYear: number, nextMonth: number) => {
-    if (nextYear === year && nextMonth === month) return;
-    setYear(nextYear);
-    setMonth(nextMonth);
-  }, [month, year]);
+    setWeekStart(weekVanMaand(nextYear, nextMonth));
+  }, [setWeekStart]);
 
   const paletteItems = useMemo(() => {
     const orderedTypes = sortAbsenceTypesForPalette(data.masterData.absenceTypes);
@@ -689,8 +680,8 @@ export function PlannerAbsenceEditor({
               />
             ) : null}
             <MonthNavigation
-              month={month - 1}
-              year={year}
+              month={overviewMonth.month - 1}
+              year={overviewMonth.year}
               onSelectMonth={(selectedMonth, selectedYear) => changeMonth(selectedYear, selectedMonth + 1)}
             />
           </div>
@@ -704,8 +695,8 @@ export function PlannerAbsenceEditor({
             <PlannerMonthDaypartGrid
               participant={participants[0]}
               dayparts={visibleDayparts}
-              year={year}
-              month={month}
+              year={overviewMonth.year}
+              month={overviewMonth.month}
               renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}
               onCellClick={applyCell}
               onCellPointerEnter={(cell, event) => {

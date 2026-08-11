@@ -27,6 +27,7 @@ import { PlannerViewModeSwitch } from '@/components/praktijkplanner/PlannerViewM
 import { PlannerWeekBar } from '@/components/praktijkplanner/PlannerWeekBar';
 import { PraktijkplannerPage, PraktijkplannerTitleAside, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
+import { usePlannerWeergave } from '@/hooks/praktijkplanner/usePlannerWeergave';
 import {
   buildActivityAssignmentSlot,
   getMissingActivityExpertiseWarning,
@@ -41,7 +42,7 @@ import {
   zichtbareDagdelen,
 } from '@/lib/praktijkplanner/dagdeel-zichtbaarheid';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
-import { addDays, formatIsoDate, monthBounds, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import { addDays, maandVanWeek, monthBounds } from '@/lib/praktijkplanner/dates';
 import { absentieTekst } from '@/lib/praktijkplanner/absentie-tekst';
 import { afwijkingTekst } from '@/lib/praktijkplanner/herhaling-tekst';
 import {
@@ -84,10 +85,6 @@ function slotKey(iddeelnemer: number, datum: string, iddagdeel: number) {
   return `${iddeelnemer}:${datum}:${iddagdeel}`;
 }
 
-function currentWeekStart() {
-  return startOfIsoWeek(formatIsoDate(new Date()));
-}
-
 export function ActivitiesContent({
   groupId,
   data,
@@ -95,7 +92,7 @@ export function ActivitiesContent({
 }: PraktijkplannerPageContext & { readOnly?: boolean }) {
   const router = useRouter();
   const canEdit = data.isManager && !readOnly;
-  const [weekStart, setWeekStart] = useState(currentWeekStart);
+  const { weekStart, setWeekStart, viewMode, setViewMode } = usePlannerWeergave(groupId);
   const [slots, setSlots] = useState<PraktijkplannerPlanningSlot[]>([]);
   const [absenceSlots, setAbsenceSlots] = useState<PraktijkplannerAbsenceSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -109,17 +106,11 @@ export function ActivitiesContent({
   const [showNight, setShowNight] = useState(false);
   const [participantFilter, setParticipantFilter] = useState<number | 'all'>('all');
   const [zoom, setZoom] = useState('100');
-  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [actionModal, setActionModal] = useState<ParticipantActionModal | null>(null);
 
   const end = useMemo(() => addDays(weekStart, 6), [weekStart]);
 
-  // De maand van de donderdag, want dat is de maand waar de ISO-week bij hoort. Zo blijft
-  // weekStart de enige plek waar staat waar je bent en kan week en maand niet uit elkaar lopen.
-  const monthAnchor = useMemo(() => {
-    const donderdag = new Date(`${addDays(weekStart, 3)}T12:00:00`);
-    return { year: donderdag.getFullYear(), month: donderdag.getMonth() + 1 };
-  }, [weekStart]);
+  const monthAnchor = useMemo(() => maandVanWeek(weekStart), [weekStart]);
   const monthRange = useMemo(
     () => monthBounds(monthAnchor.year, monthAnchor.month),
     [monthAnchor]

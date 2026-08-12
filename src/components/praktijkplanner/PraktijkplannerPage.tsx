@@ -65,7 +65,9 @@ export function PraktijkplannerPage({
   return (
     // h-full plus min-h-0 geeft de inhoud een echte hoogte om binnen te scrollen. Schermen
     // die daar niets mee doen stapelen gewoon zoals eerst.
-    <div className="flex h-full min-h-0 min-w-[1024px] flex-col space-y-5 p-6">
+    // De ruimte tussen de kop en het rooster is klein gehouden: de kop staat vast en de rest
+    // van het scherm scrollt eronderdoor, dus elke pixel daar gaat direct van het rooster af.
+    <div className="flex h-full min-h-0 min-w-[1024px] flex-col space-y-2 p-6">
       {/*
         De koprij blijft staan tijdens het scrollen. Schermen zetten hun weeknavigatie er in, en
         die moet bereikbaar blijven als je halverwege de deelnemers zit. De negatieve marges
@@ -79,7 +81,7 @@ export function PraktijkplannerPage({
         regeltjes uiteenviel; zonder uitleg speelt dat niet meer. flex-wrap vangt op wat toch
         niet past: dan zakt de navigatie vanzelf naar de tweede regel.
       */}
-      <div className="sticky top-0 z-40 -mx-6 -mt-6 bg-background px-6 pb-3 pt-6">
+      <div className="sticky top-0 z-40 -mx-6 -mt-6 bg-background px-6 pb-2 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           {/*

@@ -255,7 +255,6 @@ export default function CapaciteitsoverzichtPage() {
       </Head>
       <PraktijkplannerPage
         title="Capaciteit overzicht"
-        description="Vergelijk de ingeplande bezetting met de benodigde capaciteit."
       >
         {(context) => <CapacityOverviewContent {...context} />}
       </PraktijkplannerPage>

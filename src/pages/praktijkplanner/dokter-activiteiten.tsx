@@ -262,7 +262,6 @@ export default function DokterActiviteitenPage() {
       </Head>
       <PraktijkplannerPage
         title="Capaciteits rapportage"
-        description="Bekijk de telling van activiteiten en taken per weekdag en dagdeel."
       >
         {(context) => <DoctorActivitiesContent {...context} />}
       </PraktijkplannerPage>

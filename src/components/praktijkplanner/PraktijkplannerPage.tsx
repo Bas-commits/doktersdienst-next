@@ -31,11 +31,9 @@ export function PraktijkplannerTitleAside({ children }: { children: ReactNode })
 
 export function PraktijkplannerPage({
   title,
-  description,
   children,
 }: {
   title: string;
-  description?: ReactNode;
   children: (context: PraktijkplannerPageContext) => ReactNode;
 }) {
   const context = usePraktijkplannerContext();
@@ -69,35 +67,30 @@ export function PraktijkplannerPage({
     // die daar niets mee doen stapelen gewoon zoals eerst.
     <div className="flex h-full min-h-0 min-w-[1024px] flex-col space-y-5 p-6">
       {/*
-        De koprij blijft staan tijdens het scrollen. Schermen zetten hun weeknavigatie in de
-        onderste regel, en die moet bereikbaar blijven als je halverwege de deelnemers zit. De
-        negatieve marges trekken de achtergrond door de paginamarge heen, anders schuift het
-        rooster langs de zijkanten van de vastgezette rij omhoog.
+        De koprij blijft staan tijdens het scrollen. Schermen zetten hun weeknavigatie er in, en
+        die moet bereikbaar blijven als je halverwege de deelnemers zit. De negatieve marges
+        trekken de achtergrond door de paginamarge heen, anders schuift het rooster langs de
+        zijkanten van de vastgezette rij omhoog.
 
-        De navigatie stond eerst naast de titel, wat een regel hoogte scheelde. Dat hield geen
-        stand zodra de zijbalk opengaat: titel en beschrijving hielden dan zo weinig breedte
-        over dat de beschrijving in vijf smalle regeltjes uiteenviel, en juist dan werd de
-        koprij hoger in plaats van lager. Een eigen regel is voorspelbaar; die ene regel
-        hoogte is dat waard.
+        De kop had ook een uitleg per scherm en de naam van de waarneemgroep. Beide zijn eruit:
+        de uitleg zegt niets meer zodra je het scherm een keer kent, en de groep staat al boven
+        in de balk. Wat overblijft is de titel met de navigatie ernaast. Die navigatie stond
+        eerst op een eigen regel omdat de uitleg naast een opengeklapte zijbalk in vijf smalle
+        regeltjes uiteenviel; zonder uitleg speelt dat niet meer. flex-wrap vangt op wat toch
+        niet past: dan zakt de navigatie vanzelf naar de tweede regel.
       */}
       <div className="sticky top-0 z-40 -mx-6 -mt-6 bg-background px-6 pb-3 pt-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-            {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
-          </div>
-          <span className="shrink-0 rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
-            {context.groupName ?? 'Waarneemgroep'}
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          {/*
+            Leeg als een scherm geen navigatie in de kop zet. Dan valt het blok weg in plaats van
+            een lege strook over te houden.
+          */}
+          <div
+            ref={setTitleAsideSlot}
+            className="flex flex-wrap items-center justify-end gap-3 empty:hidden"
+          />
         </div>
-        {/*
-          Leeg als een scherm geen navigatie in de kop zet. Dan valt de regel weg in plaats van
-          een lege strook over te houden.
-        */}
-        <div
-          ref={setTitleAsideSlot}
-          className="flex flex-wrap items-center justify-end gap-3 empty:hidden mt-2"
-        />
       </div>
       <TitleAsideSlotContext.Provider value={titleAsideSlot}>
         {children({

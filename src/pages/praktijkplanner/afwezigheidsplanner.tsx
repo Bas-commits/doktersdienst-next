@@ -10,7 +10,6 @@ export default function AfwezigheidsplannerPage() {
       </Head>
       <PraktijkplannerPage
         title="Afwezigheidsplanner"
-        description="Beheer de afwezigheden van alle deelnemers in de geselecteerde waarneemgroep."
       >
         {(context) =>
           context.data.isManager ? (

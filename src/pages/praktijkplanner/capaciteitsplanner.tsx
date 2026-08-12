@@ -611,7 +611,6 @@ export default function CapaciteitsplannerPage() {
       </Head>
       <PraktijkplannerPage
         title="Capaciteit planner"
-        description="Stel per locatie, weekdag en dagdeel de gewenste capaciteit in."
       >
         {(context) => <CapacityPlannerContent {...context} />}
       </PraktijkplannerPage>

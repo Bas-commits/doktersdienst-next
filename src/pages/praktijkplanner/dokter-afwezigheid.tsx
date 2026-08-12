@@ -323,7 +323,6 @@ export default function DokterAfwezigheidPage() {
       </Head>
       <PraktijkplannerPage
         title="Absentie telling"
-        description="Bekijk uw afwezigheidsbudget en resterende dagdelen per jaar."
       >
         {(context) => <DoctorAbsenceContent {...context} />}
       </PraktijkplannerPage>

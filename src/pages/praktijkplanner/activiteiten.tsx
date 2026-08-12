@@ -1165,17 +1165,7 @@ export default function ActiviteitenPlannerPage() {
       <Head>
         <title>Activiteiten planner | Praktijkplanner</title>
       </Head>
-      <PraktijkplannerPage
-        title="Activiteiten planner"
-        description={
-          <>
-            Plan activiteiten, taken, locaties en beschikbaarheid per deelnemer en dagdeel.
-            <br />
-            Druk op esc om fische aan cursor te laten verdwijnen.
-          </>
-        }
-   
-      >
+      <PraktijkplannerPage title="Activiteiten planner">
         {(context) => <ActivitiesContent {...context} />}
       </PraktijkplannerPage>
     </>

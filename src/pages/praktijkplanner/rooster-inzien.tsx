@@ -12,7 +12,6 @@ export default function RoosterInzienPage() {
       </Head>
       <PraktijkplannerPage
         title="Rooster inzien"
-        description="Bekijk de activiteitenplanning per deelnemer en dagdeel. Wijzigen is niet mogelijk."
       >
         {(context) => <ActivitiesContent {...context} readOnly />}
       </PraktijkplannerPage>

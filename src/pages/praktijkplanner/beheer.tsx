@@ -529,7 +529,6 @@ export default function PlannerbeheerPage() {
       </Head>
       <PraktijkplannerPage
         title="Plannerbeheer"
-        description="Beheer de stamgegevens die in Praktijkplanner gebruikt worden."
       >
         {(context) => <BeheerContent {...context} />}
       </PraktijkplannerPage>

@@ -930,7 +930,7 @@ export function ActivitiesContent({
 
   const renderParticipantActions = useCallback(
     (participant: PraktijkplannerParticipant) => (
-      <div className="flex shrink-0 flex-col items-center gap-0.5">
+      <div className="flex shrink-0 items-center gap-0.5">
         <button
           type="button"
           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"

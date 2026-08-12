@@ -154,29 +154,12 @@ export function PlannerDaypartGrid({
               scrollPaddingTop: `${PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX}px`,
             }}
           >
-      <div className={cn('flex w-fit min-w-full', renderParticipantActions && 'gap-1')}>
-        {renderParticipantActions ? (
-          <div className="sticky left-0 z-40 flex w-fit shrink-0 flex-col bg-card">
-            {/*
-              Dit blok staat op de hoogte van de kopregel en blijft daar staan. De kopregel
-              zelf loopt niet door over deze kolom, dus zonder dit blok schoven de knoppen
-              van de bovenste deelnemers gewoon naast DEELNEMER in beeld.
-            */}
-            <div
-              aria-hidden
-              className="sticky top-0 z-10 border-b border-transparent bg-card"
-              style={{ height: `${PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX}px` }}
-            />
-            {participants.map((participant) => (
-              <div
-                key={participant.id}
-                className="flex min-h-30 w-fit snap-start items-center justify-center border-b border-transparent last:border-b-0"
-              >
-                {renderParticipantActions(participant)}
-              </div>
-            ))}
-          </div>
-        ) : null}
+      {/*
+        De knoppen per deelnemer stonden hier in een eigen kolom links van het rooster, onder
+        elkaar. Die kolom is weg: ze staan nu boven de naam, binnen de deelnemerskolom zelf.
+        Dat scheelt de breedte van de kolom en de hoogte van vier knoppen op elkaar.
+      */}
+      <div className="flex w-fit min-w-full">
       <div className="min-w-[1120px]">
         {/*
           De kopregel blijft staan terwijl je door de deelnemers scrollt. Zonder dat weet je
@@ -223,7 +206,11 @@ export function PlannerDaypartGrid({
             key={participant.id}
             className="grid snap-start grid-cols-[minmax(11rem,1fr)_repeat(7,minmax(9.5rem,1fr))] border-b last:border-b-0"
           >
-            <div className="flex min-h-30 items-center gap-2 p-3 text-left">
+            <div className="flex min-h-30 flex-col justify-center gap-1 p-3 text-left">
+              {renderParticipantActions ? (
+                <div className="flex justify-start">{renderParticipantActions(participant)}</div>
+              ) : null}
+              <div className="flex items-center gap-2">
               <span
                 className="inline-flex h-7 w-13 shrink-0 items-center justify-center rounded text-xs font-bold"
                 style={{
@@ -257,6 +244,7 @@ export function PlannerDaypartGrid({
                     {expertises.map((expertise) => expertiseLabel(expertise)).join(', ')}
                   </p>
                 ) : null}
+              </div>
               </div>
             </div>
             {days.map((datum) => (

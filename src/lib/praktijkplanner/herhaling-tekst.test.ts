@@ -8,7 +8,7 @@ describe('herhaling teksten', () => {
 
   it('vertelt bij een afwijking waarom het bordje er staat en van welke week', () => {
     expect(afwijkingTekst('2026-08-10')).toBe(
-      'Dit dagdeel is na het herhalen aangepast en wijkt af van de herhaling van week 10 – 16 aug 2026.'
+      'Dit dagdeel is afwijkend van de oorspronkelijke herhaling week 10 – 16 aug 2026.'
     );
   });
 

@@ -15,12 +15,17 @@ export function herhalingWeekLabel(bronweek: string): string {
   return weekRangeLabel(bronweek, { withYear: true });
 }
 
-/** Uitleg bij een dagdeel dat na het herhalen met de hand is aangepast. */
+/**
+ * Uitleg bij een dagdeel dat na het herhalen met de hand is aangepast.
+ *
+ * Kort gehouden: dat het na het herhalen is aangepast en dat het afwijkt zijn hetzelfde
+ * bericht, dus staat er nog een van de twee.
+ */
 export function afwijkingTekst(bronweek: string | null): string {
-  const aanleiding = 'Dit dagdeel is na het herhalen aangepast';
+  const aanleiding = 'Dit dagdeel is afwijkend van de oorspronkelijke herhaling';
   return bronweek
-    ? `${aanleiding} en wijkt af van de herhaling van week ${herhalingWeekLabel(bronweek)}.`
-    : `${aanleiding} en wijkt af van de herhaling. Van welke week die herhaling komt is niet vastgelegd.`;
+    ? `${aanleiding} week ${herhalingWeekLabel(bronweek)}.`
+    : `${aanleiding}. Van welke week die herhaling komt is niet vastgelegd.`;
 }
 
 /** Uitleg bij een dagdeel dat ongewijzigd bij een herhaling hoort. */

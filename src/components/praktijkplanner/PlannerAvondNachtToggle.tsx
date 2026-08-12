@@ -1,51 +1,33 @@
 'use client';
 
 import { Moon } from 'lucide-react';
-import { toast } from 'sonner';
 
 /**
- * De knop die de lege rijen Avond en Nacht in beeld houdt.
+ * De knop die avond en nacht in beeld zet of eruit haalt.
  *
- * Zonder deze knop is het automatisch verbergen een val: staat er niets in de avond, dan is
- * de rij weg, en dan valt er ook nooit een eerste avond in te plannen.
+ * Puur beeld: er wordt niets opgeslagen of weggegooid, en wat verborgen is komt met dezelfde
+ * klik weer terug. Ochtend en middag zijn de drukke dagdelen en krijgen zo de ruimte.
  *
- * Het label zegt wat de klik doet, niet in welke stand hij staat: "Avond en nacht tonen" of
- * "Avond en nacht verbergen". Dat belooft net iets te veel, want verbergen lukt alleen zolang
- * die dagdelen leeg zijn; wat gepland staat blijft staan, anders zou werk onzichtbaar worden.
- * Die nuance staat in de tooltip en niet op de knop, want een knop die "Lege avond en nacht"
- * heet vraagt meer uitleg dan hij bespaart.
- *
- * Hij blijft altijd klikbaar. Een eerdere versie schakelde zichzelf uit zodra er iets gepland
- * stond, en dat las als een kapotte knop.
+ * Het label zegt wat de klik doet, niet in welke stand hij staat. Dat kan nu ook waargemaakt
+ * worden: verbergen lukt altijd. Eerder hielden avond en nacht zichzelf zichtbaar zodra er
+ * iets in stond, en dan deed de knop in de ene week niets en in de andere wel.
  */
 export function PlannerAvondNachtToggle({
   aan,
-  heeftInhoud,
   onChange,
 }: {
   aan: boolean;
-  /** Er staat iets gepland in avond of nacht, dus verbergen levert in deze periode niets op. */
-  heeftInhoud: boolean;
   onChange: (aan: boolean) => void;
 }) {
   return (
     <button
       type="button"
       aria-pressed={aan}
-      onClick={() => {
-        // De keuze wordt wel bewaard, dus zonder deze melding lijkt de knop kapot: je klikt
-        // op verbergen en er verandert niets, terwijl hij in een lege week wel werkt.
-        if (aan && heeftInhoud) {
-          toast.info(
-            'Avond en nacht blijven in deze periode staan, want er staat iets gepland. In een periode zonder avond- of nachtplanning zijn ze verborgen.'
-          );
-        }
-        onChange(!aan);
-      }}
+      onClick={() => onChange(!aan)}
       title={
         aan
-          ? 'Verbergen lukt alleen zolang avond en nacht leeg zijn. Wat gepland staat blijft staan.'
-          : 'Toon avond en nacht ook als er niets in staat, zodat er iets in te plannen valt'
+          ? 'Haal avond en nacht uit beeld. Er wordt niets verwijderd; wat gepland staat komt terug zodra je ze weer toont.'
+          : 'Toon avond en nacht, ook als er niets in staat, zodat er iets in te plannen valt'
       }
       className={[
         'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition',

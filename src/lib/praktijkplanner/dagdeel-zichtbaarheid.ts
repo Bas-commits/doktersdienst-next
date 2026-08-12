@@ -15,59 +15,22 @@ export function isAvondOfNacht(daypart: { volgorde: number }): boolean {
   return daypart.volgorde > LAATSTE_DAGDEEL_OVERDAG;
 }
 
-type Slot = { iddeelnemer: number; datum: string; iddagdeel: number };
-
-/**
- * Of er in de zichtbare periode iets in Avond of Nacht staat dat de rijen nodig maakt.
- *
- * Kijkt naar de slots die geladen zijn, dus precies de week of de maand die in beeld is. Een
- * deelnemer die uit het filter valt telt niet mee: die rij staat er niet, dus zijn avond hoeft
- * geen ruimte te kosten.
- *
- * Planning telt altijd. Een absentie alleen als diezelfde deelnemer op die dag niet ook
- * overdag afwezig is. Een week vakantie wordt namelijk op alle vier de dagdelen gezet, en
- * daarmee zou vrijwel elke week "gevuld" zijn en zouden de rijen nooit verdwijnen. Wie de
- * hele dag weg is, is dat 's avonds ook; dat staat al in de ochtendrij. Een absentie die
- * alléén op de avond staat is wel echt nieuws en houdt de rijen dus open.
- */
-export function heeftAvondOfNachtInhoud(
-  planning: ReadonlyArray<Slot>,
-  absenties: ReadonlyArray<Slot>,
-  dayparts: ReadonlyArray<PraktijkplannerDaypart>,
-  zichtbareDeelnemers: ReadonlySet<number>
-): boolean {
-  const avondNacht = new Set(dayparts.filter(isAvondOfNacht).map((daypart) => daypart.id));
-  const telt = (slot: Slot) =>
-    avondNacht.has(slot.iddagdeel) && zichtbareDeelnemers.has(slot.iddeelnemer);
-
-  if (planning.some(telt)) return true;
-
-  const overdagAfwezig = new Set(
-    absenties
-      .filter((slot) => !avondNacht.has(slot.iddagdeel))
-      .map((slot) => `${slot.iddeelnemer}:${slot.datum}`)
-  );
-  return absenties.some(
-    (slot) => telt(slot) && !overdagAfwezig.has(`${slot.iddeelnemer}:${slot.datum}`)
-  );
-}
-
 /**
  * De dagdelen die het rooster laat zien.
  *
- * Overdag staat er altijd. Avond en Nacht verdwijnen alleen als ze in de hele zichtbare
- * periode leeg zijn: die twee rijen zijn bijna de helft van de hoogte van een deelnemersrij en
- * bij de meeste weken staat er niets in.
+ * Overdag staat er altijd. Avond en Nacht staan er alleen als de knop aan staat, en dat is de
+ * hele regel: het is een kwestie van beeld, niet van inhoud. Er wordt niets opgeslagen of
+ * weggegooid, en wat verborgen is komt met dezelfde knop weer terug.
  *
- * `toonAvondNacht` zet ze terug in beeld. Dat is niet alleen gemak, het is wat het verbergen
- * veilig maakt: is Avond leeg en dus verborgen, dan valt er ook nooit meer een eerste avond in
- * te plannen. Andersom kan de knop niets verbergen wat wél gepland staat, want dan zou werk
- * onzichtbaar worden.
+ * Eerder hielden avond en nacht zichzelf zichtbaar zodra er iets in gepland stond, zodat werk
+ * nooit onzichtbaar kon worden. Dat maakte de knop onvoorspelbaar: in de ene week deed hij
+ * niets en in de andere wel, terwijl juist de drukke weken de reden zijn om ochtend en middag
+ * meer ruimte te geven. De eigenaar heeft dat op 12 augustus 2026 omgedraaid. De prijs staat
+ * er tegenover: zolang je ze verborgen hebt zie je niet dat er een avonddienst onder zit.
  */
 export function zichtbareDagdelen(
   dayparts: ReadonlyArray<PraktijkplannerDaypart>,
-  opties: { heeftInhoud: boolean; toonAvondNacht: boolean }
+  opties: { toonAvondNacht: boolean }
 ): PraktijkplannerDaypart[] {
-  const toon = opties.heeftInhoud || opties.toonAvondNacht;
-  return dayparts.filter((daypart) => !isAvondOfNacht(daypart) || toon);
+  return dayparts.filter((daypart) => !isAvondOfNacht(daypart) || opties.toonAvondNacht);
 }

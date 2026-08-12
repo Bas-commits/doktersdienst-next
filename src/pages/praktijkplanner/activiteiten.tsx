@@ -38,7 +38,6 @@ import {
 } from '@/lib/praktijkplanner/activity-assignment';
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import {
-  heeftAvondOfNachtInhoud,
   zichtbareDagdelen,
 } from '@/lib/praktijkplanner/dagdeel-zichtbaarheid';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
@@ -139,17 +138,9 @@ export function ActivitiesContent({
         : data.participants.filter((participant) => participant.id === participantFilter),
     [data.participants, participantFilter]
   );
-  const heeftAvondNachtInhoud = useMemo(() => {
-    const zichtbaar = new Set(visibleParticipants.map((participant) => participant.id));
-    return heeftAvondOfNachtInhoud(slots, absenceSlots, data.masterData.dayparts, zichtbaar);
-  }, [absenceSlots, data.masterData.dayparts, slots, visibleParticipants]);
   const visibleDayparts = useMemo(
-    () =>
-      zichtbareDagdelen(data.masterData.dayparts, {
-        heeftInhoud: heeftAvondNachtInhoud,
-        toonAvondNacht: showNight,
-      }),
-    [data.masterData.dayparts, heeftAvondNachtInhoud, showNight]
+    () => zichtbareDagdelen(data.masterData.dayparts, { toonAvondNacht: showNight }),
+    [data.masterData.dayparts, showNight]
   );
 
   useEffect(() => {
@@ -995,11 +986,7 @@ export function ActivitiesContent({
             heeft er ook geen eerste avond in te zetten.
           */}
           {canEdit ? (
-            <PlannerAvondNachtToggle
-                aan={showNight}
-                heeftInhoud={heeftAvondNachtInhoud}
-                onChange={updateVisibility}
-              />
+            <PlannerAvondNachtToggle aan={showNight} onChange={updateVisibility} />
           ) : null}
           <PlannerViewModeSwitch
             value={viewMode}

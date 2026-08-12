@@ -23,7 +23,6 @@ import { usePlannerHolidayData } from '@/hooks/praktijkplanner/usePlannerHoliday
 import { usePlannerWeergave } from '@/hooks/praktijkplanner/usePlannerWeergave';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import {
-  heeftAvondOfNachtInhoud,
   zichtbareDagdelen,
 } from '@/lib/praktijkplanner/dagdeel-zichtbaarheid';
 import { addDays, maandVanWeek, monthBounds, monthCalendarBounds, weekVanMaand } from '@/lib/praktijkplanner/dates';
@@ -128,23 +127,9 @@ export function PlannerAbsenceEditor({
     ? data.participants.filter((participant) => participant.id === data.userId)
     : data.participants;
   const editable = isDoctorMode || data.isManager;
-  const heeftAvondNachtInhoud = useMemo(
-    () =>
-      heeftAvondOfNachtInhoud(
-        [],
-        slots,
-        data.masterData.dayparts,
-        new Set(participants.map((participant) => participant.id))
-      ),
-    [data.masterData.dayparts, participants, slots]
-  );
   const visibleDayparts = useMemo(
-    () =>
-      zichtbareDagdelen(data.masterData.dayparts, {
-        heeftInhoud: heeftAvondNachtInhoud,
-        toonAvondNacht: showNight,
-      }),
-    [data.masterData.dayparts, heeftAvondNachtInhoud, showNight]
+    () => zichtbareDagdelen(data.masterData.dayparts, { toonAvondNacht: showNight }),
+    [data.masterData.dayparts, showNight]
   );
 
   useEffect(() => {
@@ -552,11 +537,7 @@ export function PlannerAbsenceEditor({
   const weergaveKnoppen = (
     <>
       {editable ? (
-        <PlannerAvondNachtToggle
-          aan={showNight}
-          heeftInhoud={heeftAvondNachtInhoud}
-          onChange={updateVisibility}
-        />
+        <PlannerAvondNachtToggle aan={showNight} onChange={updateVisibility} />
       ) : null}
       <PlannerViewModeSwitch
         value={viewMode}
@@ -681,7 +662,6 @@ export function PlannerAbsenceEditor({
             {editable ? (
               <PlannerAvondNachtToggle
                 aan={showNight}
-                heeftInhoud={heeftAvondNachtInhoud}
                 onChange={updateVisibility}
               />
             ) : null}

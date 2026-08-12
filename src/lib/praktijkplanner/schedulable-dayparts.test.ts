@@ -101,29 +101,17 @@ describe('weekdagen en dagdelen zonder rooster', () => {
   const matrix = [1, 2].flatMap((weekdag) =>
     [1, 2].map((iddagdeel) => ({ weekdag, iddagdeel, actief: true }))
   );
-  const leeg = new Set<number>();
-
   it('laat niets weg zolang er geen matrix is opgeslagen', () => {
-    expect([...weekdagenZonderRooster([], leeg)]).toEqual([]);
-    expect([...dagdelenZonderRooster([], [1, 2, 3, 4], leeg)]).toEqual([]);
+    expect([...weekdagenZonderRooster([])]).toEqual([]);
+    expect([...dagdelenZonderRooster([], [1, 2, 3, 4])]).toEqual([]);
   });
 
   it('haalt de dagen weg waarop de groep nooit werkt', () => {
-    expect([...weekdagenZonderRooster(matrix, leeg)]).toEqual([3, 4, 5, 6, 7]);
+    expect([...weekdagenZonderRooster(matrix)]).toEqual([3, 4, 5, 6, 7]);
   });
 
   it('haalt de dagdelen weg die op geen enkele dag gebruikt worden', () => {
-    expect([...dagdelenZonderRooster(matrix, [1, 2, 3, 4], leeg)]).toEqual([3, 4]);
-  });
-
-  it('houdt een dag in beeld zodra er toch iets in staat', () => {
-    // Zonder deze uitzondering is die woensdag niet meer te bereiken: anders dan bij avond en
-    // nacht is er geen knop om de kolom terug te halen.
-    expect([...weekdagenZonderRooster(matrix, new Set([3]))]).toEqual([4, 5, 6, 7]);
-  });
-
-  it('houdt een dagdeel in beeld zodra er toch iets in staat', () => {
-    expect([...dagdelenZonderRooster(matrix, [1, 2, 3, 4], new Set([4]))]).toEqual([3]);
+    expect([...dagdelenZonderRooster(matrix, [1, 2, 3, 4])]).toEqual([3, 4]);
   });
 
   it('telt een dag met alleen uitgezette rijen ook als nooit gebruikt', () => {
@@ -131,6 +119,6 @@ describe('weekdagen en dagdelen zonder rooster', () => {
       { weekdag: 1, iddagdeel: 1, actief: true },
       { weekdag: 6, iddagdeel: 1, actief: false },
     ];
-    expect(weekdagenZonderRooster(uitgezet, leeg).has(6)).toBe(true);
+    expect(weekdagenZonderRooster(uitgezet).has(6)).toBe(true);
   });
 });

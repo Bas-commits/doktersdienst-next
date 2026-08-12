@@ -341,7 +341,12 @@ export function ActivitiesContent({
       if (absence && (!absence.isVoorlopig || !hasActivityContent)) {
         const provisional = absence.isVoorlopig;
         const cell = (
-          <AbsenceDaypartCell absence={absence.absenceType} provisional={provisional} fill />
+          <AbsenceDaypartCell
+            absence={absence.absenceType}
+            provisional={provisional}
+            participantColor={participant.color}
+            fill
+          />
         );
         return (
           <PlannerDaypartHoverPreview

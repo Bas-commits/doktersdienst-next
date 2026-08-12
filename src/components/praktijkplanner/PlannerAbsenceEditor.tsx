@@ -263,7 +263,14 @@ export function PlannerAbsenceEditor({
         return null;
       }
 
-      const cell = <AbsenceDaypartCell absence={absence} provisional={provisional} fill />;
+      const cell = (
+        <AbsenceDaypartCell
+          absence={absence}
+          provisional={provisional}
+          participantColor={participant.color}
+          fill
+        />
+      );
 
       // Zonder deze kaart vertelt het vakje alleen zijn kleur. De dokterversie toont maar één
       // deelnemer, dus daar zou de naam iedere keer dezelfde regel zijn.

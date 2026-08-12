@@ -167,7 +167,7 @@ export function PlannerDaypartGrid({
           dekkend gemaakt: doorschijnend zie je de fiches eronder doorheen lopen.
         */}
         <div
-          className="sticky top-0 z-30 grid grid-cols-[minmax(11rem,13rem)_repeat(7,minmax(9.5rem,11rem))] border-b bg-card"
+          className="sticky top-0 z-30 grid grid-cols-[minmax(10rem,12rem)_repeat(7,minmax(8rem,9rem))] border-b bg-card"
           style={{ height: `${PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX}px` }}
         >
           <div className="flex h-full items-center justify-center px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -204,7 +204,7 @@ export function PlannerDaypartGrid({
           return (
           <div
             key={participant.id}
-            className="grid snap-start grid-cols-[minmax(11rem,13rem)_repeat(7,minmax(9.5rem,11rem))] border-b last:border-b-0"
+            className="grid snap-start grid-cols-[minmax(10rem,12rem)_repeat(7,minmax(8rem,9rem))] border-b last:border-b-0"
           >
             <div className="flex min-h-20 flex-col justify-center gap-1 p-3 text-left">
               {renderParticipantActions ? (
@@ -254,7 +254,7 @@ export function PlannerDaypartGrid({
                   hoogte werd een vakje een liggende balk zodra avond en nacht erbij kwamen,
                   en een staande balk zodra ze weer weg waren.
                 */}
-                <div className="grid w-full grid-cols-2 justify-items-center gap-1">
+                <div className="mx-auto grid w-fit grid-cols-2 gap-1">
                   {orderedDayparts.map((daypart) => {
                     const cell = { participant, datum, daypart };
                     const unavailable = isCellUnavailable?.(cell) ?? false;
@@ -286,12 +286,13 @@ export function PlannerDaypartGrid({
                           if (unavailable) setUnavailableCursor(null);
                         }}
                         className={cn(
-                          // Vierkant, en niet groter dan dit. Zonder die bovengrens rekt een
-                          // vakje mee met de monitor en wordt een fiche alleen maar groter
-                          // zonder dat er meer in staat. 56 pixels is gekozen omdat twee van
-                          // deze vakjes onder elkaar de regel even hoog houden als hij was met
-                          // vaste hoogte, zodat avond en nacht erbij zetten geen ruimte kost.
-                          'group/cell relative flex aspect-square w-full max-w-14 rounded border text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default',
+                          // Vast vierkant van 56 pixels, niet een deel van de kolombreedte.
+                          // Meerekenen met de kolom maakte een fiche groter zonder dat er meer
+                          // in kwam te staan, en liet de ruimte die overbleef als lucht tussen
+                          // de twee vakjes vallen. 56 is gekozen omdat twee vakjes onder elkaar
+                          // de regel even hoog houden als hij was met een vaste regelhoogte,
+                          // zodat avond en nacht erbij zetten geen ruimte kost.
+                          'group/cell relative flex size-14 rounded border text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default',
                           unavailable
                             ? 'cursor-none border-border/40 bg-muted/40 opacity-50'
                             : 'border-border/70 disabled:opacity-80',

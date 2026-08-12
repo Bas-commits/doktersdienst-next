@@ -53,8 +53,11 @@ import {
   subscribePlannerChanged,
 } from '@/lib/praktijkplanner/planner-change-broadcast';
 import {
+  dagdelenZonderRooster,
   isDaypartSchedulableForParticipant,
+  isoWeekdayFromDate,
   participantMatrixFor,
+  weekdagenZonderRooster,
 } from '@/lib/praktijkplanner/schedulable-dayparts';
 import type {
   PraktijkplannerAbsenceSlot,
@@ -138,10 +141,32 @@ export function ActivitiesContent({
         : data.participants.filter((participant) => participant.id === participantFilter),
     [data.participants, participantFilter]
   );
-  const visibleDayparts = useMemo(
-    () => zichtbareDagdelen(data.masterData.dayparts, { toonAvondNacht: showNight }),
-    [data.masterData.dayparts, showNight]
+  // Wat er in de geladen periode staat. Een dag of dagdeel dat de groep nooit gebruikt maar
+  // waar toch iets in staat blijft in beeld, anders is dat werk niet meer te bereiken.
+  const gevuld = useMemo(() => {
+    const weekdagen = new Set<number>();
+    const dagdelen = new Set<number>();
+    for (const slot of [...slots, ...absenceSlots]) {
+      weekdagen.add(isoWeekdayFromDate(slot.datum));
+      dagdelen.add(slot.iddagdeel);
+    }
+    return { weekdagen, dagdelen };
+  }, [absenceSlots, slots]);
+  const verborgenWeekdagen = useMemo(
+    () => weekdagenZonderRooster(data.masterData.schedulableDayparts ?? [], gevuld.weekdagen),
+    [data.masterData.schedulableDayparts, gevuld.weekdagen]
   );
+  const visibleDayparts = useMemo(() => {
+    const weg = dagdelenZonderRooster(
+      data.masterData.schedulableDayparts ?? [],
+      data.masterData.dayparts.map((daypart) => daypart.id),
+      gevuld.dagdelen
+    );
+    return zichtbareDagdelen(
+      data.masterData.dayparts.filter((daypart) => !weg.has(daypart.id)),
+      { toonAvondNacht: showNight }
+    );
+  }, [data.masterData.dayparts, data.masterData.schedulableDayparts, gevuld.dagdelen, showNight]);
 
   useEffect(() => {
     setSelectedSpecificationId((current) => {
@@ -1097,6 +1122,7 @@ export function ActivitiesContent({
             onCursorToolDismiss={dismissCursorTool}
             renderParticipantActions={canEdit ? renderParticipantActions : undefined}
             onParticipantNameClick={readOnly ? undefined : openDeelnemerGegevens}
+            verborgenWeekdagen={verborgenWeekdagen}
           />
           )}
         </div>

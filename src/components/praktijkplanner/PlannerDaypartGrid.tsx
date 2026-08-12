@@ -5,6 +5,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
 import { weekDates } from '@/lib/praktijkplanner/dates';
+import { isoWeekdayFromDate } from '@/lib/praktijkplanner/schedulable-dayparts';
 import { cn } from '@/lib/utils';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
 import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
@@ -80,6 +81,7 @@ export function PlannerDaypartGrid({
   renderParticipantActions,
   onParticipantNameClick,
   getCellClassName,
+  verborgenWeekdagen,
 }: {
   participants: PraktijkplannerParticipant[];
   dayparts: PraktijkplannerDaypart[];
@@ -99,8 +101,12 @@ export function PlannerDaypartGrid({
   /** When set, participant names become clickable (e.g. open mijn gegevens). */
   onParticipantNameClick?: (participant: PraktijkplannerParticipant) => void;
   getCellClassName?: (cell: PlannerDaypartCell) => string | undefined;
+  /** ISO-weekdagen (maandag is 1) die de groep nooit gebruikt en die dus geen kolom krijgen. */
+  verborgenWeekdagen?: ReadonlySet<number>;
 }) {
-  const days = weekDates(weekStart);
+  const days = weekDates(weekStart).filter(
+    (datum) => !verborgenWeekdagen?.has(isoWeekdayFromDate(datum))
+  );
   const orderedDayparts = [...dayparts].sort((a, b) => a.volgorde - b.volgorde);
   const huidigMoment = useHuidigMoment();
   const gridRootRef = useRef<HTMLDivElement>(null);
@@ -110,6 +116,10 @@ export function PlannerDaypartGrid({
     containerRef: gridRootRef,
     onDismiss: onCursorToolDismiss,
   });
+
+  // Het aantal dagkolommen staat niet vast: dagen die de groep nooit gebruikt vallen weg. De
+  // kopregel en elke deelnemersregel delen deze ene definitie, anders schuiven ze uit elkaar.
+  const kolommen = `minmax(10rem,12rem) repeat(${days.length}, minmax(8rem,9rem))`;
 
   const followerTool = unavailableCursor ? UNAVAILABLE_DAYPART_CURSOR_TOOL : cursorTool ?? null;
   const followerPosition = unavailableCursor ?? cursorPosition;
@@ -160,15 +170,22 @@ export function PlannerDaypartGrid({
         Dat scheelt de breedte van de kolom en de hoogte van vier knoppen op elkaar.
       */}
       <div className="flex w-fit min-w-full">
-      <div className="min-w-[1120px]">
+      {/*
+        Geen vaste minimumbreedte meer: die hoorde bij zeven vaste dagkolommen. De kolommen
+        dragen hun eigen ondergrens, dus met minder dagen krimpt het rooster mee.
+      */}
+      <div>
         {/*
           De kopregel blijft staan terwijl je door de deelnemers scrollt. Zonder dat weet je
           halverwege het rooster niet meer welke kolom welke dag is. De achtergrond is
           dekkend gemaakt: doorschijnend zie je de fiches eronder doorheen lopen.
         */}
         <div
-          className="sticky top-0 z-30 grid grid-cols-[minmax(10rem,12rem)_repeat(7,minmax(8rem,9rem))] border-b bg-card"
-          style={{ height: `${PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX}px` }}
+          className="sticky top-0 z-30 grid border-b bg-card"
+          style={{
+            height: `${PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX}px`,
+            gridTemplateColumns: kolommen,
+          }}
         >
           <div className="flex h-full items-center justify-center px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Deelnemer
@@ -204,7 +221,8 @@ export function PlannerDaypartGrid({
           return (
           <div
             key={participant.id}
-            className="grid snap-start grid-cols-[minmax(10rem,12rem)_repeat(7,minmax(8rem,9rem))] border-b last:border-b-0"
+            className="grid snap-start border-b last:border-b-0"
+            style={{ gridTemplateColumns: kolommen }}
           >
             <div className="flex min-h-20 flex-col justify-center gap-1 p-3 text-left">
               {renderParticipantActions ? (

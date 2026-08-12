@@ -28,8 +28,11 @@ import {
 import { addDays, maandVanWeek, monthBounds, monthCalendarBounds, weekVanMaand } from '@/lib/praktijkplanner/dates';
 import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 import {
+  dagdelenZonderRooster,
   isDaypartSchedulableForParticipant,
+  isoWeekdayFromDate,
   participantMatrixFor,
+  weekdagenZonderRooster,
 } from '@/lib/praktijkplanner/schedulable-dayparts';
 import type { PraktijkplannerAbsenceSlot, PraktijkplannerDaypart } from '@/types/praktijkplanner';
  
@@ -127,10 +130,32 @@ export function PlannerAbsenceEditor({
     ? data.participants.filter((participant) => participant.id === data.userId)
     : data.participants;
   const editable = isDoctorMode || data.isManager;
-  const visibleDayparts = useMemo(
-    () => zichtbareDagdelen(data.masterData.dayparts, { toonAvondNacht: showNight }),
-    [data.masterData.dayparts, showNight]
+  // Zie weekdagenZonderRooster: een dag of dagdeel dat de groep nooit gebruikt maar waar toch
+  // een afwezigheid staat blijft in beeld.
+  const gevuld = useMemo(() => {
+    const weekdagen = new Set<number>();
+    const dagdelen = new Set<number>();
+    for (const slot of slots) {
+      weekdagen.add(isoWeekdayFromDate(slot.datum));
+      dagdelen.add(slot.iddagdeel);
+    }
+    return { weekdagen, dagdelen };
+  }, [slots]);
+  const verborgenWeekdagen = useMemo(
+    () => weekdagenZonderRooster(data.masterData.schedulableDayparts ?? [], gevuld.weekdagen),
+    [data.masterData.schedulableDayparts, gevuld.weekdagen]
   );
+  const visibleDayparts = useMemo(() => {
+    const weg = dagdelenZonderRooster(
+      data.masterData.schedulableDayparts ?? [],
+      data.masterData.dayparts.map((daypart) => daypart.id),
+      gevuld.dagdelen
+    );
+    return zichtbareDagdelen(
+      data.masterData.dayparts.filter((daypart) => !weg.has(daypart.id)),
+      { toonAvondNacht: showNight }
+    );
+  }, [data.masterData.dayparts, data.masterData.schedulableDayparts, gevuld.dagdelen, showNight]);
 
   useEffect(() => {
     if (emailParticipantId != null || data.participants.length === 0) return;
@@ -625,6 +650,7 @@ export function PlannerAbsenceEditor({
           participants={participants}
           dayparts={visibleDayparts}
           weekStart={weekStart}
+          verborgenWeekdagen={verborgenWeekdagen}
           renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}
           isCellFilled={({ participant, datum, daypart }) => isCellFilled(participant.id, datum, daypart)}
           onCellClick={applyCell}

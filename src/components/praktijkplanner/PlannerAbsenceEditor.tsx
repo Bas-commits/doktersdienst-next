@@ -623,6 +623,7 @@ export function PlannerAbsenceEditor({
           ) : null}
           {viewMode === 'month' ? (
             <PlannerMonthOverviewGrid
+              verborgenWeekdagen={verborgenWeekdagen}
               participants={participants}
               dayparts={visibleDayparts}
               year={overviewMonth.year}
@@ -687,6 +688,7 @@ export function PlannerAbsenceEditor({
             }}
           >
             <PlannerMonthDaypartGrid
+              verborgenWeekdagen={verborgenWeekdagen}
               participant={participants[0]}
               dayparts={visibleDayparts}
               year={overviewMonth.year}

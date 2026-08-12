@@ -15,7 +15,11 @@ import {
   type PraktijkplannerPageContext,
 } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { Button } from '@/components/ui/button';
-import { isDaypartSchedulable } from '@/lib/praktijkplanner/schedulable-dayparts';
+import {
+  dagdelenZonderRooster,
+  isDaypartSchedulable,
+  weekdagenZonderRooster,
+} from '@/lib/praktijkplanner/schedulable-dayparts';
 import type {
   PraktijkplannerCapacityCell,
   PraktijkplannerCapacityRegime,
@@ -106,10 +110,21 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
   const regimeIdRef = useRef(regimeId);
   regimeIdRef.current = regimeId;
 
-  const dayparts = useMemo(
-    () => [...data.masterData.dayparts].sort((left, right) => left.volgorde - right.volgorde),
-    [data.masterData.dayparts]
+  // Een eis opgeven voor een dag die de groep nooit werkt heeft geen zin; die cel was hier al
+  // niet invulbaar en hoort dus ook niet in het sjabloon te staan.
+  const verborgenWeekdagen = useMemo(
+    () => weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
+    [data.masterData.schedulableDayparts]
   );
+  const dayparts = useMemo(() => {
+    const weg = dagdelenZonderRooster(
+      data.masterData.schedulableDayparts ?? [],
+      data.masterData.dayparts.map((daypart) => daypart.id)
+    );
+    return [...data.masterData.dayparts]
+      .filter((daypart) => !weg.has(daypart.id))
+      .sort((left, right) => left.volgorde - right.volgorde);
+  }, [data.masterData.dayparts, data.masterData.schedulableDayparts]);
 
   const requirementSections: CapacityRequirementSection[] = useMemo(
     () => [
@@ -497,6 +512,7 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
           ) : null}
           <CapacityWeekGrid
             dayparts={dayparts}
+            verborgenWeekdagen={verborgenWeekdagen}
             isCellUnavailable={(weekday, daypart) =>
               !isDaypartSchedulable(data.masterData.schedulableDayparts ?? [], weekday.id, daypart.id)
             }

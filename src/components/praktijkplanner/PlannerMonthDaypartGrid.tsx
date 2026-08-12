@@ -3,7 +3,11 @@
 import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
-import { datesBetweenInclusive, monthCalendarBounds } from '@/lib/praktijkplanner/dates';
+import {
+  datesBetweenInclusive,
+  monthCalendarBounds,
+  weekdayFromIsoDate,
+} from '@/lib/praktijkplanner/dates';
 import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
 import type { PlannerDaypartCell } from './PlannerDaypartGrid';
 import { UNAVAILABLE_DAYPART_TOAST } from './PlannerDaypartGrid';
@@ -41,6 +45,7 @@ export function PlannerMonthDaypartGrid({
   renderBlockedCell,
   cursorTool,
   onCursorToolDismiss,
+  verborgenWeekdagen,
 }: {
   participant: PraktijkplannerParticipant;
   dayparts: PraktijkplannerDaypart[];
@@ -56,6 +61,8 @@ export function PlannerMonthDaypartGrid({
   renderBlockedCell?: (cell: PlannerDaypartCell) => ReactNode;
   cursorTool?: PlannerCursorTool | null;
   onCursorToolDismiss?: () => void;
+  /** ISO-weekdagen die de groep nooit gebruikt. Zie weekdagenZonderRooster. */
+  verborgenWeekdagen?: ReadonlySet<number>;
 }) {
   const bounds = monthCalendarBounds(year, month);
   const gridRootRef = useRef<HTMLDivElement>(null);
@@ -68,7 +75,14 @@ export function PlannerMonthDaypartGrid({
   const huidigMoment = useHuidigMoment();
   if (!bounds) return null;
 
-  const dates = datesBetweenInclusive(bounds.start, bounds.end);
+  // Kop en cellen filteren op dezelfde regel, anders staat een dag onder de verkeerde naam.
+  // De kalender begint altijd op maandag, dus de rijen blijven kloppen als er een dag uitvalt.
+  const zichtbareWeekdagen = [1, 2, 3, 4, 5, 6, 7].filter(
+    (weekdag) => !verborgenWeekdagen?.has(weekdag)
+  );
+  const dates = datesBetweenInclusive(bounds.start, bounds.end).filter(
+    (datum) => !verborgenWeekdagen?.has(weekdayFromIsoDate(datum))
+  );
   const orderedDayparts = [...dayparts].sort(compareDayparts);
   const followerTool = unavailableCursor ? UNAVAILABLE_DAYPART_CURSOR_TOOL : cursorTool ?? null;
   const followerPosition = unavailableCursor ?? cursorPosition;
@@ -80,15 +94,24 @@ export function PlannerMonthDaypartGrid({
   return (
     <div ref={gridRootRef}>
     <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
-      <div className="min-w-[900px]">
-        <div className="grid grid-cols-7 border-b bg-muted/40">
-          {WEEKDAYS.map((weekday) => (
-            <div key={weekday} className="p-2 text-center text-xs font-semibold text-muted-foreground">
-              {weekday}
+      <div style={{ minWidth: `${zichtbareWeekdagen.length * 128}px` }}>
+        <div
+          className="grid border-b bg-muted/40"
+          style={{ gridTemplateColumns: `repeat(${zichtbareWeekdagen.length}, minmax(0,1fr))` }}
+        >
+          {zichtbareWeekdagen.map((weekdag) => (
+            <div
+              key={weekdag}
+              className="p-2 text-center text-xs font-semibold text-muted-foreground"
+            >
+              {WEEKDAYS[weekdag - 1]}
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7">
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: `repeat(${zichtbareWeekdagen.length}, minmax(0,1fr))` }}
+        >
           {dates.map((datum) => {
             const date = new Date(`${datum}T12:00:00`);
             const inMonth = date.getMonth() + 1 === month;

@@ -83,6 +83,7 @@ export function PlannerMonthOverviewGrid({
   renderCell,
   holidayLabels,
   onParticipantNameClick,
+  verborgenWeekdagen,
 }: {
   participants: PraktijkplannerParticipant[];
   dayparts: PraktijkplannerDaypart[];
@@ -91,12 +92,17 @@ export function PlannerMonthOverviewGrid({
   renderCell: (cell: PlannerDaypartCell) => ReactNode;
   holidayLabels?: ReadonlyMap<string, string[]>;
   onParticipantNameClick?: (participant: PraktijkplannerParticipant) => void;
+  /** ISO-weekdagen die de groep nooit gebruikt. Zie weekdagenZonderRooster. */
+  verborgenWeekdagen?: ReadonlySet<number>;
 }) {
   const huidigMoment = useHuidigMoment();
   const bounds = monthBounds(year, month);
   if (!bounds) return null;
 
-  const dates = datesBetweenInclusive(bounds.start, bounds.end);
+  // De weekkoppen tellen daarna vanzelf minder dagen, want die worden uit deze lijst afgeleid.
+  const dates = datesBetweenInclusive(bounds.start, bounds.end).filter(
+    (datum) => !verborgenWeekdagen?.has(weekdayFromIsoDate(datum))
+  );
   const geordendeDagdelen = [...dayparts].sort((a, b) => a.volgorde - b.volgorde);
   const groepen = weekGroepen(dates);
 

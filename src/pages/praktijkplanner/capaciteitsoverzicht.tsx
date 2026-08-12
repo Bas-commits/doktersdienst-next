@@ -14,7 +14,11 @@ import {
 } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { addDays } from '@/lib/praktijkplanner/dates';
 import { subscribePlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
-import { isDaypartSchedulable } from '@/lib/praktijkplanner/schedulable-dayparts';
+import {
+  dagdelenZonderRooster,
+  isDaypartSchedulable,
+  weekdagenZonderRooster,
+} from '@/lib/praktijkplanner/schedulable-dayparts';
 import type { PraktijkplannerCapacityComparison } from '@/types/praktijkplanner';
 
 type OverviewCell = {
@@ -46,10 +50,21 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
   const effectiveLocationId = locationId ?? data.masterData.locations[0]?.id ?? null;
 
-  const dayparts = useMemo(
-    () => [...data.masterData.dayparts].sort((left, right) => left.volgorde - right.volgorde),
-    [data.masterData.dayparts]
+  // Dagen en dagdelen die de groep nooit gebruikt horen hier net zo goed niet thuis als in de
+  // planners: anders vergelijkt dit scherm een bezetting met een eis die niet bestaat.
+  const verborgenWeekdagen = useMemo(
+    () => weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
+    [data.masterData.schedulableDayparts]
   );
+  const dayparts = useMemo(() => {
+    const weg = dagdelenZonderRooster(
+      data.masterData.schedulableDayparts ?? [],
+      data.masterData.dayparts.map((daypart) => daypart.id)
+    );
+    return [...data.masterData.dayparts]
+      .filter((daypart) => !weg.has(daypart.id))
+      .sort((left, right) => left.volgorde - right.volgorde);
+  }, [data.masterData.dayparts, data.masterData.schedulableDayparts]);
 
   const weekDates = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
@@ -214,6 +229,7 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
           <CapacityWeekGrid
             dayparts={dayparts}
             weekdayHeaders={weekdayHeaders}
+            verborgenWeekdagen={verborgenWeekdagen}
             isCellUnavailable={(weekday, daypart) =>
               !isDaypartSchedulable(data.masterData.schedulableDayparts ?? [], weekday.id, daypart.id)
             }

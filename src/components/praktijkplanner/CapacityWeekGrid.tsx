@@ -35,6 +35,8 @@ type CapacityWeekGridProps = {
    */
   isCurrentCell?: (weekday: CapacityWeekday, daypart: PraktijkplannerDaypart) => boolean;
   className?: string;
+  /** ISO-weekdagen die de groep nooit gebruikt. Zie weekdagenZonderRooster. */
+  verborgenWeekdagen?: ReadonlySet<number>;
 };
 
 export function CapacityWeekGrid({
@@ -44,8 +46,15 @@ export function CapacityWeekGrid({
   isCellUnavailable,
   isCurrentCell,
   className,
+  verborgenWeekdagen,
 }: CapacityWeekGridProps) {
-  const headers = weekdayHeaders ?? CAPACITY_WEEKDAYS.map((day) => day.label);
+  // De kop die een scherm meegeeft staat op de plek van de volledige week, dus die moet mee
+  // gefilterd worden op dezelfde index. Anders komt de datum onder de verkeerde dag te staan.
+  const alleHeaders = weekdayHeaders ?? CAPACITY_WEEKDAYS.map((day) => day.label);
+  const dagen = CAPACITY_WEEKDAYS.map((weekday, index) => ({
+    weekday,
+    header: alleHeaders[index],
+  })).filter(({ weekday }) => !verborgenWeekdagen?.has(weekday.id));
   const [unavailableCursor, setUnavailableCursor] = useState<{ x: number; y: number } | null>(null);
 
   const trackUnavailableCursor = (event: { clientX: number; clientY: number }) => {
@@ -54,15 +63,19 @@ export function CapacityWeekGrid({
 
   return (
     <div className={['overflow-x-auto rounded-xl border bg-card shadow-sm', className].filter(Boolean).join(' ')}>
-      <table className="w-full min-w-[1100px] border-collapse text-sm">
+      {/* De minimumbreedte volgt het aantal kolommen; met zeven dagen is dit de oude 1100. */}
+      <table
+        className="w-full border-collapse text-sm"
+        style={{ minWidth: `${120 + dagen.length * 140}px` }}
+      >
         <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
           <tr>
             <th className="sticky left-0 z-10 border-b border-r bg-muted/40 p-3 text-left font-semibold">
               Dagdeel
             </th>
-            {CAPACITY_WEEKDAYS.map((weekday, index) => (
+            {dagen.map(({ weekday, header }) => (
               <th key={weekday.id} className="border-b p-3 text-center font-semibold">
-                {headers[index]}
+                {header}
               </th>
             ))}
           </tr>
@@ -80,7 +93,7 @@ export function CapacityWeekGrid({
                     ) : null}
                   </div>
                 </th>
-                {CAPACITY_WEEKDAYS.map((weekday) => {
+                {dagen.map(({ weekday }) => {
                   const unavailable = isCellUnavailable?.(weekday, daypart) ?? false;
                   const isNu = isCurrentCell?.(weekday, daypart) ?? false;
                   return (

@@ -1069,6 +1069,7 @@ export function ActivitiesContent({
           ) : null}
           {viewMode === 'month' ? (
             <PlannerMonthOverviewGrid
+              verborgenWeekdagen={verborgenWeekdagen}
               participants={visibleParticipants}
               dayparts={visibleDayparts}
               year={monthAnchor.year}

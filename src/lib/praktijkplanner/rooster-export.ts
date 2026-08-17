@@ -64,6 +64,114 @@ function vakjeTekst(
 }
 
 /**
+ * De twee koprijen van het raster: de dag boven het eerste dagdeel, de dagdelen eronder.
+ *
+ * De dagnaam staat alleen boven het eerste dagdeel en de rest blijft leeg, zodat er in Excel op
+ * te filteren valt zonder samengevoegde cellen (die kan deze bibliotheek niet maken).
+ */
+function rasterKoppen(
+  datums: string[],
+  dagdelen: RoosterExportDagdeel[]
+): { dagKop: ExcelWaarde[]; dagdeelKop: ExcelWaarde[] } {
+  const dagKop: ExcelWaarde[] = [''];
+  const dagdeelKop: ExcelWaarde[] = ['Dokter'];
+  for (const datum of datums) {
+    dagdelen.forEach((dagdeel, index) => {
+      dagKop.push(
+        index === 0 ? `${weekdagNaam(datum)} ${datum.slice(8, 10)}-${datum.slice(5, 7)}` : ''
+      );
+      dagdeelKop.push(dagdeel.naam);
+    });
+  }
+  return { dagKop, dagdeelKop };
+}
+
+/**
+ * Bouwt en downloadt de afwezigheden van de dagen die de afwezigheidsplanner toont.
+ *
+ * Apart van het rooster hierboven, met eigen kolommen. Het rooster erbij zou hier zes lege
+ * kolommen betekenen, en dat leest als ontbrekende gegevens in plaats van als een ander scherm.
+ *
+ * Aangevraagd staat in een eigen kolom naast vastgelegd, niet als een aparte soort. Wie telt
+ * hoeveel dagdelen er vastliggen moet de aanvragen eruit kunnen filteren; wie kijkt of iemand er
+ * is wil ze juist zien staan.
+ *
+ * Let op, dit is het enige punt waar het bestand meer bevat dan het scherm: een afwezigheid op
+ * een dagdeel waarop de dokter niet inroosterbaar is, tekent het raster niet. Die staat hier wel,
+ * want hij staat in de database en telt mee in de balans. Weglaten zou een export opleveren die
+ * niet klopt met de absentietelling, en dat is erger dan een regel die op het scherm ontbreekt.
+ * Dat verschil hoort een eigen kaart te worden.
+ */
+export async function downloadPlannerAfwezigheden(params: {
+  bestandsnaam: string;
+  kop: string;
+  datums: string[];
+  dagdelen: RoosterExportDagdeel[];
+  deelnemers: RoosterExportDeelnemer[];
+  absences: PraktijkplannerAbsenceSlot[];
+}): Promise<void> {
+  const absentieOp = new Map(
+    params.absences.map((slot) => [sleutel(slot.iddeelnemer, slot.datum, slot.iddagdeel), slot])
+  );
+
+  const gegevens: ExcelWaarde[][] = [];
+  const raster: ExcelWaarde[][] = [];
+
+  for (const deelnemer of params.deelnemers) {
+    const rasterRegel: ExcelWaarde[] = [deelnemer.naam];
+    for (const datum of params.datums) {
+      for (const dagdeel of params.dagdelen) {
+        const absentie = absentieOp.get(sleutel(deelnemer.id, datum, dagdeel.id));
+        rasterRegel.push(
+          absentie
+            ? absentie.isVoorlopig
+              ? `${absentie.absenceType.naam} (aangevraagd)`
+              : absentie.absenceType.naam
+            : ''
+        );
+        if (!absentie) continue;
+        gegevens.push([
+          new Date(`${datum}T12:00:00`),
+          weekdagNaam(datum),
+          dagdeel.naam,
+          deelnemer.naam,
+          absentie.absenceType.naam,
+          absentie.isVoorlopig ? 'aangevraagd' : 'vastgelegd',
+        ]);
+      }
+    }
+    raster.push(rasterRegel);
+  }
+
+  gegevens.sort((links, rechts) => {
+    const datumVerschil = (links[0] as Date).getTime() - (rechts[0] as Date).getTime();
+    if (datumVerschil !== 0) return datumVerschil;
+    return String(links[3]).localeCompare(String(rechts[3]), 'nl');
+  });
+
+  const { dagKop, dagdeelKop } = rasterKoppen(params.datums, params.dagdelen);
+
+  await downloadWerkboek(params.bestandsnaam, [
+    {
+      naam: 'Gegevens',
+      kolombreedtes: [12, 12, 14, 28, 24, 18],
+      dagKolommen: [0],
+      rijen: [
+        [params.kop],
+        [],
+        ['Datum', 'Weekdag', 'Dagdeel', 'Dokter', 'Afwezigheid', 'Status'],
+        ...gegevens,
+      ],
+    },
+    {
+      naam: 'Overzicht',
+      kolombreedtes: [28, ...Array(params.datums.length * params.dagdelen.length).fill(18)],
+      rijen: [[params.kop], [], dagKop, dagdeelKop, ...raster],
+    },
+  ]);
+}
+
+/**
  * Bouwt en downloadt het rooster van de praktijkplanner voor de dagen die het scherm toont.
  *
  * Twee bladen, en ze zijn er allebei om een andere reden. Gegevens zet elk dagdeel op een eigen
@@ -129,17 +237,7 @@ export async function downloadPlannerRooster(params: {
     return String(links[3]).localeCompare(String(rechts[3]), 'nl');
   });
 
-  // Twee koprijen, want een dag beslaat meerdere dagdelen. De dagnaam staat boven het eerste
-  // dagdeel van die dag en de rest blijft leeg, zodat er in Excel op te filteren valt zonder
-  // samengevoegde cellen (die kan deze bibliotheek niet maken).
-  const dagKop: ExcelWaarde[] = [''];
-  const dagdeelKop: ExcelWaarde[] = ['Dokter'];
-  for (const datum of params.datums) {
-    params.dagdelen.forEach((dagdeel, index) => {
-      dagKop.push(index === 0 ? `${weekdagNaam(datum)} ${datum.slice(8, 10)}-${datum.slice(5, 7)}` : '');
-      dagdeelKop.push(dagdeel.naam);
-    });
-  }
+  const { dagKop, dagdeelKop } = rasterKoppen(params.datums, params.dagdelen);
 
   const bladen: ExcelBlad[] = [
     {

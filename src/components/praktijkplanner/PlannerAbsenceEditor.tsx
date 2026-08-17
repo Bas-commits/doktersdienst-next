@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Mail, Minus, Moon, Plus, RotateCcw, Sun, Trash2 } from 'lucide-react';
+import { Download, Mail, Minus, Moon, Plus, RotateCcw, Sun, Trash2 } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { PraktijkplannerTitleAside, type PraktijkplannerPageContext } from './PraktijkplannerPage';
@@ -25,7 +25,17 @@ import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import {
   zichtbareDagdelen,
 } from '@/lib/praktijkplanner/dagdeel-zichtbaarheid';
-import { addDays, maandVanWeek, monthBounds, monthCalendarBounds, weekVanMaand } from '@/lib/praktijkplanner/dates';
+import {
+  addDays,
+  datesBetweenInclusive,
+  weekdayFromIsoDate,
+  maandVanWeek,
+  monthBounds,
+  monthCalendarBounds,
+  weekVanMaand,
+} from '@/lib/praktijkplanner/dates';
+import { deelnemerRoosterNaam } from '@/lib/deelnemer-display';
+import { downloadPlannerAfwezigheden } from '@/lib/praktijkplanner/rooster-export';
 import { notifyPlannerChanged } from '@/lib/praktijkplanner/planner-change-broadcast';
 import {
   dagdelenZonderRooster,
@@ -221,6 +231,58 @@ export function PlannerAbsenceEditor({
   const slotMap = useMemo(
     () => new Map(slots.map((slot) => [keyFor(slot.iddeelnemer, slot.datum, slot.iddagdeel), slot])),
     [slots]
+  );
+
+  /*
+    De dagen die op het scherm staan: de week, of de maand als die gekozen is, min de weekdagen
+    waar de groep nooit op werkt. Dezelfde periode als waarmee de afwezigheden zijn opgehaald,
+    dus wat je downloadt is wat je ziet.
+  */
+  const exportDatums = useMemo(
+    () =>
+      datesBetweenInclusive(range.start, range.end).filter(
+        (datum) => !verborgenWeekdagen.has(weekdayFromIsoDate(datum))
+      ),
+    [range.start, range.end, verborgenWeekdagen]
+  );
+  const [downloading, setDownloading] = useState(false);
+
+  /** Zet de getoonde afwezigheden in een Excel-bestand. */
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      await downloadPlannerAfwezigheden({
+        bestandsnaam: `praktijkplanner-afwezigheid-${range.start}.xlsx`,
+        kop: `Afwezigheid ${range.start} tot ${range.end}`,
+        datums: exportDatums,
+        dagdelen: visibleDayparts.map((daypart) => ({ id: daypart.id, naam: daypart.naam })),
+        deelnemers: participants.map((participant) => ({
+          id: participant.id,
+          naam: deelnemerRoosterNaam(participant),
+        })),
+        absences: slots,
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  /*
+    Staat op beide varianten van dit scherm. De planner haalt er de week of de maand van de hele
+    groep uit, de dokter zijn eigen maand; in allebei de gevallen precies wat er op het scherm
+    staat, dus er komt geen recht bij kijken.
+  */
+  const downloadKnop = (
+    <button
+      type="button"
+      onClick={() => void handleDownload()}
+      disabled={loading || downloading || participants.length === 0}
+      className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border bg-background px-3 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+      title="Download de getoonde periode als Excel-bestand"
+    >
+      <Download className="size-4" aria-hidden />
+      Download Excel
+    </button>
   );
 
   const resolveAbsence = useCallback(
@@ -605,6 +667,7 @@ export function PlannerAbsenceEditor({
           <PraktijkplannerTitleAside>
             <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
             {weergaveKnoppen}
+            {downloadKnop}
           </PraktijkplannerTitleAside>
           {editable && toontMaand ? (
             <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">
@@ -669,6 +732,7 @@ export function PlannerAbsenceEditor({
                 onChange={updateVisibility}
               />
             ) : null}
+            {downloadKnop}
           </PraktijkplannerTitleAside>
           <div className="overflow-x-auto pb-2">
           <div

@@ -25,6 +25,26 @@ export function formatDeelnemerDisplayName(row: DeelnemerNameFields): string | n
   return parts.length > 0 ? parts.join(' ') : null;
 }
 
+/**
+ * De naam zoals de roosterschermen hem tonen: achternaam eerst, dan voornaam.
+ *
+ * Dezelfde volgorde als in de lijst deelnemers, en anders dan formatDeelnemerDisplayName. Op een
+ * scherm met een rij per dokter wil je op achternaam kunnen aflezen, en in een Excel-bestand op
+ * achternaam kunnen sorteren.
+ */
+export function deelnemerRoosterNaam(
+  fields: DeelnemerNameFields & { id?: number }
+): string {
+  return (
+    [fields.achternaam, fields.voornaam, fields.voorletterstussenvoegsel]
+      .filter(Boolean)
+      .join(', ') ||
+    fields.name ||
+    fields.initialen ||
+    `Deelnemer ${fields.id ?? ''}`.trim()
+  );
+}
+
 /** Prefer `initialen` from mijn-gegevens; otherwise derive from name parts. */
 export function deelnemerChipInitials(
   fields: DeelnemerNameFields,

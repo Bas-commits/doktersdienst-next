@@ -44,7 +44,7 @@ import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen'
 import {
   zichtbareDagdelen,
 } from '@/lib/praktijkplanner/dagdeel-zichtbaarheid';
-import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { deelnemerChipInitials, deelnemerRoosterNaam } from '@/lib/deelnemer-display';
 import {
   addDays,
   maandVanWeek,
@@ -84,14 +84,7 @@ type ParticipantActionModal =
 
 /** Same format as lijst deelnemers: achternaam, voornaam, voorletterstussenvoegsel */
 function participantDisplayName(participant: PraktijkplannerParticipant): string {
-  return (
-    [participant.achternaam, participant.voornaam, participant.voorletterstussenvoegsel]
-      .filter(Boolean)
-      .join(', ') ||
-    participant.name ||
-    participant.initialen ||
-    `Deelnemer ${participant.id}`
-  );
+  return deelnemerRoosterNaam(participant);
 }
 
 function slotKey(iddeelnemer: number, datum: string, iddagdeel: number) {

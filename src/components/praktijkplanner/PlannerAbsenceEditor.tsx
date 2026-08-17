@@ -103,13 +103,6 @@ export function PlannerAbsenceEditor({
   // Ook de maandkalender van de dokterversie hangt aan weekStart. Die had een eigen maand en
   // jaar, en dan is er niets wat die twee bij elkaar houdt zodra de schermen elkaar volgen.
   const overviewMonth = useMemo(() => maandVanWeek(weekStart), [weekStart]);
-  const overviewMonthLabel = useMemo(
-    () =>
-      new Intl.DateTimeFormat('nl-NL', { month: 'long', year: 'numeric' }).format(
-        new Date(overviewMonth.year, overviewMonth.month - 1, 1, 12)
-      ),
-    [overviewMonth]
-  );
 
   const range = useMemo(() => {
     if (!isDoctorMode) {
@@ -552,7 +545,6 @@ export function PlannerAbsenceEditor({
         onChange={setNevenscherm}
         keuzes={['geen', 'maand']}
         naastElkaar={false}
-        monthLabel={overviewMonthLabel}
       />
     </>
   );

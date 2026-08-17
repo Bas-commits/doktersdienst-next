@@ -82,7 +82,13 @@ export function PraktijkplannerPage({
         niet past: dan zakt de navigatie vanzelf naar de tweede regel.
       */}
       <div className="sticky top-0 z-40 -mx-6 -mt-6 bg-background px-6 pb-2 pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        {/*
+          De navigatie sluit aan op de titel en wordt niet naar rechts geduwd. Met
+          justify-between stond er een gat van een paar honderd pixels tussen, en zodra de
+          zijbalk openging paste de navigatie er niet meer naast: die viel dan op een eigen
+          regel en stond daar tegen de rechterrand aangedrukt, met datzelfde gat ervoor.
+        */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           {/*
             Leeg als een scherm geen navigatie in de kop zet. Dan valt het blok weg in plaats van
@@ -90,7 +96,7 @@ export function PraktijkplannerPage({
           */}
           <div
             ref={setTitleAsideSlot}
-            className="flex flex-wrap items-center justify-end gap-3 empty:hidden"
+            className="flex min-w-0 flex-wrap items-center gap-3 empty:hidden"
           />
         </div>
       </div>

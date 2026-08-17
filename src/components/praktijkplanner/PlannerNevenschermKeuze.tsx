@@ -18,10 +18,6 @@ const LABELS: Record<PlannerNevenscherm, string> = {
  * waarschuwing bij hoeft. Een melding dat een scherm te smal is kan de lezer toch niet
  * verhelpen.
  *
- * De maandnaam staat alleen bij de maand, want in de week zegt de weekbalk al waar je bent.
- * Hij hoort hier en niet boven het rooster: de maandtabel heeft weeknummers en dagnummers in
- * zijn kop, maar nergens de maand zelf.
- *
  * Args:
  *     keuzes: Welke nevenschermen dit scherm kent. De Afwezigheidsplanner heeft geen
  *         capaciteit en geen locatie, en toont die knoppen dus ook niet.
@@ -34,17 +30,14 @@ export function PlannerNevenschermKeuze({
   onChange,
   keuzes,
   naastElkaar,
-  monthLabel,
 }: {
   value: PlannerNevenscherm;
   onChange: (value: PlannerNevenscherm) => void;
   keuzes: readonly PlannerNevenscherm[];
   naastElkaar: boolean;
-  monthLabel: string;
 }) {
   return (
     <div className="flex items-center gap-2">
-      {value === 'maand' ? <span className="text-sm font-semibold">{monthLabel}</span> : null}
       <div className="inline-flex overflow-hidden rounded-md border">
         {keuzes.map((keuze) => (
           <button

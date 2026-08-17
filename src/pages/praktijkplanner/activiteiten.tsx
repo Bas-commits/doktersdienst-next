@@ -160,13 +160,6 @@ export function ActivitiesContent({
   // kijken. Het palet hoort bij de week: staat die er niet, dan is er niets om het op te
   // laten vallen.
   const showsPalette = canEdit && toontWeek;
-  const monthLabel = useMemo(
-    () =>
-      new Intl.DateTimeFormat('nl-NL', { month: 'long', year: 'numeric' }).format(
-        new Date(monthAnchor.year, monthAnchor.month - 1, 1, 12)
-      ),
-    [monthAnchor]
-  );
 
   const holidays = usePlannerHolidays(rangeStart, rangeEnd);
   const visibleParticipants = useMemo(
@@ -1029,8 +1022,13 @@ export function ActivitiesContent({
         De maand- en weekregel staan in de koprij van de pagina, naast de titel. Ze stonden
         boven het rooster en dat kostte twee regels hoogte die de titel al gebruikte.
       */}
+      {/*
+        Geen extra blok om deze drie heen: dan wikkelen ze als een geheel naar een tweede
+        regel zodra er een pixel te weinig is. Los in de koprij schuift alleen het stuk dat
+        echt niet meer past.
+      */}
       <PraktijkplannerTitleAside>
-        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+        <>
           <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
           {/*
             De weekbalk blijft ook in de maandweergave de navigatie: een week aanwijzen kiest
@@ -1058,9 +1056,8 @@ export function ActivitiesContent({
                 : ['geen', 'maand', 'locatie']
             }
             naastElkaar={naastElkaar}
-            monthLabel={monthLabel}
           />
-        </div>
+        </>
       </PraktijkplannerTitleAside>
 
       <div ref={roosterRij} className="flex min-h-0 flex-1 items-stretch gap-4">

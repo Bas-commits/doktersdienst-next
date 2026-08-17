@@ -7,10 +7,14 @@ import { PLANNER_WEEK_IN_MONTH_NAV_HEIGHT_PX } from './planner-grid-layout';
 const WEEK_JUMP = 4;
 
 /**
- * Weken links en rechts van de gekozen week. Vijf knoppen houden de balk smal genoeg om
- * naast de titel te passen; met zeven werd de titel in tweeen gebroken.
+ * Weken links en rechts van de gekozen week.
+ *
+ * Drie knoppen: de vorige week, deze week en de volgende. Met vijf was de balk 649 pixels en
+ * paste de koprij met de zijbalk open niet meer op een regel; de twee buitenste links kosten
+ * daar samen ruim 200 van. Verder terug of vooruit gaat met de pijlen ernaast, dus er is
+ * niets onbereikbaar geworden.
  */
-const WEEKS_AROUND = 2;
+const WEEKS_AROUND = 1;
 
 const ChevronLeft = ({ double = false }: { double?: boolean }) => (
   <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="currentColor" aria-hidden>

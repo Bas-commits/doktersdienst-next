@@ -3,7 +3,7 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-react';
+import { Copy, Download, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartCell';
 import { CapacityOverviewPanel } from '@/components/praktijkplanner/CapacityOverview';
@@ -45,7 +45,15 @@ import {
   zichtbareDagdelen,
 } from '@/lib/praktijkplanner/dagdeel-zichtbaarheid';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
-import { addDays, maandVanWeek, monthBounds } from '@/lib/praktijkplanner/dates';
+import {
+  addDays,
+  maandVanWeek,
+  monthBounds,
+  weekDates,
+  weekRangeLabel,
+  weekdayFromIsoDate,
+} from '@/lib/praktijkplanner/dates';
+import { downloadPlannerRooster } from '@/lib/praktijkplanner/rooster-export';
 import { absentieTekst } from '@/lib/praktijkplanner/absentie-tekst';
 import { afwijkingTekst } from '@/lib/praktijkplanner/herhaling-tekst';
 import {
@@ -321,6 +329,40 @@ export function ActivitiesContent({
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [groupId, loadAbsences, refreshSlots]);
+
+  /*
+    De dagen die het raster toont: de week, min de weekdagen waar de groep nooit op werkt. Wat
+    je downloadt hoort te zijn wat je ziet, dus dit is dezelfde lijst als de kolommen.
+
+    De week en niet de maand, ook als het maandpaneel ernaast staat. Dat paneel is er om te
+    kijken; de week is waar de knop bij hoort en wat de bestandsnaam kan dragen.
+  */
+  const exportDatums = useMemo(
+    () => weekDates(weekStart).filter((datum) => !verborgenWeekdagen.has(weekdayFromIsoDate(datum))),
+    [weekStart, verborgenWeekdagen]
+  );
+  const [downloading, setDownloading] = useState(false);
+
+  /** Zet de getoonde week in een Excel-bestand, met de dokters en dagdelen die op het scherm staan. */
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      await downloadPlannerRooster({
+        bestandsnaam: `praktijkplanner-rooster-${weekStart}.xlsx`,
+        kop: `Rooster ${weekRangeLabel(weekStart, { withYear: true })}`,
+        datums: exportDatums,
+        dagdelen: visibleDayparts.map((daypart) => ({ id: daypart.id, naam: daypart.naam })),
+        deelnemers: visibleParticipants.map((participant) => ({
+          id: participant.id,
+          naam: participantDisplayName(participant),
+        })),
+        slots,
+        absences: absenceSlots,
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   const baseSlotMap = useMemo(
     () => new Map(slots.map((slot) => [slotKey(slot.iddeelnemer, slot.datum, slot.iddagdeel), slot])),
@@ -1057,6 +1099,21 @@ export function ActivitiesContent({
             }
             naastElkaar={naastElkaar}
           />
+          {/*
+            De knop staat er ook voor wie het rooster alleen inziet. Een dokter die zijn eigen
+            week wil meenemen heeft er evenveel aan als de planner, en het bestand bevat niets
+            dat het scherm niet al toont.
+          */}
+          <button
+            type="button"
+            onClick={() => void handleDownload()}
+            disabled={loadingSlots || downloading || visibleParticipants.length === 0}
+            className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border bg-background px-3 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+            title="Download deze week als Excel-bestand"
+          >
+            <Download className="size-4" aria-hidden />
+            Download Excel
+          </button>
         </>
       </PraktijkplannerTitleAside>
 

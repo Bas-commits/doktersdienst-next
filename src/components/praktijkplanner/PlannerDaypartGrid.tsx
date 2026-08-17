@@ -82,6 +82,7 @@ export function PlannerDaypartGrid({
   onParticipantNameClick,
   getCellClassName,
   verborgenWeekdagen,
+  toonInhoudOpNietInplanbaar = false,
 }: {
   participants: PraktijkplannerParticipant[];
   dayparts: PraktijkplannerDaypart[];
@@ -91,7 +92,7 @@ export function PlannerDaypartGrid({
   renderCell: (cell: PlannerDaypartCell) => ReactNode;
   onCellClick?: (cell: PlannerDaypartCell) => void;
   isCellDisabled?: (cell: PlannerDaypartCell) => boolean;
-  /** Non-schedulable dayparts: always gray placeholder, never clickable, never show chips. */
+  /** Non-schedulable dayparts: always gray placeholder, never clickable. */
   isCellUnavailable?: (cell: PlannerDaypartCell) => boolean;
   isCellFilled?: (cell: PlannerDaypartCell) => boolean;
   holidayLabels?: ReadonlyMap<string, string[]>;
@@ -103,6 +104,17 @@ export function PlannerDaypartGrid({
   getCellClassName?: (cell: PlannerDaypartCell) => string | undefined;
   /** ISO-weekdagen (maandag is 1) die de groep nooit gebruikt en die dus geen kolom krijgen. */
   verborgenWeekdagen?: ReadonlySet<number>;
+  /**
+   * Toont wat er in een niet-inplanbaar vakje staat, in plaats van een leeg grijs vakje.
+   *
+   * Staat uit voor de planning: de eigenaar heeft op 12 augustus 2026 besloten dat oude planning
+   * op een dagdeel dat de groep niet meer gebruikt weg mag blijven, en dat kost niemand iets.
+   * Aan voor de afwezigheidsplanner, waar het wel iets kost: een afwezigheid die het scherm
+   * verzwijgt telt gewoon mee in de jaarbalans, dus een saldo klopt dan niet met wat je ziet en
+   * er is geen enkele manier om te achterhalen waarom. In Test10 stonden 39 van de 197
+   * afwezigheden zo verstopt.
+   */
+  toonInhoudOpNietInplanbaar?: boolean;
 }) {
   const days = weekDates(weekStart).filter(
     (datum) => !verborgenWeekdagen?.has(isoWeekdayFromDate(datum))
@@ -277,7 +289,14 @@ export function PlannerDaypartGrid({
                     const cell = { participant, datum, daypart };
                     const unavailable = isCellUnavailable?.(cell) ?? false;
                     const disabled = !unavailable && ((isCellDisabled?.(cell) ?? false) || !onCellClick);
-                    const filled = !unavailable && (isCellFilled?.(cell) ?? false);
+                    const toontInhoud = !unavailable || toonInhoudOpNietInplanbaar;
+                    const filled = toontInhoud && (isCellFilled?.(cell) ?? false);
+                    /*
+                      Een niet-inplanbaar vakje waar toch iets in staat mag aangeklikt worden, want
+                      anders is het wel te zien en niet weg te halen. Wat er dan gebeurt bepaalt de
+                      aanroeper: de afwezigheidsplanner laat alleen wissen toe, niet neerzetten.
+                    */
+                    const opruimbaar = unavailable && filled;
                     // Het dagdeel waar de klok nu in staat, op de dag van vandaag. Een rand
                     // en geen vulling: in het vakje staat een fiche die zichtbaar moet blijven.
                     const isNu =
@@ -288,20 +307,20 @@ export function PlannerDaypartGrid({
                         type="button"
                         disabled={disabled}
                         onClick={() => {
-                          if (unavailable) {
+                          if (unavailable && !opruimbaar) {
                             toast.info(UNAVAILABLE_DAYPART_TOAST);
                             return;
                           }
                           onCellClick?.(cell);
                         }}
                         onPointerEnter={(event) => {
-                          if (unavailable) trackUnavailableCursor(event);
+                          if (unavailable && !opruimbaar) trackUnavailableCursor(event);
                         }}
                         onPointerMove={(event) => {
-                          if (unavailable) trackUnavailableCursor(event);
+                          if (unavailable && !opruimbaar) trackUnavailableCursor(event);
                         }}
                         onPointerLeave={() => {
-                          if (unavailable) setUnavailableCursor(null);
+                          if (unavailable && !opruimbaar) setUnavailableCursor(null);
                         }}
                         className={cn(
                           // Vast vierkant van 56 pixels, niet een deel van de kolombreedte.
@@ -312,13 +331,24 @@ export function PlannerDaypartGrid({
                           // zodat avond en nacht erbij zetten geen ruimte kost.
                           'group/cell relative flex size-14 rounded border text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default',
                           unavailable
-                            ? 'cursor-none border-border/40 bg-muted/40 opacity-50'
+                            ? opruimbaar
+                              ? // Wel grijs, maar met een streepjesrand: dit vakje hoort hier niet
+                                // te staan en kan weg. Zonder de dode cursor, want er valt te
+                                // klikken.
+                                'border-dashed border-destructive/50 bg-muted/40 opacity-70'
+                              : 'cursor-none border-border/40 bg-muted/40 opacity-50'
                             : 'border-border/70 disabled:opacity-80',
                           filled ? 'items-stretch p-0.5' : 'items-center justify-center p-1',
                           isNu ? 'ring-2 ring-inset ring-emerald-600' : '',
                           !unavailable ? getCellClassName?.(cell) : undefined
                         )}
-                        aria-label={`${participantLabel(participant)} ${datum} ${daypart.naam}${unavailable ? ' niet inplanbaar' : ''}`}
+                        aria-label={`${participantLabel(participant)} ${datum} ${daypart.naam}${
+                          unavailable
+                            ? opruimbaar
+                              ? ' niet inplanbaar, klik om weg te halen'
+                              : ' niet inplanbaar'
+                            : ''
+                        }`}
                       >
                         {!filled ? (
                           <DaypartIcon
@@ -332,7 +362,7 @@ export function PlannerDaypartGrid({
                             filled ? 'items-stretch' : 'items-center justify-center'
                           )}
                         >
-                          {unavailable ? null : renderCell(cell)}
+                          {toontInhoud ? renderCell(cell) : null}
                         </span>
                       </button>
                     );

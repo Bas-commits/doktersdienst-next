@@ -377,18 +377,32 @@ export function PlannerAbsenceEditor({
       daypart: { id: number };
     }) => {
       if (!editable) return;
-      if (
-        !isDaypartSchedulableForParticipant(
-          data.masterData.schedulableDayparts ?? [],
-          participantMatrixFor(
-            data.masterData.participantSchedulableDayparts ?? [],
-            isDoctorMode ? data.userId : participant.id
-          ),
-          datum,
-          daypart.id
-        )
-      ) {
-        return;
+      const inroosterbaar = isDaypartSchedulableForParticipant(
+        data.masterData.schedulableDayparts ?? [],
+        participantMatrixFor(
+          data.masterData.participantSchedulableDayparts ?? [],
+          isDoctorMode ? data.userId : participant.id
+        ),
+        datum,
+        daypart.id
+      );
+      /*
+        Op een dagdeel waarop deze dokter niet ingeroosterd kan worden mag er niets bij, maar wat
+        er staat mag er wel af. Zulke afwezigheden bestaan: ze tellen mee in de jaarbalans terwijl
+        het scherm ze tot voor kort niet tekende, en dan is er geen enkele manier om een saldo dat
+        niet klopt recht te zetten.
+      */
+      if (!inroosterbaar) {
+        const bestaat = slotMap.has(
+          keyFor(isDoctorMode ? data.userId : participant.id, datum, daypart.id)
+        );
+        if (!bestaat) return;
+        if (!clearMode) {
+          toast.info('Dit dagdeel is niet inplanbaar. Kies Leegmaken om het weg te halen.', {
+            position: TOAST_POSITION,
+          });
+          return;
+        }
       }
       if (!clearMode && selectedTypeId == null) {
         toast.info('Kies eerst een afwezigheidstype.', { position: TOAST_POSITION });
@@ -692,6 +706,7 @@ export function PlannerAbsenceEditor({
           dayparts={visibleDayparts}
           weekStart={weekStart}
           verborgenWeekdagen={verborgenWeekdagen}
+          toonInhoudOpNietInplanbaar
           renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}
           isCellFilled={({ participant, datum, daypart }) => isCellFilled(participant.id, datum, daypart)}
           onCellClick={applyCell}
@@ -743,6 +758,7 @@ export function PlannerAbsenceEditor({
           >
             <PlannerMonthDaypartGrid
               verborgenWeekdagen={verborgenWeekdagen}
+              toonInhoudOpNietInplanbaar
               participant={participants[0]}
               dayparts={visibleDayparts}
               year={overviewMonth.year}

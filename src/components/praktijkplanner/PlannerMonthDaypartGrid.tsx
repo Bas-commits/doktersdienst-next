@@ -46,6 +46,7 @@ export function PlannerMonthDaypartGrid({
   cursorTool,
   onCursorToolDismiss,
   verborgenWeekdagen,
+  toonInhoudOpNietInplanbaar = false,
 }: {
   participant: PraktijkplannerParticipant;
   dayparts: PraktijkplannerDaypart[];
@@ -63,6 +64,8 @@ export function PlannerMonthDaypartGrid({
   onCursorToolDismiss?: () => void;
   /** ISO-weekdagen die de groep nooit gebruikt. Zie weekdagenZonderRooster. */
   verborgenWeekdagen?: ReadonlySet<number>;
+  /** Zie dezelfde vlag op PlannerDaypartGrid: een verstopte afwezigheid kost een saldo. */
+  toonInhoudOpNietInplanbaar?: boolean;
 }) {
   const bounds = monthCalendarBounds(year, month);
   const gridRootRef = useRef<HTMLDivElement>(null);
@@ -144,35 +147,45 @@ export function PlannerMonthDaypartGrid({
                     const unavailable = isCellUnavailable?.(cell) ?? false;
                     const disabled =
                       !unavailable && (blocked || isCellDisabled?.(cell) || !onCellClick);
+                    const inhoud =
+                      !unavailable || toonInhoudOpNietInplanbaar
+                        ? blocked
+                          ? renderBlockedCell?.(cell) ?? renderCell(cell)
+                          : renderCell(cell)
+                        : null;
+                    // Staat er toch iets in een niet-inplanbaar vakje, dan moet het weg kunnen.
+                    const opruimbaar = unavailable && inhoud != null;
                     return (
                       <button
                         key={`${datum}-${daypart.id}`}
                         type="button"
                         disabled={disabled}
                         onClick={() => {
-                          if (unavailable) {
+                          if (unavailable && !opruimbaar) {
                             toast.info(UNAVAILABLE_DAYPART_TOAST);
                             return;
                           }
                           onCellClick?.(cell);
                         }}
                         onPointerEnter={(event) => {
-                          if (unavailable) {
+                          if (unavailable && !opruimbaar) {
                             trackUnavailableCursor(event);
                             return;
                           }
                           onCellPointerEnter?.(cell, event);
                         }}
                         onPointerMove={(event) => {
-                          if (unavailable) trackUnavailableCursor(event);
+                          if (unavailable && !opruimbaar) trackUnavailableCursor(event);
                         }}
                         onPointerLeave={() => {
-                          if (unavailable) setUnavailableCursor(null);
+                          if (unavailable && !opruimbaar) setUnavailableCursor(null);
                         }}
                         className={[
                           'group/cell relative flex min-h-12 w-full items-center justify-center rounded border px-1 text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default',
                           unavailable
-                            ? 'cursor-none border-border/40 bg-muted/40 opacity-50'
+                            ? opruimbaar
+                              ? 'border-dashed border-destructive/50 bg-muted/40 opacity-70'
+                              : 'cursor-none border-border/40 bg-muted/40 opacity-50'
                             : 'border-border/70 disabled:opacity-80',
                           isNu ? 'ring-2 ring-inset ring-emerald-600' : '',
                         ].join(' ')}
@@ -181,13 +194,7 @@ export function PlannerMonthDaypartGrid({
                         <span className="absolute top-0.5 left-1 text-[8px] text-muted-foreground">
                           {daypart.naam.slice(0, 1)}
                         </span>
-                        <span className="min-w-0 max-w-full">
-                          {unavailable
-                            ? null
-                            : blocked
-                              ? renderBlockedCell?.(cell) ?? renderCell(cell)
-                              : renderCell(cell)}
-                        </span>
+                        <span className="min-w-0 max-w-full">{inhoud}</span>
                       </button>
                     );
                   })}

@@ -1,7 +1,7 @@
 'use client';
 
 import Head from 'next/head';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Download } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartCell';
@@ -14,6 +14,8 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { downloadAbsentietelling } from '@/lib/absentietelling-export';
+import { naamVoorBestandsnaam } from '@/lib/excel-export';
 import type { PraktijkplannerYearBalance, PraktijkplannerYearBalanceMutation } from '@/types/praktijkplanner';
 
 const AUTOSAVE_DEBOUNCE_MS = 400;
@@ -89,6 +91,7 @@ function DoctorAbsenceContent({ groupId, data }: PraktijkplannerPageContext) {
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const skipNextSaveRef = useRef(true);
 
   useEffect(() => {
@@ -199,6 +202,36 @@ function DoctorAbsenceContent({ groupId, data }: PraktijkplannerPageContext) {
     };
   }, [balances, data.isManager, groupId, loading, note, selectedParticipantId, year]);
 
+  const gekozenNaam =
+    data.participants.find((participant) => participant.id === selectedParticipantId) ?? null;
+
+  /** Zet de balans en de losse afwezige dagdelen van deze deelnemer in een Excel-bestand. */
+  async function handleDownload() {
+    const naam = gekozenNaam ? participantName(gekozenNaam) : 'deelnemer';
+    setDownloading(true);
+    try {
+      await downloadAbsentietelling({
+        bestandsnaam: `absentietelling-${naamVoorBestandsnaam(naam)}-${year}.xlsx`,
+        deelnemer: naam,
+        jaar: year,
+        notitie: note,
+        regels: balances.map((balance) => ({
+          type: balance.absenceType.naam,
+          beginsaldo: balance.beginsaldo,
+          budget: balance.budget,
+          mutaties: balance.mutaties,
+          mutatiesVoorlopig: balance.mutatiesVoorlopig,
+          totaal: balance.totaal,
+          totaalVoorlopig: balance.totaalVoorlopig,
+          datums: balance.mutatieDatums ?? [],
+          datumsVoorlopig: balance.mutatieDatumsVoorlopig ?? [],
+        })),
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3 shadow-sm">
@@ -229,6 +262,24 @@ function DoctorAbsenceContent({ groupId, data }: PraktijkplannerPageContext) {
             className="h-9 w-24 rounded border bg-background px-2"
           />
         </label>
+        {/*
+          De knop staat naast het jaar, want dat is samen met de deelnemer wat er in het bestand
+          komt. Uit zolang er geen balans geladen is; een leeg bestand ziet eruit als een fout.
+        */}
+        <button
+          type="button"
+          onClick={() => void handleDownload()}
+          disabled={loading || downloading || balances.length === 0}
+          className="inline-flex h-9 items-center gap-2 rounded border bg-background px-3 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+          title={
+            balances.length === 0
+              ? 'Niets te exporteren'
+              : 'Download deze absentietelling als Excel-bestand'
+          }
+        >
+          <Download className="size-4" aria-hidden />
+          Download Excel
+        </button>
         {data.isManager && saving ? (
           <span className="text-sm text-muted-foreground">Opslaan…</span>
         ) : null}

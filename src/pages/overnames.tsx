@@ -19,6 +19,14 @@ import { OvernameDetailModal } from '@/components/OvernameDetailModal';
 import type { OvernameDoctor } from '@/components/OvernameModal';
 import type { ShiftBlockView } from '@/types/diensten';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { Download } from 'lucide-react';
+import { naamVoorBestandsnaam } from '@/lib/excel-export';
+import { downloadKalender } from '@/lib/kalender-export';
+
+const MAANDNAMEN = [
+  'januari', 'februari', 'maart', 'april', 'mei', 'juni',
+  'juli', 'augustus', 'september', 'oktober', 'november', 'december',
+];
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -100,6 +108,26 @@ export default function OvernamesPage() {
 
   const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
   const error = waarneemgroepenError ?? dienstenError;
+
+  const [downloading, setDownloading] = useState(false);
+
+  /** Zet de overnames van de getoonde maand in een Excel-bestand. */
+  async function handleDownload() {
+    const maand = `${MAANDNAMEN[viewMonth]} ${viewYear}`;
+    const groep = activeWaarneemgroep?.naam ?? 'waarneemgroep';
+    setDownloading(true);
+    try {
+      await downloadKalender({
+        bestandsnaam: `overnames-${naamVoorBestandsnaam(groep)}-${viewYear}-${String(viewMonth + 1).padStart(2, '0')}.xlsx`,
+        bladnaam: 'Overnames',
+        kop: `${groep}, ${maand}`,
+        rijen: rows,
+        metOvername: true,
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   // Propose modal state
   const [selectedShift, setSelectedShift] = useState<ShiftBlockView | null>(null);
@@ -528,7 +556,24 @@ export default function OvernamesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            
+            {/*
+              De knop pakt de maand die in de kalender staat. Een eigen periodekeuze zou hier
+              een tweede plek zijn waar de maand gekozen wordt, naast de kalender zelf.
+            */}
+            <button
+              type="button"
+              onClick={() => void handleDownload()}
+              disabled={loading || downloading || rows.length === 0}
+              className="inline-flex h-9 items-center gap-2 rounded border bg-background px-3 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              title={
+                rows.length === 0
+                  ? 'Geen overnames in deze maand'
+                  : 'Download deze maand als Excel-bestand'
+              }
+            >
+              <Download className="size-4" aria-hidden />
+              Download Excel
+            </button>
           </CardContent>
         </Card>
         <Card>

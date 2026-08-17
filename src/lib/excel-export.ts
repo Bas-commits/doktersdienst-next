@@ -18,6 +18,13 @@ export type ExcelBlad = {
   rijen: ExcelWaarde[][];
   /** Kolombreedtes in tekens. Korter dan het aantal kolommen mag; de rest krijgt de standaard. */
   kolombreedtes?: number[];
+  /**
+   * Kolommen (nulgebaseerd) die alleen de dag tonen, ook als het bestand verder tijden bevat.
+   *
+   * Bestaat voor een blad met zowel een dagkolom als een begin- en eindtijd. Zonder dit kreeg de
+   * dagkolom er 00:00 achter, en dat leest als een gegeven terwijl het er geen is.
+   */
+  dagKolommen?: number[];
 };
 
 /**
@@ -50,6 +57,28 @@ function zetDatumNotatie(blad: Record<string, unknown>, notatie: string): void {
     if (adres.startsWith('!')) continue;
     const getypeerd = cel as { t?: string; z?: string };
     if (getypeerd.t === 'd') getypeerd.z = notatie;
+  }
+}
+
+/**
+ * Geeft de aangewezen kolommen de dagnotatie, na de algemene notatie van het bestand.
+ *
+ * Loopt hier wel over kolomnummers, anders dan `zetDatumNotatie`: welke kolom een dag zonder tijd
+ * is kan de cel zelf niet zeggen, want het is dezelfde datum als de begintijd ernaast.
+ */
+function zetDagNotatie(
+  XLSX: typeof import('xlsx'),
+  blad: Record<string, unknown>,
+  kolommen: number[],
+  aantalRijen: number
+): void {
+  for (const kolom of kolommen) {
+    for (let rij = 0; rij < aantalRijen; rij++) {
+      const cel = blad[XLSX.utils.encode_cell({ r: rij, c: kolom })] as
+        | { t?: string; z?: string }
+        | undefined;
+      if (cel?.t === 'd') cel.z = DAG_NOTATIE;
+    }
   }
 }
 
@@ -107,6 +136,9 @@ export async function downloadWerkboek(
       sheet['!cols'] = blad.kolombreedtes.map((wch) => ({ wch }));
     }
     zetDatumNotatie(sheet, datumNotatie);
+    if (blad.dagKolommen?.length) {
+      zetDagNotatie(XLSX, sheet, blad.dagKolommen, blad.rijen.length);
+    }
     XLSX.utils.book_append_sheet(werkboek, sheet, bladnaam(blad.naam));
   }
 

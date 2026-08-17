@@ -13,8 +13,15 @@ import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
 import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
+import { Download } from 'lucide-react';
+import { downloadKalender } from '@/lib/kalender-export';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
+
+const MAANDNAMEN = [
+  'januari', 'februari', 'maart', 'april', 'mei', 'juni',
+  'juli', 'augustus', 'september', 'oktober', 'november', 'december',
+];
 
 /** Unix seconds for start of first day of month (0-based), minus 2 weeks so adjacent visible days have data. */
 function vanGteForMonth(viewMonth: number, viewYear: number): number {
@@ -177,6 +184,28 @@ export default function RoosterInzienPage() {
   const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
   const error = waarneemgroepenError ?? dienstenError;
 
+  const [downloading, setDownloading] = useState(false);
+
+  /**
+   * Zet het getoonde rooster in een Excel-bestand.
+   *
+   * De naam van de waarneemgroep gaat niet in de bestandsnaam: dit scherm kan er meerdere
+   * tegelijk tonen. Wel in een kolom, zodat er in het bestand op te filteren valt.
+   */
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      await downloadKalender({
+        bestandsnaam: `rooster-${viewYear}-${String(viewMonth + 1).padStart(2, '0')}.xlsx`,
+        bladnaam: 'Rooster',
+        kop: `Rooster ${MAANDNAMEN[viewMonth]} ${viewYear}: ${rows.map((row) => row.name).join(', ')}`,
+        rijen: rows,
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <>
       <Head>
@@ -218,6 +247,24 @@ export default function RoosterInzienPage() {
                   onToggle={toggleWaarneemgroep}
                 />
                 Rooster inzien
+                {/*
+                  De knop pakt de maand die in de kalender staat en de waarneemgroepen die het
+                  filter ernaast doorlaat. Wat je downloadt is wat je ziet.
+                */}
+                <button
+                  type="button"
+                  onClick={() => void handleDownload()}
+                  disabled={loading || downloading || rows.length === 0}
+                  className="ml-auto inline-flex h-9 items-center gap-2 rounded border bg-background px-3 text-sm font-normal hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                  title={
+                    rows.length === 0
+                      ? 'Geen diensten in deze maand'
+                      : 'Download deze maand als Excel-bestand'
+                  }
+                >
+                  <Download className="size-4" aria-hidden />
+                  Download Excel
+                </button>
               </CardTitle>
             </CardHeader>
             <CardContent>

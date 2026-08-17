@@ -245,7 +245,7 @@ export default function VakantiePage() {
                   onChange={(e) => setIdvakantieregio(e.target.value)}
                   disabled={submitting}
                 >
-                  <option value="0">Alle regio's</option>
+                  <option value="0">Alle regio&apos;s</option>
                   {data?.vakantieregios.map((r) => (
                     <option key={r.id} value={String(r.id)}>{r.naam}</option>
                   ))}

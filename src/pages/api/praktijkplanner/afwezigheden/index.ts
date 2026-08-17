@@ -291,18 +291,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       if (!(await canAccessPraktijkplannerParticipant(accessResult.access, mutation.iddeelnemer))) {
         throw new AbsenceRequestError('Geen toegang tot deze deelnemer.', 403);
       }
-      try {
-        await assertDaypartSchedulable(
-          accessResult.access.idwaarneemgroep,
-          mutation.datum,
-          mutation.iddagdeel,
-          mutation.iddeelnemer
-        );
-      } catch (error) {
-        if (error instanceof SchedulableDaypartError) {
-          throw new AbsenceRequestError(error.message, 400);
+      /*
+        De inroosterbaarheid geldt voor wat erbij komt, niet voor wat eraf gaat. Een afwezigheid
+        weghalen op een dagdeel dat inmiddels niet meer inplanbaar is moet kunnen: zulke rijen
+        bestaan, ze tellen mee in de jaarbalans, en met de controle ook op verwijderen erop waren
+        ze nergens meer vandaan te halen.
+      */
+      if (mutation.idafwezigheidstype != null) {
+        try {
+          await assertDaypartSchedulable(
+            accessResult.access.idwaarneemgroep,
+            mutation.datum,
+            mutation.iddagdeel,
+            mutation.iddeelnemer
+          );
+        } catch (error) {
+          if (error instanceof SchedulableDaypartError) {
+            throw new AbsenceRequestError(error.message, 400);
+          }
+          throw error;
         }
-        throw error;
       }
       if (!accessResult.access.isManager && mutation.idafwezigheidstype != null && !mutation.isVoorlopig) {
         throw new AbsenceRequestError('Alleen secretarissen en beheerders kunnen afwezigheden bevestigen.', 403);

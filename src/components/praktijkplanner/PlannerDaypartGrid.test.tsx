@@ -86,6 +86,44 @@ describe('PlannerDaypartGrid', () => {
     toastInfo.mockRestore();
   });
 
+  it('toont een gevuld niet-inplanbaar vakje en laat het aanklikken als de vlag aanstaat', () => {
+    const onCellClick = vi.fn();
+    render(
+      <PlannerDaypartGrid
+        weekStart="2026-07-13"
+        toonInhoudOpNietInplanbaar
+        participants={[
+          {
+            id: 7,
+            voornaam: 'Ada',
+            voorletterstussenvoegsel: null,
+            achternaam: 'Lovelace',
+            initialen: 'AL',
+            color: '#334155',
+            name: null,
+          },
+        ]}
+        dayparts={[
+          { id: 1, naam: 'Ochtend', volgorde: 1 },
+          { id: 2, naam: 'Middag', volgorde: 2 },
+        ]}
+        renderCell={({ daypart }) => (daypart.id === 2 ? <span>Compensatie</span> : null)}
+        onCellClick={onCellClick}
+        isCellUnavailable={({ daypart }) => daypart.id === 2}
+        isCellFilled={({ daypart }) => daypart.id === 2}
+      />
+    );
+
+    const verstopt = screen.getAllByRole('button', {
+      name: 'Lovelace, Ada 2026-07-13 Middag niet inplanbaar, klik om weg te halen',
+    })[0];
+    expect(screen.getAllByText('Compensatie').length).toBeGreaterThan(0);
+    fireEvent.click(verstopt);
+    expect(onCellClick).toHaveBeenCalledWith(
+      expect.objectContaining({ datum: '2026-07-13', daypart: expect.objectContaining({ id: 2 }) })
+    );
+  });
+
   it('makes participant names clickable when onParticipantNameClick is provided', () => {
     const onParticipantNameClick = vi.fn();
     render(

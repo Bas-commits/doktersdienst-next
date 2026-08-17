@@ -96,11 +96,9 @@ function rasterKoppen(
  * hoeveel dagdelen er vastliggen moet de aanvragen eruit kunnen filteren; wie kijkt of iemand er
  * is wil ze juist zien staan.
  *
- * Let op, dit is het enige punt waar het bestand meer bevat dan het scherm: een afwezigheid op
- * een dagdeel waarop de dokter niet inroosterbaar is, tekent het raster niet. Die staat hier wel,
- * want hij staat in de database en telt mee in de balans. Weglaten zou een export opleveren die
- * niet klopt met de absentietelling, en dat is erger dan een regel die op het scherm ontbreekt.
- * Dat verschil hoort een eigen kaart te worden.
+ * Afwezigheden op een dagdeel waarop de dokter niet inroosterbaar is staan er gewoon in. Die
+ * verschenen hier eerder wel en op het scherm niet, wat het bestand als enige liet zien dat er
+ * saldo verdween aan onzichtbare regels. Sinds het raster ze ook toont is dat geen verschil meer.
  */
 export async function downloadPlannerAfwezigheden(params: {
   bestandsnaam: string;

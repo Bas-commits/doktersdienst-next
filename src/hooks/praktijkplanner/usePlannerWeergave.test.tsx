@@ -32,14 +32,23 @@ describe('usePlannerWeergave', () => {
     expect(rechts.result.current.weekStart).toBe('2026-08-24');
   });
 
-  it('deelt ook de schakelaar week/maand', async () => {
+  it('deelt ook de keuze van het nevenscherm', async () => {
     const { links, rechts } = tweeSchermen();
 
-    act(() => links.result.current.setViewMode('month'));
+    act(() => links.result.current.setNevenscherm('maand'));
     await laatBerichtenAankomen();
 
-    expect(rechts.result.current.viewMode).toBe('month');
+    expect(rechts.result.current.nevenscherm).toBe('maand');
     expect(rechts.result.current.weekStart).toBe(links.result.current.weekStart);
+  });
+
+  it('deelt ook een nevenscherm dat het andere scherm zelf niet kent', async () => {
+    const { links, rechts } = tweeSchermen();
+
+    act(() => links.result.current.setNevenscherm('capaciteit'));
+    await laatBerichtenAankomen();
+
+    expect(rechts.result.current.nevenscherm).toBe('capaciteit');
   });
 
   it('laat een andere waarneemgroep met rust', async () => {

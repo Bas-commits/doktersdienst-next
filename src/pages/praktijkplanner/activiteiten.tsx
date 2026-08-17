@@ -2,10 +2,11 @@
 
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartCell';
+import { CapacityOverviewPanel } from '@/components/praktijkplanner/CapacityOverview';
 import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
 import { PlannerAvondNachtToggle } from '@/components/praktijkplanner/PlannerAvondNachtToggle';
 import {
@@ -20,9 +21,14 @@ import { PlannerManageHerhalingModal } from '@/components/praktijkplanner/Planne
 import { PlannerMonthOverviewGrid } from '@/components/praktijkplanner/PlannerMonthOverviewGrid';
 import { PlannerNotifyPlanningModal } from '@/components/praktijkplanner/PlannerNotifyPlanningModal';
 import { PlannerRepeatWeekModal } from '@/components/praktijkplanner/PlannerRepeatWeekModal';
-import { PlannerViewModeSwitch } from '@/components/praktijkplanner/PlannerViewModeSwitch';
+import { PlannerNevenschermKeuze } from '@/components/praktijkplanner/PlannerNevenschermKeuze';
 import { PlannerWeekBar } from '@/components/praktijkplanner/PlannerWeekBar';
 import { PraktijkplannerPage, PraktijkplannerTitleAside, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
+import {
+  PALET_BREEDTE_PX,
+  PANEEL_DREMPEL_PX,
+  useBeschikbareBreedte,
+} from '@/hooks/praktijkplanner/useBeschikbareBreedte';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import { usePlannerWeergave } from '@/hooks/praktijkplanner/usePlannerWeergave';
 import {
@@ -90,7 +96,11 @@ export function ActivitiesContent({
 }: PraktijkplannerPageContext & { readOnly?: boolean }) {
   const router = useRouter();
   const canEdit = data.isManager && !readOnly;
-  const { weekStart, setWeekStart, viewMode, setViewMode } = usePlannerWeergave(groupId);
+  const { weekStart, setWeekStart, nevenscherm, setNevenscherm } = usePlannerWeergave(groupId);
+  // De rij waar palet, week en paneel in staan. De breedte daarvan hangt niet af van wat er
+  // in komt te staan, dus de meting kan zichzelf niet achterna lopen.
+  const roosterRij = useRef<HTMLDivElement>(null);
+  const beschikbareBreedte = useBeschikbareBreedte(roosterRij);
   const [slots, setSlots] = useState<PraktijkplannerPlanningSlot[]>([]);
   const [absenceSlots, setAbsenceSlots] = useState<PraktijkplannerAbsenceSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -113,14 +123,35 @@ export function ActivitiesContent({
     () => monthBounds(monthAnchor.year, monthAnchor.month),
     [monthAnchor]
   );
-  const rangeStart = viewMode === 'month' && monthRange ? monthRange.start : weekStart;
-  const rangeEnd = viewMode === 'month' && monthRange ? monthRange.end : end;
+  // De maand haalt een hele maand op, ook als hij naast de week staat: het paneel toont dan
+  // dezelfde maand, alleen smaller.
+  const toontMaand = nevenscherm === 'maand';
+  const rangeStart = toontMaand && monthRange ? monthRange.start : weekStart;
+  const rangeEnd = toontMaand && monthRange ? monthRange.end : end;
+
+  /*
+    Links staat de week, rechts de keuze. Past dat niet naast elkaar, dan komt de keuze in de
+    plaats van de week; zo blijft alles bereikbaar op een laptop zonder een melding die de
+    lezer toch niet kan verhelpen.
+
+    Het palet gaat van de beschikbare ruimte af, dus dat wordt er hier afgetrokken in plaats
+    van gemeten. Zie useBeschikbareBreedte voor waarom meten hier zou gaan flikkeren.
+  */
+  const naastElkaar =
+    beschikbareBreedte - (canEdit ? PALET_BREEDTE_PX : 0) >= PANEEL_DREMPEL_PX;
+  /*
+    Wat er in het paneel komt, of niets. Niet hetzelfde als de knop: een keuze die dit scherm
+    niet kan tonen valt hier terug op niets, en dan blijft de week gewoon staan in plaats van
+    dat er een lege kolom naast komt. Dat gebeurt als een ander venster een keuze doorgeeft
+    die deze gebruiker niet mag zien.
+  */
+  const paneel = toontMaand ? 'maand' : nevenscherm === 'capaciteit' && data.isManager ? 'capaciteit' : null;
+  const toontWeek = paneel === null || naastElkaar;
 
   // In een cel van 34 pixels is geen fiche neer te zetten, dus de maand is altijd om te
-  // kijken. Op de planner blijft de schakelaar staan, maar het palet verdwijnt en er staat
-  // bij dat wijzigen per week gaat; een scherm waarin de helft van de knoppen niets doet is
-  // verwarrender dan geen maand.
-  const showsPalette = canEdit && viewMode === 'week';
+  // kijken. Het palet hoort bij de week: staat die er niet, dan is er niets om het op te
+  // laten vallen.
+  const showsPalette = canEdit && toontWeek;
   const monthLabel = useMemo(
     () =>
       new Intl.DateTimeFormat('nl-NL', { month: 'long', year: 'numeric' }).format(
@@ -996,15 +1027,22 @@ export function ActivitiesContent({
           {canEdit ? (
             <PlannerAvondNachtToggle aan={showNight} onChange={updateVisibility} />
           ) : null}
-          <PlannerViewModeSwitch
-            value={viewMode}
-            onChange={setViewMode}
+          {/*
+            Het capaciteitsoverzicht is er alleen voor secretarissen en beheerders, net als de
+            eigen pagina ervan. Een knop aanbieden die op een 403 uitloopt is erger dan geen
+            knop.
+          */}
+          <PlannerNevenschermKeuze
+            value={nevenscherm}
+            onChange={setNevenscherm}
+            keuzes={data.isManager ? ['geen', 'maand', 'capaciteit'] : ['geen', 'maand']}
+            naastElkaar={naastElkaar}
             monthLabel={monthLabel}
           />
         </div>
       </PraktijkplannerTitleAside>
 
-      <div className="flex min-h-0 flex-1 items-stretch gap-4">
+      <div ref={roosterRij} className="flex min-h-0 flex-1 items-stretch gap-4">
         {showsPalette ? (
           <div className="shrink-0 self-stretch">
             {/*
@@ -1055,61 +1093,85 @@ export function ActivitiesContent({
           </div>
         ) : null}
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
-          {slotError ? <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{slotError}</p> : null}
-          {loadingSlots ? <p className="text-sm text-muted-foreground">Planning laden…</p> : null}
-          {canEdit && viewMode === 'month' ? (
-            <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">
-              De maand is om te kijken. Zet de weergave op Week om een dagdeel te plannen.
-            </p>
-          ) : null}
-          {viewMode === 'month' ? (
-            <PlannerMonthOverviewGrid
-              verborgenWeekdagen={verborgenWeekdagen}
+        {/*
+          Twee op een: het weekrooster heeft minstens 1056 pixels nodig en het paneel ongeveer
+          500. Met flex-1 op allebei zou de week op 1600 nog maar 800 krijgen en is er niet
+          meer in te plannen.
+        */}
+        {toontWeek ? (
+          <div
+            className={[
+              'flex min-h-0 min-w-0 flex-col gap-4',
+              paneel === null ? 'flex-1' : 'flex-[2]',
+            ].join(' ')}
+          >
+            {slotError ? <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{slotError}</p> : null}
+            {loadingSlots ? <p className="text-sm text-muted-foreground">Planning laden…</p> : null}
+            <PlannerDaypartGrid
               participants={visibleParticipants}
               dayparts={visibleDayparts}
-              year={monthAnchor.year}
-              month={monthAnchor.month}
+              weekStart={weekStart}
+              zoom={zoom}
               renderCell={({ participant, datum, daypart }) =>
                 renderSlot({
                   participant,
                   datum,
                   daypart,
                   hoverEnabled: cursorTool == null,
-                  variant: 'month',
                 })
               }
+              onCellClick={canEdit ? queueCell : undefined}
+              isCellDisabled={isCellDisabled}
+              isCellUnavailable={isCellUnavailable}
+              isCellFilled={isCellFilled}
+              getCellClassName={getCellClassName}
               holidayLabels={holidays}
+              cursorTool={cursorTool}
+              onCursorToolDismiss={dismissCursorTool}
+              renderParticipantActions={canEdit ? renderParticipantActions : undefined}
               onParticipantNameClick={readOnly ? undefined : openDeelnemerGegevens}
+              verborgenWeekdagen={verborgenWeekdagen}
             />
-          ) : (
-          <PlannerDaypartGrid
-            participants={visibleParticipants}
-            dayparts={visibleDayparts}
-            weekStart={weekStart}
-            zoom={zoom}
-            renderCell={({ participant, datum, daypart }) =>
-              renderSlot({
-                participant,
-                datum,
-                daypart,
-                hoverEnabled: cursorTool == null,
-              })
-            }
-            onCellClick={canEdit ? queueCell : undefined}
-            isCellDisabled={isCellDisabled}
-            isCellUnavailable={isCellUnavailable}
-            isCellFilled={isCellFilled}
-            getCellClassName={getCellClassName}
-            holidayLabels={holidays}
-            cursorTool={cursorTool}
-            onCursorToolDismiss={dismissCursorTool}
-            renderParticipantActions={canEdit ? renderParticipantActions : undefined}
-            onParticipantNameClick={readOnly ? undefined : openDeelnemerGegevens}
-            verborgenWeekdagen={verborgenWeekdagen}
-          />
-          )}
-        </div>
+          </div>
+        ) : null}
+
+        {paneel !== null ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+            {/*
+              Alleen om te kijken, of het nu naast de week staat of ervoor in de plaats. Die
+              regel staat er alleen als de week er niet naast staat: staat hij er wel, dan
+              wijst de planner gewoon links aan en zegt de regel niets nieuws.
+            */}
+            {canEdit && paneel === 'maand' && !naastElkaar ? (
+              <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">
+                De maand is om te kijken. Zet de weergave op Week om een dagdeel te plannen.
+              </p>
+            ) : null}
+            {paneel === 'maand' ? (
+              <PlannerMonthOverviewGrid
+                verborgenWeekdagen={verborgenWeekdagen}
+                participants={visibleParticipants}
+                dayparts={visibleDayparts}
+                year={monthAnchor.year}
+                month={monthAnchor.month}
+                renderCell={({ participant, datum, daypart }) =>
+                  renderSlot({
+                    participant,
+                    datum,
+                    daypart,
+                    hoverEnabled: cursorTool == null,
+                    variant: 'month',
+                  })
+                }
+                holidayLabels={holidays}
+                onParticipantNameClick={readOnly ? undefined : openDeelnemerGegevens}
+              />
+            ) : null}
+            {paneel === 'capaciteit' ? (
+              <CapacityOverviewPanel groupId={groupId} data={data} weekStart={weekStart} />
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {canEdit && actionModal?.type === 'copy' ? (

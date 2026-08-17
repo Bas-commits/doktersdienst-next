@@ -14,7 +14,7 @@ import { PlannerDaypartGrid } from './PlannerDaypartGrid';
 import { PlannerMonthDaypartGrid } from './PlannerMonthDaypartGrid';
 import { PlannerMonthOverviewGrid } from './PlannerMonthOverviewGrid';
 import { PlannerAvondNachtToggle } from './PlannerAvondNachtToggle';
-import { PlannerViewModeSwitch } from './PlannerViewModeSwitch';
+import { PlannerNevenschermKeuze } from './PlannerNevenschermKeuze';
 import { PlannerWeekBar } from './PlannerWeekBar';
 import { MonthNavigation } from '@/components/CalandarGrid/MonthNavigation';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -87,7 +87,10 @@ export function PlannerAbsenceEditor({
 }) {
   const { groupId, data } = context;
   const isDoctorMode = mode === 'doctor';
-  const { weekStart, setWeekStart, viewMode, setViewMode } = usePlannerWeergave(groupId);
+  const { weekStart, setWeekStart, nevenscherm, setNevenscherm } = usePlannerWeergave(groupId);
+  // Dit scherm kent alleen de week en de maand. Staat de planner elders op capaciteit of
+  // locatie, dan is er hier niets om naast te zetten en blijft de week staan.
+  const toontMaand = nevenscherm === 'maand';
   const [slots, setSlots] = useState<PraktijkplannerAbsenceSlot[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
@@ -110,7 +113,7 @@ export function PlannerAbsenceEditor({
 
   const range = useMemo(() => {
     if (!isDoctorMode) {
-      if (viewMode === 'month') {
+      if (toontMaand) {
         const bounds = monthBounds(overviewMonth.year, overviewMonth.month);
         if (bounds) return bounds;
       }
@@ -123,7 +126,7 @@ export function PlannerAbsenceEditor({
         end: `${year}-${String(month).padStart(2, '0')}-28`,
       }
     );
-  }, [isDoctorMode, overviewMonth, viewMode, weekStart]);
+  }, [isDoctorMode, overviewMonth, toontMaand, weekStart]);
   const holidayData = usePlannerHolidayData(range.start, range.end);
   const participants = isDoctorMode
     ? data.participants.filter((participant) => participant.id === data.userId)
@@ -540,9 +543,15 @@ export function PlannerAbsenceEditor({
       {editable ? (
         <PlannerAvondNachtToggle aan={showNight} onChange={updateVisibility} />
       ) : null}
-      <PlannerViewModeSwitch
-        value={viewMode}
-        onChange={setViewMode}
+      {/*
+        Dit scherm zet nooit twee panelen naast elkaar, dus de maand komt hier altijd in de
+        plaats van de week. Capaciteit en locatie horen bij de planner en staan hier niet.
+      */}
+      <PlannerNevenschermKeuze
+        value={toontMaand ? 'maand' : 'geen'}
+        onChange={setNevenscherm}
+        keuzes={['geen', 'maand']}
+        naastElkaar={false}
         monthLabel={overviewMonthLabel}
       />
     </>
@@ -558,7 +567,7 @@ export function PlannerAbsenceEditor({
         alleen maar uitnodigen tot iets wat niet werkt. De dokterversie heeft zijn eigen
         maandkalender waarin je wel kunt kiezen, en houdt het palet dus.
       */}
-      {editable && !(!isDoctorMode && viewMode === 'month') ? (
+      {editable && !(!isDoctorMode && toontMaand) ? (
         <div className="shrink-0 self-stretch">
           {/*
             Het palet begint bovenaan. Het sloeg eerder de hoogte van de navigatie over, want
@@ -605,12 +614,12 @@ export function PlannerAbsenceEditor({
             <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
             {weergaveKnoppen}
           </PraktijkplannerTitleAside>
-          {editable && viewMode === 'month' ? (
+          {editable && toontMaand ? (
             <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground">
               De maand is om te kijken. Zet de weergave op Week om een afwezigheid te zetten.
             </p>
           ) : null}
-          {viewMode === 'month' ? (
+          {toontMaand ? (
             <PlannerMonthOverviewGrid
               verborgenWeekdagen={verborgenWeekdagen}
               participants={participants}

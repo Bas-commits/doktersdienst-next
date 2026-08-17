@@ -3,11 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatIsoDate, isIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 
-export type PlannerViewMode = 'week' | 'month';
+/**
+ * Wat er naast de week staat.
+ *
+ * Links staat altijd de week, dus dit is geen keuze tussen twee weergaven maar de keuze wat
+ * je erbij wil zien. Past het niet naast elkaar, dan komt het in de plaats van de week; dat
+ * is precies wat de oude knop Maand deed. Zie useBeschikbareBreedte.
+ */
+export type PlannerNevenscherm = 'geen' | 'maand' | 'capaciteit' | 'locatie';
+
+const NEVENSCHERMEN: readonly PlannerNevenscherm[] = ['geen', 'maand', 'capaciteit', 'locatie'];
 
 export type PlannerWeergave = {
   weekStart: string;
-  viewMode: PlannerViewMode;
+  nevenscherm: PlannerNevenscherm;
 };
 
 /**
@@ -29,7 +38,7 @@ function isWeergaveBericht(value: unknown): value is WeergaveBericht {
   return (
     typeof bericht.idwaarneemgroep === 'number' &&
     isIsoDate(bericht.weekStart) &&
-    (bericht.viewMode === 'week' || bericht.viewMode === 'month')
+    NEVENSCHERMEN.includes(bericht.nevenscherm as PlannerNevenscherm)
   );
 }
 
@@ -39,8 +48,13 @@ function isWeergaveBericht(value: unknown): value is WeergaveBericht {
  * Elk scherm hield dit in zijn eigen state, dus wie de Activiteiten planner en het Capaciteit
  * overzicht naast elkaar had staan vergeleek zonder het te merken twee verschillende weken.
  *
- * De maand zit hier niet in. Schermen leiden hun maand af van de week met maandVanWeek, zodat
- * week en maand niet uit elkaar kunnen lopen en er maar één ding rond hoeft te gaan.
+ * De maand zit hier niet als datum in. Schermen leiden hun maand af van de week met
+ * maandVanWeek, zodat week en maand niet uit elkaar kunnen lopen en er maar één ding rond
+ * hoeft te gaan.
+ *
+ * Schermen die geen capaciteit of locatie kennen, zoals de Afwezigheidsplanner, lezen alleen
+ * of het nevenscherm de maand is en tonen anders hun week. Zo blijft er één begrip rondgaan
+ * in plaats van twee die uit elkaar lopen.
  *
  * De keuze wordt niet bewaard: een scherm opent altijd op de huidige week, en pas daarna
  * volgen open schermen elkaar. Anders begin je een ochtend onbedoeld in een week van vorige
@@ -52,11 +66,11 @@ function isWeergaveBericht(value: unknown): value is WeergaveBericht {
  */
 export function usePlannerWeergave(idwaarneemgroep: number): PlannerWeergave & {
   setWeekStart: (weekStart: string) => void;
-  setViewMode: (viewMode: PlannerViewMode) => void;
+  setNevenscherm: (nevenscherm: PlannerNevenscherm) => void;
 } {
   const [weergave, setWeergave] = useState<PlannerWeergave>(() => ({
     weekStart: huidigeWeek(),
-    viewMode: 'week',
+    nevenscherm: 'geen',
   }));
   const kanaal = useRef<BroadcastChannel | null>(null);
   // Wat er als laatste over het kanaal ging, in of uit. Zonder dit stuurt een scherm het
@@ -73,7 +87,7 @@ export function usePlannerWeergave(idwaarneemgroep: number): PlannerWeergave & {
       }
       const volgende: PlannerWeergave = {
         weekStart: event.data.weekStart,
-        viewMode: event.data.viewMode,
+        nevenscherm: event.data.nevenscherm,
       };
       laatsteBericht.current = JSON.stringify(volgende);
       setWeergave(volgende);
@@ -101,9 +115,11 @@ export function usePlannerWeergave(idwaarneemgroep: number): PlannerWeergave & {
     setWeergave((huidig) => (huidig.weekStart === weekStart ? huidig : { ...huidig, weekStart }));
   }, []);
 
-  const setViewMode = useCallback((viewMode: PlannerViewMode) => {
-    setWeergave((huidig) => (huidig.viewMode === viewMode ? huidig : { ...huidig, viewMode }));
+  const setNevenscherm = useCallback((nevenscherm: PlannerNevenscherm) => {
+    setWeergave((huidig) =>
+      huidig.nevenscherm === nevenscherm ? huidig : { ...huidig, nevenscherm }
+    );
   }, []);
 
-  return { ...weergave, setWeekStart, setViewMode };
+  return { ...weergave, setWeekStart, setNevenscherm };
 }

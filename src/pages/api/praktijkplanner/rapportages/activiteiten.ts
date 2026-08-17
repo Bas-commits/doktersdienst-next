@@ -18,7 +18,23 @@ type ReportRow = {
   datums: string[];
 };
 
-type Data = { rows: ReportRow[] } | { error: string };
+/**
+ * Een enkele toekenning, zoals hij in de planning staat.
+ *
+ * Het scherm heeft genoeg aan `rows`, want dat toont een matrix van aantallen. Deze regels
+ * bestaan voor de Excel-export: daarin moet per regel te zien zijn wie het was, op welke datum
+ * en op welk dagdeel, want dat is wat iemand nodig heeft om er zelf mee te rekenen. Optellen
+ * kan de ontvanger daarna zelf; uit een optelling het detail terughalen kan niet.
+ */
+type ReportDetail = {
+  datum: string;
+  iddagdeel: number;
+  iddeelnemer: number;
+  soort: ReportRow['soort'];
+  label: string;
+};
+
+type Data = { rows: ReportRow[]; details: ReportDetail[] } | { error: string };
 
 function oneQueryValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -148,6 +164,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }
 
     const aggregate = new Map<string, ReportRow>();
+    const details: ReportDetail[] = [];
     for (const row of rows) {
       if (row.id == null || row.datum == null || row.iddagdeel == null || row.iddeelnemer == null) continue;
       if (absenceKeys.has(`${row.iddeelnemer}:${row.datum}:${row.iddagdeel}`)) continue;
@@ -165,6 +182,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           cell,
           row.datum
         );
+        details.push({
+          datum: row.datum,
+          iddagdeel: row.iddagdeel,
+          iddeelnemer: row.iddeelnemer,
+          soort: 'activiteit',
+          label: row.activityAfkorting || row.activityNaam,
+        });
       }
       if (row.specificationId != null && row.specificationNaam != null) {
         addCount(
@@ -178,6 +202,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           cell,
           row.datum
         );
+        details.push({
+          datum: row.datum,
+          iddagdeel: row.iddagdeel,
+          iddeelnemer: row.iddeelnemer,
+          soort: 'specificatie',
+          label: row.specificationAfkorting || row.specificationNaam,
+        });
       }
       for (const task of tasksByPlanning.get(row.id) ?? []) {
         if (task.idtaaktype == null) continue;
@@ -192,11 +223,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           cell,
           row.datum
         );
+        details.push({
+          datum: row.datum,
+          iddagdeel: row.iddagdeel,
+          iddeelnemer: row.iddeelnemer,
+          soort: 'taak',
+          label: task.afkorting || task.omschrijving || `Taak ${task.idtaaktype}`,
+        });
       }
     }
 
     const soortOrder = { activiteit: 0, specificatie: 1, taak: 2 } as const;
     return res.status(200).json({
+      details: details.sort(
+        (left, right) =>
+          left.datum.localeCompare(right.datum) ||
+          left.iddagdeel - right.iddagdeel ||
+          left.label.localeCompare(right.label, 'nl')
+      ),
       rows: [...aggregate.values()]
         .map((row) => ({
           ...row,

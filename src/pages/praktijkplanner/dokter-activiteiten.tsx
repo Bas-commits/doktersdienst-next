@@ -1,7 +1,7 @@
 'use client';
 
 import Head from 'next/head';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Download } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CAPACITY_WEEKDAYS } from '@/components/praktijkplanner/CapacityWeekGrid';
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
@@ -13,6 +13,12 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  downloadCapaciteitsrapportage,
+  type RapportageKolom,
+  type RapportageRegel,
+} from '@/lib/capaciteitsrapportage-export';
+import { naamVoorBestandsnaam } from '@/lib/excel-export';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
 
 type ReportRow = {
@@ -92,7 +98,9 @@ function DoctorActivitiesContent({ groupId, data }: PraktijkplannerPageContext) 
   const [start, setStart] = useState(defaultStart);
   const [end, setEnd] = useState(() => addDays(defaultStart(), 6));
   const [rows, setRows] = useState<ReportRow[]>([]);
+  const [details, setDetails] = useState<RapportageRegel[]>([]);
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const effectiveParticipantParam = data.isManager
     ? participantSelection
     : (data.participants[0]?.id ?? null);
@@ -106,16 +114,24 @@ function DoctorActivitiesContent({ groupId, data }: PraktijkplannerPageContext) 
       { credentials: 'include', signal: abortController.signal }
     )
       .then(async (response) => {
-        const payload = (await response.json()) as { rows?: ReportRow[]; error?: string };
+        const payload = (await response.json()) as {
+          rows?: ReportRow[];
+          details?: RapportageRegel[];
+          error?: string;
+        };
         if (!response.ok || !payload.rows) throw new Error(payload.error || 'De telling kon niet worden geladen.');
-        return payload.rows;
+        return { rows: payload.rows, details: payload.details ?? [] };
       })
       .then((result) => {
-        if (!abortController.signal.aborted) setRows(result);
+        if (!abortController.signal.aborted) {
+          setRows(result.rows);
+          setDetails(result.details);
+        }
       })
       .catch(() => {
         if (!abortController.signal.aborted) {
           setRows([]);
+          setDetails([]);
         }
       })
       .finally(() => {
@@ -143,6 +159,65 @@ function DoctorActivitiesContent({ groupId, data }: PraktijkplannerPageContext) 
   const taskRows = useMemo(() => rows.filter((row) => row.soort === 'taak').sort(sortRows), [rows]);
 
   const columnCount = 2 + CAPACITY_WEEKDAYS.length * dayparts.length;
+
+  const exportKolommen = useMemo<RapportageKolom[]>(
+    () =>
+      CAPACITY_WEEKDAYS.flatMap((weekday) =>
+        dayparts.map((daypart) => ({
+          weekdagId: String(weekday.id),
+          weekdagLabel: weekday.label,
+          dagdeelId: daypart.id,
+          dagdeelNaam: daypart.naam,
+        }))
+      ),
+    [dayparts]
+  );
+
+  const deelnemerNamen = useMemo(() => {
+    const namen = new Map<number, string>();
+    for (const participant of data.participants) namen.set(participant.id, participantName(participant));
+    return namen;
+  }, [data.participants]);
+
+  const dagdeelNamen = useMemo(() => {
+    const namen = new Map<number, string>();
+    for (const daypart of dayparts) namen.set(daypart.id, daypart.naam);
+    return namen;
+  }, [dayparts]);
+
+  /**
+   * Zet de rapportage in een Excel-bestand.
+   *
+   * Neemt de deelnemer en de periode die op dat moment gekozen staan. Bij "Alle deelnemers"
+   * gaat iedereen mee, en dan is het tabblad Gegevens het enige plek waar nog te zien is wie
+   * wat deed: de matrix eronder telt de dokters bij elkaar op.
+   */
+  async function handleDownload() {
+    const gekozenDeelnemer =
+      effectiveParticipantParam === ALL_PARTICIPANTS || effectiveParticipantParam == null
+        ? 'alle-deelnemers'
+        : naamVoorBestandsnaam(deelnemerNamen.get(effectiveParticipantParam) ?? 'deelnemer');
+    setDownloading(true);
+    try {
+      await downloadCapaciteitsrapportage({
+        bestandsnaam: `capaciteitsrapportage-${gekozenDeelnemer}-${start}-${end}.xlsx`,
+        waarneemgroep:
+          effectiveParticipantParam === ALL_PARTICIPANTS || effectiveParticipantParam == null
+            ? 'Alle deelnemers'
+            : (deelnemerNamen.get(effectiveParticipantParam) ?? 'Deelnemer'),
+        van: start,
+        tot: end,
+        regels: details,
+        activiteitRijen: activityRows,
+        taakRijen: taskRows,
+        kolommen: exportKolommen,
+        deelnemerNaam: (id) => deelnemerNamen.get(id) ?? `Deelnemer ${id}`,
+        dagdeelNaam: (id) => dagdeelNamen.get(id) ?? `Dagdeel ${id}`,
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   const renderSection = (title: string, sectionRows: ReportRow[], emptyLabel: string) => (
     <>
@@ -215,6 +290,24 @@ function DoctorActivitiesContent({ groupId, data }: PraktijkplannerPageContext) 
           <span className="font-medium">Tot</span>
           <input type="date" value={end} onChange={(event) => setEnd(event.target.value)} className="h-9 rounded border bg-background px-2" />
         </label>
+        {/*
+          Geen eigen periodekeuze in de knop: de periode staat er hiernaast al. De knop is uit
+          zolang er niets geladen is, want een leeg bestand downloaden ziet eruit als een fout.
+        */}
+        <button
+          type="button"
+          onClick={() => void handleDownload()}
+          disabled={loading || downloading || details.length === 0}
+          className="inline-flex h-9 items-center gap-2 rounded border bg-background px-3 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+          title={
+            details.length === 0
+              ? 'Niets te exporteren in dit tijdvak'
+              : 'Download deze rapportage als Excel-bestand'
+          }
+        >
+          <Download className="size-4" aria-hidden />
+          Download Excel
+        </button>
       </div>
 
       {loading ? <p className="text-sm text-muted-foreground">Telling laden…</p> : null}

@@ -8,48 +8,20 @@ import {
   monthBounds,
   weekdayFromIsoDate,
 } from '@/lib/praktijkplanner/dates';
-import { getContrastTextColor } from '@/utils/contrastTextColor';
 import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
 import type { PlannerDaypartCell } from './PlannerDaypartGrid';
 
 const WEEKDAG_LETTERS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
-/** Kolombreedte van een dag. Genoeg voor drie tekens, en 31 dagen passen zo op een breed scherm. */
+/**
+ * Een dagvakje is vierkant, want er staat een fiche in en die heeft drie banden onder elkaar.
+ * Bij 34 pixels is een band elf pixels hoog: genoeg voor de kleur en het icoon. Smaller is de
+ * fiche niet meer te herkennen, breder past een maand van 31 dagen op geen enkel scherm meer.
+ */
 const DAG_BREEDTE_PX = 34;
+const CEL_HOOGTE_PX = 34;
 const NAAM_BREEDTE_PX = 176;
 const DAGDEEL_BREEDTE_PX = 24;
-
-/**
- * De cel van de maandweergave: één afkorting in de kleur van waar hij bij hoort.
- *
- * De afkorting wordt afgekapt op vier tekens omdat de kolom 34 pixels breed is. Dat is te
- * weinig om SprCOPd van SprOnco te onderscheiden, en dat hoeft ook niet: de hoverkaart toont
- * de volledige naam. De kleur is wat je in een maand in één oogopslag leest, niet de letters.
- */
-export function PlannerMonthCell({
-  label,
-  color,
-  provisional,
-}: {
-  label: string;
-  color: string | null;
-  provisional: boolean;
-}) {
-  if (!label) return null;
-  const background = color || '#e5e7eb';
-  return (
-    <span
-      className={[
-        'block truncate rounded-[2px] px-0.5 text-[9px] leading-4 font-semibold',
-        provisional ? 'opacity-45' : '',
-      ].join(' ')}
-      style={{ background, color: getContrastTextColor(background) }}
-      title={label}
-    >
-      {label.slice(0, 4)}
-    </span>
-  );
-}
 
 /** Achternaam eerst, net als in de weekweergave en in de lijst deelnemers. */
 function deelnemerNaam(participant: PraktijkplannerParticipant): string {
@@ -73,7 +45,12 @@ function weekGroepen(dates: string[]): Array<{ week: number; dagen: number }> {
  * De weekweergave zet de vier dagdelen als fiches in een blokje van twee bij twee, ongeveer
  * 187 pixels per dag. Een maand in die vorm is ruim 5800 pixels breed en past op geen enkel
  * scherm. Daarom staat hier per dag maar één kolom en krijgt elk dagdeel een eigen rij onder
- * de deelnemer. In de cel past dan nog één afkorting; al het andere staat in de hoverkaart.
+ * de deelnemer.
+ *
+ * In die kolom staat dezelfde fiche als in de week, alleen kleiner getekend: de fiches zijn
+ * wat een planner afleest, dus een letter in plaats daarvan haalt de maand leeg. Zie de
+ * dichtheid `micro` in PlannerCombinedDaypartChip voor wat er bij 34 pixels overblijft.
+ * De hoverkaart toont onveranderd alles.
  */
 export function PlannerMonthOverviewGrid({
   participants,
@@ -205,13 +182,20 @@ export function PlannerMonthOverviewGrid({
                       key={datum}
                       style={{ width: DAG_BREEDTE_PX, minWidth: DAG_BREEDTE_PX }}
                       className={[
-                        'h-5 border-r border-b p-0 text-center align-middle',
+                        'border-r border-b p-0 text-center align-middle',
                         weekdag >= 6 ? 'bg-muted/40' : '',
                         index === geordendeDagdelen.length - 1 ? 'border-b-2' : '',
                         isNu ? 'ring-1 ring-inset ring-emerald-600' : '',
                       ].join(' ')}
                     >
-                      {renderCell({ participant, datum, daypart })}
+                      {/*
+                        Een fiche vult zijn vakje met h-full, en dat rekent alleen als de ouder
+                        een hoogte in pixels heeft. Een td met alleen een klasse geeft die niet
+                        door, dus staat de hoogte hier op het blokje eromheen.
+                      */}
+                      <div className="relative" style={{ height: CEL_HOOGTE_PX }}>
+                        {renderCell({ participant, datum, daypart })}
+                      </div>
                     </td>
                   );
                 })}

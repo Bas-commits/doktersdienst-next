@@ -12,7 +12,16 @@ export type PlannerDaypartChipItem = {
   icon?: string | null;
 };
 
-type ChipDensity = 'compact' | 'popover';
+/**
+ * Hoe groot de fiche getekend wordt.
+ *
+ * `micro` is de maandweergave: een vakje van ongeveer 34 pixels, dus een band van elf. Daar
+ * past geen tekst in die iemand nog kan lezen, en een afgekapt woord van twee letters is
+ * erger dan geen woord. Wat overblijft is wat je in een maand ook echt afleest: de kleuren
+ * van de drie banden, het kader in de kleur van de deelnemer en het icoon van de activiteit.
+ * De hoverkaart toont onveranderd de hele fiche met alle namen.
+ */
+type ChipDensity = 'micro' | 'compact' | 'popover';
 
 type ChipBandProps = {
   row: 'tasks' | 'activity' | 'location';
@@ -45,6 +54,7 @@ function iconStyle(color: string | null): CSSProperties {
  */
 function ChipBand({ row, items, style, density }: ChipBandProps) {
   const isPopover = density === 'popover';
+  const toontTekst = density !== 'micro';
 
   if (items.length === 0) {
     return (
@@ -70,7 +80,7 @@ function ChipBand({ row, items, style, density }: ChipBandProps) {
           key={item.id ?? `${item.label}-${index}`}
           className={cn(
             'flex h-full min-w-0 flex-1 items-center justify-center',
-            isPopover ? 'gap-1 px-1.5' : 'gap-0.5 px-1',
+            isPopover ? 'gap-1 px-1.5' : toontTekst ? 'gap-0.5 px-1' : 'px-0',
             // Overlap adjacent task segments the same way bands overlap.
             index < items.length - 1 && '-mr-px'
           )}
@@ -87,14 +97,16 @@ function ChipBand({ row, items, style, density }: ChipBandProps) {
               style={iconStyle(item.color)}
             />
           ) : null}
-          <span
-            className={cn(
-              'truncate font-semibold leading-tight',
-              isPopover ? 'text-[13px]' : 'text-[9px]'
-            )}
-          >
-            {item.label}
-          </span>
+          {toontTekst ? (
+            <span
+              className={cn(
+                'truncate font-semibold leading-tight',
+                isPopover ? 'text-[13px]' : 'text-[9px]'
+              )}
+            >
+              {item.label}
+            </span>
+          ) : null}
         </span>
       ))}
     </span>
@@ -125,7 +137,7 @@ export function PlannerCombinedDaypartChip({
   fill = false,
   participantColor,
   initials,
-  initialsVariant = 'compact',
+  density = 'compact',
 }: {
   tasks?: PlannerDaypartChipItem[];
   activity?: PlannerDaypartChipItem | null;
@@ -134,15 +146,14 @@ export function PlannerCombinedDaypartChip({
   fill?: boolean;
   participantColor?: string | null;
   initials?: string | null;
-  /** `popover`: larger labels/icons, initials sit below the face. */
-  initialsVariant?: ChipDensity;
+  /** `popover`: larger labels/icons, initials sit below the face. `micro`: zie ChipDensity. */
+  density?: ChipDensity;
 }) {
   const label = [...tasks.map((task) => task.label), activity?.label, location?.label]
     .filter(Boolean)
     .join(' · ');
   const hasParticipantBorder = Boolean(participantColor);
   const faceColor = fallbackFaceColor(participantColor, tasks, activity, location);
-  const density: ChipDensity = initialsVariant;
 
   // Real outer border without CSS `border`: the frame is colored padding around a
   // clipped face. Gaps can only show the frame color, never page white.
@@ -155,7 +166,7 @@ export function PlannerCombinedDaypartChip({
       className={cn(
         'relative block min-w-0 text-center shadow-sm',
         fill ? 'h-full w-full min-h-0' : 'h-12',
-        initialsVariant === 'popover' && 'mb-3',
+        density === 'popover' && 'mb-3',
         className
       )}
       aria-label={label || undefined}
@@ -200,7 +211,11 @@ export function PlannerCombinedDaypartChip({
         </span>
       </span>
 
-      {participantColor && initials ? (
+      {/*
+        In de maandweergave staat de naam al aan het begin van de rij en hangt het bolletje
+        half buiten de fiche, dus over de rij eronder. Daar zegt het niets en dekt het wel af.
+      */}
+      {participantColor && initials && density !== 'micro' ? (
         <span
           aria-hidden
           className={cn(

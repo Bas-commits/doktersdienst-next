@@ -53,12 +53,17 @@ export function AbsenceDaypartCell({
           )}
           style={{ background }}
         >
+          {/*
+            Het vakje is in de week 56 pixels en in de maand 34. Zonder de bovengrens loopt het
+            icoon in de maand over zijn eigen kader heen; met alleen een percentage wordt hij in
+            de week juist groter dan hij ooit was.
+          */}
           {icon ? (
             <PlannerIconImage
               src={icon}
               width={28}
               height={28}
-              className="size-7 object-contain"
+              className="size-7 max-h-full max-w-full object-contain"
               fallback={naamKort}
             />
           ) : (

@@ -17,10 +17,7 @@ import { PlannerCopyWeekModal } from '@/components/praktijkplanner/PlannerCopyWe
 import { PlannerDaypartGrid } from '@/components/praktijkplanner/PlannerDaypartGrid';
 import { PlannerDaypartHoverPreview } from '@/components/praktijkplanner/PlannerDaypartHoverPreview';
 import { PlannerManageHerhalingModal } from '@/components/praktijkplanner/PlannerManageHerhalingModal';
-import {
-  PlannerMonthCell,
-  PlannerMonthOverviewGrid,
-} from '@/components/praktijkplanner/PlannerMonthOverviewGrid';
+import { PlannerMonthOverviewGrid } from '@/components/praktijkplanner/PlannerMonthOverviewGrid';
 import { PlannerNotifyPlanningModal } from '@/components/praktijkplanner/PlannerNotifyPlanningModal';
 import { PlannerRepeatWeekModal } from '@/components/praktijkplanner/PlannerRepeatWeekModal';
 import { PlannerViewModeSwitch } from '@/components/praktijkplanner/PlannerViewModeSwitch';
@@ -319,9 +316,9 @@ export function ActivitiesContent({
       daypart: { id: number; naam: string };
       hoverEnabled: boolean;
       /**
-       * In de maandweergave is een dag maar 34 pixels breed. Daar past de fiche niet in, dus
-       * toont de cel één afkorting in de kleur van de activiteit. De hoverkaart eronder blijft
-       * dezelfde en toont wel de hele fiche, zodat er geen informatie verdwijnt.
+       * In de maandweergave is een vakje 34 bij 34 pixels in plaats van 56 bij 56. Dezelfde
+       * fiche dus, alleen kleiner getekend: zonder de namen in de banden en zonder het bolletje
+       * met de initialen, want daar is bij die maat geen ruimte voor.
        */
       variant?: 'week' | 'month';
     }) => {
@@ -364,15 +361,7 @@ export function ActivitiesContent({
             showPlanningDetails={false}
             chip={<div className="relative h-full w-full">{cell}</div>}
           >
-            {variant === 'month' ? (
-              <PlannerMonthCell
-                label={absence.absenceType.naam}
-                color={absence.absenceType.kleur}
-                provisional={provisional}
-              />
-            ) : (
-              cell
-            )}
+            {cell}
           </PlannerDaypartHoverPreview>
         );
       }
@@ -415,9 +404,15 @@ export function ActivitiesContent({
 
       const provisionalOverlay = Boolean(absence?.isVoorlopig);
       const absenceTypeName = absence?.absenceType.naam ?? null;
+      // De bordjes staan bovenop de fiche. Op de helft van de maat moeten ze mee krimpen,
+      // anders dekt een vraagteken van zestien pixels het halve vakje af.
+      const isMaand = variant === 'month';
       const provisionalBadge = (
         <span
-          className="pointer-events-none absolute top-0.5 right-0.5 z-20 flex size-4 items-center justify-center rounded bg-background/90 text-[11px] font-bold text-muted-foreground ring-1 ring-border"
+          className={[
+            'pointer-events-none absolute top-0.5 right-0.5 z-20 flex items-center justify-center rounded bg-background/90 font-bold text-muted-foreground ring-1 ring-border',
+            isMaand ? 'size-2.5 text-[8px]' : 'size-4 text-[11px]',
+          ].join(' ')}
           title={absentieTekst(absenceTypeName, true)}
         >
           ?
@@ -442,21 +437,30 @@ export function ActivitiesContent({
                 fill
                 participantColor={participant.color}
                 initials={initials}
+                density={isMaand ? 'micro' : 'compact'}
                 className="shadow-none"
               />
             ) : null}
             {availability ? (
-              <span className="pointer-events-none absolute inset-x-0.5 bottom-0.5 truncate rounded bg-background/80 px-0.5 text-[9px] font-medium text-emerald-700">
+              <span
+                className={[
+                  'pointer-events-none absolute inset-x-0.5 bottom-0.5 truncate rounded bg-background/80 px-0.5 font-medium text-emerald-700',
+                  isMaand ? 'text-[7px] leading-tight' : 'text-[9px]',
+                ].join(' ')}
+              >
                 {availability.naam}
               </span>
             ) : null}
           </div>
           {existing?.isUitzondering ? (
             <span
-              className="pointer-events-none absolute top-0.5 left-0.5 z-20 rounded bg-background/90 p-0.5 text-amber-500"
+              className={[
+                'pointer-events-none absolute top-0.5 left-0.5 z-20 rounded bg-background/90 text-amber-500',
+                isMaand ? 'p-0' : 'p-0.5',
+              ].join(' ')}
               title={afwijkingTekst(existing.recurrenceSourceWeek)}
             >
-              <TriangleAlert className="size-3.5" aria-hidden />
+              <TriangleAlert className={isMaand ? 'size-2.5' : 'size-3.5'} aria-hidden />
             </span>
           ) : null}
           {provisionalOverlay ? provisionalBadge : null}
@@ -491,7 +495,7 @@ export function ActivitiesContent({
                   fill
                   participantColor={participant.color}
                   initials={initials}
-                  initialsVariant="popover"
+                  density="popover"
                   className="shadow-sm"
                 />
               </div>
@@ -499,15 +503,7 @@ export function ActivitiesContent({
             </div>
           }
         >
-          {variant === 'month' ? (
-            <PlannerMonthCell
-              label={activityItem?.label ?? taskItems[0]?.label ?? locationItem?.label ?? ''}
-              color={activityItem?.color ?? taskItems[0]?.color ?? locationItem?.color ?? null}
-              provisional={provisionalOverlay}
-            />
-          ) : (
-            chip
-          )}
+          {chip}
         </PlannerDaypartHoverPreview>
       );
     },

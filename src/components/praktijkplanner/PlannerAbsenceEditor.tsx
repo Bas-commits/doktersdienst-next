@@ -12,7 +12,7 @@ import { PlannerChipPalette } from './PlannerChipPalette';
 import type { PlannerCursorTool } from './PlannerCursorTool';
 import { PlannerDaypartGrid } from './PlannerDaypartGrid';
 import { PlannerMonthDaypartGrid } from './PlannerMonthDaypartGrid';
-import { PlannerMonthCell, PlannerMonthOverviewGrid } from './PlannerMonthOverviewGrid';
+import { PlannerMonthOverviewGrid } from './PlannerMonthOverviewGrid';
 import { PlannerAvondNachtToggle } from './PlannerAvondNachtToggle';
 import { PlannerViewModeSwitch } from './PlannerViewModeSwitch';
 import { PlannerWeekBar } from './PlannerWeekBar';
@@ -242,10 +242,7 @@ export function PlannerAbsenceEditor({
     (
       participant: PraktijkplannerPageContext['data']['participants'][number],
       datum: string,
-      daypart: PraktijkplannerDaypart,
-      // In de maandweergave is een dag 34 pixels breed; daar past het gekleurde vakje met het
-      // icoon niet in. De hoverkaart eronder blijft dezelfde en toont het wel.
-      variant: 'week' | 'month' = 'week'
+      daypart: PraktijkplannerDaypart
     ) => {
       const { absence, provisional } = resolveAbsence(participant.id, datum, daypart.id);
       if (!absence) {
@@ -285,15 +282,7 @@ export function PlannerAbsenceEditor({
           showParticipant={!isDoctorMode}
           chip={<div className="relative h-full w-full">{cell}</div>}
         >
-          {variant === 'month' ? (
-            <PlannerMonthCell
-              label={absence.naam}
-              color={absence.kleur}
-              provisional={provisional === true}
-            />
-          ) : (
-            cell
-          )}
+          {cell}
         </PlannerDaypartHoverPreview>
       );
     },
@@ -629,7 +618,7 @@ export function PlannerAbsenceEditor({
               year={overviewMonth.year}
               month={overviewMonth.month}
               renderCell={({ participant, datum, daypart }) =>
-                renderCell(participant, datum, daypart, 'month')
+                renderCell(participant, datum, daypart)
               }
               holidayLabels={holidayData.labels}
             />

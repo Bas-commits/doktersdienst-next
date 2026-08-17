@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DateTimePicker } from '@/components/ui/datetime-picker';
+import { Download } from 'lucide-react';
+import { downloadVakanties } from '@/lib/vakanties-export';
 import type { VakantiesResponse, VakantieItem } from './api/vakanties/index';
 
 const TYPE_FEESTDAG = 0;
@@ -69,6 +71,7 @@ export default function VakantiePage() {
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<VakantieItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const loadData = useCallback((y: number) => {
     setLoading(true);
@@ -165,6 +168,28 @@ export default function VakantiePage() {
   const regioLabel = (vak: VakantieItem) =>
     vak.regio_naam && vak.regio_naam.trim().length > 0 ? vak.regio_naam : 'Alle';
   const typeLabel = (t: number) => (t === TYPE_FEESTDAG ? 'Feestdag' : 'Vakantie');
+
+  /** Zet de vakanties en feestdagen van het gekozen jaar in een Excel-bestand. */
+  async function handleDownload() {
+    const vakanties = data?.vakanties ?? [];
+    setDownloading(true);
+    try {
+      await downloadVakanties({
+        bestandsnaam: `vakanties-${year}.xlsx`,
+        jaar: year,
+        regels: vakanties.map((vak) => ({
+          id: vak.id,
+          regio: regioLabel(vak),
+          naam: vak.naam,
+          van: vak.van,
+          tot: vak.tot,
+          type: typeLabel(vak.type),
+        })),
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   if (isPending || !session?.user) return null;
 
@@ -337,6 +362,22 @@ export default function VakantiePage() {
                 onClick={() => setYear((y) => y + 1)}
               >
                 Later &raquo;
+              </Button>
+              {/* Naast de jaarknoppen, want het jaar bepaalt wat er in het bestand komt. */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleDownload()}
+                disabled={loading || downloading || (data?.vakanties ?? []).length === 0}
+                title={
+                  (data?.vakanties ?? []).length === 0
+                    ? `Geen vakanties of feestdagen in ${year}`
+                    : 'Download dit jaar als Excel-bestand'
+                }
+              >
+                <Download className="size-4" aria-hidden />
+                Download Excel
               </Button>
             </div>
           </div>

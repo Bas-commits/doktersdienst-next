@@ -142,7 +142,7 @@ export function CapacityLocatieKeuze({
   locations: PraktijkplannerContextData['masterData']['locations'];
   value: number | null;
   onChange: (id: number | null) => void;
-  /** In het paneel is er geen plek voor een lijst van 224 pixels naast de weekbalk. */
+  /** In het paneel staat de lijst op een eigen regel en mag hij lager zijn dan in de paginakop. */
   compact?: boolean;
 }) {
   return (
@@ -157,7 +157,7 @@ export function CapacityLocatieKeuze({
         onChange={(event) => onChange(Number(event.target.value) || null)}
         className={
           compact
-            ? 'h-8 w-40 max-w-full rounded border bg-background px-2 text-sm'
+            ? 'h-8 w-56 max-w-full rounded border bg-background px-2 text-sm'
             : 'h-10 w-56 max-w-full rounded border bg-background px-3 text-base'
         }
       >

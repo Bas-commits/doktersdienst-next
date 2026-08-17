@@ -7,6 +7,7 @@ import { Copy, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-reac
 import { toast } from 'sonner';
 import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartCell';
 import { CapacityOverviewPanel } from '@/components/praktijkplanner/CapacityOverview';
+import { LocatieSpecialismenPanel } from '@/components/praktijkplanner/LocatieSpecialismenPanel';
 import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
 import { PlannerAvondNachtToggle } from '@/components/praktijkplanner/PlannerAvondNachtToggle';
 import {
@@ -145,7 +146,14 @@ export function ActivitiesContent({
     dat er een lege kolom naast komt. Dat gebeurt als een ander venster een keuze doorgeeft
     die deze gebruiker niet mag zien.
   */
-  const paneel = toontMaand ? 'maand' : nevenscherm === 'capaciteit' && data.isManager ? 'capaciteit' : null;
+  const paneel =
+    toontMaand
+      ? 'maand'
+      : nevenscherm === 'locatie'
+        ? 'locatie'
+        : nevenscherm === 'capaciteit' && data.isManager
+          ? 'capaciteit'
+          : null;
   const toontWeek = paneel === null || naastElkaar;
 
   // In een cel van 34 pixels is geen fiche neer te zetten, dus de maand is altijd om te
@@ -332,6 +340,15 @@ export function ActivitiesContent({
         absenceSlots.map((slot) => [slotKey(slot.iddeelnemer, slot.datum, slot.iddagdeel), slot])
       ),
     [absenceSlots]
+  );
+
+  // Een aanvraag is nog geen afwezigheid. Alleen een vastgelegde afwezigheid haalt de dokter
+  // uit de telling van het locatiepaneel; anders verdwijnt hij uit het overzicht op het moment
+  // dat hij vakantie vraagt, terwijl er nog niets besloten is.
+  const isAfwezig = useCallback(
+    (iddeelnemer: number, datum: string, iddagdeel: number) =>
+      absenceMap.get(slotKey(iddeelnemer, datum, iddagdeel))?.isVoorlopig === false,
+    [absenceMap]
   );
 
   const renderSlot = useCallback(
@@ -1035,7 +1052,11 @@ export function ActivitiesContent({
           <PlannerNevenschermKeuze
             value={nevenscherm}
             onChange={setNevenscherm}
-            keuzes={data.isManager ? ['geen', 'maand', 'capaciteit'] : ['geen', 'maand']}
+            keuzes={
+              data.isManager
+                ? ['geen', 'maand', 'capaciteit', 'locatie']
+                : ['geen', 'maand', 'locatie']
+            }
             naastElkaar={naastElkaar}
             monthLabel={monthLabel}
           />
@@ -1169,6 +1190,14 @@ export function ActivitiesContent({
             ) : null}
             {paneel === 'capaciteit' ? (
               <CapacityOverviewPanel groupId={groupId} data={data} weekStart={weekStart} />
+            ) : null}
+            {paneel === 'locatie' ? (
+              <LocatieSpecialismenPanel
+                data={data}
+                weekStart={weekStart}
+                slots={slots}
+                isAfwezig={isAfwezig}
+              />
             ) : null}
           </div>
         ) : null}

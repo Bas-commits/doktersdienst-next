@@ -3,14 +3,18 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { BsCalculator } from 'react-icons/bs';
 import { authClient } from '@/lib/auth-client';
 import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { downloadUrentellingWorkbook } from '@/lib/urentelling-export';
+import {
+  downloadDeelnemerWorkbook,
+  downloadUrentellingWorkbook,
+  naamVoorBestandsnaam,
+} from '@/lib/urentelling-export';
 import type {
   UrentellingColumn,
   UrentellingCommitmentCell,
@@ -173,6 +177,8 @@ export default function UrentellingPage() {
   const [responseTot, setResponseTot] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  // Per arts, niet een enkele vlag: anders gaan bij een klik alle knoppen in de tabel op slot.
+  const [downloadingDeelnemerId, setDownloadingDeelnemerId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedDeelnemerIds, setExpandedDeelnemerIds] = useState<Set<number>>(new Set());
 
@@ -301,6 +307,32 @@ export default function UrentellingPage() {
       setError(err instanceof Error ? err.message : 'Kon Excel-bestand niet downloaden');
     } finally {
       setDownloading(false);
+    }
+  }
+
+  /**
+   * Haalt het bestand van een enkele arts op.
+   *
+   * Neemt de periode die op dat moment in het scherm staat, zonder eigen keuzevenster. De knop
+   * zit in een tabelrij naast het uitklappijltje, en de periode is net boven de tabel ingesteld;
+   * een venster ertussen zou vragen wat er al beantwoord is.
+   */
+  async function handleDownloadDeelnemer(row: UrentellingRow) {
+    if (responseVan == null || responseTot == null) return;
+    const filename = `urentelling-${naamVoorBestandsnaam(row.naam)}-${formatDateForFilename(responseVan)}-${formatDateForFilename(responseTot)}.xlsx`;
+    setDownloadingDeelnemerId(row.iddeelnemer);
+    try {
+      await downloadDeelnemerWorkbook({
+        filename,
+        naam: row.naam,
+        van: responseVan,
+        tot: responseTot,
+        details: detailsByDeelnemer.get(row.iddeelnemer) ?? [],
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kon Excel-bestand niet downloaden');
+    } finally {
+      setDownloadingDeelnemerId(null);
     }
   }
 
@@ -456,6 +488,28 @@ export default function UrentellingPage() {
                                   ) : (
                                     <ChevronRight className="size-4" aria-hidden />
                                   )}
+                                </button>
+                                {/*
+                                  Naast het uitklappijltje, want het levert precies de regels die
+                                  dat pijltje laat zien. Ook zichtbaar als de rij dicht staat: wie
+                                  het bestand wil doorsturen hoeft dan niet eerst uit te klappen.
+                                */}
+                                <button
+                                  type="button"
+                                  onClick={() => void handleDownloadDeelnemer(row)}
+                                  disabled={
+                                    rowDetails.length === 0 ||
+                                    downloadingDeelnemerId === row.iddeelnemer
+                                  }
+                                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                                  aria-label={`Download de diensten van ${row.naam} als Excel-bestand`}
+                                  title={
+                                    rowDetails.length === 0
+                                      ? 'Geen diensten in deze periode'
+                                      : 'Download de diensten van deze arts als Excel-bestand'
+                                  }
+                                >
+                                  <Download className="size-4" aria-hidden />
                                 </button>
                                 <button
                                   type="button"

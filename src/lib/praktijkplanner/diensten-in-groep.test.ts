@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groepPlantDiensten } from './diensten-in-groep';
+import { dokterAfwezigheidsschermTitel, groepPlantDiensten } from './diensten-in-groep';
 import type { PraktijkplannerTaskType } from '@/types/praktijkplanner';
 
 function taak(overrides: Partial<PraktijkplannerTaskType> = {}): PraktijkplannerTaskType {
@@ -25,5 +25,12 @@ describe('groepPlantDiensten', () => {
 
   it('is waar zodra een taaktype een dienst is', () => {
     expect(groepPlantDiensten([taak(), taak({ id: 2, isDienst: true })])).toBe(true);
+  });
+});
+
+describe('dokterAfwezigheidsschermTitel', () => {
+  it('noemt de dienstvoorkeur alleen als de groep diensten plant', () => {
+    expect(dokterAfwezigheidsschermTitel(true)).toBe('Afwezigheids- en dienstvoorkeur');
+    expect(dokterAfwezigheidsschermTitel(false)).toBe('Afwezigheidsplanner dokter');
   });
 });

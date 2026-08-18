@@ -33,11 +33,16 @@ export function PraktijkplannerPage({
   title,
   children,
 }: {
-  title: string;
+  /**
+   * De naam van het scherm. Als functie wanneer de naam van de waarneemgroep afhangt; die
+   * wordt dan pas geroepen als de gegevens er zijn, en met null zolang dat niet zo is.
+   */
+  title: string | ((data: PraktijkplannerPageContext['data'] | null) => string);
   children: (context: PraktijkplannerPageContext) => ReactNode;
 }) {
   const context = usePraktijkplannerContext();
   const [titleAsideSlot, setTitleAsideSlot] = useState<HTMLElement | null>(null);
+  const schermnaam = typeof title === 'string' ? title : title(context.data ?? null);
 
   if (context.loading) {
     return (
@@ -52,7 +57,7 @@ export function PraktijkplannerPage({
       <div className="p-6">
         <Card className="max-w-2xl">
           <CardHeader>
-            <CardTitle>{title}</CardTitle>
+            <CardTitle>{schermnaam}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-destructive">{context.error ?? 'De Praktijkplanner is niet beschikbaar.'}</p>
@@ -89,7 +94,7 @@ export function PraktijkplannerPage({
           regel en stond daar tegen de rechterrand aangedrukt, met datzelfde gat ervoor.
         */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{schermnaam}</h1>
           {/*
             Leeg als een scherm geen navigatie in de kop zet. Dan valt het blok weg in plaats van
             een lege strook over te houden.

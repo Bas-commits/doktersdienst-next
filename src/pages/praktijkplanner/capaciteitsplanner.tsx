@@ -8,7 +8,12 @@ import {
   type CapacityRequirementSection,
 } from '@/components/praktijkplanner/CapacityRequirementList';
 import { CapacityRegimeModal } from '@/components/praktijkplanner/CapacityRegimeModal';
-import { CAPACITY_WEEKDAYS, CapacityWeekGrid } from '@/components/praktijkplanner/CapacityWeekGrid';
+import {
+  CAPACITY_WEEKDAYS,
+  CapacityWeekGrid,
+  type CapacityWeekday,
+} from '@/components/praktijkplanner/CapacityWeekGrid';
+import { dienstTaakIds } from '@/lib/praktijkplanner/diensten-in-groep';
 import {
   PraktijkplannerPage,
   PraktijkplannerTitleAside,
@@ -23,6 +28,7 @@ import {
 import type {
   PraktijkplannerCapacityCell,
   PraktijkplannerCapacityRegime,
+  PraktijkplannerDaypart,
 } from '@/types/praktijkplanner';
 
 type Requirement = { id: number; aantal: number };
@@ -183,6 +189,33 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
     [data.masterData]
   );
   const heeftGroepsTaken = groepSections[0].items.length > 0;
+
+  /*
+    Op een dagdeel dat de groep heeft uitgezet mag alleen een dienst staan, net als in de
+    Activiteiten planner. De eis erbij hoort dus ook te kunnen, anders is nergens te zien dat
+    er 's nachts iemand nodig is. Alles wat geen dienst is blijft daar weg.
+  */
+  const diensten = useMemo(() => dienstTaakIds(data.masterData.tasks), [data.masterData.tasks]);
+  const alleenDienstSecties = useCallback(
+    (secties: CapacityRequirementSection[]): CapacityRequirementSection[] =>
+      secties
+        .filter((sectie) => sectie.key === 'tasks')
+        .map((sectie) => ({
+          ...sectie,
+          items: sectie.items.filter((item) => diensten.has(item.id)),
+        })),
+    [diensten]
+  );
+  const dienstSections = useMemo(
+    () => alleenDienstSecties(requirementSections),
+    [alleenDienstSecties, requirementSections]
+  );
+  const dienstGroepSections = useMemo(
+    () => alleenDienstSecties(groepSections),
+    [alleenDienstSecties, groepSections]
+  );
+  const heeftDienstEisen =
+    (dienstSections[0]?.items.length ?? 0) > 0 || (dienstGroepSections[0]?.items.length ?? 0) > 0;
 
   const gekozenRegime = useMemo(
     () => regimes.find((regime) => regime.id === regimeId) ?? null,
@@ -435,6 +468,103 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
           ? 'Opslaan mislukt'
           : null;
 
+  /*
+    Hetzelfde vakje voor een gewoon dagdeel en voor een dagdeel dat de groep heeft uitgezet.
+    Het verschil is alleen welke eisen er in mogen: op zo'n dagdeel staan alleen diensten,
+    en dan zegt een aantal dokters niets.
+  */
+  function capaciteitsVakje(
+    weekday: CapacityWeekday,
+    daypart: PraktijkplannerDaypart,
+    alleenDiensten: boolean
+  ) {
+    const secties = alleenDiensten ? dienstSections : requirementSections;
+    const groepsSecties = alleenDiensten ? dienstGroepSections : groepSections;
+    const toonGroepsblok = alleenDiensten
+      ? (dienstGroepSections[0]?.items.length ?? 0) > 0
+      : heeftGroepsTaken;
+    const key = keyFor(weekday.id, daypart.id);
+    const cell = cells.get(key);
+    if (!cell) return null;
+    const normaalCell = normalCells?.get(key) ?? null;
+    const groepCell = groepCells.get(key);
+    const normaalGroepCell = normalGroepCells?.get(key) ?? null;
+    return (
+      <div className="space-y-1.5">
+      <CapacityRequirementList
+        mode="edit"
+        toonAantalDeelnemers={!alleenDiensten}
+        normaal={
+          normaalCell
+            ? {
+                aantalDeelnemers: normaalCell.aantalDeelnemers,
+                getValue: (sectionKey, itemId) =>
+                  requirementValue(
+                    normaalCell[sectionKey as RequirementField] as Requirement[],
+                    itemId
+                  ),
+              }
+            : undefined
+        }
+        aantalDeelnemers={cell.aantalDeelnemers}
+        onAantalDeelnemersChange={(value) =>
+          updateCell(key, (current) => ({ ...current, aantalDeelnemers: value }))
+        }
+        sections={secties}
+        getValue={(sectionKey, itemId) =>
+          requirementValue(cell[sectionKey as RequirementField] as Requirement[], itemId)
+        }
+        onValueChange={(sectionKey, itemId, value) => {
+          const field = sectionKey as RequirementField;
+          updateCell(key, (current) => ({
+            ...current,
+            [field]: setRequirement(current[field] as Requirement[], itemId, value),
+          }));
+        }}
+      />
+      {toonGroepsblok && groepCell ? (
+        <div className="rounded border border-dashed border-border bg-muted/30 p-1.5">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Hele groep
+          </p>
+          <CapacityRequirementList
+            mode="edit"
+            toonAantalDeelnemers={false}
+            normaal={
+              normaalGroepCell
+                ? {
+                    aantalDeelnemers: normaalGroepCell.aantalDeelnemers,
+                    getValue: (sectionKey, itemId) =>
+                      requirementValue(
+                        normaalGroepCell[sectionKey as RequirementField] as Requirement[],
+                        itemId
+                      ),
+                  }
+                : undefined
+            }
+            aantalDeelnemers={0}
+            onAantalDeelnemersChange={() => undefined}
+            sections={groepsSecties}
+            getValue={(sectionKey, itemId) =>
+              requirementValue(
+                groepCell[sectionKey as RequirementField] as Requirement[],
+                itemId
+              )
+            }
+            onValueChange={(sectionKey, itemId, value) => {
+              const field = sectionKey as RequirementField;
+              updateGroepCell(key, (current) => ({
+                ...current,
+                [field]: setRequirement(current[field] as Requirement[], itemId, value),
+              }));
+            }}
+          />
+        </div>
+      ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <PraktijkplannerTitleAside>
@@ -516,87 +646,10 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
             isCellUnavailable={(weekday, daypart) =>
               !isDaypartSchedulable(data.masterData.schedulableDayparts ?? [], weekday.id, daypart.id)
             }
-            renderCell={(weekday, daypart) => {
-              const key = keyFor(weekday.id, daypart.id);
-              const cell = cells.get(key);
-              if (!cell) return null;
-              const normaalCell = normalCells?.get(key) ?? null;
-              const groepCell = groepCells.get(key);
-              const normaalGroepCell = normalGroepCells?.get(key) ?? null;
-              return (
-                <div className="space-y-1.5">
-                <CapacityRequirementList
-                  mode="edit"
-                  normaal={
-                    normaalCell
-                      ? {
-                          aantalDeelnemers: normaalCell.aantalDeelnemers,
-                          getValue: (sectionKey, itemId) =>
-                            requirementValue(
-                              normaalCell[sectionKey as RequirementField] as Requirement[],
-                              itemId
-                            ),
-                        }
-                      : undefined
-                  }
-                  aantalDeelnemers={cell.aantalDeelnemers}
-                  onAantalDeelnemersChange={(value) =>
-                    updateCell(key, (current) => ({ ...current, aantalDeelnemers: value }))
-                  }
-                  sections={requirementSections}
-                  getValue={(sectionKey, itemId) =>
-                    requirementValue(cell[sectionKey as RequirementField] as Requirement[], itemId)
-                  }
-                  onValueChange={(sectionKey, itemId, value) => {
-                    const field = sectionKey as RequirementField;
-                    updateCell(key, (current) => ({
-                      ...current,
-                      [field]: setRequirement(current[field] as Requirement[], itemId, value),
-                    }));
-                  }}
-                />
-                {heeftGroepsTaken && groepCell ? (
-                  <div className="rounded border border-dashed border-border bg-muted/30 p-1.5">
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Hele groep
-                    </p>
-                    <CapacityRequirementList
-                      mode="edit"
-                      toonAantalDeelnemers={false}
-                      normaal={
-                        normaalGroepCell
-                          ? {
-                              aantalDeelnemers: normaalGroepCell.aantalDeelnemers,
-                              getValue: (sectionKey, itemId) =>
-                                requirementValue(
-                                  normaalGroepCell[sectionKey as RequirementField] as Requirement[],
-                                  itemId
-                                ),
-                            }
-                          : undefined
-                      }
-                      aantalDeelnemers={0}
-                      onAantalDeelnemersChange={() => undefined}
-                      sections={groepSections}
-                      getValue={(sectionKey, itemId) =>
-                        requirementValue(
-                          groepCell[sectionKey as RequirementField] as Requirement[],
-                          itemId
-                        )
-                      }
-                      onValueChange={(sectionKey, itemId, value) => {
-                        const field = sectionKey as RequirementField;
-                        updateGroepCell(key, (current) => ({
-                          ...current,
-                          [field]: setRequirement(current[field] as Requirement[], itemId, value),
-                        }));
-                      }}
-                    />
-                  </div>
-                ) : null}
-                </div>
-              );
-            }}
+            renderCell={(weekday, daypart) => capaciteitsVakje(weekday, daypart, false)}
+            renderUnavailableCell={(weekday, daypart) =>
+              heeftDienstEisen ? capaciteitsVakje(weekday, daypart, true) : null
+            }
           />
         </>
       )}

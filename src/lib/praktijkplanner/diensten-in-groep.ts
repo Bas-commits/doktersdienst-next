@@ -21,3 +21,19 @@ export function groepPlantDiensten(tasks: readonly PraktijkplannerTaskType[]): b
 export function dokterAfwezigheidsschermTitel(plantDiensten: boolean): string {
   return plantDiensten ? 'Afwezigheids- en dienstvoorkeur' : 'Afwezigheidsplanner dokter';
 }
+
+/** De taaktypen die een dienst zijn, op id. */
+export function dienstTaakIds(tasks: readonly PraktijkplannerTaskType[]): Set<number> {
+  return new Set(tasks.filter((taak) => taak.isDienst).map((taak) => taak.id));
+}
+
+/**
+ * Hoort deze regel uit het capaciteitsoverzicht bij een diensttaak?
+ *
+ * De sleutels komen van de server en zien eruit als "taak:12" of "groepstaak:12". Op een
+ * dagdeel dat de groep heeft uitgezet zijn dit de enige regels die er mogen staan.
+ */
+export function isDiensteis(key: string, diensten: ReadonlySet<number>): boolean {
+  const [soort, id] = key.split(':');
+  return (soort === 'taak' || soort === 'groepstaak') && diensten.has(Number(id));
+}

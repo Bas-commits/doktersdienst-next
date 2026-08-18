@@ -44,6 +44,11 @@ type EditableProps = {
 type StatusProps = {
   mode: 'status';
   totaal: PraktijkplannerCapacityComparison;
+  /**
+   * Uit op een dagdeel dat de groep heeft uitgezet. Daar staan alleen diensten, en een aantal
+   * dokters zou daar een eis suggereren die niemand heeft opgegeven.
+   */
+  toonTotaal?: boolean;
   sections: Array<{
     key: string;
     title: string;
@@ -151,13 +156,15 @@ export function CapacityRequirementList(props: CapacityRequirementListProps) {
     );
   }
 
-  const { totaal, sections } = props;
+  const { totaal, sections, toonTotaal = true } = props;
   return (
     <div className="min-w-[140px] space-y-1.5 text-xs">
-      <div className="flex items-center justify-between gap-2 font-medium">
-        <span>Aantal dokters:</span>
-        <StatusBadge comparison={totaal} />
-      </div>
+      {toonTotaal ? (
+        <div className="flex items-center justify-between gap-2 font-medium">
+          <span>Aantal dokters:</span>
+          <StatusBadge comparison={totaal} />
+        </div>
+      ) : null}
       {sections.map((section) =>
         section.items.length === 0 ? null : (
           <div key={section.key} className="space-y-1 border-t border-border/60 pt-1.5">

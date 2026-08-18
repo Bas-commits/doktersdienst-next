@@ -11,6 +11,7 @@ import {
   isDaypartSchedulable,
   weekdagenZonderRooster,
 } from '@/lib/praktijkplanner/schedulable-dayparts';
+import { dienstTaakIds, isDiensteis } from '@/lib/praktijkplanner/diensten-in-groep';
 import type { PraktijkplannerContextData } from '@/hooks/praktijkplanner/usePraktijkplannerContext';
 import type { PraktijkplannerCapacityComparison } from '@/types/praktijkplanner';
 
@@ -199,6 +200,11 @@ export function CapacityOverviewGrid({
       .sort((left, right) => left.volgorde - right.volgorde);
   }, [data.masterData.dayparts, data.masterData.schedulableDayparts]);
 
+  const diensten = useMemo(
+    () => dienstTaakIds(data.masterData.tasks),
+    [data.masterData.tasks]
+  );
+
   const weekDates = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
     [weekStart]
@@ -243,6 +249,32 @@ export function CapacityOverviewGrid({
         weekDates[weekday.id - 1] === huidigMoment?.datum &&
         daypart.volgorde === huidigMoment.volgorde
       }
+      /*
+        Een dagdeel dat de groep heeft uitgezet kan wel diensten dragen, en juist daar hoort
+        zichtbaar te zijn dat er iemand nodig is. De rest van het vakje blijft weg: een aantal
+        dokters of een gewone taak hoort hier niet en zou een eis suggereren die niet bestaat.
+      */
+      renderUnavailableCell={(weekday, daypart) => {
+        const cell = cellByKey.get(`${weekDates[weekday.id - 1]}:${daypart.id}`);
+        const dienstEisen = (cell?.taken ?? []).filter((item) => isDiensteis(item.key, diensten));
+        if (dienstEisen.length === 0) return null;
+        return (
+          <div className="space-y-1" data-testid="capaciteit-diensten-buiten-rooster">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Alleen diensten
+            </p>
+            <CapacityRequirementList
+              mode="status"
+              totaal={emptyComparison(
+                `totaal:${weekDates[weekday.id - 1]}:${daypart.id}`,
+                'Aantal deelnemers'
+              )}
+              toonTotaal={false}
+              sections={[{ key: 'taken', title: 'Taken', items: dienstEisen }]}
+            />
+          </div>
+        );
+      }}
       renderCell={(weekday, daypart) => {
         const date = weekDates[weekday.id - 1];
         const cell = cellByKey.get(`${date}:${daypart.id}`);

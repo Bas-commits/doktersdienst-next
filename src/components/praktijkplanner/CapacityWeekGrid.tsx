@@ -30,6 +30,16 @@ type CapacityWeekGridProps = {
   renderCell: (weekday: CapacityWeekday, daypart: PraktijkplannerDaypart) => ReactNode;
   isCellUnavailable?: (weekday: CapacityWeekday, daypart: PraktijkplannerDaypart) => boolean;
   /**
+   * Wat er op een niet-inplanbaar vakje toch te zien is.
+   *
+   * Diensten mogen op zo'n dagdeel wel staan, dus een vakje dat er een draagt heeft meer te
+   * melden dan "Niet inplanbaar". Geeft dit niets terug, dan blijft het bij die tekst.
+   */
+  renderUnavailableCell?: (
+    weekday: CapacityWeekday,
+    daypart: PraktijkplannerDaypart
+  ) => ReactNode;
+  /**
    * Het vakje waar de klok nu in staat. Alleen ingevuld door schermen die echte datums
    * tonen; de capaciteitsplanner is een sjabloon per weekdag en kent geen vandaag.
    */
@@ -44,6 +54,7 @@ export function CapacityWeekGrid({
   weekdayHeaders,
   renderCell,
   isCellUnavailable,
+  renderUnavailableCell,
   isCurrentCell,
   className,
   verborgenWeekdagen,
@@ -95,6 +106,9 @@ export function CapacityWeekGrid({
                 </th>
                 {dagen.map(({ weekday }) => {
                   const unavailable = isCellUnavailable?.(weekday, daypart) ?? false;
+                  const unavailableInhoud = unavailable
+                    ? renderUnavailableCell?.(weekday, daypart)
+                    : null;
                   const isNu = isCurrentCell?.(weekday, daypart) ?? false;
                   return (
                     <td
@@ -107,7 +121,9 @@ export function CapacityWeekGrid({
                         .filter(Boolean)
                         .join(' ')}
                     >
-                      {unavailable ? (
+                      {unavailable && unavailableInhoud ? (
+                        unavailableInhoud
+                      ) : unavailable ? (
                         <button
                           type="button"
                           onClick={() => toast.info(UNAVAILABLE_DAYPART_TOAST)}

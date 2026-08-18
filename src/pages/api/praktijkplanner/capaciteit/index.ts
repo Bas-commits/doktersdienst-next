@@ -8,6 +8,7 @@ import {
 import { parseNonNegativeInteger, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
 import { isDaypartSchedulable } from '@/lib/praktijkplanner/schedulable-dayparts';
 import { loadSchedulableDayparts } from '@/lib/praktijkplanner/schedulable-dayparts-db';
+import { dienstTaaktypeIds } from '@/lib/praktijkplanner/dienst-taaktypen';
 import type { PraktijkplannerCapacityCell } from '@/types/praktijkplanner';
 
 type Data =
@@ -456,28 +457,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       }
     }
 
+    /*
+      Op een dagdeel dat de groep heeft uitgezet mag alleen een dienst staan. Dat is dezelfde
+      uitzondering als in de Activiteiten planner, en zonder de eis erbij zou nergens te zien
+      zijn dat er 's nachts iemand nodig is. Al het andere blijft daar geweigerd.
+    */
     const schedulableMatrix = await loadSchedulableDayparts(accessResult.access.idwaarneemgroep);
+    const diensten = await dienstTaaktypeIds(accessResult.access.idwaarneemgroep);
     for (const cell of alleCellen) {
       if (isDaypartSchedulable(schedulableMatrix, cell.weekdag, cell.iddagdeel)) continue;
-      const hasContent =
+      const anders =
         cell.aantalDeelnemers > 0 ||
         cell.expertises.some((item) => item.aantal > 0) ||
-        cell.tasks.some((item) => item.aantal > 0) ||
+        cell.tasks.some((item) => item.aantal > 0 && !diensten.has(item.id)) ||
         cell.activities.some((item) => item.aantal > 0) ||
         cell.specifications.some((item) => item.aantal > 0);
-      if (hasContent) {
+      if (anders) {
         return res.status(400).json({
-          error: 'Dit dagdeel is niet inplanbaar voor deze weekdag.',
+          error: 'Dit dagdeel is niet inplanbaar voor deze weekdag; alleen een dienst mag hier.',
         });
       }
     }
-
-    const schedulableCells = cells.filter((cell) =>
-      isDaypartSchedulable(schedulableMatrix, cell.weekdag, cell.iddagdeel)
-    );
-    const schedulableGroepCells = (groepCells ?? []).filter((cell) =>
-      isDaypartSchedulable(schedulableMatrix, cell.weekdag, cell.iddagdeel)
-    );
     const updatedAt = new Date().toISOString();
     const updatedBy = accessResult.access.user.id;
 
@@ -486,7 +486,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         idwaarneemgroep: accessResult.access.idwaarneemgroep,
         idplannerlocatie,
         idregime,
-        cells: schedulableCells,
+        cells,
         updatedBy,
         updatedAt,
       });
@@ -495,7 +495,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           idwaarneemgroep: accessResult.access.idwaarneemgroep,
           idplannerlocatie: null,
           idregime,
-          cells: schedulableGroepCells,
+          cells: groepCells,
           updatedBy,
           updatedAt,
         });

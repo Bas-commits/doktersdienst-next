@@ -628,6 +628,22 @@ export function ActivitiesContent({
     [absenceMap, canEdit]
   );
 
+  /**
+   * De taken die de groep als dienst heeft aangemerkt.
+   *
+   * Een nachtdienst valt per definitie buiten de uren waarop iemand werkt, dus de
+   * inroosterbaarheid mag er niet voor gelden. Zonder deze uitzondering is een dienst nergens
+   * neer te zetten waar hij hoort.
+   */
+  const dienstTaakIds = useMemo(
+    () => new Set(data.masterData.tasks.filter((taak) => taak.isDienst).map((taak) => taak.id)),
+    [data.masterData.tasks]
+  );
+  const zetDienstNeer = useMemo(
+    () => selectedTaskIds.some((id) => dienstTaakIds.has(id)),
+    [dienstTaakIds, selectedTaskIds]
+  );
+
   const isCellUnavailable = useCallback(
     ({
       participant,
@@ -637,14 +653,22 @@ export function ActivitiesContent({
       participant: { id: number };
       datum: string;
       daypart: { id: number };
-    }) =>
-      !isDaypartSchedulableForParticipant(
+    }) => {
+      // Wie een dienst in de hand heeft, of leegmaakt, moet overal kunnen klikken.
+      if (zetDienstNeer || clearMode) return false;
+      return !isDaypartSchedulableForParticipant(
         data.masterData.schedulableDayparts ?? [],
         participantMatrixFor(data.masterData.participantSchedulableDayparts ?? [], participant.id),
         datum,
         daypart.id
-      ),
-    [data.masterData.participantSchedulableDayparts, data.masterData.schedulableDayparts]
+      );
+    },
+    [
+      clearMode,
+      data.masterData.participantSchedulableDayparts,
+      data.masterData.schedulableDayparts,
+      zetDienstNeer,
+    ]
   );
 
   const getCellClassName = useCallback(
@@ -804,6 +828,8 @@ export function ActivitiesContent({
         return;
       }
       if (
+        !zetDienstNeer &&
+        !clearMode &&
         !isDaypartSchedulableForParticipant(
           data.masterData.schedulableDayparts ?? [],
           participantMatrixFor(data.masterData.participantSchedulableDayparts ?? [], participant.id),
@@ -991,6 +1017,7 @@ export function ActivitiesContent({
       selectedSpecificationId,
       selectedTaskIds,
       slots,
+      zetDienstNeer,
     ]
   );
 

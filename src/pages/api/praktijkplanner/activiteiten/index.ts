@@ -7,6 +7,7 @@ import {
   sendPraktijkplannerAccessError,
 } from '@/lib/praktijkplanner/access';
 import { isIsoDate, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
+import { dienstTaaktypeIds } from '@/lib/praktijkplanner/dienst-taaktypen';
 import {
   assertDaypartSchedulable,
   SchedulableDaypartError,
@@ -440,22 +441,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       throw new PlannerRequestError('Een gekozen dagdeel bestaat niet.');
     }
 
+    const dienstTaakIds = await dienstTaaktypeIds(accessResult.access.idwaarneemgroep);
+
     for (const mutation of parsed) {
       if (!(await canAccessPraktijkplannerParticipant(accessResult.access, mutation.iddeelnemer, { requireManager: true }))) {
         throw new PlannerRequestError('Een deelnemer hoort niet bij deze waarneemgroep.', 403);
       }
-      try {
-        await assertDaypartSchedulable(
-          accessResult.access.idwaarneemgroep,
-          mutation.datum,
-          mutation.iddagdeel,
-          mutation.iddeelnemer
-        );
-      } catch (error) {
-        if (error instanceof SchedulableDaypartError) {
-          throw new PlannerRequestError(error.message, 400);
+      /*
+        Inroosterbaarheid geldt voor het gewone werk, niet voor een dienst. Een nachtdienst valt
+        per definitie buiten de uren waarop iemand werkt, dus die zou de controle altijd tegen
+        zich krijgen.
+
+        Leegmaken glipt er ook langs. Anders is een dienst op zo'n dagdeel wel neer te zetten en
+        daarna niet meer weg te krijgen, en dat is precies hoe planning eerder onzichtbaar in de
+        database bleef staan.
+      */
+      const bevatDienst = mutation.taskIds.some((id) => dienstTaakIds.has(id));
+      const maaktLeeg =
+        mutation.idactiviteit == null &&
+        mutation.idplannerlocatie == null &&
+        mutation.idbeschikbaarheidstype == null &&
+        mutation.taskIds.length === 0;
+      if (!bevatDienst && !maaktLeeg) {
+        try {
+          await assertDaypartSchedulable(
+            accessResult.access.idwaarneemgroep,
+            mutation.datum,
+            mutation.iddagdeel,
+            mutation.iddeelnemer
+          );
+        } catch (error) {
+          if (error instanceof SchedulableDaypartError) {
+            throw new PlannerRequestError(error.message, 400);
+          }
+          throw error;
         }
-        throw error;
       }
       await assertMasterDataBelongsToGroup(accessResult.access.idwaarneemgroep, mutation);
     }

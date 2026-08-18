@@ -60,6 +60,11 @@ export type PraktijkplannerTaskType = {
   nietLocatieGebonden: boolean;
   /** Collega's kunnen deze taak bellen; het rooster zet er een telefoonicoontje bij. */
   inbelbaar: boolean;
+  /**
+   * Deze taak is een dienst. Mag daarom wel op een dagdeel waarop de arts niet werkt, en
+   * wordt met rust gelaten door herhalen, kopieren en Leegmaken.
+   */
+  isDienst: boolean;
   actief: boolean;
 };
 

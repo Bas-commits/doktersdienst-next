@@ -38,10 +38,10 @@ const specifications = [
 ];
 
 const tasks = [
-  { id: 11, afkorting: 'SV', omschrijving: 'Supervisie', kleur: '#800080', idexpertise: null, actief: true, nietLocatieGebonden: false, inbelbaar: false },
-  { id: 12, afkorting: 'TR', omschrijving: 'Translatie', kleur: '#f59e0b', idexpertise: null, actief: true, nietLocatieGebonden: false, inbelbaar: false },
-  { id: 13, afkorting: 'OP', omschrijving: 'Overleg', kleur: '#0ea5e9', idexpertise: null, actief: true, nietLocatieGebonden: false, inbelbaar: false },
-  { id: 14, afkorting: 'AD', omschrijving: 'Administratie', kleur: '#64748b', idexpertise: null, actief: true, nietLocatieGebonden: false, inbelbaar: false },
+  { id: 11, afkorting: 'SV', omschrijving: 'Supervisie', kleur: '#800080', idexpertise: null, actief: true, nietLocatieGebonden: false, inbelbaar: false, isDienst: false },
+  { id: 12, afkorting: 'TR', omschrijving: 'Translatie', kleur: '#f59e0b', idexpertise: null, actief: true, nietLocatieGebonden: false, inbelbaar: false, isDienst: false },
+  { id: 13, afkorting: 'OP', omschrijving: 'Overleg', kleur: '#0ea5e9', idexpertise: null, actief: true, nietLocatieGebonden: false, inbelbaar: false, isDienst: false },
+  { id: 14, afkorting: 'AD', omschrijving: 'Administratie', kleur: '#64748b', idexpertise: null, actief: true, nietLocatieGebonden: false, inbelbaar: false, isDienst: false },
 ];
 
 const locations = [

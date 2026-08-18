@@ -118,6 +118,7 @@ export async function getPraktijkplannerMasterData(
         idexpertise: schema.taaktypen.idexpertise,
         nietLocatieGebonden: schema.taaktypen.nietLocatieGebonden,
         inbelbaar: schema.taaktypen.inbelbaar,
+        isDienst: schema.taaktypen.isDienst,
         verwijderd: schema.taaktypen.verwijderd,
       })
       .from(schema.taaktypen)
@@ -230,6 +231,7 @@ export async function getPraktijkplannerMasterData(
         nietLocatieGebonden: row.nietLocatieGebonden === true,
         // Zelfde verhaal als hierboven: leeg betekent niet inbelbaar.
         inbelbaar: row.inbelbaar === true,
+        isDienst: row.isDienst === true,
         actief: row.verwijderd !== 1,
       })),
     locations: locationRows

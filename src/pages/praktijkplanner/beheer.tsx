@@ -39,7 +39,7 @@ const TABS: Array<{ id: BeheerTab; label: string }> = [
 ];
 
 function initialForm(): Form {
-  return { actief: true, nietLocatieGebonden: false, inbelbaar: false };
+  return { actief: true, nietLocatieGebonden: false, inbelbaar: false, isDienst: false };
 }
 
 function getItems(masterData: PraktijkplannerMasterData, entity: Entity) {
@@ -191,6 +191,7 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
       actief: item.actief !== false,
       nietLocatieGebonden: item.nietLocatieGebonden === true,
       inbelbaar: item.inbelbaar === true,
+      isDienst: item.isDienst === true,
       omschrijving: String(item.omschrijving ?? ''),
       naam: String(item.naam ?? ''),
       afkorting: String(item.afkorting ?? ''),
@@ -513,6 +514,23 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
                   Voor taken waarbij collega&apos;s de dienstdoende dokter mogen bellen, zoals een extern
                   consult. In het rooster komt er dan een telefoonicoontje bij te staan. Het nummer
                   hoeft u hier niet in te vullen, dat staat al bij de dokter zelf.
+                </span>
+              </span>
+            </label>
+          ) : null}
+          {entity === 'task' ? (
+            <label className="flex items-start gap-2 text-sm md:col-span-2">
+              <Checkbox
+                className="mt-0.5"
+                checked={form.isDienst === true}
+                onCheckedChange={(value) => setForm((current) => ({ ...current, isDienst: !!value }))}
+              />
+              <span className="grid gap-0.5">
+                <Label className="cursor-pointer">Dit is een dienst</Label>
+                <span className="text-xs text-muted-foreground">
+                  Zo&apos;n taak mag ook op een dagdeel waarop de dokter normaal niet werkt, want een
+                  nachtdienst valt daar altijd buiten. Herhalen, een week kopi&euml;ren en Leegmaken
+                  laten hem staan: een dienst haalt u alleen weg door hem zelf aan te klikken.
                 </span>
               </span>
             </label>

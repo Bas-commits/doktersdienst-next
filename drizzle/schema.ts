@@ -166,6 +166,7 @@ export const taaktypen = pgTable("taaktypen", {
 	nietLocatieGebonden: boolean("niet_locatie_gebonden"),
 	deelnemer2Mogelijk: boolean(),
 	inbelbaar: boolean(),
+	isDienst: boolean("is_dienst"),
 });
 
 export const specialismen = pgTable("specialismen", {

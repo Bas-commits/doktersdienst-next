@@ -1,0 +1,14 @@
+-- Een dienst wordt in de Praktijkplanner een gewone taak op een dagdeel. Dat is de hele
+-- gedachte: de concurrent doet het zo, en een planner die met taakblokken werkt hoeft dan
+-- geen tweede systeem te leren. Maar dan moet de code wel weten welke taak een dienst is,
+-- en dat wist ze niet. "Dienst" was tot nu toe een naam die iemand had ingetypt.
+--
+-- Twee regels hangen aan dit vinkje en allebei zijn het uitzonderingen:
+--   * Een gewone taak mag niet op een dagdeel waarop de arts niet werkt. Een dienst wel,
+--     want een nachtdienst valt per definitie buiten de werktijden.
+--   * Herhalen, een week kopieren en Leegmaken laten een dienst met rust. Een dienst is
+--     bewust neergezet en hoort alleen te verdwijnen als iemand hem zelf aanklikt.
+--
+-- Het staat op het taaktype en niet op de losse planning, net als niet_locatie_gebonden en
+-- inbelbaar. Of iets een dienst is, is een eigenschap van het soort werk.
+ALTER TABLE "taaktypen" ADD COLUMN IF NOT EXISTS "is_dienst" boolean;

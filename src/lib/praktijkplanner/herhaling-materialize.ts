@@ -64,3 +64,30 @@ export function buildMaterializePlans(input: {
   }
   return plans;
 }
+
+/**
+ * Haalt diensten uit de plannen die een herhaling of een kopieeractie gaat wegschrijven.
+ *
+ * Een herhaling zet het gewone weekpatroon neer. Een dienst staat er juist omdat iemand hem daar
+ * bewust heeft neergezet, dus meenemen zou betekenen dat de reeks diensten verzint voor weken
+ * waar niemand naar kijkt. Een dagdeel waar alleen een dienst stond levert daardoor niets op en
+ * blijft in de doelweek leeg.
+ */
+export function plannenZonderDiensten(
+  plans: MaterializeSlotPlan[],
+  dienstTaaktypen: ReadonlySet<number>
+): MaterializeSlotPlan[] {
+  if (dienstTaaktypen.size === 0) return plans;
+  return plans
+    .map((plan) => ({
+      ...plan,
+      tasks: plan.tasks.filter((taak) => !dienstTaaktypen.has(taak.idtaaktype)),
+    }))
+    .filter(
+      (plan) =>
+        plan.idactiviteit != null ||
+        plan.idplannerlocatie != null ||
+        plan.idbeschikbaarheidstype != null ||
+        plan.tasks.length > 0
+    );
+}

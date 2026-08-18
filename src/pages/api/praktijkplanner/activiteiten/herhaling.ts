@@ -7,8 +7,10 @@ import {
   sendPraktijkplannerAccessError,
 } from '@/lib/praktijkplanner/access';
 import { addDays, isIsoDate, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
+import { dienstTaaktypeIds } from '@/lib/praktijkplanner/dienst-taaktypen';
 import {
   buildMaterializePlans,
+  plannenZonderDiensten,
   occurrenceKey,
   type PlannerTemplate,
 } from '@/lib/praktijkplanner/herhaling-materialize';
@@ -321,9 +323,30 @@ async function collectTargetPlanningIds(
         or(...weekFilters)
       )
     );
-  return candidates
+  const ids = candidates
     .map((candidate) => candidate.id)
     .filter((id): id is number => id != null && !ignored.has(id));
+  if (ids.length === 0) return ids;
+
+  /*
+    Planning met een dienst telt hier niet mee, en dat werkt twee kanten op omdat deze lijst
+    twee dingen voedt: wat er in de doelweken wordt weggegooid, en de botsingscontrole die met
+    een 409 afbreekt. Zonder deze uitzondering zou een herhaling een dienst overschrijven, of
+    zou een enkele nachtdienst de hele reeks blokkeren met de melding dat er al planning staat.
+  */
+  const dienstIds = await dienstTaaktypeIds(idwaarneemgroep);
+  if (dienstIds.size === 0) return ids;
+  const metDienst = await db
+    .select({ idplanning: schema.planningtaak.idplanning })
+    .from(schema.planningtaak)
+    .where(
+      and(
+        inArray(schema.planningtaak.idplanning, ids),
+        inArray(schema.planningtaak.idtaaktype, [...dienstIds])
+      )
+    );
+  const beschermd = new Set(metDienst.flatMap((rij) => (rij.idplanning == null ? [] : [rij.idplanning])));
+  return ids.filter((id) => !beschermd.has(id));
 }
 
 async function assertNoTargetCollision(
@@ -379,12 +402,19 @@ async function materializeSeriesWithTx(
     });
   }
 
-  const plans = buildMaterializePlans({
+  const alleplans = buildMaterializePlans({
     sourceStart: input.sourceStart,
     targetStarts: input.targetStarts,
     templates: input.templates,
     skipKeys: input.skipKeys,
   });
+  // Het filter staat hier en niet bij het opbouwen van de sjablonen, omdat er twee bronnen zijn
+  // (de bronweek en de opgeslagen bronslots van een bestaande reeks) en dit de plek is waar ze
+  // allebei langskomen.
+  const plans = plannenZonderDiensten(
+    alleplans,
+    await dienstTaaktypeIds(input.idwaarneemgroep)
+  );
   const schedulableMatrix = await loadSchedulableDayparts(input.idwaarneemgroep);
   const participantRows = await loadParticipantSchedulableDayparts(
     input.idwaarneemgroep,

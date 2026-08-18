@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildMaterializePlans,
   occurrenceKey,
+  plannenZonderDiensten,
   templateDayOffset,
   type PlannerTemplate,
 } from './herhaling-materialize';
@@ -54,5 +55,46 @@ describe('herhaling-materialize', () => {
     });
     expect(plans).toHaveLength(1);
     expect(plans[0]).toMatchObject({ datum: '2026-07-20', iddagdeel: 2 });
+  });
+
+  it('laat diensten niet meereizen naar de doelweken', () => {
+    const plans = buildMaterializePlans({
+      sourceStart: '2026-07-13',
+      targetStarts: ['2026-07-20'],
+      templates: [
+        template({ iddagdeel: 1, tasks: [{ idtaaktype: 3, positie: 1 }] }),
+        template({
+          iddagdeel: 4,
+          idactiviteit: null,
+          tasks: [{ idtaaktype: 50, positie: 1 }],
+        }),
+        template({
+          iddagdeel: 2,
+          idactiviteit: 10,
+          tasks: [
+            { idtaaktype: 50, positie: 1 },
+            { idtaaktype: 3, positie: 2 },
+          ],
+        }),
+      ],
+    });
+
+    const overgebleven = plannenZonderDiensten(plans, new Set([50]));
+
+    // Het dagdeel met alleen een dienst valt weg; het dagdeel met een activiteit blijft,
+    // maar zonder de dienst erin.
+    expect(overgebleven.map((plan) => plan.iddagdeel).sort()).toEqual([1, 2]);
+    expect(overgebleven.flatMap((plan) => plan.tasks.map((taak) => taak.idtaaktype))).toEqual([
+      3, 3,
+    ]);
+  });
+
+  it('laat de plannen ongemoeid als de groep geen diensttaken heeft', () => {
+    const plans = buildMaterializePlans({
+      sourceStart: '2026-07-13',
+      targetStarts: ['2026-07-20'],
+      templates: [template()],
+    });
+    expect(plannenZonderDiensten(plans, new Set())).toBe(plans);
   });
 });

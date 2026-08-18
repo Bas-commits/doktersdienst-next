@@ -78,7 +78,8 @@ export type PraktijkplannerTaskType = {
   inbelbaar: boolean;
   /**
    * Deze taak is een dienst. Mag daarom wel op een dagdeel waarop de arts niet werkt, en
-   * wordt met rust gelaten door herhalen, kopieren en Leegmaken.
+   * wordt met rust gelaten door herhalen en een week kopieren. Leegmaken haalt hem wel weg,
+   * want anders is een dienst die er per ongeluk staat nergens meer vanaf te krijgen.
    */
   isDienst: boolean;
   actief: boolean;

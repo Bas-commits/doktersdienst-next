@@ -3,9 +3,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { TriangleAlert } from 'lucide-react';
+import { DIENSTVOORKEUR_WEERGAVE } from './PlannerDienstvoorkeurMark';
 import { absentieTekst } from '@/lib/praktijkplanner/absentie-tekst';
 import { afwijkingTekst, herhalingWeekLabel } from '@/lib/praktijkplanner/herhaling-tekst';
 import { cn } from '@/lib/utils';
+import type { PraktijkplannerDienstvoorkeurWaarde } from '@/types/praktijkplanner';
 
 const CURSOR_GAP = 50;
 const VIEWPORT_PAD = 8;
@@ -81,6 +83,7 @@ export function PlannerDaypartHoverPreview({
   activityName,
   locationName,
   absence,
+  dienstvoorkeur,
   availabilityName,
   taskNames,
   showPlanningDetails = true,
@@ -109,6 +112,8 @@ export function PlannerDaypartHoverPreview({
    * veld en geen twee vlaggen, want aangevraagd en goedgekeurd sluiten elkaar uit.
    */
   absence?: { type: string | null; aangevraagd: boolean } | null;
+  /** De dienstvoorkeur op dit dagdeel. Staat los van de afwezigheid; beide kunnen er zijn. */
+  dienstvoorkeur?: PraktijkplannerDienstvoorkeurWaarde | null;
   availabilityName?: string | null;
   /** De taken voluit: de omschrijving van elk taaktype, niet de afkorting. */
   taskNames?: string[];
@@ -308,6 +313,21 @@ export function PlannerDaypartHoverPreview({
                     ) : null}
                     <span className="font-medium">
                       {absentieTekst(absence.type, absence.aangevraagd)}
+                    </span>
+                  </div>
+                ) : null}
+                {dienstvoorkeur ? (
+                  <div
+                    className="flex items-start gap-1.5 rounded-md bg-muted p-2"
+                    data-testid="hover-dienstvoorkeur"
+                  >
+                    <span
+                      className="mt-0.5 size-3.5 shrink-0 rounded"
+                      style={{ background: DIENSTVOORKEUR_WEERGAVE[dienstvoorkeur].kleur }}
+                      aria-hidden
+                    />
+                    <span className="font-medium">
+                      {DIENSTVOORKEUR_WEERGAVE[dienstvoorkeur].label}
                     </span>
                   </div>
                 ) : null}

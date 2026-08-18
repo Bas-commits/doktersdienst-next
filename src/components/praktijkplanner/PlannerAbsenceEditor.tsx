@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { PraktijkplannerTitleAside, type PraktijkplannerPageContext } from './PraktijkplannerPage';
 import { AbsenceDaypartCell } from './AbsenceDaypartCell';
 import { PlannerDaypartHoverPreview } from './PlannerDaypartHoverPreview';
+import { PlannerDienstvoorkeurConflictModal } from './PlannerDienstvoorkeurConflictModal';
+import { DIENSTVOORKEUR_WEERGAVE, PlannerDienstvoorkeurMark } from './PlannerDienstvoorkeurMark';
 import { absenceDisplayBackground, absenceDisplayColor, absenceForegroundIconPath, absencePaletteIconPath, DAYPART_ICONS, sortAbsenceTypesForPalette } from './absence-icons';
 import { PlannerChipPalette } from './PlannerChipPalette';
 import type { PlannerCursorTool } from './PlannerCursorTool';
@@ -22,6 +24,7 @@ import { Label } from '@/components/ui/label';
 import { usePlannerHolidayData } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import { usePlannerWeergave } from '@/hooks/praktijkplanner/usePlannerWeergave';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { groepPlantDiensten } from '@/lib/praktijkplanner/diensten-in-groep';
 import {
   zichtbareDagdelen,
 } from '@/lib/praktijkplanner/dagdeel-zichtbaarheid';
@@ -43,7 +46,12 @@ import {
   participantMatrixFor,
   weekdagenZonderRooster,
 } from '@/lib/praktijkplanner/schedulable-dayparts';
-import type { PraktijkplannerAbsenceSlot, PraktijkplannerDaypart } from '@/types/praktijkplanner';
+import type {
+  PraktijkplannerAbsenceSlot,
+  PraktijkplannerDaypart,
+  PraktijkplannerDienstvoorkeur,
+  PraktijkplannerDienstvoorkeurWaarde,
+} from '@/types/praktijkplanner';
  
 
 
@@ -64,6 +72,17 @@ function participantName(participant: PraktijkplannerPageContext['data']['partic
 
 const REMOVE_PALETTE_ID = '__remove_absence__';
 const REMOVE_PALETTE_ICON = <Trash2 aria-hidden />;
+const DIENST_PALETTE_IDS: Record<PraktijkplannerDienstvoorkeurWaarde, string> = {
+  graag: '__dienst_graag__',
+  liever_niet: '__dienst_liever_niet__',
+};
+
+function dienstvoorkeurVanPaletteId(
+  id: number | string
+): PraktijkplannerDienstvoorkeurWaarde | null {
+  const waarden = Object.keys(DIENST_PALETTE_IDS) as PraktijkplannerDienstvoorkeurWaarde[];
+  return waarden.find((waarde) => DIENST_PALETTE_IDS[waarde] === id) ?? null;
+}
 
 function provisionalPaletteId(typeId: number) {
   return `${typeId}__provisional`;
@@ -106,6 +125,14 @@ export function PlannerAbsenceEditor({
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
   const [isVoorlopig, setIsVoorlopig] = useState(isDoctorMode);
   const [clearMode, setClearMode] = useState(false);
+  const [dienstKeuze, setDienstKeuze] = useState<PraktijkplannerDienstvoorkeurWaarde | null>(
+    null
+  );
+  const [voorkeuren, setVoorkeuren] = useState<PraktijkplannerDienstvoorkeur[]>([]);
+  const [conflict, setConflict] = useState<{
+    melding: string;
+    beslis: (akkoord: boolean) => void;
+  } | null>(null);
   const [emailParticipantId, setEmailParticipantId] = useState<number | null>(null);
   const [showNight, setShowNight] = useState(false);
   const [zoom, setZoom] = useState(100);
@@ -149,6 +176,12 @@ export function PlannerAbsenceEditor({
       { toonAvondNacht: showNight }
     );
   }, [data.masterData.dayparts, data.masterData.schedulableDayparts, showNight]);
+
+  // Dezelfde afleiding waar de naam van dit scherm op steunt, zie diensten-in-groep.
+  const heeftDienstTaken = useMemo(
+    () => groepPlantDiensten(data.masterData.tasks),
+    [data.masterData.tasks]
+  );
 
   useEffect(() => {
     if (emailParticipantId != null || data.participants.length === 0) return;
@@ -228,9 +261,58 @@ export function PlannerAbsenceEditor({
 
   useEffect(() => loadSlots(), [loadSlots]);
 
+  const voorkeurenUrl = useMemo(
+    () =>
+      `/api/praktijkplanner/dienstvoorkeuren?idwaarneemgroep=${groupId}&start=${range.start}&end=${range.end}` +
+      (isDoctorMode ? `&iddeelnemer=${data.userId}` : ''),
+    [data.userId, groupId, isDoctorMode, range.end, range.start]
+  );
+
+  const refreshVoorkeuren = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!heeftDienstTaken) return;
+      const response = await fetch(voorkeurenUrl, { credentials: 'include', signal });
+      const payload = (await response.json()) as {
+        voorkeuren?: PraktijkplannerDienstvoorkeur[];
+        error?: string;
+      };
+      if (!response.ok || !payload.voorkeuren) {
+        throw new Error(payload.error || 'De dienstvoorkeuren konden niet worden geladen.');
+      }
+      if (!signal?.aborted) setVoorkeuren(payload.voorkeuren);
+    },
+    [heeftDienstTaken, voorkeurenUrl]
+  );
+
+  useEffect(() => {
+    if (!heeftDienstTaken) {
+      setVoorkeuren([]);
+      return;
+    }
+    const abortController = new AbortController();
+    refreshVoorkeuren(abortController.signal).catch((error: unknown) => {
+      if (abortController.signal.aborted) return;
+      toast.error(
+        error instanceof Error ? error.message : 'De dienstvoorkeuren konden niet worden geladen.'
+      );
+    });
+    return () => abortController.abort();
+  }, [heeftDienstTaken, refreshVoorkeuren]);
+
   const slotMap = useMemo(
     () => new Map(slots.map((slot) => [keyFor(slot.iddeelnemer, slot.datum, slot.iddagdeel), slot])),
     [slots]
+  );
+
+  const voorkeurMap = useMemo(
+    () =>
+      new Map(
+        voorkeuren.map((voorkeur) => [
+          keyFor(voorkeur.iddeelnemer, voorkeur.datum, voorkeur.iddagdeel),
+          voorkeur.voorkeur,
+        ])
+      ),
+    [voorkeuren]
   );
 
   /*
@@ -303,7 +385,8 @@ export function PlannerAbsenceEditor({
       daypart: PraktijkplannerDaypart
     ) => {
       const { absence, provisional } = resolveAbsence(participant.id, datum, daypart.id);
-      if (!absence) {
+      const voorkeur = voorkeurMap.get(keyFor(participant.id, datum, daypart.id)) ?? null;
+      if (!absence && !voorkeur) {
         if (isDoctorMode) {
           const icon = DAYPART_ICONS[daypart.volgorde];
           return icon ? (
@@ -315,27 +398,38 @@ export function PlannerAbsenceEditor({
         return null;
       }
 
-      const cell = (
-        <AbsenceDaypartCell
-          absence={absence}
-          provisional={provisional}
-          participantColor={participant.color}
-          fill
-        />
-      );
+      /*
+        Allebei tegelijk kan: een dagdeel met vakantie waarop de dokter toch graag dienst doet.
+        De afwezigheid houdt dan het vlak en de voorkeur wordt een hoekje, zodat de botsing te
+        zien blijft in plaats van dat er een van de twee onder de andere verdwijnt.
+      */
+      const cell = absence ? (
+        <div className="relative h-full w-full">
+          <AbsenceDaypartCell
+            absence={absence}
+            provisional={provisional}
+            participantColor={participant.color}
+            fill
+          />
+          {voorkeur ? <PlannerDienstvoorkeurMark voorkeur={voorkeur} variant="hoek" /> : null}
+        </div>
+      ) : voorkeur ? (
+        <PlannerDienstvoorkeurMark voorkeur={voorkeur} />
+      ) : null;
 
       // Zonder deze kaart vertelt het vakje alleen zijn kleur. De dokterversie toont maar één
       // deelnemer, dus daar zou de naam iedere keer dezelfde regel zijn.
       return (
         <PlannerDaypartHoverPreview
-          enabled={!(editable && (clearMode || selectedTypeId != null))}
+          enabled={!(editable && (clearMode || selectedTypeId != null || dienstKeuze != null))}
           participantName={participantName(participant)}
           initials={deelnemerChipInitials(participant)}
           datum={datum}
           daypartName={daypart.naam}
           fromRepetition={false}
           isException={false}
-          absence={{ type: absence.naam, aangevraagd: provisional === true }}
+          absence={absence ? { type: absence.naam, aangevraagd: provisional === true } : null}
+          dienstvoorkeur={voorkeur}
           showPlanningDetails={false}
           showParticipant={!isDoctorMode}
           chip={<div className="relative h-full w-full">{cell}</div>}
@@ -344,13 +438,14 @@ export function PlannerAbsenceEditor({
         </PlannerDaypartHoverPreview>
       );
     },
-    [clearMode, editable, isDoctorMode, resolveAbsence, selectedTypeId]
+    [clearMode, dienstKeuze, editable, isDoctorMode, resolveAbsence, selectedTypeId, voorkeurMap]
   );
 
   const isCellFilled = useCallback(
     (iddeelnemer: number, datum: string, daypart: PraktijkplannerDaypart) =>
-      resolveAbsence(iddeelnemer, datum, daypart.id).absence != null,
-    [resolveAbsence]
+      resolveAbsence(iddeelnemer, datum, daypart.id).absence != null ||
+      voorkeurMap.has(keyFor(iddeelnemer, datum, daypart.id)),
+    [resolveAbsence, voorkeurMap]
   );
 
   const refreshSlots = useCallback(async () => {
@@ -366,6 +461,59 @@ export function PlannerAbsenceEditor({
     setSlots(payload.slots);
   }, [data.userId, groupId, isDoctorMode, range.end, range.start]);
 
+  const bewaarVoorkeur = useCallback(
+    async (
+      iddeelnemer: number,
+      datum: string,
+      iddagdeel: number,
+      voorkeur: PraktijkplannerDienstvoorkeurWaarde | null
+    ) => {
+      try {
+        const response = await fetch('/api/praktijkplanner/dienstvoorkeuren', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idwaarneemgroep: groupId,
+            voorkeuren: [{ iddeelnemer, datum, iddagdeel, voorkeur }],
+          }),
+        });
+        const payload = (await response.json()) as { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error || 'De dienstvoorkeur kon niet worden opgeslagen.');
+        }
+        await refreshVoorkeuren();
+        toast.success(
+          voorkeur == null
+            ? 'Dienstvoorkeur verwijderd.'
+            : `${DIENSTVOORKEUR_WEERGAVE[voorkeur].label} opgeslagen.`,
+          { position: TOAST_POSITION }
+        );
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : 'De dienstvoorkeur kon niet worden opgeslagen.',
+          { position: TOAST_POSITION }
+        );
+      }
+    },
+    [groupId, refreshVoorkeuren]
+  );
+
+  /** Toont het waarschuwingsvenster en wacht tot de dokter kiest. */
+  const vraagBevestiging = useCallback(
+    (melding: string) =>
+      new Promise<boolean>((resolve) => {
+        setConflict({
+          melding,
+          beslis: (akkoord: boolean) => {
+            setConflict(null);
+            resolve(akkoord);
+          },
+        });
+      }),
+    []
+  );
+
   const applyCell = useCallback(
     async ({
       participant,
@@ -377,12 +525,43 @@ export function PlannerAbsenceEditor({
       daypart: { id: number };
     }) => {
       if (!editable) return;
+      const participantId = isDoctorMode ? data.userId : participant.id;
+      const key = keyFor(participantId, datum, daypart.id);
+      const existing = slotMap.get(key);
+      const staandeVoorkeur = voorkeurMap.get(key) ?? null;
+
+      /*
+        Een dienstvoorkeur gaat over diensten, niet over het gewone rooster, en mag dus ook op
+        een dagdeel waarop deze dokter niet ingeroosterd wordt. Dat is dezelfde regel als die
+        een dienst zelf daar wel laat staan, en daarom staat dit voor de controle hieronder.
+      */
+      if (dienstKeuze != null) {
+        if (dienstKeuze === 'graag' && existing) {
+          const akkoord = await vraagBevestiging(
+            `Op dit dagdeel staat ${existing.absenceType.naam}. Toch aangeven dat u hier graag dienst doet? Allebei blijft staan.`
+          );
+          if (!akkoord) return;
+        }
+        await bewaarVoorkeur(participantId, datum, daypart.id, dienstKeuze);
+        return;
+      }
+
+      // Leegmaken haalt ook de dienstvoorkeur weg. Staat er verder niets, dan is het klaar.
+      if (clearMode && staandeVoorkeur) {
+        await bewaarVoorkeur(participantId, datum, daypart.id, null);
+        if (!existing) return;
+      }
+
+      if (!clearMode && selectedTypeId != null && staandeVoorkeur === 'graag') {
+        const akkoord = await vraagBevestiging(
+          'Op dit dagdeel staat Dienst graag. Toch afwezigheid aangeven? Allebei blijft staan.'
+        );
+        if (!akkoord) return;
+      }
+
       const inroosterbaar = isDaypartSchedulableForParticipant(
         data.masterData.schedulableDayparts ?? [],
-        participantMatrixFor(
-          data.masterData.participantSchedulableDayparts ?? [],
-          isDoctorMode ? data.userId : participant.id
-        ),
+        participantMatrixFor(data.masterData.participantSchedulableDayparts ?? [], participantId),
         datum,
         daypart.id
       );
@@ -393,10 +572,7 @@ export function PlannerAbsenceEditor({
         niet klopt recht te zetten.
       */
       if (!inroosterbaar) {
-        const bestaat = slotMap.has(
-          keyFor(isDoctorMode ? data.userId : participant.id, datum, daypart.id)
-        );
-        if (!bestaat) return;
+        if (!existing) return;
         if (!clearMode) {
           toast.info('Dit dagdeel is niet inplanbaar. Kies Leegmaken om het weg te halen.', {
             position: TOAST_POSITION,
@@ -409,9 +585,6 @@ export function PlannerAbsenceEditor({
         return;
       }
 
-      const participantId = isDoctorMode ? data.userId : participant.id;
-      const key = keyFor(participantId, datum, daypart.id);
-      const existing = slotMap.get(key);
       if (isDoctorMode && existing && !existing.isVoorlopig) {
         toast.info('Deze afwezigheid is bevestigd en kan niet meer worden gewijzigd.', {
           position: TOAST_POSITION,
@@ -490,6 +663,7 @@ export function PlannerAbsenceEditor({
       }
     },
     [
+      bewaarVoorkeur,
       clearMode,
       data.masterData.absenceTypes,
       data.masterData.participantSchedulableDayparts,
@@ -500,9 +674,12 @@ export function PlannerAbsenceEditor({
       isDoctorMode,
       isVoorlopig,
       refreshSlots,
+      dienstKeuze,
       selectedTypeId,
       slotMap,
       slots,
+      voorkeurMap,
+      vraagBevestiging,
     ]
   );
 
@@ -562,26 +739,43 @@ export function PlannerAbsenceEditor({
               icon: absencePaletteIconPath(type.code, type.icon, false),
             },
           ]);
+    const dienstItems = heeftDienstTaken
+      ? (Object.keys(DIENSTVOORKEUR_WEERGAVE) as PraktijkplannerDienstvoorkeurWaarde[]).map(
+          (waarde) => {
+            const { label, kleur, Icon } = DIENSTVOORKEUR_WEERGAVE[waarde];
+            return {
+              id: DIENST_PALETTE_IDS[waarde],
+              label,
+              color: kleur,
+              background: kleur,
+              icon: <Icon aria-hidden />,
+            };
+          }
+        )
+      : [];
     return [
       { id: REMOVE_PALETTE_ID, label: 'Leegmaken', color: '#c91b23', background: '#c91b23', icon: REMOVE_PALETTE_ICON },
       ...absenceItems,
+      ...dienstItems,
     ];
-  }, [data.masterData.absenceTypes, isDoctorMode]);
+  }, [data.masterData.absenceTypes, heeftDienstTaken, isDoctorMode]);
 
-  const selectedPaletteId =
-    clearMode || selectedTypeId == null
-      ? clearMode
-        ? REMOVE_PALETTE_ID
-        : null
-      : !isDoctorMode
-        ? isVoorlopig
-          ? provisionalPaletteId(selectedTypeId)
-          : confirmedPaletteId(selectedTypeId)
-        : selectedTypeId;
+  const selectedPaletteId = dienstKeuze
+    ? DIENST_PALETTE_IDS[dienstKeuze]
+    : clearMode || selectedTypeId == null
+        ? clearMode
+          ? REMOVE_PALETTE_ID
+          : null
+        : !isDoctorMode
+          ? isVoorlopig
+            ? provisionalPaletteId(selectedTypeId)
+            : confirmedPaletteId(selectedTypeId)
+          : selectedTypeId;
 
   const dismissCursorTool = useCallback(() => {
     setSelectedTypeId(null);
     setClearMode(false);
+    setDienstKeuze(null);
   }, []);
 
   const cursorTool = useMemo((): PlannerCursorTool | null => {
@@ -591,6 +785,15 @@ export function PlannerAbsenceEditor({
         icon: <Trash2 className="text-white" aria-hidden />,
         color: '#c91b23',
         label: 'Leegmaken',
+      };
+    }
+    if (dienstKeuze) {
+      const { label, kleur, Icon } = DIENSTVOORKEUR_WEERGAVE[dienstKeuze];
+      return {
+        icon: <Icon className="text-white" aria-hidden />,
+        color: kleur,
+        background: kleur,
+        label,
       };
     }
     if (selectedTypeId == null) return null;
@@ -603,7 +806,15 @@ export function PlannerAbsenceEditor({
       background: absenceDisplayBackground(absenceType.code, absenceType.kleur, provisional),
       label: absenceType.naam,
     };
-  }, [clearMode, data.masterData.absenceTypes, editable, isDoctorMode, isVoorlopig, selectedTypeId]);
+  }, [
+    clearMode,
+    data.masterData.absenceTypes,
+    dienstKeuze,
+    editable,
+    isDoctorMode,
+    isVoorlopig,
+    selectedTypeId,
+  ]);
 
   // Week en maand hangen dezelfde knoppen op, en het moeten dezelfde knoppen in dezelfde
   // volgorde blijven.
@@ -627,6 +838,12 @@ export function PlannerAbsenceEditor({
 
   return (
     <div className="space-y-4">
+      <PlannerDienstvoorkeurConflictModal
+        open={conflict != null}
+        melding={conflict?.melding ?? ''}
+        onBevestig={() => conflict?.beslis(true)}
+        onAnnuleer={() => conflict?.beslis(false)}
+      />
   
 
       <div className="flex items-start gap-4">
@@ -645,23 +862,39 @@ export function PlannerAbsenceEditor({
           <aside className="sticky top-0" data-planner-tool-keep-active>
             <PlannerChipPalette
             variant="sidebar"
-            title={isDoctorMode ? 'Afwezigheid aangeven' : 'Afwezigheidstypen'}
+            title={
+              isDoctorMode
+                ? heeftDienstTaken
+                  ? 'Afwezigheid en dienst aangeven'
+                  : 'Afwezigheid aangeven'
+                : 'Afwezigheidstypen'
+            }
             items={paletteItems}
             selectedId={selectedPaletteId}
             onSelect={(id) => {
               if (id === REMOVE_PALETTE_ID) {
                 setClearMode(true);
                 setSelectedTypeId(null);
+                setDienstKeuze(null);
+                return;
+              }
+              const dienst = dienstvoorkeurVanPaletteId(id);
+              if (dienst) {
+                setDienstKeuze(dienst);
+                setClearMode(false);
+                setSelectedTypeId(null);
                 return;
               }
               const { typeId, provisional } = parsePaletteSelection(id);
               setClearMode(false);
+              setDienstKeuze(null);
               setSelectedTypeId(typeId);
               setIsVoorlopig(isDoctorMode || provisional);
             }}
             onClear={() => {
               setClearMode(false);
               setSelectedTypeId(null);
+              setDienstKeuze(null);
             }}
           />
           </aside>

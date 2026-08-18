@@ -155,6 +155,7 @@ export function PlannerCopyWeekModal({
                 id: task.id,
                 label: task.afkorting || task.omschrijving || `Taak ${task.id}`,
                 color: task.kleur,
+                inbelbaar: task.inbelbaar,
               },
             ]
           : []

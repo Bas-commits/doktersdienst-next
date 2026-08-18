@@ -58,6 +58,8 @@ export type PraktijkplannerTaskType = {
   idexpertise: number | null;
   /** Mag op elke locatie gebeuren; de eis geldt dan voor de hele waarneemgroep. */
   nietLocatieGebonden: boolean;
+  /** Collega's kunnen deze taak bellen; het rooster zet er een telefoonicoontje bij. */
+  inbelbaar: boolean;
   actief: boolean;
 };
 
@@ -120,6 +122,8 @@ export type PraktijkplannerTask = {
   afkorting: string | null;
   omschrijving: string | null;
   kleur: string | null;
+  /** Staat op het taaktype, niet op deze planning. Zie PraktijkplannerTaskType. */
+  inbelbaar: boolean;
 };
 
 export type PraktijkplannerPlanningSlot = {

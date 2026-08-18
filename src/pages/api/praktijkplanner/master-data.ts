@@ -256,6 +256,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           kleur: optionalText(body.kleur, 50),
           idexpertise: expertise.idexpertise,
           nietLocatieGebonden: activeValue(body.nietLocatieGebonden, false),
+          inbelbaar: activeValue(body.inbelbaar, false),
           verwijderd: 0,
           volgorde: 9999,
         })
@@ -415,6 +416,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           afkorting: optionalText(body.afkorting, 10),
           kleur: optionalText(body.kleur, 50),
           nietLocatieGebonden: activeValue(body.nietLocatieGebonden, false),
+          inbelbaar: activeValue(body.inbelbaar, false),
           verwijderd: activeValue(body.actief) ? 0 : 1,
         })
         .where(and(eq(schema.taaktypen.id, id), eq(schema.taaktypen.idwaarneemgroep, idwaarneemgroep)));

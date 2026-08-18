@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { Phone } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
@@ -10,6 +11,13 @@ export type PlannerDaypartChipItem = {
   label: string;
   color: string | null;
   icon?: string | null;
+  /**
+   * Collega's mogen deze taak bellen. Levert een telefoonicoontje in de band op.
+   *
+   * Het nummer staat er niet bij en het icoontje doet niets bij aanklikken. Het zegt alleen dat
+   * er iemand bereikbaar is, want wie belt kijkt eerst wie er zit en pakt daarna zijn telefoon.
+   */
+  inbelbaar?: boolean;
 };
 
 /**
@@ -106,6 +114,17 @@ function ChipBand({ row, items, style, density }: ChipBandProps) {
             >
               {item.label}
             </span>
+          ) : null}
+          {/*
+            Alleen waar tekst past. In de maandweergave is de band elf pixels hoog; een tweede
+            pictogram naast dat van de activiteit is daar een vlekje en geen mededeling.
+          */}
+          {item.inbelbaar && toontTekst ? (
+            <Phone
+              aria-label="Hierop kan worden ingebeld"
+              className={cn('shrink-0', isPopover ? 'size-3.5' : 'size-2.5')}
+              strokeWidth={2.5}
+            />
           ) : null}
         </span>
       ))}

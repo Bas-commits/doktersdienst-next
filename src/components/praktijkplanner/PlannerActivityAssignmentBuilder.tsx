@@ -124,14 +124,16 @@ function OptionPreview({
   color,
   label,
   icon,
+  inbelbaar,
   slot = 'middle',
 }: {
   color: string | null;
   label: string;
   icon?: string | null;
+  inbelbaar?: boolean;
   slot?: 'top' | 'middle' | 'bottom';
 }) {
-  const item: PlannerDaypartChipItem = { color, label, icon };
+  const item: PlannerDaypartChipItem = { color, label, icon, inbelbaar };
 
   return (
     <PlannerCombinedDaypartChip
@@ -506,6 +508,7 @@ export function PlannerActivityAssignmentBuilder({
                     <OptionPreview
                       color={task.kleur}
                       label={task.afkorting || task.omschrijving || `Taak ${task.id}`}
+                      inbelbaar={task.inbelbaar}
                       slot="top"
                     />
                     <span className="min-w-0">

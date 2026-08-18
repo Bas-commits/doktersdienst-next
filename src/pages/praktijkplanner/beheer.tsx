@@ -39,7 +39,7 @@ const TABS: Array<{ id: BeheerTab; label: string }> = [
 ];
 
 function initialForm(): Form {
-  return { actief: true, nietLocatieGebonden: false };
+  return { actief: true, nietLocatieGebonden: false, inbelbaar: false };
 }
 
 function getItems(masterData: PraktijkplannerMasterData, entity: Entity) {
@@ -190,6 +190,7 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
       idlocatie: item.idlocatie ? String(item.idlocatie) : '',
       actief: item.actief !== false,
       nietLocatieGebonden: item.nietLocatieGebonden === true,
+      inbelbaar: item.inbelbaar === true,
       omschrijving: String(item.omschrijving ?? ''),
       naam: String(item.naam ?? ''),
       afkorting: String(item.afkorting ?? ''),
@@ -495,6 +496,23 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
                 <span className="text-xs text-muted-foreground">
                   Bijvoorbeeld een telefonisch extern consult. In de Capaciteitsplanner vult u zulke
                   taken een keer in voor de hele waarneemgroep in plaats van bij elke locatie apart.
+                </span>
+              </span>
+            </label>
+          ) : null}
+          {entity === 'task' ? (
+            <label className="flex items-start gap-2 text-sm md:col-span-2">
+              <Checkbox
+                className="mt-0.5"
+                checked={form.inbelbaar === true}
+                onCheckedChange={(value) => setForm((current) => ({ ...current, inbelbaar: !!value }))}
+              />
+              <span className="grid gap-0.5">
+                <Label className="cursor-pointer">Hierop kan worden ingebeld</Label>
+                <span className="text-xs text-muted-foreground">
+                  Voor taken waarbij collega&apos;s de dienstdoende dokter mogen bellen, zoals een extern
+                  consult. In het rooster komt er dan een telefoonicoontje bij te staan. Het nummer
+                  hoeft u hier niet in te vullen, dat staat al bij de dokter zelf.
                 </span>
               </span>
             </label>

@@ -453,6 +453,7 @@ export function ActivitiesContent({
                 id: task.id,
                 label: task.afkorting || task.omschrijving || `Taak ${task.id}`,
                 color: task.kleur,
+                inbelbaar: task.inbelbaar,
               },
             ]
           : []
@@ -743,6 +744,7 @@ export function ActivitiesContent({
               id: task.id,
               label: task.afkorting || task.omschrijving || `Taak ${task.id}`,
               color: task.kleur,
+              inbelbaar: task.inbelbaar,
             }))}
             activity={
               activity
@@ -899,6 +901,7 @@ export function ActivitiesContent({
                   afkorting: task.afkorting,
                   omschrijving: task.omschrijving,
                   kleur: task.kleur,
+                  inbelbaar: task.inbelbaar,
                 },
               ]
             : [];

@@ -26,6 +26,32 @@ describe('PlannerCombinedDaypartChip', () => {
     ]);
   });
 
+  // Deze opzet ruimt niet automatisch op tussen tests, dus zoeken gaat via de eigen container.
+  // Een losse screen-query vindt anders het icoontje van de vorige render terug.
+  it('zet een telefoonicoontje bij een taak waarop kan worden ingebeld', () => {
+    const { container } = render(
+      <PlannerCombinedDaypartChip
+        tasks={[
+          { id: 1, label: 'EC', color: '#800080', inbelbaar: true },
+          { id: 2, label: 'SV', color: '#0ea5e9' },
+        ]}
+      />
+    );
+
+    expect(container.querySelectorAll('[aria-label="Hierop kan worden ingebeld"]')).toHaveLength(1);
+  });
+
+  it('laat het telefoonicoontje weg in de maandweergave, waar geen tekst past', () => {
+    const { container } = render(
+      <PlannerCombinedDaypartChip
+        density="micro"
+        tasks={[{ id: 1, label: 'EC', color: '#800080', inbelbaar: true }]}
+      />
+    );
+
+    expect(container.querySelector('[aria-label="Hierop kan worden ingebeld"]')).toBeNull();
+  });
+
   it('keeps unselected rows visible as empty placeholders', () => {
     render(<PlannerCombinedDaypartChip activity={{ id: 2, label: 'ALG', color: '#008000' }} />);
 

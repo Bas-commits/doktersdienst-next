@@ -50,6 +50,22 @@ export type PraktijkplannerActivitySpecification = {
   actief: boolean;
 };
 
+/**
+ * Wat een arts over diensten heeft gezegd voor een dagdeel.
+ *
+ * Bewust geen afwezigheid: bij "graag" is de arts er juist wel. Daarom een eigen tabel, zodat
+ * de jaarbalans er niets van meetelt.
+ */
+export type PraktijkplannerDienstvoorkeurWaarde = 'graag' | 'liever_niet';
+
+export type PraktijkplannerDienstvoorkeur = {
+  id: number;
+  iddeelnemer: number;
+  datum: string;
+  iddagdeel: number;
+  voorkeur: PraktijkplannerDienstvoorkeurWaarde;
+};
+
 export type PraktijkplannerTaskType = {
   id: number;
   afkorting: string | null;

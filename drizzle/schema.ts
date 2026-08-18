@@ -623,6 +623,29 @@ export const planningafwezigheden = pgTable("planningafwezigheden", {
 	index("planningafwezigheden_group_date_daypart_idx").on(table.idwaarneemgroep, table.datum, table.iddagdeel),
 ]);
 
+export const praktijkplannerdienstvoorkeuren = pgTable("praktijkplannerdienstvoorkeuren", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),
+	iddeelnemer: integer().notNull().references(() => deelnemers.id),
+	datum: date().notNull(),
+	iddagdeel: integer().notNull().references(() => dagdelen.id),
+	/** 'graag' of 'liever_niet'; de database bewaakt dat met een check. */
+	voorkeur: varchar({ length: 20 }).notNull(),
+	createdBy: integer("created_by").references(() => deelnemers.id),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+	version: integer().notNull().default(1),
+}, (table) => [
+	unique("dienstvoorkeuren_deelnemer_datum_dagdeel_unique").on(
+		table.idwaarneemgroep,
+		table.iddeelnemer,
+		table.datum,
+		table.iddagdeel
+	),
+	index("dienstvoorkeuren_groep_datum_idx").on(table.idwaarneemgroep, table.datum, table.iddagdeel),
+]);
+
 export const afwezigheidsjaarbudgetten = pgTable("afwezigheidsjaarbudgetten", {
 	id: serial().primaryKey().notNull(),
 	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id),

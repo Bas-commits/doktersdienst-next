@@ -253,7 +253,7 @@ describe('PlannerAbsenceEditor dienstvoorkeur', () => {
     stubFetch();
     render(<PlannerAbsenceEditor context={context} mode="doctor" />);
 
-    expect(screen.queryByRole('button', { name: 'Dienst graag' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dienst graag?' })).not.toBeInTheDocument();
     expect(
       fetchMock.mock.calls.some(([url]) =>
         (url as string).startsWith('/api/praktijkplanner/dienstvoorkeuren')
@@ -261,11 +261,23 @@ describe('PlannerAbsenceEditor dienstvoorkeur', () => {
     ).toBe(false);
   });
 
+  it('zet een vraagteken bij de dokter en niet bij de planner', async () => {
+    stubFetch();
+    const { unmount } = render(<PlannerAbsenceEditor context={dienstContext} mode="doctor" />);
+    expect(screen.getByRole('button', { name: 'Dienst graag?' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dienst liever niet?' })).toBeInTheDocument();
+    unmount();
+
+    render(<PlannerAbsenceEditor context={dienstContext} mode="manager" />);
+    expect(screen.getByRole('button', { name: 'Dienst graag' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dienst graag?' })).not.toBeInTheDocument();
+  });
+
   it('slaat een dienstvoorkeur op het aangeklikte dagdeel op', async () => {
     stubFetch();
     render(<PlannerAbsenceEditor context={dienstContext} mode="doctor" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Dienst graag' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dienst graag?' }));
     fireEvent.click(screen.getAllByRole('button', { name: / Ochtend$/ })[0]);
 
     await waitFor(() => {
@@ -299,7 +311,7 @@ describe('PlannerAbsenceEditor dienstvoorkeur', () => {
     render(<PlannerAbsenceEditor context={dienstContext} mode="doctor" />);
 
     await waitFor(() => expect(screen.getAllByText('Vakantie?').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Dienst graag' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dienst graag?' }));
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${datum} Ochtend$`) }));
 
     await waitFor(() =>

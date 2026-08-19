@@ -739,13 +739,16 @@ export function PlannerAbsenceEditor({
               icon: absencePaletteIconPath(type.code, type.icon, false),
             },
           ]);
+    // Het vraagteken volgt dezelfde regel als bij de afwezigheidstypen: de dokter vraagt, de
+    // planner legt vast. Anders dan daar is het hier alleen taal en geen toestand, want een
+    // dienstvoorkeur wordt niet goedgekeurd; er is dus ook geen tweede blokje voor de planner.
     const dienstItems = heeftDienstTaken
       ? (Object.keys(DIENSTVOORKEUR_WEERGAVE) as PraktijkplannerDienstvoorkeurWaarde[]).map(
           (waarde) => {
             const { label, kleur, Icon } = DIENSTVOORKEUR_WEERGAVE[waarde];
             return {
               id: DIENST_PALETTE_IDS[waarde],
-              label,
+              label: isDoctorMode ? `${label}?` : label,
               color: kleur,
               background: kleur,
               icon: <Icon aria-hidden />,

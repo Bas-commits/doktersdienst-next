@@ -18,6 +18,8 @@ type VoorkeurMutatie = {
   iddagdeel: unknown;
   /** Leeg betekent: haal de voorkeur weg. */
   voorkeur?: unknown;
+  /** Ontbreekt hij, dan is het een aanvraag. Vastleggen moet je willen zeggen. */
+  isVoorlopig?: unknown;
 };
 
 type Data =
@@ -76,6 +78,7 @@ async function laadVoorkeuren(
       datum: tabel.datum,
       iddagdeel: tabel.iddagdeel,
       voorkeur: tabel.voorkeur,
+      isVoorlopig: tabel.isVoorlopig,
     })
     .from(tabel)
     .where(
@@ -99,6 +102,7 @@ async function laadVoorkeuren(
             datum: rij.datum,
             iddagdeel: rij.iddagdeel,
             voorkeur: waarde,
+            isVoorlopig: rij.isVoorlopig,
           },
         ];
   });
@@ -177,10 +181,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       const iddagdeel = parsePositiveInteger(invoer.iddagdeel);
       const leeg = invoer.voorkeur == null || invoer.voorkeur === '';
       const voorkeur = leeg ? null : parseWaarde(invoer.voorkeur);
-      if (!iddeelnemer || !iddagdeel || !isIsoDate(invoer.datum) || (!leeg && voorkeur == null)) {
+      if (
+        !iddeelnemer ||
+        !iddagdeel ||
+        !isIsoDate(invoer.datum) ||
+        (!leeg && voorkeur == null) ||
+        (invoer.isVoorlopig != null && typeof invoer.isVoorlopig !== 'boolean')
+      ) {
         throw new VoorkeurError('Een wijziging bevat ongeldige gegevens.');
       }
-      return { iddeelnemer, datum: invoer.datum, iddagdeel, voorkeur };
+      return {
+        iddeelnemer,
+        datum: invoer.datum,
+        iddagdeel,
+        voorkeur,
+        isVoorlopig: invoer.isVoorlopig !== false,
+      };
     });
 
     const daypartIds = [...new Set(mutaties.map((mutatie) => mutatie.iddagdeel))];
@@ -199,6 +215,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       if (!accessResult.access.isManager && mutatie.iddeelnemer !== accessResult.access.user.id) {
         throw new VoorkeurError('U kunt alleen uw eigen dienstvoorkeur aanpassen.', 403);
       }
+      // Dezelfde tweedeling als bij een afwezigheid: een arts vraagt aan, de planner legt vast.
+      if (!accessResult.access.isManager && mutatie.voorkeur != null && !mutatie.isVoorlopig) {
+        throw new VoorkeurError(
+          'Alleen secretarissen en beheerders kunnen een dienstvoorkeur vastleggen.',
+          403
+        );
+      }
       /*
         Ook weghalen mag niet meer als de dag voorbij is. Dat is geen slordigheid: het rooster is
         op die voorkeur gebouwd, dus hem achteraf wissen maakt onnavolgbaar waarom iemand die
@@ -215,18 +238,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const gebruiker = accessResult.access.user.id;
     await db.transaction(async (tx) => {
       for (const mutatie of mutaties) {
+        const plek = and(
+          eq(tabel.idwaarneemgroep, accessResult.access.idwaarneemgroep),
+          eq(tabel.iddeelnemer, mutatie.iddeelnemer),
+          eq(tabel.datum, mutatie.datum),
+          eq(tabel.iddagdeel, mutatie.iddagdeel)
+        );
+        /*
+          Wat de planner heeft vastgelegd is een afspraak, geen wens meer. Een arts mag hem
+          daarom niet omzetten of weghalen; hetzelfde slot als bij een bevestigde afwezigheid.
+        */
+        if (!accessResult.access.isManager) {
+          const [staand] = await tx
+            .select({ isVoorlopig: tabel.isVoorlopig })
+            .from(tabel)
+            .where(plek)
+            .limit(1);
+          if (staand?.isVoorlopig === false) {
+            throw new VoorkeurError(
+              'Deze dienstvoorkeur is vastgelegd en kan niet meer worden gewijzigd.',
+              403
+            );
+          }
+        }
         // Altijd eerst weg, dan eventueel opnieuw. Dat is wat de unieke sleutel toch al
         // afdwingt, en het scheelt een aparte tak voor wisselen tussen graag en liever niet.
-        await tx
-          .delete(tabel)
-          .where(
-            and(
-              eq(tabel.idwaarneemgroep, accessResult.access.idwaarneemgroep),
-              eq(tabel.iddeelnemer, mutatie.iddeelnemer),
-              eq(tabel.datum, mutatie.datum),
-              eq(tabel.iddagdeel, mutatie.iddagdeel)
-            )
-          );
+        await tx.delete(tabel).where(plek);
         if (mutatie.voorkeur == null) continue;
         await tx.insert(tabel).values({
           idwaarneemgroep: accessResult.access.idwaarneemgroep,
@@ -234,6 +271,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           datum: mutatie.datum,
           iddagdeel: mutatie.iddagdeel,
           voorkeur: mutatie.voorkeur,
+          isVoorlopig: mutatie.isVoorlopig,
           createdBy: gebruiker,
           updatedBy: gebruiker,
         });

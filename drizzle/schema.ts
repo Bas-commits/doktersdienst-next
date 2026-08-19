@@ -631,6 +631,8 @@ export const praktijkplannerdienstvoorkeuren = pgTable("praktijkplannerdienstvoo
 	iddagdeel: integer().notNull().references(() => dagdelen.id),
 	/** 'graag' of 'liever_niet'; de database bewaakt dat met een check. */
 	voorkeur: varchar({ length: 20 }).notNull(),
+	/** Waar is aangevraagd door de arts, onwaar is vastgelegd door de planner. */
+	isVoorlopig: boolean("is_voorlopig").notNull().default(true),
 	createdBy: integer("created_by").references(() => deelnemers.id),
 	updatedBy: integer("updated_by").references(() => deelnemers.id),
 	createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),

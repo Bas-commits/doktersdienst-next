@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { TriangleAlert } from 'lucide-react';
-import { DIENSTVOORKEUR_WEERGAVE } from './PlannerDienstvoorkeurMark';
+import { dienstvoorkeurKleur, dienstvoorkeurLabel } from './PlannerDienstvoorkeurMark';
 import { absentieTekst } from '@/lib/praktijkplanner/absentie-tekst';
 import { afwijkingTekst, herhalingWeekLabel } from '@/lib/praktijkplanner/herhaling-tekst';
 import { cn } from '@/lib/utils';
@@ -113,7 +113,7 @@ export function PlannerDaypartHoverPreview({
    */
   absence?: { type: string | null; aangevraagd: boolean } | null;
   /** De dienstvoorkeur op dit dagdeel. Staat los van de afwezigheid; beide kunnen er zijn. */
-  dienstvoorkeur?: PraktijkplannerDienstvoorkeurWaarde | null;
+  dienstvoorkeur?: { waarde: PraktijkplannerDienstvoorkeurWaarde; aangevraagd: boolean } | null;
   availabilityName?: string | null;
   /** De taken voluit: de omschrijving van elk taaktype, niet de afkorting. */
   taskNames?: string[];
@@ -323,11 +323,16 @@ export function PlannerDaypartHoverPreview({
                   >
                     <span
                       className="mt-0.5 size-3.5 shrink-0 rounded"
-                      style={{ background: DIENSTVOORKEUR_WEERGAVE[dienstvoorkeur].kleur }}
+                      style={{
+                        background: dienstvoorkeurKleur(
+                          dienstvoorkeur.waarde,
+                          dienstvoorkeur.aangevraagd
+                        ),
+                      }}
                       aria-hidden
                     />
                     <span className="font-medium">
-                      {DIENSTVOORKEUR_WEERGAVE[dienstvoorkeur].label}
+                      {dienstvoorkeurLabel(dienstvoorkeur.waarde, dienstvoorkeur.aangevraagd)}
                     </span>
                   </div>
                 ) : null}

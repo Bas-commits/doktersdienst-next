@@ -110,7 +110,13 @@ const ABSENCE_DISPLAY_BACKGROUNDS: Record<string, { confirmed: string; provision
   },
 };
 
-function brightenHex(hex: string, amount: number): string {
+/**
+ * Dezelfde kleur, maar lichter. Zo ziet een aanvraag eruit naast wat al vastligt.
+ *
+ * Ook gebruikt door het teken van de dienstvoorkeur, zodat aangevraagd en vastgelegd daar op
+ * dezelfde manier uit elkaar te houden zijn als bij een afwezigheid.
+ */
+export function brightenHex(hex: string, amount: number): string {
   const normalized = hex.trim().replace(/^#/, '');
   if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return hex;
   const channels = [0, 2, 4].map((offset) => parseInt(normalized.slice(offset, offset + 2), 16));

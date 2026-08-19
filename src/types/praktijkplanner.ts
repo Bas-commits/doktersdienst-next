@@ -64,6 +64,8 @@ export type PraktijkplannerDienstvoorkeur = {
   datum: string;
   iddagdeel: number;
   voorkeur: PraktijkplannerDienstvoorkeurWaarde;
+  /** Aangevraagd door de arts, of vastgelegd door de planner. Zie planningafwezigheden. */
+  isVoorlopig: boolean;
 };
 
 export type PraktijkplannerTaskType = {

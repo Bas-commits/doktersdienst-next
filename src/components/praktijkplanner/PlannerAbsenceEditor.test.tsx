@@ -261,16 +261,43 @@ describe('PlannerAbsenceEditor dienstvoorkeur', () => {
     ).toBe(false);
   });
 
-  it('zet een vraagteken bij de dokter en niet bij de planner', async () => {
+  it('geeft de dokter alleen aanvragen en de planner ook het vastleggen', async () => {
     stubFetch();
     const { unmount } = render(<PlannerAbsenceEditor context={dienstContext} mode="doctor" />);
     expect(screen.getByRole('button', { name: 'Dienst graag?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Dienst liever niet?' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dienst graag' })).not.toBeInTheDocument();
     unmount();
 
     render(<PlannerAbsenceEditor context={dienstContext} mode="manager" />);
-    expect(screen.getByRole('button', { name: 'Dienst graag' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Dienst graag?' })).not.toBeInTheDocument();
+    for (const naam of [
+      'Dienst graag?',
+      'Dienst graag',
+      'Dienst liever niet?',
+      'Dienst liever niet',
+    ]) {
+      expect(screen.getByRole('button', { name: naam })).toBeInTheDocument();
+    }
+  });
+
+  it('legt vast zonder vraagteken als de planner dat blokje pakt', async () => {
+    stubFetch();
+    render(<PlannerAbsenceEditor context={dienstContext} mode="manager" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dienst graag' }));
+    fireEvent.click(screen.getAllByRole('button', { name: / Ochtend$/ })[0]);
+
+    await waitFor(() => {
+      const postCall = fetchMock.mock.calls.find(
+        ([url, init]) =>
+          url === '/api/praktijkplanner/dienstvoorkeuren' &&
+          (init as RequestInit | undefined)?.method === 'POST'
+      );
+      expect(postCall).toBeDefined();
+      expect(JSON.parse((postCall?.[1] as RequestInit).body as string)).toMatchObject({
+        voorkeuren: [{ voorkeur: 'graag', isVoorlopig: false }],
+      });
+    });
   });
 
   it('slaat een dienstvoorkeur op het aangeklikte dagdeel op', async () => {
@@ -289,7 +316,7 @@ describe('PlannerAbsenceEditor dienstvoorkeur', () => {
       expect(postCall).toBeDefined();
       expect(JSON.parse((postCall?.[1] as RequestInit).body as string)).toMatchObject({
         idwaarneemgroep: 3,
-        voorkeuren: [{ iddeelnemer: 7, iddagdeel: 1, voorkeur: 'graag' }],
+        voorkeuren: [{ iddeelnemer: 7, iddagdeel: 1, voorkeur: 'graag', isVoorlopig: true }],
       });
     });
   });

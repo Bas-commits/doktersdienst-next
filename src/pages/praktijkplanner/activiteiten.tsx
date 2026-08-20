@@ -28,6 +28,7 @@ import { PraktijkplannerPage, PraktijkplannerTitleAside, type PraktijkplannerPag
 import {
   PALET_BREEDTE_PX,
   PANEEL_DREMPEL_PX,
+  WEEK_MINIMUM_PX,
   useBeschikbareBreedte,
 } from '@/hooks/praktijkplanner/useBeschikbareBreedte';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
@@ -1192,16 +1193,17 @@ export function ActivitiesContent({
         ) : null}
 
         {/*
-          Twee op een: het weekrooster heeft minstens 1056 pixels nodig en het paneel ongeveer
-          500. Met flex-1 op allebei zou de week op 1600 nog maar 800 krijgen en is er niet
-          meer in te plannen.
+          Ieder de helft. Dit stond op twee staat tot een, omdat de week op de drempel van
+          1600 anders te smal wordt om in te plannen. Op een breed scherm pakte de week
+          daardoor ruimte die hij niet kan gebruiken: het rooster is nooit breder dan zeven
+          dagen, dus die winst werd lege ruimte terwijl het paneel tegen de rand werd gedrukt.
+          Nu deelt de rij eerlijk en houdt WEEK_MINIMUM_PX de bodem eronder, zodat de week op
+          een smal scherm nog steeds voorgaat.
         */}
         {toontWeek ? (
           <div
-            className={[
-              'flex min-h-0 min-w-0 flex-col gap-4',
-              paneel === null ? 'flex-1' : 'flex-[2]',
-            ].join(' ')}
+            className="flex min-h-0 min-w-0 flex-1 flex-col gap-4"
+            style={paneel === null ? undefined : { minWidth: WEEK_MINIMUM_PX }}
           >
             {slotError ? <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{slotError}</p> : null}
             {loadingSlots ? <p className="text-sm text-muted-foreground">Planning laden…</p> : null}

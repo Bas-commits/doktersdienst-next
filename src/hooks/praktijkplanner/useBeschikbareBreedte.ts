@@ -19,6 +19,15 @@ export const PANEEL_DREMPEL_PX = 1600;
 export const PALET_BREEDTE_PX = 256;
 
 /**
+ * De smalste week waar nog in te plannen is: 160 pixels voor de namen en 128 per dag.
+ *
+ * Staat er een paneel naast, dan krijgen week en paneel allebei de helft, maar niet ten koste
+ * van de week. Op de drempel van 1600 is de helft maar 792, en daar past het rooster niet in.
+ * Dit getal is de bodem: eerst de week zijn minimum, de rest is voor het paneel.
+ */
+export const WEEK_MINIMUM_PX = 1056;
+
+/**
  * De breedte van een blok, bijgehouden terwijl het scherm verandert.
  *
  * Meet de ruimte die het rooster echt krijgt, niet de breedte van het venster. De zijbalk

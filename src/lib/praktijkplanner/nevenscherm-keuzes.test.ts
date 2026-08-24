@@ -13,12 +13,12 @@ describe('nevenschermKeuzes', () => {
     expect(nevenschermKeuzes({ alleenLezen: true, isBeheerder: true })).toEqual(['geen', 'maand']);
   });
 
-  it('geeft de planner ook Capaciteit en Locatie', () => {
+  it('geeft de planner ook Capaciteit en Expertise', () => {
     expect(nevenschermKeuzes({ alleenLezen: false, isBeheerder: true })).toEqual([
       'geen',
       'maand',
       'capaciteit',
-      'locatie',
+      'expertise',
     ]);
   });
 

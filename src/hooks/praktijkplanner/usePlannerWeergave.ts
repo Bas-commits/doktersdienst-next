@@ -10,9 +10,14 @@ import { formatIsoDate, isIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/
  * je erbij wil zien. Past het niet naast elkaar, dan komt het in de plaats van de week; dat
  * is precies wat de oude knop Maand deed. Zie useBeschikbareBreedte.
  */
-export type PlannerNevenscherm = 'geen' | 'maand' | 'capaciteit' | 'locatie';
+export type PlannerNevenscherm = 'geen' | 'maand' | 'capaciteit' | 'expertise';
 
-const NEVENSCHERMEN: readonly PlannerNevenscherm[] = ['geen', 'maand', 'capaciteit', 'locatie'];
+const NEVENSCHERMEN: readonly PlannerNevenscherm[] = [
+  'geen',
+  'maand',
+  'capaciteit',
+  'expertise',
+];
 
 export type PlannerWeergave = {
   weekStart: string;
@@ -52,7 +57,7 @@ function isWeergaveBericht(value: unknown): value is WeergaveBericht {
  * maandVanWeek, zodat week en maand niet uit elkaar kunnen lopen en er maar één ding rond
  * hoeft te gaan.
  *
- * Schermen die geen capaciteit of locatie kennen, zoals de Afwezigheidsplanner, lezen alleen
+ * Schermen die geen capaciteit of expertise kennen, zoals de Afwezigheidsplanner, lezen alleen
  * of het nevenscherm de maand is en tonen anders hun week. Zo blijft er één begrip rondgaan
  * in plaats van twee die uit elkaar lopen.
  *

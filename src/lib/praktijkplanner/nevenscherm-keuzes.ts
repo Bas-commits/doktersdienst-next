@@ -5,7 +5,7 @@ import type { PlannerNevenscherm } from '@/hooks/praktijkplanner/usePlannerWeerg
  *
  * Dit hing eerder alleen aan de rol, en dat is niet genoeg. Rooster inzien is hetzelfde
  * scherm als de Activiteiten planner, alleen alleen-lezen, dus een beheerder die zijn eigen
- * rooster kwam inzien kreeg daar ook Capaciteit en Locatie te zien. Die twee zijn er voor wie
+ * rooster kwam inzien kreeg daar ook Capaciteit en Expertise te zien. Die twee zijn er voor wie
  * plant. Wie alleen komt kijken heeft aan Week en Maand genoeg.
  *
  * Capaciteit blijft daarnaast aan de beheerder voorbehouden, net als de eigen pagina ervan.
@@ -23,6 +23,6 @@ export function nevenschermKeuzes(opties: {
   isBeheerder: boolean;
 }): readonly PlannerNevenscherm[] {
   if (opties.alleenLezen) return ['geen', 'maand'];
-  if (opties.isBeheerder) return ['geen', 'maand', 'capaciteit', 'locatie'];
-  return ['geen', 'maand', 'locatie'];
+  if (opties.isBeheerder) return ['geen', 'maand', 'capaciteit', 'expertise'];
+  return ['geen', 'maand', 'expertise'];
 }

@@ -70,6 +70,10 @@ function TellingLijst({ telling }: { telling: DagdeelTelling }) {
 /**
  * Welke specialismen er deze week op een locatie staan, per dagdeel geteld.
  *
+ * Dit paneel heette Locatie, naar het keuzelijstje bovenin. Dat was de verkeerde naam: de
+ * locatie is het filter, niet het onderwerp. Wat er staat zijn tellingen van expertises en
+ * specificaties. De naam Locatie is bovendien nodig voor het scherm met de fiches per dagdeel.
+ *
  * Het capaciteitsoverzicht ernaast beantwoordt een andere vraag. Dat toont alleen wat er als
  * eis in een capaciteitsjabloon staat, met gepland tegenover benodigd; een expertise die wel
  * op de locatie loopt maar nergens geeist wordt komt daar niet voor. Dit paneel telt wat er
@@ -84,7 +88,7 @@ function TellingLijst({ telling }: { telling: DagdeelTelling }) {
  *     isAfwezig: Een dagdeel waarop de deelnemer afwezig is telt niet mee. Zonder dat telt een
  *         dokter met vakantie gewoon door en lijkt de locatie voller dan hij is.
  */
-export function LocatieSpecialismenPanel({
+export function ExpertisePanel({
   data,
   weekStart,
   slots,

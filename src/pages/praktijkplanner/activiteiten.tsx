@@ -7,7 +7,7 @@ import { Copy, Download, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'l
 import { toast } from 'sonner';
 import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartCell';
 import { CapacityOverviewPanel } from '@/components/praktijkplanner/CapacityOverview';
-import { LocatieSpecialismenPanel } from '@/components/praktijkplanner/LocatieSpecialismenPanel';
+import { ExpertisePanel } from '@/components/praktijkplanner/ExpertisePanel';
 import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
 import { PlannerAvondNachtToggle } from '@/components/praktijkplanner/PlannerAvondNachtToggle';
 import {
@@ -372,7 +372,7 @@ export function ActivitiesContent({
   );
 
   // Een aanvraag is nog geen afwezigheid. Alleen een vastgelegde afwezigheid haalt de dokter
-  // uit de telling van het locatiepaneel; anders verdwijnt hij uit het overzicht op het moment
+  // uit de telling van het expertisepaneel; anders verdwijnt hij uit het overzicht op het moment
   // dat hij vakantie vraagt, terwijl er nog niets besloten is.
   const isAfwezig = useCallback(
     (iddeelnemer: number, datum: string, iddagdeel: number) =>
@@ -1274,8 +1274,8 @@ export function ActivitiesContent({
             {paneel === 'capaciteit' ? (
               <CapacityOverviewPanel groupId={groupId} data={data} weekStart={weekStart} />
             ) : null}
-            {paneel === 'locatie' ? (
-              <LocatieSpecialismenPanel
+            {paneel === 'expertise' ? (
+              <ExpertisePanel
                 data={data}
                 weekStart={weekStart}
                 slots={slots}

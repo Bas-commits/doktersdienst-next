@@ -23,6 +23,32 @@ const basis = {
 };
 
 describe('PlannerDaypartHoverPreview', () => {
+  it('toont de opmerking die bij de fiche staat', async () => {
+    render(
+      <PlannerDaypartHoverPreview {...basis} opmerking="Alleen tot 12 uur aanwezig">
+        <span>fiche</span>
+      </PlannerDaypartHoverPreview>
+    );
+
+    openHover();
+
+    const blok = await waitFor(() => screen.getByTestId('hover-opmerking'));
+    expect(blok).toHaveTextContent('Alleen tot 12 uur aanwezig');
+  });
+
+  it('laat het blok weg als er geen opmerking is', async () => {
+    render(
+      <PlannerDaypartHoverPreview {...basis} opmerking={null}>
+        <span>fiche</span>
+      </PlannerDaypartHoverPreview>
+    );
+
+    openHover();
+
+    await waitFor(() => screen.getByText('Veltenaar, Bart, B'));
+    expect(screen.queryByTestId('hover-opmerking')).toBeNull();
+  });
+
   it('noemt bij een aanvraag welk type absentie is aangevraagd', async () => {
     render(
       <PlannerDaypartHoverPreview

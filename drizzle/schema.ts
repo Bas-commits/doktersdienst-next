@@ -530,6 +530,11 @@ export const planning = pgTable("planning", {
 	idactiviteitspecificatie: integer().references(() => activiteitSpecificaties.id),
 	idlocatie: integer().references(() => locaties.id),
 	idplannerlocatie: integer().references(() => praktijkplannerlocaties.id),
+	/**
+	 * Vrije tekst van de planner bij deze ene fiche. Null als er niets bij staat; een lege
+	 * opmerking bestaat niet. Gaat mee met de regel: dagdeel leeg is opmerking weg.
+	 */
+	opmerking: text(),
 	createdBy: integer("created_by").references(() => deelnemers.id),
 	updatedBy: integer("updated_by").references(() => deelnemers.id),
 	createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),

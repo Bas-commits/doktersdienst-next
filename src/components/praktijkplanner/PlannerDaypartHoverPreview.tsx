@@ -86,6 +86,7 @@ export function PlannerDaypartHoverPreview({
   dienstvoorkeur,
   availabilityName,
   taskNames,
+  opmerking,
   showPlanningDetails = true,
   showParticipant = true,
   chip,
@@ -123,6 +124,8 @@ export function PlannerDaypartHoverPreview({
    * een cel staan. Hier is de ruimte er wel, en wie wil bellen kijkt toch eerst wie er zit.
    */
   taskNames?: Array<{ naam: string; inbelnummer?: string | null }>;
+  /** De vrije tekst die de planner bij deze fiche zette. Op de fiche staat alleen een paperclip. */
+  opmerking?: string | null;
   /**
    * Uit op een dagdeel dat alleen een absentieaanvraag is. Activiteit, locatie, herhaling en
    * taken zijn daar per definitie leeg, en vier regels met een streepje zeggen niets.
@@ -324,6 +327,19 @@ export function PlannerDaypartHoverPreview({
                   <div className="flex justify-between gap-2">
                     <dt className="text-muted-foreground">Beschikbaarheid</dt>
                     <dd className="text-right font-medium">{availabilityName}</dd>
+                  </div>
+                ) : null}
+                {/*
+                  Onder de regels, niet ertussen. De paperclip op de fiche zegt alleen dat er
+                  iets staat; dit is de enige plek waar het te lezen valt, en vrije tekst van
+                  een planner past niet in een regel van naam en waarde.
+                */}
+                {opmerking ? (
+                  <div
+                    className="rounded-md bg-muted p-2 whitespace-pre-wrap"
+                    data-testid="hover-opmerking"
+                  >
+                    {opmerking}
                   </div>
                 ) : null}
                 {/*

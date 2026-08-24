@@ -1,0 +1,16 @@
+-- Een opmerking bij een fiche.
+--
+-- Een fiche zegt nu welke activiteit, taken en locatie er staan, en dat is alles wat het kan
+-- zeggen. Een planner die er iets bij wil zetten dat nergens in past, "alleen ochtend
+-- aanwezig" of "in overleg met de assistente", had daar geen plek voor.
+--
+-- Text en geen varchar met een grens. Een lengte zou een raad zijn, en er wordt niet op
+-- gezocht of gesorteerd. Het scherm houdt de invoer bij een paar regels.
+--
+-- Nullable, en niet een lege string met een default. Geen opmerking en een lege opmerking zijn
+-- hetzelfde ding, en met null is dat in een query af te lezen zonder de lege tekst mee te
+-- moeten wegen.
+--
+-- De opmerking hangt aan de planningsregel zelf. Wordt het dagdeel leeggemaakt, dan gaat de
+-- regel weg en de opmerking mee: zonder fiche is er niets om iets bij op te merken.
+ALTER TABLE "planning" ADD COLUMN IF NOT EXISTS "opmerking" text;

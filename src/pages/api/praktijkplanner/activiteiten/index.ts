@@ -171,6 +171,7 @@ async function loadSlots(
       idactiviteit: schema.planning.idactiviteit,
       idactiviteitspecificatie: schema.planning.idactiviteitspecificatie,
       idplannerlocatie: schema.planning.idplannerlocatie,
+      opmerking: schema.planning.opmerking,
       version: schema.planning.version,
       activityId: schema.activiteiten.id,
       activityNaam: schema.activiteiten.naam,
@@ -288,6 +289,7 @@ async function loadSlots(
       idactiviteit: row.idactiviteit,
       idactiviteitspecificatie: row.idactiviteitspecificatie,
       idplannerlocatie: row.idplannerlocatie,
+      opmerking: row.opmerking,
       version: row.version,
       activity:
         row.activityId != null && row.activityNaam != null

@@ -3,12 +3,16 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Download, Minus, Plus, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-react';
+import { Copy, Download, Minus, Paperclip, Plus, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartCell';
 import { CapacityOverviewPanel } from '@/components/praktijkplanner/CapacityOverview';
 import { ExpertisePanel } from '@/components/praktijkplanner/ExpertisePanel';
 import { LocatieFichesPanel } from '@/components/praktijkplanner/LocatieFichesPanel';
+import {
+  PlannerOpmerkingModal,
+  type PlannerOpmerkingDoel,
+} from '@/components/praktijkplanner/PlannerOpmerkingModal';
 import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
 import { PlannerAvondNachtToggle } from '@/components/praktijkplanner/PlannerAvondNachtToggle';
 import {
@@ -122,6 +126,9 @@ export function ActivitiesContent({
   const [selectedAvailabilityId, setSelectedAvailabilityId] = useState<number | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
   const [clearMode, setClearMode] = useState(false);
+  // Aan betekent: de volgende klik op een fiche opent de opmerking in plaats van te plannen.
+  const [opmerkingMode, setOpmerkingMode] = useState(false);
+  const [opmerkingDoel, setOpmerkingDoel] = useState<PlannerOpmerkingDoel | null>(null);
   const [showNight, setShowNight] = useState(false);
   const [participantFilter, setParticipantFilter] = useState<number | 'all'>('all');
   const [zoom, setZoom] = useState('100');
@@ -543,15 +550,34 @@ export function ActivitiesContent({
               </span>
             ) : null}
           </div>
-          {existing?.isUitzondering ? (
+          {/*
+            Linksboven, en met zijn tweeen naast elkaar als er zowel een afwijking als een
+            opmerking is. Ze stapelen zou er een van de twee onder de ander leggen, en dan is
+            er geen manier om te zien dat het er twee zijn.
+          */}
+          {existing?.isUitzondering || existing?.opmerking ? (
             <span
               className={[
-                'pointer-events-none absolute top-0.5 left-0.5 z-20 rounded bg-background/90 text-amber-500',
+                'pointer-events-none absolute top-0.5 left-0.5 z-20 flex items-center gap-0.5 rounded bg-background/90',
                 isMaand ? 'p-0' : 'p-0.5',
               ].join(' ')}
-              title={afwijkingTekst(existing.recurrenceSourceWeek)}
             >
-              <TriangleAlert className={isMaand ? 'size-2.5' : 'size-3.5'} aria-hidden />
+              {existing?.isUitzondering ? (
+                <TriangleAlert
+                  className={[isMaand ? 'size-2.5' : 'size-3.5', 'text-amber-500'].join(' ')}
+                  aria-hidden
+                >
+                  <title>{afwijkingTekst(existing.recurrenceSourceWeek)}</title>
+                </TriangleAlert>
+              ) : null}
+              {existing?.opmerking ? (
+                <Paperclip
+                  className={[isMaand ? 'size-2.5' : 'size-3.5', 'text-slate-600'].join(' ')}
+                  aria-hidden
+                >
+                  <title>Er staat een opmerking bij deze fiche</title>
+                </Paperclip>
+              ) : null}
             </span>
           ) : null}
           {provisionalOverlay ? provisionalBadge : null}
@@ -576,6 +602,7 @@ export function ActivitiesContent({
             naam: volledigeTaakNaam(taak),
             inbelnummer: taak.inbelbaar ? taak.inbelnummer : null,
           }))}
+          opmerking={existing?.opmerking ?? null}
           chip={
             // De fiche in de kaart moet dezelfde fiche zijn als in het rooster. Zonder de
             // grijze sluier en het vraagteken wijst de planner iets aan dat er anders uitziet
@@ -707,6 +734,7 @@ export function ActivitiesContent({
 
   const clearSelection = useCallback(() => {
     setClearMode(false);
+    setOpmerkingMode(false);
     setSelectedActivityId(null);
     setSelectedSpecificationId(null);
     setSelectedLocationId(null);
@@ -717,11 +745,38 @@ export function ActivitiesContent({
   const setAssignmentClearMode = useCallback((enabled: boolean) => {
     setClearMode(enabled);
     if (!enabled) return;
+    setOpmerkingMode(false);
     setSelectedActivityId(null);
     setSelectedSpecificationId(null);
     setSelectedLocationId(null);
     setSelectedAvailabilityId(null);
     setSelectedTaskIds([]);
+  }, []);
+
+  /*
+    Leegmaken en opmerking zijn allebei een stand waarin de volgende klik iets anders doet dan
+    plannen. Twee tegelijk zou betekenen dat een klik twee dingen kan zijn, dus zet de een de
+    ander uit. Een selectie in het palet gaat ook uit: die hoort bij plannen.
+  */
+  const setAssignmentOpmerkingMode = useCallback((enabled: boolean) => {
+    setOpmerkingMode(enabled);
+    if (!enabled) return;
+    setClearMode(false);
+    setSelectedActivityId(null);
+    setSelectedSpecificationId(null);
+    setSelectedLocationId(null);
+    setSelectedAvailabilityId(null);
+    setSelectedTaskIds([]);
+  }, []);
+
+  /*
+    Iets uit het palet kiezen betekent dat je wil plannen. Leegmaken en opmerking zijn allebei
+    een stand waarin de klik iets anders doet, dus die gaan uit. Zonder dit blijft de vorige
+    stand aan terwijl het palet iets anders laat zien.
+  */
+  const setPlanModus = useCallback(() => {
+    setClearMode(false);
+    setOpmerkingMode(false);
   }, []);
 
   const dismissCursorTool = useCallback(() => {
@@ -730,6 +785,13 @@ export function ActivitiesContent({
 
   const cursorTool = useMemo((): PlannerCursorTool | null => {
     if (!canEdit) return null;
+    if (opmerkingMode) {
+      return {
+        icon: <Paperclip className="text-white" aria-hidden />,
+        color: '#334155',
+        label: 'Opmerking',
+      };
+    }
     if (clearMode) {
       return {
         icon: <Trash2 className="text-white" aria-hidden />,
@@ -818,6 +880,7 @@ export function ActivitiesContent({
   }, [
     canEdit,
     clearMode,
+    opmerkingMode,
     data.masterData.activities,
     data.masterData.availabilityTypes,
     data.masterData.locations,
@@ -842,6 +905,29 @@ export function ActivitiesContent({
     }) => {
       if (!canEdit) {
         toast.info('Alleen secretarissen en beheerders kunnen de activiteitenplanning aanpassen.');
+        return;
+      }
+      /*
+        De opmerkingstand komt voor alles. Een leeg dagdeel heeft niets om iets bij op te
+        merken, en dat zeggen we ook: een lege modal openen die daarna nergens heen kan is
+        erger dan een melding.
+      */
+      if (opmerkingMode) {
+        const bestaand = baseSlotMap.get(slotKey(participant.id, datum, daypart.id));
+        if (!bestaand) {
+          toast.info('Zet eerst iets op dit dagdeel, dan kan er een opmerking bij.');
+          return;
+        }
+        setOpmerkingDoel({
+          iddeelnemer: participant.id,
+          deelnemerNaam: participantDisplayName(participant),
+          datum,
+          iddagdeel: daypart.id,
+          dagdeelNaam:
+            data.masterData.dayparts.find((item) => item.id === daypart.id)?.naam ?? 'dagdeel',
+          opmerking: bestaand.opmerking,
+          recurrenceId: bestaand.recurrenceId,
+        });
         return;
       }
       if (
@@ -974,6 +1060,10 @@ export function ActivitiesContent({
           idactiviteit: next.idactiviteit,
           idactiviteitspecificatie: next.idactiviteitspecificatie,
           idplannerlocatie: next.idplannerlocatie,
+          // Een opmerking overleeft het aanpassen van de fiche; de server laat de kolom ook
+          // met rust. Hem hier op null zetten zou hem tot de volgende ophaalslag laten
+          // verdwijnen en dat leest als weg.
+          opmerking: existingSlot?.opmerking ?? null,
           version: existingSlot?.version ?? 0,
           activity,
           specification,
@@ -1018,6 +1108,8 @@ export function ActivitiesContent({
       absenceMap,
       baseSlotMap,
       clearMode,
+      opmerkingMode,
+      data.masterData.dayparts,
       canEdit,
       data.masterData.activities,
       data.masterData.availabilityTypes,
@@ -1215,28 +1307,30 @@ export function ActivitiesContent({
                 }}
                 clearMode={clearMode}
                 onActivityChange={(id) => {
-                  setClearMode(false);
+                  setPlanModus();
                   setSelectedActivityId(id);
                   setSelectedSpecificationId(null);
                 }}
                 onSpecificationChange={(id) => {
-                  setClearMode(false);
+                  setPlanModus();
                   setSelectedSpecificationId(id);
                 }}
                 onTaskChange={(ids) => {
-                  setClearMode(false);
+                  setPlanModus();
                   setSelectedTaskIds(ids);
                 }}
                 onLocationChange={(id) => {
-                  setClearMode(false);
+                  setPlanModus();
                   setSelectedLocationId(id);
                 }}
                 onAvailabilityChange={(id) => {
-                  setClearMode(false);
+                  setPlanModus();
                   setSelectedAvailabilityId(id);
                 }}
                 onClearSelection={clearSelection}
                 onClearModeChange={setAssignmentClearMode}
+                opmerkingMode={opmerkingMode}
+                onOpmerkingModeChange={setAssignmentOpmerkingMode}
               />
             </div>
           </div>
@@ -1387,6 +1481,16 @@ export function ActivitiesContent({
           participantName={participantDisplayName(actionModal.participant)}
           defaultVanafWeekStart={weekStart}
           onChanged={refreshAfterRecurrence}
+        />
+      ) : null}
+
+      {canEdit ? (
+        <PlannerOpmerkingModal
+          open={opmerkingDoel != null}
+          doel={opmerkingDoel}
+          groupId={groupId}
+          onClose={() => setOpmerkingDoel(null)}
+          onSaved={() => void refreshSlots()}
         />
       ) : null}
 

@@ -168,6 +168,8 @@ export type PraktijkplannerPlanningSlot = {
   idactiviteit: number | null;
   idactiviteitspecificatie: number | null;
   idplannerlocatie: number | null;
+  /** Vrije tekst van de planner bij deze fiche. Null als er niets bij staat. */
+  opmerking: string | null;
   version: number;
   activity: Pick<PraktijkplannerActivity, 'id' | 'naam' | 'afkorting' | 'kleur' | 'icon'> | null;
   specification: Pick<PraktijkplannerActivitySpecification, 'id' | 'naam' | 'afkorting' | 'kleur'> | null;

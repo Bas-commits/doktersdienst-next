@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronDown, ChevronUp, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Paperclip, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import type {
@@ -170,6 +170,7 @@ export function PlannerActivityAssignmentBuilder({
   availabilityTypes,
   selection,
   clearMode,
+  opmerkingMode,
   onActivityChange,
   onSpecificationChange,
   onTaskChange,
@@ -177,6 +178,7 @@ export function PlannerActivityAssignmentBuilder({
   onAvailabilityChange,
   onClearSelection,
   onClearModeChange,
+  onOpmerkingModeChange,
 }: {
   activities: PraktijkplannerActivity[];
   specifications: PraktijkplannerActivitySpecification[];
@@ -185,6 +187,8 @@ export function PlannerActivityAssignmentBuilder({
   availabilityTypes: PraktijkplannerAvailabilityType[];
   selection: Selection;
   clearMode: boolean;
+  /** Aan betekent: de volgende klik op een fiche opent de opmerking in plaats van te plannen. */
+  opmerkingMode: boolean;
   onActivityChange: (id: number | null) => void;
   onSpecificationChange: (id: number | null) => void;
   onTaskChange: (ids: number[]) => void;
@@ -192,6 +196,7 @@ export function PlannerActivityAssignmentBuilder({
   onAvailabilityChange: (id: number | null) => void;
   onClearSelection: () => void;
   onClearModeChange: (enabled: boolean) => void;
+  onOpmerkingModeChange: (enabled: boolean) => void;
 }) {
   const [openSections, setOpenSections] = useState<Record<BuilderSectionId, boolean>>({
     activities: true,
@@ -333,6 +338,26 @@ export function PlannerActivityAssignmentBuilder({
           <Trash2 className="size-4" aria-hidden />
         </span>
         <span>{clearMode ? 'Leegmaken actief' : 'Dagdeel leegmaken'}</span>
+      </button>
+
+      {/*
+        Onder leegmaken, want het is dezelfde soort knop: geen keuze die je op een dagdeel
+        neerzet, maar een stand waarin de volgende klik iets anders doet. De twee sluiten
+        elkaar uit; het scherm zet de ander uit als deze aangaat.
+      */}
+      <button
+        type="button"
+        aria-pressed={opmerkingMode}
+        onClick={() => onOpmerkingModeChange(!opmerkingMode)}
+        className={[
+          'mb-2 flex w-full items-center gap-2 rounded-lg border px-2 py-2 text-left text-xs font-semibold transition',
+          opmerkingMode ? 'border-foreground bg-foreground text-background' : 'border-border hover:bg-muted',
+        ].join(' ')}
+      >
+        <span className={opmerkingMode ? 'text-background' : 'text-muted-foreground'}>
+          <Paperclip className="size-4" aria-hidden />
+        </span>
+        <span>{opmerkingMode ? 'Opmerking actief' : 'Opmerking bij fiche'}</span>
       </button>
 
       <div className="space-y-2">

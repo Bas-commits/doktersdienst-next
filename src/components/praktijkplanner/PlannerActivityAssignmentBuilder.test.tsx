@@ -66,6 +66,7 @@ function BuilderHarness() {
     availabilityId: null,
   });
   const [clearMode, setClearMode] = useState(false);
+  const [opmerkingMode, setOpmerkingMode] = useState(false);
 
   return (
     <PlannerActivityAssignmentBuilder
@@ -76,6 +77,8 @@ function BuilderHarness() {
       availabilityTypes={[]}
       selection={selection}
       clearMode={clearMode}
+      opmerkingMode={opmerkingMode}
+      onOpmerkingModeChange={setOpmerkingMode}
       onActivityChange={(activityId) =>
         setSelection((current) => ({
           ...current,

@@ -33,6 +33,7 @@ import {
 } from '@/hooks/praktijkplanner/useBeschikbareBreedte';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import { usePlannerWeergave } from '@/hooks/praktijkplanner/usePlannerWeergave';
+import { nevenschermKeuzes } from '@/lib/praktijkplanner/nevenscherm-keuzes';
 import {
   buildActivityAssignmentSlot,
   getMissingActivityExpertiseWarning,
@@ -142,20 +143,19 @@ export function ActivitiesContent({
   */
   const naastElkaar =
     beschikbareBreedte - (canEdit ? PALET_BREEDTE_PX : 0) >= PANEEL_DREMPEL_PX;
+  const keuzes = useMemo(
+    () => nevenschermKeuzes({ alleenLezen: readOnly, isBeheerder: data.isManager }),
+    [readOnly, data.isManager]
+  );
   /*
-    Wat er in het paneel komt, of niets. Niet hetzelfde als de knop: een keuze die dit scherm
-    niet kan tonen valt hier terug op niets, en dan blijft de week gewoon staan in plaats van
-    dat er een lege kolom naast komt. Dat gebeurt als een ander venster een keuze doorgeeft
-    die deze gebruiker niet mag zien.
+    Wat er in het paneel komt, of niets. Dezelfde lijst als de knoppen, want anders kan een
+    ander venster een keuze doorgeven die hier niet aan te klikken is: de weergave gaat over
+    een BroadcastChannel naar elk open roosterscherm. Een keuze die dit scherm niet kent valt
+    terug op niets, en dan blijft de week gewoon staan in plaats van dat er een lege kolom
+    naast komt.
   */
   const paneel =
-    toontMaand
-      ? 'maand'
-      : nevenscherm === 'locatie'
-        ? 'locatie'
-        : nevenscherm === 'capaciteit' && data.isManager
-          ? 'capaciteit'
-          : null;
+    nevenscherm === 'geen' || !keuzes.includes(nevenscherm) ? null : nevenscherm;
   const toontWeek = paneel === null || naastElkaar;
 
   // In een cel van 34 pixels is geen fiche neer te zetten, dus de maand is altijd om te
@@ -1115,16 +1115,16 @@ export function ActivitiesContent({
           {/*
             Het capaciteitsoverzicht is er alleen voor secretarissen en beheerders, net als de
             eigen pagina ervan. Een knop aanbieden die op een 403 uitloopt is erger dan geen
-            knop.
+            knop. Zie nevenschermKeuzes voor de rest van de afweging.
+
+            De knop volgt het paneel en niet de gedeelde keuze. Komt er over het kanaal een
+            keuze binnen die dit scherm niet kent, dan staat er de week, en dan hoort Week
+            ook de knop te zijn die aan staat.
           */}
           <PlannerNevenschermKeuze
-            value={nevenscherm}
+            value={paneel ?? 'geen'}
             onChange={setNevenscherm}
-            keuzes={
-              data.isManager
-                ? ['geen', 'maand', 'capaciteit', 'locatie']
-                : ['geen', 'maand', 'locatie']
-            }
+            keuzes={keuzes}
             naastElkaar={naastElkaar}
           />
           {/*

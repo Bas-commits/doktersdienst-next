@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartCell';
 import { CapacityOverviewPanel } from '@/components/praktijkplanner/CapacityOverview';
 import { ExpertisePanel } from '@/components/praktijkplanner/ExpertisePanel';
+import { LocatieFichesPanel } from '@/components/praktijkplanner/LocatieFichesPanel';
 import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
 import { PlannerAvondNachtToggle } from '@/components/praktijkplanner/PlannerAvondNachtToggle';
 import {
@@ -1280,6 +1281,16 @@ export function ActivitiesContent({
                 weekStart={weekStart}
                 slots={slots}
                 isAfwezig={isAfwezig}
+              />
+            ) : null}
+            {paneel === 'locatie' ? (
+              <LocatieFichesPanel
+                data={data}
+                weekStart={weekStart}
+                slots={slots}
+                dayparts={visibleDayparts}
+                isAfwezig={isAfwezig}
+                renderSlot={renderSlot}
               />
             ) : null}
           </div>

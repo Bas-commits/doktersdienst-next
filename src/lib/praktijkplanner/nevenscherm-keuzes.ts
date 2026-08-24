@@ -23,6 +23,6 @@ export function nevenschermKeuzes(opties: {
   isBeheerder: boolean;
 }): readonly PlannerNevenscherm[] {
   if (opties.alleenLezen) return ['geen', 'maand'];
-  if (opties.isBeheerder) return ['geen', 'maand', 'capaciteit', 'expertise'];
-  return ['geen', 'maand', 'expertise'];
+  if (opties.isBeheerder) return ['geen', 'maand', 'capaciteit', 'expertise', 'locatie'];
+  return ['geen', 'maand', 'expertise', 'locatie'];
 }

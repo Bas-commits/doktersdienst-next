@@ -7,6 +7,7 @@ const LABELS: Record<PlannerNevenscherm, string> = {
   maand: 'Maand',
   capaciteit: 'Capaciteit',
   expertise: 'Expertise',
+  locatie: 'Locatie',
 };
 
 /**

@@ -25,6 +25,9 @@ import type {
  * maar in het vakje staan de fiches zelf in plaats van tellingen. Zo lijken de twee panelen
  * op elkaar en hoeft niemand twee indelingen te leren.
  *
+ * Boven de lijst staat Alle locaties. Dan valt het filter weg en staat er wat de hele
+ * waarneemgroep die week doet, inclusief de fiches die aan geen enkele locatie hangen.
+ *
  * Alleen om te kijken. Plannen gaat per dokter, en dat is precies wat het rooster ernaast is.
  *
  * Args:
@@ -56,8 +59,14 @@ export function LocatieFichesPanel({
     hoverEnabled: boolean;
   }) => ReactNode;
 }) {
-  const [locationId, setLocationId] = useState<number | null>(null);
-  const effectiveLocationId = locationId ?? data.masterData.locations[0]?.id ?? null;
+  /*
+    Undefined is nog niets gekozen en valt terug op de eerste locatie. Null is Alle locaties,
+    een echte keuze en dus iets anders dan geen keuze. Twee betekenissen op null leggen zou
+    het scherm bij het openen meteen op alles zetten.
+  */
+  const [locationId, setLocationId] = useState<number | null | undefined>(undefined);
+  const effectiveLocationId =
+    locationId === undefined ? data.masterData.locations[0]?.id ?? null : locationId;
   const huidigMoment = useHuidigMoment();
 
   const verborgenWeekdagen = useMemo(
@@ -84,7 +93,10 @@ export function LocatieFichesPanel({
     const volgorde = new Map(data.participants.map((deelnemer, index) => [deelnemer.id, index]));
     const gevonden = new Map<string, PraktijkplannerParticipant[]>();
     for (const slot of slots) {
-      if (slot.idplannerlocatie !== effectiveLocationId) continue;
+      // Alle locaties neemt ook de fiches mee die helemaal geen locatie hebben. Een taak die
+      // niet aan een locatie hangt is werk van de groep, en dat is precies wat hier gevraagd
+      // wordt: alles wat er deze week staat.
+      if (effectiveLocationId !== null && slot.idplannerlocatie !== effectiveLocationId) continue;
       if (isAfwezig(slot.iddeelnemer, slot.datum, slot.iddagdeel)) continue;
       const deelnemer = deelnemerPerId.get(slot.iddeelnemer);
       if (!deelnemer) continue;
@@ -136,6 +148,7 @@ export function LocatieFichesPanel({
         value={effectiveLocationId}
         onChange={setLocationId}
         compact
+        toontAlleLocaties
       />
       {/*
         Het paneel scrollt van binnen, net als Expertise. Anders schuift het weekrooster links

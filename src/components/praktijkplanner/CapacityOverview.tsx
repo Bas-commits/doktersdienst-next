@@ -133,18 +133,28 @@ export function useCapacityOverview(
   return { cells, loading, locationId: effectiveLocationId, setLocationId, weekRegime };
 }
 
-/** De keuzelijst met plannerlocaties. Staat op de pagina in de kop en in het paneel erboven. */
+/**
+ * De keuzelijst met plannerlocaties. Staat op de pagina in de kop en in het paneel erboven.
+ *
+ * Args:
+ *     toontAlleLocaties: Zet er Alle locaties boven, die null teruggeeft. Alleen voor schermen
+ *         die zonder locatie iets te tonen hebben. Het capaciteitsoverzicht heeft dat niet:
+ *         daar hoort een aantal bij een locatie, en over alle locaties heen opgeteld is dat
+ *         een ander getal dan waar het scherm over gaat.
+ */
 export function CapacityLocatieKeuze({
   locations,
   value,
   onChange,
   compact = false,
+  toontAlleLocaties = false,
 }: {
   locations: PraktijkplannerContextData['masterData']['locations'];
   value: number | null;
   onChange: (id: number | null) => void;
   /** In het paneel staat de lijst op een eigen regel en mag hij lager zijn dan in de paginakop. */
   compact?: boolean;
+  toontAlleLocaties?: boolean;
 }) {
   return (
     <label className={compact ? 'flex min-w-0 items-center gap-2 text-sm' : 'flex min-w-0 items-center gap-2 text-base'}>
@@ -162,6 +172,7 @@ export function CapacityLocatieKeuze({
             : 'h-10 w-56 max-w-full rounded border bg-background px-3 text-base'
         }
       >
+        {toontAlleLocaties ? <option value="">Alle locaties</option> : null}
         {locations.map((location) => (
           <option key={location.id} value={location.id}>
             {location.naam}

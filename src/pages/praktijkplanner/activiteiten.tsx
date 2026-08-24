@@ -3,7 +3,7 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Download, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-react';
+import { Copy, Download, Minus, Plus, Repeat, SendHorizontal, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartCell';
 import { CapacityOverviewPanel } from '@/components/praktijkplanner/CapacityOverview';
@@ -34,6 +34,12 @@ import {
 } from '@/hooks/praktijkplanner/useBeschikbareBreedte';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
 import { usePlannerWeergave } from '@/hooks/praktijkplanner/usePlannerWeergave';
+import {
+  MAAND_CEL_MATEN,
+  MAAND_CEL_STANDAARD,
+  toontTekstInMaand,
+  volgendeCelGrootte,
+} from '@/lib/praktijkplanner/maand-celgrootte';
 import { nevenschermKeuzes } from '@/lib/praktijkplanner/nevenscherm-keuzes';
 import {
   buildActivityAssignmentSlot,
@@ -120,6 +126,12 @@ export function ActivitiesContent({
   const [participantFilter, setParticipantFilter] = useState<number | 'all'>('all');
   const [zoom, setZoom] = useState('100');
   const [actionModal, setActionModal] = useState<ParticipantActionModal | null>(null);
+  /*
+    De maat van een dagvakje in de maand. Wordt niet bewaard, net als de keuze naast de week:
+    een scherm opent altijd hetzelfde. Een stand van gisteren die je vandaag niet meer verwacht
+    is verwarrender dan een knopje dat je opnieuw indrukt.
+  */
+  const [maandCelGrootte, setMaandCelGrootte] = useState<number>(MAAND_CEL_STANDAARD);
 
   const end = useMemo(() => addDays(weekStart, 6), [weekStart]);
 
@@ -1129,6 +1141,34 @@ export function ActivitiesContent({
             naastElkaar={naastElkaar}
           />
           {/*
+            Plus en min horen bij de maand en staan er dus alleen als die er is. In dezelfde
+            rij als de rest: het is een knop over wat je ziet, net als de keuze ernaast.
+          */}
+          {paneel === 'maand' ? (
+            <div className="inline-flex shrink-0 overflow-hidden rounded-md border text-muted-foreground">
+              <button
+                type="button"
+                className="px-2 py-1 transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                title="Kleinere fiches, meer dagen in beeld"
+                disabled={maandCelGrootte === MAAND_CEL_MATEN[0]}
+                onClick={() => setMaandCelGrootte((huidig) => volgendeCelGrootte(huidig, 'uit'))}
+              >
+                <Minus className="size-4" aria-hidden />
+                <span className="sr-only">Kleinere fiches in de maand</span>
+              </button>
+              <button
+                type="button"
+                className="border-l px-2 py-1 transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                title="Grotere fiches, vanaf de weekmaat met tekst erbij"
+                disabled={maandCelGrootte === MAAND_CEL_MATEN[MAAND_CEL_MATEN.length - 1]}
+                onClick={() => setMaandCelGrootte((huidig) => volgendeCelGrootte(huidig, 'in'))}
+              >
+                <Plus className="size-4" aria-hidden />
+                <span className="sr-only">Grotere fiches in de maand</span>
+              </button>
+            </div>
+          ) : null}
+          {/*
             De knop staat er ook voor wie het rooster alleen inziet. Een dokter die zijn eigen
             week wil meenemen heeft er evenveel aan als de planner, en het bestand bevat niets
             dat het scherm niet al toont.
@@ -1259,13 +1299,16 @@ export function ActivitiesContent({
                 dayparts={visibleDayparts}
                 year={monthAnchor.year}
                 month={monthAnchor.month}
+                celGrootte={maandCelGrootte}
                 renderCell={({ participant, datum, daypart }) =>
                   renderSlot({
                     participant,
                     datum,
                     daypart,
                     hoverEnabled: cursorTool == null,
-                    variant: 'month',
+                    // Bij de weekmaat past de fiche zoals de week hem tekent, met tekst en
+                    // met het telefoonicoontje. Dat hangt aan de maat en niet aan het knopje.
+                    variant: toontTekstInMaand(maandCelGrootte) ? 'week' : 'month',
                   })
                 }
                 holidayLabels={holidays}

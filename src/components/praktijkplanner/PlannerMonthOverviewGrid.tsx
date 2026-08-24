@@ -9,17 +9,11 @@ import {
   weekdayFromIsoDate,
 } from '@/lib/praktijkplanner/dates';
 import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
+import { MAAND_CEL_STANDAARD } from '@/lib/praktijkplanner/maand-celgrootte';
 import type { PlannerDaypartCell } from './PlannerDaypartGrid';
 
 const WEEKDAG_LETTERS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
-/**
- * Een dagvakje is vierkant, want er staat een fiche in en die heeft drie banden onder elkaar.
- * Bij 34 pixels is een band elf pixels hoog: genoeg voor de kleur en het icoon. Smaller is de
- * fiche niet meer te herkennen, breder past een maand van 31 dagen op geen enkel scherm meer.
- */
-const DAG_BREEDTE_PX = 34;
-const CEL_HOOGTE_PX = 34;
 const NAAM_BREEDTE_PX = 176;
 const DAGDEEL_BREEDTE_PX = 24;
 
@@ -51,6 +45,11 @@ function weekGroepen(dates: string[]): Array<{ week: number; dagen: number }> {
  * wat een planner afleest, dus een letter in plaats daarvan haalt de maand leeg. Zie de
  * dichtheid `micro` in PlannerCombinedDaypartChip voor wat er bij 34 pixels overblijft.
  * De hoverkaart toont onveranderd alles.
+ *
+ * Args:
+ *     celGrootte: De maat van een dagvakje in pixels, vierkant. Was vast op 34; het scherm
+ *         bedient dit met plus en min. Wat er bij welke maat in de fiche past bepaalt de
+ *         aanroeper, want die tekent de fiche. Zie maand-celgrootte.
  */
 export function PlannerMonthOverviewGrid({
   participants,
@@ -61,6 +60,7 @@ export function PlannerMonthOverviewGrid({
   holidayLabels,
   onParticipantNameClick,
   verborgenWeekdagen,
+  celGrootte = MAAND_CEL_STANDAARD,
 }: {
   participants: PraktijkplannerParticipant[];
   dayparts: PraktijkplannerDaypart[];
@@ -71,6 +71,7 @@ export function PlannerMonthOverviewGrid({
   onParticipantNameClick?: (participant: PraktijkplannerParticipant) => void;
   /** ISO-weekdagen die de groep nooit gebruikt. Zie weekdagenZonderRooster. */
   verborgenWeekdagen?: ReadonlySet<number>;
+  celGrootte?: number;
 }) {
   const huidigMoment = useHuidigMoment();
   const bounds = monthBounds(year, month);
@@ -123,7 +124,7 @@ export function PlannerMonthOverviewGrid({
               return (
                 <th
                   key={datum}
-                  style={{ width: DAG_BREEDTE_PX, minWidth: DAG_BREEDTE_PX }}
+                  style={{ width: celGrootte, minWidth: celGrootte }}
                   className={[
                     'border-r border-b px-0 py-1 text-center font-medium',
                     weekdag >= 6 ? 'bg-muted/60' : 'bg-muted/20',
@@ -180,7 +181,7 @@ export function PlannerMonthOverviewGrid({
                   return (
                     <td
                       key={datum}
-                      style={{ width: DAG_BREEDTE_PX, minWidth: DAG_BREEDTE_PX }}
+                      style={{ width: celGrootte, minWidth: celGrootte }}
                       className={[
                         'border-r border-b p-0 text-center align-middle',
                         weekdag >= 6 ? 'bg-muted/40' : '',
@@ -193,7 +194,7 @@ export function PlannerMonthOverviewGrid({
                         een hoogte in pixels heeft. Een td met alleen een klasse geeft die niet
                         door, dus staat de hoogte hier op het blokje eromheen.
                       */}
-                      <div className="relative" style={{ height: CEL_HOOGTE_PX }}>
+                      <div className="relative" style={{ height: celGrootte }}>
                         {renderCell({ participant, datum, daypart })}
                       </div>
                     </td>

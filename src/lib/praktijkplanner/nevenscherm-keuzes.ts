@@ -12,10 +12,11 @@ import type { PlannerNevenscherm } from '@/hooks/praktijkplanner/usePlannerWeerg
  * Een knop aanbieden die op een 403 uitloopt is erger dan geen knop.
  *
  * Args:
- *     alleenLezen: Of dit Rooster inzien is. Niet hetzelfde als "mag niet plannen": een
- *         dokter mag ook op de Activiteiten planner niets wijzigen, maar kijkt daar wel mee
- *         naar de locaties.
- *     isBeheerder: Of deze gebruiker secretaris of beheerder is.
+ *     alleenLezen: Of dit Rooster inzien is. Niet hetzelfde als "mag niet plannen".
+ *     isBeheerder: Of deze gebruiker secretaris of beheerder is. De Activiteiten planner
+ *         staat alleen in het menu van de secretaris, dus een dokter komt daar normaal niet.
+ *         De derde uitkomst hieronder geldt dus alleen voor wie het adres intypt, en houdt
+ *         het gedrag zoals het was.
  */
 export function nevenschermKeuzes(opties: {
   alleenLezen: boolean;

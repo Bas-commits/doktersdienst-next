@@ -257,6 +257,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           idexpertise: expertise.idexpertise,
           nietLocatieGebonden: activeValue(body.nietLocatieGebonden, false),
           inbelbaar: activeValue(body.inbelbaar, false),
+          inbelnummer: optionalText(body.inbelnummer, 30),
           isDienst: activeValue(body.isDienst, false),
           verwijderd: 0,
           volgorde: 9999,
@@ -418,6 +419,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           kleur: optionalText(body.kleur, 50),
           nietLocatieGebonden: activeValue(body.nietLocatieGebonden, false),
           inbelbaar: activeValue(body.inbelbaar, false),
+          inbelnummer: optionalText(body.inbelnummer, 30),
           isDienst: activeValue(body.isDienst, false),
           verwijderd: activeValue(body.actief) ? 0 : 1,
         })

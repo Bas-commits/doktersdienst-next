@@ -39,7 +39,7 @@ const TABS: Array<{ id: BeheerTab; label: string }> = [
 ];
 
 function initialForm(): Form {
-  return { actief: true, nietLocatieGebonden: false, inbelbaar: false, isDienst: false };
+  return { actief: true, nietLocatieGebonden: false, inbelbaar: false, inbelnummer: '', isDienst: false };
 }
 
 function getItems(masterData: PraktijkplannerMasterData, entity: Entity) {
@@ -191,6 +191,7 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
       actief: item.actief !== false,
       nietLocatieGebonden: item.nietLocatieGebonden === true,
       inbelbaar: item.inbelbaar === true,
+      inbelnummer: String(item.inbelnummer ?? ''),
       isDienst: item.isDienst === true,
       omschrijving: String(item.omschrijving ?? ''),
       naam: String(item.naam ?? ''),
@@ -512,9 +513,30 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
                 <Label className="cursor-pointer">Hierop kan worden ingebeld</Label>
                 <span className="text-xs text-muted-foreground">
                   Voor taken waarbij collega&apos;s de dienstdoende dokter mogen bellen, zoals een extern
-                  consult. In het rooster komt er dan een telefoonicoontje bij te staan. Het nummer
-                  hoeft u hier niet in te vullen, dat staat al bij de dokter zelf.
+                  consult. In het rooster komt er dan een telefoonicoontje bij te staan.
                 </span>
+              </span>
+            </label>
+          ) : null}
+          {/*
+            Alleen zichtbaar als het vinkje aanstaat. Een nummer bij een taak die niet inbelbaar
+            is wordt nergens getoond, dus een leeg veld dat altijd meekijkt is een vraag zonder
+            antwoord.
+          */}
+          {entity === 'task' && form.inbelbaar === true ? (
+            <label className="grid gap-1 text-sm md:col-span-2">
+              <span className="font-medium">Nummer om op in te bellen</span>
+              <input
+                className="h-9 rounded border bg-background px-2"
+                maxLength={30}
+                placeholder="Bijvoorbeeld 088 123 4567"
+                value={String(form.inbelnummer ?? '')}
+                onChange={(event) => setForm((current) => ({ ...current, inbelnummer: event.target.value }))}
+              />
+              <span className="text-xs text-muted-foreground">
+                Mag leeg blijven; het telefoonicoontje staat er dan nog steeds. Vult u een nummer
+                in, dan verschijnt het bij de taak zodra iemand met de muis over een dagdeel gaat.
+                In het rooster zelf is er geen ruimte voor.
               </span>
             </label>
           ) : null}

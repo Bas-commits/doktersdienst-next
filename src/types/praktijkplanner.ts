@@ -79,6 +79,14 @@ export type PraktijkplannerTaskType = {
   /** Collega's kunnen deze taak bellen; het rooster zet er een telefoonicoontje bij. */
   inbelbaar: boolean;
   /**
+   * Het nummer waarop deze taak bereikbaar is, of leeg.
+   *
+   * Staat bewust niet op de fiche zelf: in de week is de taakband negen pixels tekst hoog en
+   * kunnen er drie taken in een cel staan. Het nummer hoort daarom in de hoverkaart, waar de
+   * taaknaam ook al voluit staat.
+   */
+  inbelnummer: string | null;
+  /**
    * Deze taak is een dienst. Mag daarom wel op een dagdeel waarop de arts niet werkt, en
    * wordt met rust gelaten door herhalen en een week kopieren. Leegmaken haalt hem wel weg,
    * want anders is een dienst die er per ongeluk staat nergens meer vanaf te krijgen.
@@ -148,6 +156,8 @@ export type PraktijkplannerTask = {
   kleur: string | null;
   /** Staat op het taaktype, niet op deze planning. Zie PraktijkplannerTaskType. */
   inbelbaar: boolean;
+  /** Staat op het taaktype, niet op deze planning. Zie PraktijkplannerTaskType. */
+  inbelnummer: string | null;
 };
 
 export type PraktijkplannerPlanningSlot = {

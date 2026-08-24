@@ -559,7 +559,10 @@ export function ActivitiesContent({
           locationName={locationItem?.label}
           absence={provisionalOverlay ? { type: absenceTypeName, aangevraagd: true } : null}
           availabilityName={availability?.naam}
-          taskNames={tasks.map(volledigeTaakNaam)}
+          taskNames={tasks.map((taak) => ({
+            naam: volledigeTaakNaam(taak),
+            inbelnummer: taak.inbelbaar ? taak.inbelnummer : null,
+          }))}
           chip={
             // De fiche in de kaart moet dezelfde fiche zijn als in het rooster. Zonder de
             // grijze sluier en het vraagteken wijst de planner iets aan dat er anders uitziet
@@ -929,6 +932,7 @@ export function ActivitiesContent({
                   omschrijving: task.omschrijving,
                   kleur: task.kleur,
                   inbelbaar: task.inbelbaar,
+                  inbelnummer: task.inbelnummer,
                 },
               ]
             : [];

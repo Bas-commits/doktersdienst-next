@@ -16,6 +16,7 @@ function taak(overrides: Partial<PraktijkplannerTaskType> = {}): Praktijkplanner
     idexpertise: null,
     nietLocatieGebonden: false,
     inbelbaar: false,
+    inbelnummer: null,
     isDienst: false,
     actief: true,
     ...overrides,

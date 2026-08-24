@@ -115,8 +115,14 @@ export function PlannerDaypartHoverPreview({
   /** De dienstvoorkeur op dit dagdeel. Staat los van de afwezigheid; beide kunnen er zijn. */
   dienstvoorkeur?: { waarde: PraktijkplannerDienstvoorkeurWaarde; aangevraagd: boolean } | null;
   availabilityName?: string | null;
-  /** De taken voluit: de omschrijving van elk taaktype, niet de afkorting. */
-  taskNames?: string[];
+  /**
+   * De taken voluit: de omschrijving van elk taaktype, niet de afkorting.
+   *
+   * Met het nummer erbij als de taak inbelbaar is en er een nummer is ingevuld. Op de fiche
+   * zelf past dat niet: de taakband is daar negen pixels tekst hoog en er kunnen drie taken in
+   * een cel staan. Hier is de ruimte er wel, en wie wil bellen kijkt toch eerst wie er zit.
+   */
+  taskNames?: Array<{ naam: string; inbelnummer?: string | null }>;
   /**
    * Uit op een dagdeel dat alleen een absentieaanvraag is. Activiteit, locatie, herhaling en
    * taken zijn daar per definitie leeg, en vier regels met een streepje zeggen niets.
@@ -127,6 +133,11 @@ export function PlannerDaypartHoverPreview({
   chip: ReactNode;
   children: ReactNode;
 }) {
+  // Alleen de taken waar echt een nummer bij staat. Inbelbaar zonder nummer levert geen regel
+  // op; het telefoonicoontje op de fiche zegt dan al wat er te zeggen valt.
+  const inbelnummers = (taskNames ?? []).filter(
+    (taak): taak is { naam: string; inbelnummer: string } => Boolean(taak.inbelnummer)
+  );
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState<HoverPosition | null>(null);
   const [coords, setCoords] = useState<{ left: number; top: number } | null>(null);
@@ -282,8 +293,30 @@ export function PlannerDaypartHoverPreview({
                       {taskNames && taskNames.length > 0
                         ? // Elke taak op zijn eigen regel. Achter elkaar met een komma ertussen
                           // lopen twee volledige omschrijvingen in elkaar over.
-                          taskNames.map((naam, index) => <p key={`${naam}-${index}`}>{naam}</p>)
+                          taskNames.map((taak, index) => (
+                            <p key={`${taak.naam}-${index}`}>{taak.naam}</p>
+                          ))
                         : '—'}
+                    </dd>
+                  </div>
+                ) : null}
+                {/*
+                  Een eigen regel, net als Taak. Achter de taaknaam geplakt loopt een nummer
+                  van twaalf tekens vast met een omschrijving als Extern consult oncologie.
+
+                  De taaknaam staat er alleen bij als er meer dan een nummer is. Bij een enkel
+                  nummer staat de taak al op de regel erboven en zou de naam er twee keer staan.
+                */}
+                {inbelnummers.length > 0 ? (
+                  <div className="flex justify-between gap-2">
+                    <dt className="shrink-0 text-muted-foreground">Inbellen</dt>
+                    <dd className="text-right font-medium" data-testid="hover-inbellen">
+                      {inbelnummers.map((taak, index) => (
+                        <p key={`${taak.naam}-${index}`}>
+                          {inbelnummers.length > 1 ? `${taak.naam} ` : ''}
+                          {taak.inbelnummer}
+                        </p>
+                      ))}
                     </dd>
                   </div>
                 ) : null}

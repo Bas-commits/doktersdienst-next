@@ -166,6 +166,8 @@ export const taaktypen = pgTable("taaktypen", {
 	nietLocatieGebonden: boolean("niet_locatie_gebonden"),
 	deelnemer2Mogelijk: boolean(),
 	inbelbaar: boolean(),
+	/** Het nummer waarop deze taak bereikbaar is. Mag leeg zijn terwijl inbelbaar aanstaat. */
+	inbelnummer: varchar({ length: 30 }),
 	isDienst: boolean("is_dienst"),
 });
 

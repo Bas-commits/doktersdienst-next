@@ -78,7 +78,7 @@ describe('PlannerDaypartHoverPreview', () => {
       <PlannerDaypartHoverPreview
         {...basis}
         activityName="OK Longtransplantatie"
-        taskNames={['Spoedsein Utrecht', 'Consulten Utrecht']}
+        taskNames={[{ naam: 'Spoedsein Utrecht' }, { naam: 'Consulten Utrecht' }]}
       >
         <span>fiche</span>
       </PlannerDaypartHoverPreview>
@@ -94,9 +94,64 @@ describe('PlannerDaypartHoverPreview', () => {
     expect(screen.getByTestId('hover-activiteit')).toHaveTextContent('OK Longtransplantatie');
   });
 
+  it('zet het inbelnummer op een eigen regel en niet achter de taaknaam', async () => {
+    render(
+      <PlannerDaypartHoverPreview
+        {...basis}
+        taskNames={[
+          { naam: 'Extern consult', inbelnummer: '088 123 4567' },
+          { naam: 'Supervisie', inbelnummer: null },
+        ]}
+      >
+        <span>fiche</span>
+      </PlannerDaypartHoverPreview>
+    );
+
+    openHover();
+
+    const taken = await waitFor(() => screen.getByTestId('hover-taken'));
+    expect(taken).not.toHaveTextContent('088 123 4567');
+    expect(screen.getByTestId('hover-inbellen')).toHaveTextContent('088 123 4567');
+    expect(screen.getByText('Inbellen')).toBeInTheDocument();
+  });
+
+  it('noemt de taak erbij zodra twee taken een nummer hebben', async () => {
+    render(
+      <PlannerDaypartHoverPreview
+        {...basis}
+        taskNames={[
+          { naam: 'Extern consult', inbelnummer: '088 123 4567' },
+          { naam: 'Extern consult oncologie', inbelnummer: '088 765 4321' },
+        ]}
+      >
+        <span>fiche</span>
+      </PlannerDaypartHoverPreview>
+    );
+
+    openHover();
+
+    const inbellen = await waitFor(() => screen.getByTestId('hover-inbellen'));
+    expect(inbellen.querySelectorAll('p')).toHaveLength(2);
+    expect(inbellen).toHaveTextContent('Extern consult 088 123 4567');
+    expect(inbellen).toHaveTextContent('Extern consult oncologie 088 765 4321');
+  });
+
+  it('laat de regel weg als een inbelbare taak geen nummer heeft', async () => {
+    render(
+      <PlannerDaypartHoverPreview {...basis} taskNames={[{ naam: 'Supervisie', inbelnummer: null }]}>
+        <span>fiche</span>
+      </PlannerDaypartHoverPreview>
+    );
+
+    openHover();
+
+    await waitFor(() => screen.getByTestId('hover-taken'));
+    expect(screen.queryByTestId('hover-inbellen')).toBeNull();
+  });
+
   it('noemt een dagdeel met een enkele taak Taak', async () => {
     render(
-      <PlannerDaypartHoverPreview {...basis} taskNames={['Spoedsein Utrecht']}>
+      <PlannerDaypartHoverPreview {...basis} taskNames={[{ naam: 'Spoedsein Utrecht' }]}>
         <span>fiche</span>
       </PlannerDaypartHoverPreview>
     );

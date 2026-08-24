@@ -241,6 +241,7 @@ async function loadSlots(
         omschrijving: schema.taaktypen.omschrijving,
         kleur: schema.taaktypen.kleur,
         inbelbaar: schema.taaktypen.inbelbaar,
+        inbelnummer: schema.taaktypen.inbelnummer,
       })
       .from(schema.planningtaak)
       .innerJoin(schema.taaktypen, eq(schema.planningtaak.idtaaktype, schema.taaktypen.id))
@@ -256,6 +257,7 @@ async function loadSlots(
         omschrijving: task.omschrijving,
         kleur: task.kleur,
         inbelbaar: task.inbelbaar === true,
+        inbelnummer: task.inbelnummer ?? null,
       });
       tasksByPlanning.set(task.idplanning, items);
     }

@@ -218,6 +218,7 @@ const dienstContext: PraktijkplannerPageContext = {
           idexpertise: null,
           nietLocatieGebonden: true,
           inbelbaar: false,
+          inbelnummer: null,
           isDienst: true,
           actief: true,
         },

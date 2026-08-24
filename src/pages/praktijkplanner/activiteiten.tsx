@@ -1180,8 +1180,13 @@ export function ActivitiesContent({
             className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border bg-background px-3 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
             title="Download deze week als Excel-bestand"
           >
+            {/*
+              Alleen Excel op de knop. Het pijltje zegt al dat er iets gedownload wordt, en
+              deze rij moet op een laptop naast de weekbalk, de keuze en plus en min passen.
+              De volledige zin staat in de titel eronder.
+            */}
             <Download className="size-4" aria-hidden />
-            Download Excel
+            Excel
           </button>
         </>
       </PraktijkplannerTitleAside>

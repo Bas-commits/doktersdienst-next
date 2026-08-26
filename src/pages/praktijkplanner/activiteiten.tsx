@@ -1088,7 +1088,7 @@ export function ActivitiesContent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ idwaarneemgroep: groupId, slots: [next] }),
         });
-        const payload = (await response.json()) as { error?: string };
+        const payload = (await response.json()) as { error?: string; hersteld?: number };
         if (!response.ok) throw new Error(payload.error || 'Wijziging kon niet worden opgeslagen.');
         await refreshSlots();
         notifyPlannerChanged(groupId);
@@ -1097,7 +1097,13 @@ export function ActivitiesContent({
             toast.warning(warning, { duration: 8000 });
           }
         } else {
-          toast.success(clearMode ? 'Dagdeel leeggemaakt.' : 'Dagdeel opgeslagen.');
+          toast.success(
+            payload.hersteld
+              ? 'Afwijking weggehaald, het fiche van de herhaling staat er weer.'
+              : clearMode
+                ? 'Dagdeel leeggemaakt.'
+                : 'Dagdeel opgeslagen.'
+          );
         }
       } catch (error) {
         setSlots(previousSlots);

@@ -9,6 +9,10 @@ import {
 import { isIsoDate, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
 import { dienstTaaktypeIds } from '@/lib/praktijkplanner/dienst-taaktypen';
 import {
+  UITZONDERING_VERWIJDERD,
+  herstelHerhalingsfiche,
+} from '@/lib/praktijkplanner/herhaling-herstel-db';
+import {
   assertDaypartSchedulable,
   SchedulableDaypartError,
 } from '@/lib/praktijkplanner/schedulable-dayparts-db';
@@ -28,7 +32,8 @@ type SlotMutation = {
 
 type Data =
   | { slots: PraktijkplannerPlanningSlot[] }
-  | { success: true }
+  /** `hersteld`: hoeveel dagdelen het fiche van hun herhaling terugkregen in plaats van leeg te blijven. */
+  | { success: true; hersteld: number }
   | { error: string };
 
 class PlannerRequestError extends Error {
@@ -484,6 +489,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       await assertMasterDataBelongsToGroup(accessResult.access.idwaarneemgroep, mutation);
     }
 
+    let hersteldeFiches = 0;
     await db.transaction(async (tx) => {
       for (const mutation of parsed) {
         const [existing] = await tx
@@ -519,23 +525,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
               .select({
                 idherhaling: schema.planningherhalingslots.idherhaling,
                 isBronslot: schema.planningherhalingslots.isBronslot,
+                isUitzondering: schema.planningherhalingslots.isUitzondering,
               })
               .from(schema.planningherhalingslots)
               .where(eq(schema.planningherhalingslots.idplanning, existing.id))
               .limit(1);
-            if (link?.idherhaling != null && !link.isBronslot) {
+            const idherhaling = !link?.isBronslot ? link?.idherhaling ?? null : null;
+            await tx.delete(schema.planning).where(eq(schema.planning.id, existing.id));
+
+            /*
+              Een afwijking weghalen betekent terug naar de reeks en niet naar een leeg vakje:
+              de planner plakte hier iets overheen en haalt dat er nu weer af. Een gewoon fiche
+              van de reeks leegmaken blijft leeg; daar is niets overheen geplakt en dan is
+              leegmaken precies wat het woord zegt.
+            */
+            const hersteld =
+              idherhaling != null && link?.isUitzondering === true
+                ? await herstelHerhalingsfiche(tx, {
+                    idherhaling,
+                    idwaarneemgroep: accessResult.access.idwaarneemgroep,
+                    iddeelnemer: mutation.iddeelnemer,
+                    datum: mutation.datum,
+                    iddagdeel: mutation.iddagdeel,
+                    userId: accessResult.access.user.id,
+                  })
+                : false;
+
+            if (hersteld) hersteldeFiches += 1;
+            if (idherhaling != null && !hersteld) {
               await tx
                 .insert(schema.planningherhalinguitzonderingen)
                 .values({
-                  idherhaling: link.idherhaling,
+                  idherhaling,
                   reeksdatum: mutation.datum,
                   iddagdeel: mutation.iddagdeel,
-                  type: 'verwijderd',
+                  type: UITZONDERING_VERWIJDERD,
                   createdBy: accessResult.access.user.id,
                 })
                 .onConflictDoNothing();
             }
-            await tx.delete(schema.planning).where(eq(schema.planning.id, existing.id));
           }
           continue;
         }
@@ -613,7 +641,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       }
     });
 
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, hersteld: hersteldeFiches });
   } catch (error) {
     if (error instanceof PlannerRequestError) {
       return res.status(error.status).json({ error: error.message });

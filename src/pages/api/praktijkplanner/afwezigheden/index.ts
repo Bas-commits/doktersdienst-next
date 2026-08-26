@@ -8,6 +8,10 @@ import {
 } from '@/lib/praktijkplanner/access';
 import { isIsoDate, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
 import {
+  UITZONDERING_AFWEZIGHEID,
+  herstelNaAfwezigheid,
+} from '@/lib/praktijkplanner/herhaling-herstel-db';
+import {
   assertDaypartSchedulable,
   SchedulableDaypartError,
 } from '@/lib/praktijkplanner/schedulable-dayparts-db';
@@ -87,7 +91,7 @@ async function clearPlanningForConfirmedAbsence(
         idherhaling: link.idherhaling,
         reeksdatum: params.datum,
         iddagdeel: params.iddagdeel,
-        type: 'verwijderd',
+        type: UITZONDERING_AFWEZIGHEID,
         createdBy: params.userId,
       })
       .onConflictDoNothing();
@@ -368,6 +372,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             await tx
               .delete(schema.planningafwezigheden)
               .where(eq(schema.planningafwezigheden.id, existing.id));
+            /*
+              Gaat de afwezigheid niet door, dan hoort het fiche van de herhaling er weer te
+              staan. Het is weggehaald toen de afwezigheid werd bevestigd, dus het vakje leeg
+              laten zou de reeks stilletjes een dagdeel armer maken.
+            */
+            await herstelNaAfwezigheid(tx, {
+              idwaarneemgroep: accessResult.access.idwaarneemgroep,
+              iddeelnemer: mutation.iddeelnemer,
+              datum: mutation.datum,
+              iddagdeel: mutation.iddagdeel,
+              userId: accessResult.access.user.id,
+            });
           }
           continue;
         }
@@ -396,6 +412,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
         if (!mutation.isVoorlopig) {
           await clearPlanningForConfirmedAbsence(tx, {
+            idwaarneemgroep: accessResult.access.idwaarneemgroep,
+            iddeelnemer: mutation.iddeelnemer,
+            datum: mutation.datum,
+            iddagdeel: mutation.iddagdeel,
+            userId: accessResult.access.user.id,
+          });
+        } else {
+          // Terug naar voorlopig laat het dagdeel weer aan de planning: alleen een bevestigde
+          // afwezigheid haalt het fiche weg, dus hier hoort het weer terug te komen.
+          await herstelNaAfwezigheid(tx, {
             idwaarneemgroep: accessResult.access.idwaarneemgroep,
             iddeelnemer: mutation.iddeelnemer,
             datum: mutation.datum,

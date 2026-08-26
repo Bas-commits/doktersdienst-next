@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import {
+  OPMERKING_BEREIKEN,
+  type OpmerkingBereik,
+} from '@/lib/praktijkplanner/opmerking-bereik';
 
 /** Wat het scherm moet weten om een opmerking bij een fiche te kunnen zetten. */
 export type PlannerOpmerkingDoel = {
@@ -26,13 +30,13 @@ function datumTekst(datum: string): string {
 }
 
 /**
- * De opmerking bij een fiche, met de keuze of hij voor de hele herhaling geldt.
+ * De opmerking bij een fiche, met de keuze hoever hij doorwerkt in de herhaling.
  *
- * Die keuze staat er alleen als de fiche uit een herhaling komt. Een vinkje dat niets doet is
- * erger dan geen vinkje: het suggereert dat er een reeks is om aan te vinken.
+ * Die keuze staat er alleen als de fiche uit een herhaling komt. Keuzes die niets doen zijn
+ * erger dan geen keuzes: ze suggereren dat er een reeks is om uit te kiezen.
  *
- * De reeks staat als losse planningsregels in de database, dus "voor de hele herhaling" zet
- * dezelfde tekst bij elke fiche van die reeks. Wie later een van die fiches aanpast, past
+ * De reeks staat als losse planningsregels in de database, dus elke keuze behalve "alleen
+ * deze fiche" zet dezelfde tekst op meerdere regels. Wie er later een van aanpast, past
  * alleen die ene aan. Dat is dezelfde afspraak als voor de planning zelf.
  */
 export function PlannerOpmerkingModal({
@@ -49,15 +53,18 @@ export function PlannerOpmerkingModal({
   onSaved: () => void;
 }) {
   const [tekst, setTekst] = useState('');
-  const [voorHeleHerhaling, setVoorHeleHerhaling] = useState(false);
+  const [bereik, setBereik] = useState<OpmerkingBereik>('fiche');
+  const [ookEerdereWeken, setOokEerdereWeken] = useState(false);
   const [bezig, setBezig] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setTekst(doel?.opmerking ?? '');
-    // Standaard alleen deze fiche. Een opmerking gaat meestal over die ene dag, en per
-    // ongeluk een hele reeks beschrijven is lastiger terug te draaien dan andersom.
-    setVoorHeleHerhaling(false);
+    // Standaard alleen deze fiche, en alleen vanaf vandaag. Een opmerking gaat meestal over
+    // die ene dag, en per ongeluk een hele reeks beschrijven is lastiger terug te draaien dan
+    // andersom. Een opmerking bij een dienst van vorige maand is bijna nooit de bedoeling.
+    setBereik('fiche');
+    setOokEerdereWeken(false);
   }, [doel?.opmerking, open]);
 
   if (!open || !doel) return null;
@@ -78,7 +85,8 @@ export function PlannerOpmerkingModal({
           datum: doel.datum,
           iddagdeel: doel.iddagdeel,
           opmerking: tekst,
-          voorHeleHerhaling,
+          bereik,
+          ookEerdereWeken,
         }),
       });
       const payload = (await response.json()) as { error?: string; slotIds?: number[] };
@@ -135,21 +143,41 @@ export function PlannerOpmerkingModal({
             data-testid="planner-opmerking-tekst"
           />
           {doel.recurrenceId != null ? (
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={voorHeleHerhaling}
-                onChange={(event) => setVoorHeleHerhaling(event.target.checked)}
-                data-testid="planner-opmerking-herhaling"
-              />
-              <span>
-                Voor alle fiches van deze herhaling
-                <span className="block text-xs text-muted-foreground">
-                  Zonder dit vinkje staat de opmerking alleen bij deze ene fiche.
-                </span>
-              </span>
-            </label>
+            <div className="space-y-2 rounded-md border p-3">
+              <p className="text-sm font-medium">Deze fiche komt uit een herhaling</p>
+              <div className="space-y-1" role="radiogroup" aria-label="Waar de opmerking komt">
+                {OPMERKING_BEREIKEN.map((keuze) => (
+                  <label key={keuze.waarde} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="planner-opmerking-bereik"
+                      value={keuze.waarde}
+                      checked={bereik === keuze.waarde}
+                      onChange={() => setBereik(keuze.waarde)}
+                      data-testid={`planner-opmerking-bereik-${keuze.waarde}`}
+                    />
+                    <span>{keuze.label}</span>
+                  </label>
+                ))}
+              </div>
+              {bereik !== 'fiche' ? (
+                <label className="flex items-start gap-2 border-t pt-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={ookEerdereWeken}
+                    onChange={(event) => setOokEerdereWeken(event.target.checked)}
+                    data-testid="planner-opmerking-eerdere-weken"
+                  />
+                  <span>
+                    Ook de weken hiervoor
+                    <span className="block text-xs text-muted-foreground">
+                      Zonder dit vinkje geldt de opmerking vanaf deze datum.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
+            </div>
           ) : null}
         </div>
 

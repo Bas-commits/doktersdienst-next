@@ -7,6 +7,11 @@ import {
   sendPraktijkplannerAccessError,
 } from '@/lib/praktijkplanner/access';
 import { isIsoDate, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
+import {
+  isOpmerkingBereik,
+  kiesOpmerkingDoelen,
+  type OpmerkingBereik,
+} from '@/lib/praktijkplanner/opmerking-bereik';
 
 type Data = { success: true; slotIds: number[] } | { error: string };
 
@@ -52,7 +57,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   // Leeg is hetzelfde als niets: de kolom gaat op null en het paperclipje verdwijnt.
   const opmerking = typeof body.opmerking === 'string' ? body.opmerking.trim() : '';
   const waarde = opmerking === '' ? null : opmerking;
-  const voorHeleHerhaling = body.voorHeleHerhaling === true;
+  // Onbekend bereik valt terug op de ene fiche: dat is de keuze die het minst kapotmaakt.
+  const bereik: OpmerkingBereik = isOpmerkingBereik(body.bereik) ? body.bereik : 'fiche';
+  const ookEerdereWeken = body.ookEerdereWeken === true;
 
   const [slot] = await db
     .select({ id: schema.planning.id })
@@ -71,8 +78,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
 
   const slotIds = await db.transaction(async (tx) => {
-    let doelen = [slot.id];
-    if (voorHeleHerhaling) {
+    const bron = { idplanning: slot.id, datum, iddagdeel };
+    let reeks: typeof bron[] = [];
+    if (bereik !== 'fiche') {
       const [link] = await tx
         .select({ idherhaling: schema.planningherhalingslots.idherhaling })
         .from(schema.planningherhalingslots)
@@ -80,17 +88,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         .limit(1);
       if (link?.idherhaling != null) {
         /*
-          Elke fiche van de reeks krijgt dezelfde tekst. De reeks staat als losse
-          planningsregels in de database, dus er is geen plek waar de opmerking een keer kan
-          staan; hem overal neerzetten is wat "voor de hele herhaling" hier betekent.
+          De datum en het dagdeel komen uit planning en niet uit reeksdatum: reeksdatum is de
+          maandag van de herhaalde week, dus daarmee valt niet te zien welke dag van die week
+          een fiche is.
         */
-        const reeks = await tx
-          .select({ idplanning: schema.planningherhalingslots.idplanning })
+        reeks = await tx
+          .select({
+            idplanning: schema.planning.id,
+            datum: schema.planning.datum,
+            iddagdeel: schema.planning.iddagdeel,
+          })
           .from(schema.planningherhalingslots)
+          .innerJoin(schema.planning, eq(schema.planning.id, schema.planningherhalingslots.idplanning))
           .where(eq(schema.planningherhalingslots.idherhaling, link.idherhaling));
-        doelen = reeks.map((rij) => rij.idplanning);
       }
     }
+    const doelen = kiesOpmerkingDoelen({ bereik, bron, reeks, ookEerdereWeken });
 
     /*
       Een opmerking maakt van een fiche in een herhaling geen afwijking. Het gele bordje gaat

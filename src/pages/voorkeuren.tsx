@@ -72,7 +72,7 @@ function InfoPopover() {
           <h2 className="mb-2 text-base font-semibold">Procedure:</h2>
           <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
             <li>Klik op een van de fiches, links in het scherm</li>
-            <li>De fiche kleeft aan de cursor.</li>
+            <li>Het fiche kleeft aan de cursor.</li>
             <li>Klik op de shifts/diensten waarvoor u een voorkeur wilt aangeven.</li>
             <li>Herhaal dit voor andere voorkeuren voor shifts/diensten.</li>
           </ul>

@@ -21,7 +21,7 @@ const reeks: OpmerkingReeksFiche[] = [
 const bron: OpmerkingReeksFiche = { idplanning: 4, datum: '2026-09-01', iddagdeel: 1 };
 
 describe('kiesOpmerkingDoelen', () => {
-  it('raakt bij "alleen deze fiche" niets anders aan', () => {
+  it('raakt bij "alleen dit fiche" niets anders aan', () => {
     expect(
       kiesOpmerkingDoelen({ bereik: 'fiche', bron, reeks, ookEerdereWeken: true })
     ).toEqual([4]);

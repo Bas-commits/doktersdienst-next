@@ -502,7 +502,7 @@ export function ActivitiesContent({
 
       const provisionalOverlay = Boolean(absence?.isVoorlopig);
       const absenceTypeName = absence?.absenceType.naam ?? null;
-      // De bordjes staan bovenop de fiche. Op de helft van de maat moeten ze mee krimpen,
+      // De bordjes staan bovenop het fiche. Op de helft van de maat moeten ze mee krimpen,
       // anders dekt een vraagteken van zestien pixels het halve vakje af.
       const isMaand = variant === 'month';
       const provisionalBadge = (
@@ -575,7 +575,7 @@ export function ActivitiesContent({
                   className={[isMaand ? 'size-2.5' : 'size-3.5', 'text-slate-600'].join(' ')}
                   aria-hidden
                 >
-                  <title>Er staat een opmerking bij deze fiche</title>
+                  <title>Er staat een opmerking bij dit fiche</title>
                 </Paperclip>
               ) : null}
             </span>
@@ -604,7 +604,7 @@ export function ActivitiesContent({
           }))}
           opmerking={existing?.opmerking ?? null}
           chip={
-            // De fiche in de kaart moet dezelfde fiche zijn als in het rooster. Zonder de
+            // Het fiche in de kaart moet hetzelfde fiche zijn als in het rooster. Zonder de
             // grijze sluier en het vraagteken wijst de planner iets aan dat er anders uitziet
             // dan wat hij te zien krijgt.
             <div className="relative h-full w-full">
@@ -1060,7 +1060,7 @@ export function ActivitiesContent({
           idactiviteit: next.idactiviteit,
           idactiviteitspecificatie: next.idactiviteitspecificatie,
           idplannerlocatie: next.idplannerlocatie,
-          // Een opmerking overleeft het aanpassen van de fiche; de server laat de kolom ook
+          // Een opmerking overleeft het aanpassen van het fiche; de server laat de kolom ook
           // met rust. Hem hier op null zetten zou hem tot de volgende ophaalslag laten
           // verdwijnen en dat leest als weg.
           opmerking: existingSlot?.opmerking ?? null,
@@ -1405,7 +1405,7 @@ export function ActivitiesContent({
                     datum,
                     daypart,
                     hoverEnabled: cursorTool == null,
-                    // Bij de weekmaat past de fiche zoals de week hem tekent, met tekst en
+                    // Bij de weekmaat past het fiche zoals de week hem tekent, met tekst en
                     // met het telefoonicoontje. Dat hangt aan de maat en niet aan het knopje.
                     variant: toontTekstInMaand(maandCelGrootte) ? 'week' : 'month',
                   })

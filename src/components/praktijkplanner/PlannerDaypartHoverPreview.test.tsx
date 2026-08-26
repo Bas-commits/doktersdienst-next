@@ -23,7 +23,7 @@ const basis = {
 };
 
 describe('PlannerDaypartHoverPreview', () => {
-  it('toont de opmerking die bij de fiche staat', async () => {
+  it('toont de opmerking die bij het fiche staat', async () => {
     render(
       <PlannerDaypartHoverPreview {...basis} opmerking="Alleen tot 12 uur aanwezig">
         <span>fiche</span>

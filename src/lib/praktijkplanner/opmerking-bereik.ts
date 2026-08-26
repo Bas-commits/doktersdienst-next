@@ -1,5 +1,5 @@
 /**
- * Hoever een opmerking bij een fiche doorwerkt in de herhaling waar die fiche bij hoort.
+ * Hoever een opmerking bij een fiche doorwerkt in de herhaling waar dat fiche bij hoort.
  *
  * Een herhaling herhaalt een hele week, dus "voor de herhaling" is geen enkele vraag maar
  * twee: welke fiches van die week, en vanaf wanneer. Zonder die splitsing landt een opmerking
@@ -16,7 +16,7 @@ export type OpmerkingReeksFiche = {
 
 /** De keuzes in de volgorde waarin ze in het venster staan, met hun tekst. */
 export const OPMERKING_BEREIKEN: readonly { waarde: OpmerkingBereik; label: string }[] = [
-  { waarde: 'fiche', label: 'Alleen deze fiche' },
+  { waarde: 'fiche', label: 'Alleen dit fiche' },
   { waarde: 'dagdeel', label: 'Dit dagdeel, elke herhaling' },
   { waarde: 'dag', label: 'Deze hele dag, elke herhaling' },
   { waarde: 'reeks', label: 'Alle fiches van deze herhaling' },

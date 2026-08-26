@@ -21,7 +21,7 @@ export type PlannerDaypartChipItem = {
 };
 
 /**
- * Hoe groot de fiche getekend wordt.
+ * Hoe groot het fiche getekend wordt.
  *
  * `micro` is de maandweergave: een vakje van ongeveer 34 pixels, dus een band van elf. Daar
  * past geen tekst in die iemand nog kan lezen, en een afgekapt woord van twee letters is
@@ -232,7 +232,7 @@ export function PlannerCombinedDaypartChip({
 
       {/*
         In de maandweergave staat de naam al aan het begin van de rij en hangt het bolletje
-        half buiten de fiche, dus over de rij eronder. Daar zegt het niets en dekt het wel af.
+        half buiten het fiche, dus over de rij eronder. Daar zegt het niets en dekt het wel af.
       */}
       {participantColor && initials && density !== 'micro' ? (
         <span

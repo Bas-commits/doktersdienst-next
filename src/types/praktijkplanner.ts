@@ -81,7 +81,7 @@ export type PraktijkplannerTaskType = {
   /**
    * Het nummer waarop deze taak bereikbaar is, of leeg.
    *
-   * Staat bewust niet op de fiche zelf: in de week is de taakband negen pixels tekst hoog en
+   * Staat bewust niet op het fiche zelf: in de week is de taakband negen pixels tekst hoog en
    * kunnen er drie taken in een cel staan. Het nummer hoort daarom in de hoverkaart, waar de
    * taaknaam ook al voluit staat.
    */
@@ -168,7 +168,7 @@ export type PraktijkplannerPlanningSlot = {
   idactiviteit: number | null;
   idactiviteitspecificatie: number | null;
   idplannerlocatie: number | null;
-  /** Vrije tekst van de planner bij deze fiche. Null als er niets bij staat. */
+  /** Vrije tekst van de planner bij dit fiche. Null als er niets bij staat. */
   opmerking: string | null;
   version: number;
   activity: Pick<PraktijkplannerActivity, 'id' | 'naam' | 'afkorting' | 'kleur' | 'icon'> | null;

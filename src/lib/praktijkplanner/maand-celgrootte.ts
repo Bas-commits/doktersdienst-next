@@ -4,7 +4,7 @@
  * Een vakje is vierkant, want er staat een fiche in met drie banden onder elkaar. 34 is de
  * kleinste maat waarop die banden nog uit elkaar te houden zijn en tegelijk de enige waarop
  * een maand van 31 dagen in zijn geheel op een gewoon scherm past. Dat was tot nu toe de
- * vaste maat. 56 is de maat van de weekweergave, en dus de eerste waarop de fiche precies zo
+ * vaste maat. 56 is de maat van de weekweergave, en dus de eerste waarop het fiche precies zo
  * getekend kan worden als daar, met tekst en al. 72 is er voor wie de maand toch al zijwaarts
  * doorschuift en liever leest dan telt.
  */
@@ -13,7 +13,7 @@ export const MAAND_CEL_MATEN = [34, 44, 56, 72] as const;
 export const MAAND_CEL_STANDAARD = MAAND_CEL_MATEN[0];
 
 /**
- * Vanaf welke maat de fiche zijn tekst laat zien.
+ * Vanaf welke maat het fiche zijn tekst laat zien.
  *
  * Dit hangt aan de maat van het vakje en niet aan het knopje. Een fiche die zelf uitrekent of
  * er tekst in past kan niet in een stand komen waarin de tekst er half uit valt, ook niet als
@@ -22,7 +22,7 @@ export const MAAND_CEL_STANDAARD = MAAND_CEL_MATEN[0];
  */
 export const MAAND_TEKST_VANAF_PX = 56;
 
-/** Of een vakje van deze maat de fiche met tekst toont, zoals in de week. */
+/** Of een vakje van deze maat het fiche met tekst toont, zoals in de week. */
 export function toontTekstInMaand(celGrootte: number): boolean {
   return celGrootte >= MAAND_TEKST_VANAF_PX;
 }

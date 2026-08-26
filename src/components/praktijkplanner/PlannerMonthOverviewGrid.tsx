@@ -41,15 +41,15 @@ function weekGroepen(dates: string[]): Array<{ week: number; dagen: number }> {
  * scherm. Daarom staat hier per dag maar één kolom en krijgt elk dagdeel een eigen rij onder
  * de deelnemer.
  *
- * In die kolom staat dezelfde fiche als in de week, alleen kleiner getekend: de fiches zijn
+ * In die kolom staat hetzelfde fiche als in de week, alleen kleiner getekend: de fiches zijn
  * wat een planner afleest, dus een letter in plaats daarvan haalt de maand leeg. Zie de
  * dichtheid `micro` in PlannerCombinedDaypartChip voor wat er bij 34 pixels overblijft.
  * De hoverkaart toont onveranderd alles.
  *
  * Args:
  *     celGrootte: De maat van een dagvakje in pixels, vierkant. Was vast op 34; het scherm
- *         bedient dit met plus en min. Wat er bij welke maat in de fiche past bepaalt de
- *         aanroeper, want die tekent de fiche. Zie maand-celgrootte.
+ *         bedient dit met plus en min. Wat er bij welke maat in het fiche past bepaalt de
+ *         aanroeper, want die tekent het fiche. Zie maand-celgrootte.
  */
 export function PlannerMonthOverviewGrid({
   participants,

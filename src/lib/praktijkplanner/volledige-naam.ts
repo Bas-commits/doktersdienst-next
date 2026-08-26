@@ -1,7 +1,7 @@
 /**
  * De volledige namen van een activiteit en van een taak, voor de hoverkaart.
  *
- * Op de fiche in het rooster staat de afkorting, want daar is maar een paar tekens plek. In
+ * Op het fiche in het rooster staat de afkorting, want daar is maar een paar tekens plek. In
  * de hoverkaart is diezelfde afkorting juist het probleem. OK Trans en OK Onco schelen twee
  * letters, en bij de taken komt een afkorting zelfs meer dan een keer voor: Spoed is zowel
  * Spoedsein Utrecht als Spoedsein Nieuwegein, en Cons, ILD en TBC staan er elk twee keer in.

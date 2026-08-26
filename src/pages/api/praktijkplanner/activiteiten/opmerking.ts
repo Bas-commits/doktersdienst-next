@@ -108,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     /*
       Een opmerking maakt van een fiche in een herhaling geen afwijking. Het gele bordje gaat
       over planning die anders is dan de reeks; een opmerking verandert daar niets aan, en het
-      bordje zou dan iets melden wat de lezer niet terugvindt in de fiche.
+      bordje zou dan iets melden wat de lezer niet terugvindt in het fiche.
     */
     await tx
       .update(schema.planning)

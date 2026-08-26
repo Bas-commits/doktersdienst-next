@@ -31,8 +31,8 @@ import type {
  * Alleen om te kijken. Plannen gaat per dokter, en dat is precies wat het rooster ernaast is.
  *
  * Args:
- *     renderSlot: De fiche zoals het rooster hem tekent, inclusief hoverkaart. Meegegeven en
- *         niet hier nagemaakt, want twee tekeningen van dezelfde fiche gaan uit elkaar lopen.
+ *     renderSlot: Het fiche zoals het rooster hem tekent, inclusief hoverkaart. Meegegeven en
+ *         niet hier nagemaakt, want twee tekeningen van hetzelfde fiche gaan uit elkaar lopen.
  *     dayparts: De dagdelen die op het scherm staan. Volgt de knop Avond en nacht, dus met
  *         die knop uit blijven ochtend en middag over en heeft het paneel twee regels.
  *     isAfwezig: Een vastgelegde afwezigheid haalt de dokter hier weg. Op een locatie gaat de

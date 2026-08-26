@@ -40,7 +40,7 @@ function takenTekst(slot: PraktijkplannerPlanningSlot): string {
 /**
  * De korte tekst die in een vakje van het weekoverzicht past.
  *
- * Dit is wat het scherm in de fiche zet, in woorden in plaats van in kleuren en pictogrammen.
+ * Dit is wat het scherm in het fiche zet, in woorden in plaats van in kleuren en pictogrammen.
  * Een afwezigheid wint van de planning, net als op het scherm: staat er allebei iets, dan is de
  * afwezigheid het antwoord op de vraag of iemand er die dag is.
  */

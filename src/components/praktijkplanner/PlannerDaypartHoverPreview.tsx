@@ -102,7 +102,7 @@ export function PlannerDaypartHoverPreview({
   /** Maandag van de week waarvan herhaald is; null bij herhalingen van voor die kolom. */
   recurrenceSourceWeek?: string | null;
   /**
-   * De activiteit voluit, dus de naam en niet de afkorting die op de fiche staat. Op de fiche
+   * De activiteit voluit, dus de naam en niet de afkorting die op het fiche staat. Op het fiche
    * is er plek voor een paar tekens, hier is er plek voor de hele naam en heeft de planner er
    * ook iets aan.
    */
@@ -119,12 +119,12 @@ export function PlannerDaypartHoverPreview({
   /**
    * De taken voluit: de omschrijving van elk taaktype, niet de afkorting.
    *
-   * Met het nummer erbij als de taak inbelbaar is en er een nummer is ingevuld. Op de fiche
+   * Met het nummer erbij als de taak inbelbaar is en er een nummer is ingevuld. Op het fiche
    * zelf past dat niet: de taakband is daar negen pixels tekst hoog en er kunnen drie taken in
    * een cel staan. Hier is de ruimte er wel, en wie wil bellen kijkt toch eerst wie er zit.
    */
   taskNames?: Array<{ naam: string; inbelnummer?: string | null }>;
-  /** De vrije tekst die de planner bij deze fiche zette. Op de fiche staat alleen een paperclip. */
+  /** De vrije tekst die de planner bij dit fiche zette. Op het fiche staat alleen een paperclip. */
   opmerking?: string | null;
   /**
    * Uit op een dagdeel dat alleen een absentieaanvraag is. Activiteit, locatie, herhaling en
@@ -137,7 +137,7 @@ export function PlannerDaypartHoverPreview({
   children: ReactNode;
 }) {
   // Alleen de taken waar echt een nummer bij staat. Inbelbaar zonder nummer levert geen regel
-  // op; het telefoonicoontje op de fiche zegt dan al wat er te zeggen valt.
+  // op; het telefoonicoontje op het fiche zegt dan al wat er te zeggen valt.
   const inbelnummers = (taskNames ?? []).filter(
     (taak): taak is { naam: string; inbelnummer: string } => Boolean(taak.inbelnummer)
   );
@@ -272,7 +272,7 @@ export function PlannerDaypartHoverPreview({
                   </>
                 ) : null}
                 {/*
-                  Het bordje op de fiche zegt alleen dat er iets afwijkt. Hier hoort te staan
+                  Het bordje op het fiche zegt alleen dat er iets afwijkt. Hier hoort te staan
                   waarom het er staat en van welke week is afgeweken, anders moet de planner
                   dat zelf uitzoeken.
                 */}
@@ -330,7 +330,7 @@ export function PlannerDaypartHoverPreview({
                   </div>
                 ) : null}
                 {/*
-                  Onder de regels, niet ertussen. De paperclip op de fiche zegt alleen dat er
+                  Onder de regels, niet ertussen. De paperclip op het fiche zegt alleen dat er
                   iets staat; dit is de enige plek waar het te lezen valt, en vrije tekst van
                   een planner past niet in een regel van naam en waarde.
                 */}
@@ -343,7 +343,7 @@ export function PlannerDaypartHoverPreview({
                   </div>
                 ) : null}
                 {/*
-                  Het vraagteken op de fiche zegt alleen dat er iets is aangevraagd. Hier hoort
+                  Het vraagteken op het fiche zegt alleen dat er iets is aangevraagd. Hier hoort
                   te staan wat er is aangevraagd en dat het nog niet vaststaat, net als bij het
                   driehoekje hierboven.
                 */}

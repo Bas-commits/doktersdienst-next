@@ -16,7 +16,7 @@ export type PlannerOpmerkingDoel = {
   iddagdeel: number;
   dagdeelNaam: string;
   opmerking: string | null;
-  /** Null als deze fiche niet uit een herhaling komt; dan is er niets om over te vragen. */
+  /** Null als dit fiche niet uit een herhaling komt; dan is er niets om over te vragen. */
   recurrenceId: number | null;
 };
 
@@ -32,11 +32,11 @@ function datumTekst(datum: string): string {
 /**
  * De opmerking bij een fiche, met de keuze hoever hij doorwerkt in de herhaling.
  *
- * Die keuze staat er alleen als de fiche uit een herhaling komt. Keuzes die niets doen zijn
+ * Die keuze staat er alleen als het fiche uit een herhaling komt. Keuzes die niets doen zijn
  * erger dan geen keuzes: ze suggereren dat er een reeks is om uit te kiezen.
  *
  * De reeks staat als losse planningsregels in de database, dus elke keuze behalve "alleen
- * deze fiche" zet dezelfde tekst op meerdere regels. Wie er later een van aanpast, past
+ * dit fiche" zet dezelfde tekst op meerdere regels. Wie er later een van aanpast, past
  * alleen die ene aan. Dat is dezelfde afspraak als voor de planning zelf.
  */
 export function PlannerOpmerkingModal({
@@ -60,7 +60,7 @@ export function PlannerOpmerkingModal({
   useEffect(() => {
     if (!open) return;
     setTekst(doel?.opmerking ?? '');
-    // Standaard alleen deze fiche, en alleen vanaf vandaag. Een opmerking gaat meestal over
+    // Standaard alleen dit fiche, en alleen vanaf vandaag. Een opmerking gaat meestal over
     // die ene dag, en per ongeluk een hele reeks beschrijven is lastiger terug te draaien dan
     // andersom. Een opmerking bij een dienst van vorige maand is bijna nooit de bedoeling.
     setBereik('fiche');
@@ -125,7 +125,7 @@ export function PlannerOpmerkingModal({
       >
         <div className="border-b px-4 py-3">
           <h2 id="planner-opmerking-title" className="text-lg font-semibold tracking-tight">
-            Opmerking bij de fiche
+            Opmerking bij het fiche
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {doel.deelnemerNaam} op {datumTekst(doel.datum)}, {doel.dagdeelNaam.toLowerCase()}.
@@ -144,7 +144,7 @@ export function PlannerOpmerkingModal({
           />
           {doel.recurrenceId != null ? (
             <div className="space-y-2 rounded-md border p-3">
-              <p className="text-sm font-medium">Deze fiche komt uit een herhaling</p>
+              <p className="text-sm font-medium">Dit fiche komt uit een herhaling</p>
               <div className="space-y-1" role="radiogroup" aria-label="Waar de opmerking komt">
                 {OPMERKING_BEREIKEN.map((keuze) => (
                   <label key={keuze.waarde} className="flex items-center gap-2 text-sm">

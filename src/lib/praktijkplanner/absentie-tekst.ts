@@ -1,7 +1,7 @@
 /**
  * Woorden bij de absentie op een dagdeel.
  *
- * Staat apart zodat de fiche in het rooster en de hoverkaart hetzelfde zeggen. Het
+ * Staat apart zodat het fiche in het rooster en de hoverkaart hetzelfde zeggen. Het
  * vraagteken alleen vertelt niet wat er is aangevraagd en ook niet dat het nog moet worden
  * goedgekeurd, en dat is precies wat de planner wil weten voordat hij het dagdeel vult.
  *

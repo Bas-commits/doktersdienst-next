@@ -4,7 +4,25 @@ import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 
 const { waarneemgroepdeelnemers } = schema;
-const GELDIGE_WAARNEEMGROEP_FUNCTIES = new Set([1, 2, 3, 4]);
+/**
+ * Of deze functie bij deze waarneemgroep hoort.
+ *
+ * Stond hier eerder als de vaste verzameling 1 tot en met 4. Elke groep bepaalt nu zelf zijn
+ * functies, dus geldigheid hangt af van de groep.
+ */
+async function functieHoortBijGroep(idfunctie: number, idwaarneemgroep: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.praktijkplannerfuncties.id })
+    .from(schema.praktijkplannerfuncties)
+    .where(
+      and(
+        eq(schema.praktijkplannerfuncties.id, idfunctie),
+        eq(schema.praktijkplannerfuncties.idwaarneemgroep, idwaarneemgroep)
+      )
+    )
+    .limit(1);
+  return row != null;
+}
 
 type Actie = 'aanmelden' | 'afmelden' | 'groep' | 'functie';
 
@@ -117,11 +135,11 @@ export default async function handler(
       if (functie !== null && typeof functie !== 'number') {
         return res.status(400).json({ error: 'IDfunctie must be a number or null for functie action' });
       }
-      if (
-        functie !== null &&
-        (!Number.isInteger(functie) || !GELDIGE_WAARNEEMGROEP_FUNCTIES.has(functie))
-      ) {
+      if (functie !== null && !Number.isInteger(functie)) {
         return res.status(400).json({ error: 'IDfunctie heeft een ongeldige waarde' });
+      }
+      if (functie !== null && !(await functieHoortBijGroep(functie, IDwaarneemgroep))) {
+        return res.status(400).json({ error: 'Deze functie hoort niet bij deze waarneemgroep' });
       }
       await db
         .update(waarneemgroepdeelnemers)

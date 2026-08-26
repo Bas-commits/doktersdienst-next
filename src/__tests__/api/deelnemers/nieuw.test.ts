@@ -84,6 +84,7 @@ vi.mock('@/db', () => ({
   schema: {
     deelnemers: {},
     waarneemgroepdeelnemers: {},
+    praktijkplannerfuncties: { id: {}, idwaarneemgroep: {} },
   },
 }));
 
@@ -284,7 +285,7 @@ describe('POST /api/deelnemers/nieuw', () => {
     expect(mockTransaction).not.toHaveBeenCalled();
   });
 
-  it('returns 400 for invalid idfunctie', async () => {
+  it('returns 400 for a functie that does not belong to the waarneemgroep', async () => {
     const { default: handler } = await import('@/pages/api/deelnemers/nieuw/index');
     const res = makeRes();
     await handler(

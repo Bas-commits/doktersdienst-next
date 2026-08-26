@@ -51,6 +51,8 @@ export interface MijnGegevensProfile {
     idgroep: number | null;
     fte: number | null;
     idfunctie: number | null;
+    /** Functies van deze groep: de actieve, plus de gearchiveerde die deze deelnemer nog heeft */
+    functies: { id: number; naam: string }[];
     /** Active expertises for this group, plus any inactive ones the user already has */
     expertises: { id: number; naam: string; afkorting: string | null }[];
     selectedExpertiseIds: number[];
@@ -113,7 +115,7 @@ export interface MijnGegevensUpdateBody {
   callRecording?: boolean;
   telnrSlots?: TelnrSlotRaw[];
   /** Per waarneemgroep FTE (0–2); only rows where the user is aangemeld are updated */
-  waarneemgroepFte?: { idwaarneemgroep: number; fte: number; idfunctie?: 1 | 2 | 3 | 4 | null }[];
+  waarneemgroepFte?: { idwaarneemgroep: number; fte: number; idfunctie?: number | null }[];
   /** Per waarneemgroep selected expertise IDs; replace-set for aangemelde memberships */
   waarneemgroepExpertises?: { idwaarneemgroep: number; expertiseIds: number[] }[];
 }

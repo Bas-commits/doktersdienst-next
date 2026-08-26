@@ -13,6 +13,12 @@ export async function getPraktijkplannerMasterData(
         eq(schema.expertises.idwaarneemgroep, idwaarneemgroep),
         eq(schema.expertises.actief, true)
       );
+  const functieWhere = includeInactive
+    ? eq(schema.praktijkplannerfuncties.idwaarneemgroep, idwaarneemgroep)
+    : and(
+        eq(schema.praktijkplannerfuncties.idwaarneemgroep, idwaarneemgroep),
+        eq(schema.praktijkplannerfuncties.actief, true)
+      );
   const activityWhere = includeInactive
     ? eq(schema.activiteiten.idwaarneemgroep, idwaarneemgroep)
     : and(
@@ -59,6 +65,7 @@ export async function getPraktijkplannerMasterData(
     locationRows,
     availabilityRows,
     absenceRows,
+    functieRows,
     schedulableDaypartRows,
     participantSchedulableDaypartRows,
   ] = await Promise.all([
@@ -162,6 +169,15 @@ export async function getPraktijkplannerMasterData(
       .from(schema.afwezigheidstypen)
       .where(absenceWhere)
       .orderBy(asc(schema.afwezigheidstypen.naam)),
+    db
+      .select({
+        id: schema.praktijkplannerfuncties.id,
+        naam: schema.praktijkplannerfuncties.naam,
+        actief: schema.praktijkplannerfuncties.actief,
+      })
+      .from(schema.praktijkplannerfuncties)
+      .where(functieWhere)
+      .orderBy(asc(schema.praktijkplannerfuncties.naam)),
     db
       .select({
         weekdag: schema.praktijkplannerdagdelen.weekdag,
@@ -273,6 +289,11 @@ export async function getPraktijkplannerMasterData(
         icon: row.icon,
         actief: row.actief,
       })),
+    functies: functieRows
+      .filter((row): row is typeof row & { id: number; naam: string; actief: boolean } =>
+        row.id != null && row.naam != null && row.actief != null
+      )
+      .map((row) => ({ id: row.id, naam: row.naam, actief: row.actief })),
     schedulableDayparts: schedulableDaypartRows
       .filter(
         (row): row is typeof row & { weekdag: number; iddagdeel: number; actief: boolean } =>

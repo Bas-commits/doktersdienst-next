@@ -40,13 +40,6 @@ const ROL_BADGE_CLASSES: Record<number, string> = {
   4: 'bg-muted text-muted-foreground',
 };
 
-const FUNCTIE_OPTIONS = [
-  { id: 1 as const, label: 'Ajo' },
-  { id: 2 as const, label: 'Specialist' },
-  { id: 3 as const, label: 'Assisitent' },
-  { id: 4 as const, label: 'Toa' },
-];
-
 const formSectionClass =
   'rounded-xl border border-border bg-muted/30 p-4 space-y-4 shadow-sm dark:bg-muted/20';
 
@@ -69,7 +62,7 @@ type FormSnapshot = {
   callRecording: boolean;
   telnrSlots: TelnrSlot[];
   fteByWaarneemgroepId: Record<number, number>;
-  functieByWaarneemgroepId: Record<number, 1 | 2 | 3 | 4 | null>;
+  functieByWaarneemgroepId: Record<number, number | null>;
   expertiseIdsByWaarneemgroepId: Record<number, number[]>;
 };
 
@@ -87,11 +80,13 @@ function defaultFteForWaarneemgroepen(
 
 function defaultFunctieForWaarneemgroepen(
   waarneemgroepen: MijnGegevensProfile['waarneemgroepen']
-): Record<number, 1 | 2 | 3 | 4 | null> {
-  const out: Record<number, 1 | 2 | 3 | 4 | null> = {};
+): Record<number, number | null> {
+  const out: Record<number, number | null> = {};
   for (const wg of waarneemgroepen) {
+    // Een functie die niet meer bij de groep hoort valt terug op leeg, anders wijst de
+    // keuzelijst naar een optie die er niet is.
     const v = wg.idfunctie;
-    out[wg.id] = v === 1 || v === 2 || v === 3 || v === 4 ? v : null;
+    out[wg.id] = v != null && wg.functies.some((functie) => functie.id === v) ? v : null;
   }
   return out;
 }
@@ -108,8 +103,8 @@ function fteRecordsDirty(a: Record<number, number>, b: Record<number, number>): 
 }
 
 function functieRecordsDirty(
-  a: Record<number, 1 | 2 | 3 | 4 | null>,
-  b: Record<number, 1 | 2 | 3 | 4 | null>
+  a: Record<number, number | null>,
+  b: Record<number, number | null>
 ): boolean {
   const ids = new Set([...Object.keys(a), ...Object.keys(b)].map(Number));
   for (const id of ids) {
@@ -258,7 +253,7 @@ export default function MijnGegevensPage() {
   const [telnrSlots, setTelnrSlots] = useState<TelnrSlot[]>([{ ...DEFAULT_SLOT }]);
   const [fteByWaarneemgroepId, setFteByWaarneemgroepId] = useState<Record<number, number>>({});
   const [functieByWaarneemgroepId, setFunctieByWaarneemgroepId] = useState<
-    Record<number, 1 | 2 | 3 | 4 | null>
+    Record<number, number | null>
   >({});
   const [expertiseIdsByWaarneemgroepId, setExpertiseIdsByWaarneemgroepId] = useState<
     Record<number, number[]>
@@ -513,7 +508,10 @@ export default function MijnGegevensPage() {
       } else {
         fteCommitted[wg.id] = commitFteNumber(base);
       }
-      if (functieCommitted[wg.id] !== 1 && functieCommitted[wg.id] !== 2 && functieCommitted[wg.id] !== 3 && functieCommitted[wg.id] !== 4) {
+      // Een functie hoort bij een waarneemgroep. Staat hij niet meer in de lijst van deze
+      // groep, dan gaat er leeg naar de server in plaats van een id dat daar wordt geweigerd.
+      const gekozenFunctie = functieCommitted[wg.id];
+      if (gekozenFunctie == null || !wg.functies.some((functie) => functie.id === gekozenFunctie)) {
         functieCommitted[wg.id] = null;
       }
     }
@@ -1152,18 +1150,22 @@ export default function MijnGegevensPage() {
                                     setFunctieByWaarneemgroepId((prev) => ({
                                       ...prev,
                                       [wg.id]:
-                                        parsed === 1 || parsed === 2 || parsed === 3 || parsed === 4
+                                        parsed != null && wg.functies.some((f) => f.id === parsed)
                                           ? parsed
                                           : null,
                                     }));
                                   }}
-                                  disabled={isSubmitting}
+                                  disabled={isSubmitting || wg.functies.length === 0}
                                   className="h-9 rounded-md border border-input bg-background px-2.5 text-sm"
                                 >
-                                  <option value="">-- Kies functie --</option>
-                                  {FUNCTIE_OPTIONS.map((opt) => (
-                                    <option key={opt.id} value={opt.id}>
-                                      {opt.label}
+                                  <option value="">
+                                    {wg.functies.length === 0
+                                      ? 'Geen functies ingesteld'
+                                      : '-- Kies functie --'}
+                                  </option>
+                                  {wg.functies.map((functie) => (
+                                    <option key={functie.id} value={functie.id}>
+                                      {functie.naam}
                                     </option>
                                   ))}
                                 </select>

@@ -207,7 +207,8 @@ export const waarneemgroepdeelnemers = pgTable("waarneemgroepdeelnemers", {
 	practiceScheduler: varchar("practice_scheduler", { length: 50 }),
 	practiceSchedulerEntryDate: varchar("practice_scheduler_entry_date", { length: 50 }),
 	practiceSchedulerStopDate: varchar("practice_scheduler_stop_date", { length: 50 }),
-	idfunctie: integer(),
+	/** Verwijst naar een functie van deze waarneemgroep. Null als er geen functie is gekozen. */
+	idfunctie: integer().references(() => praktijkplannerfuncties.id, { onDelete: "restrict" }),
 });
 
 export const instellingen = pgTable("instellingen", {
@@ -891,6 +892,25 @@ export const praktijkplannerdeelnemerdagdelen = pgTable("praktijkplannerdeelneme
 		table.idwaarneemgroep,
 		table.iddeelnemer
 	),
+]);
+
+/**
+ * Functies per waarneemgroep, zoals Specialist of Assistent.
+ *
+ * Elke groep bepaalt zijn eigen lijst. Daarvoor stonden vier namen hardcoded in de frontend en
+ * was `waarneemgroepdeelnemers.idfunctie` een kaal getal, waardoor iedere groep dezelfde vier
+ * opties zag.
+ */
+export const praktijkplannerfuncties = pgTable("praktijkplannerfuncties", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id, { onDelete: "cascade" }),
+	naam: varchar({ length: 100 }).notNull(),
+	actief: boolean().notNull().default(true),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	unique("praktijkplannerfuncties_group_naam_unique").on(table.idwaarneemgroep, table.naam),
+	index("praktijkplannerfuncties_group_idx").on(table.idwaarneemgroep),
 ]);
 
 export const praktijkplannerweergavevoorkeuren = pgTable("praktijkplannerweergavevoorkeuren", {

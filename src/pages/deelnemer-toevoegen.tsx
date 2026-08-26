@@ -30,13 +30,6 @@ const rolInGroepChoices = [
   { id: 1, label: 'Deelnemer' },
   { id: 2, label: 'Secretaris' },
 ] as const;
-const functieChoices = [
-  { id: 1, label: 'Ajo' },
-  { id: 2, label: 'Specialist' },
-  { id: 3, label: 'Assisitent' },
-  { id: 4, label: 'Toa' },
-] as const;
-
 const FTE_DECIMAL_PLACES = 2;
 
 function formatFteDisplay(n: number): string {
@@ -236,6 +229,8 @@ export default function DeelnemerToevoegenPage() {
   const mayCreate = !!opties?.allowed;
 
   const groepChoices = opties?.groepen ?? [];
+  // Komt uit de gekozen waarneemgroep: elke groep bepaalt zelf welke functies hij heeft.
+  const functieChoices = opties?.functies ?? [];
   const forbiddenReason =
     optieState.status === 'ok' && opties && 'allowed' in opties && !opties.allowed
       ? opties.forbiddenReason
@@ -1031,10 +1026,14 @@ export default function DeelnemerToevoegenPage() {
                                     void handleFunctieChange(d.id, nextFunctie, wgNumeric);
                                   }}
                                 >
-                                  <option value="">— Geen —</option>
+                                  <option value="">
+                                    {functieChoices.length === 0
+                                      ? '— Geen functies ingesteld —'
+                                      : '— Geen —'}
+                                  </option>
                                   {functieChoices.map((choice) => (
                                     <option key={choice.id} value={String(choice.id)}>
-                                      {choice.label}
+                                      {choice.naam}
                                     </option>
                                   ))}
                                 </select>
@@ -1321,10 +1320,12 @@ export default function DeelnemerToevoegenPage() {
                     onChange={(e) => setIdfunctie(e.target.value)}
                     disabled={submitting}
                   >
-                    <option value="">— Geen —</option>
+                    <option value="">
+                      {functieChoices.length === 0 ? '— Geen functies ingesteld —' : '— Geen —'}
+                    </option>
                     {functieChoices.map((choice) => (
                       <option key={choice.id} value={String(choice.id)}>
-                        {choice.label}
+                        {choice.naam}
                       </option>
                     ))}
                   </select>

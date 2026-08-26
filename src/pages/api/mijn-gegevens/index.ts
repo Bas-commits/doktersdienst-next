@@ -33,6 +33,7 @@ const {
   instellingtype,
   settelnrs,
   expertises,
+  praktijkplannerfuncties,
   deelnemerexpertises,
 } = schema;
 
@@ -51,7 +52,31 @@ function normaliseLocatieId(raw: number): number {
   return raw >= 1_000_000_000 ? raw - 1_000_000_000 : raw;
 }
 
-const GELDIGE_WAARNEEMGROEP_FUNCTIES = new Set([1, 2, 3, 4]);
+/**
+ * Welke functies een waarneemgroep heeft, opgehaald uit praktijkplannerfuncties.
+ *
+ * Stond hier eerder als de vaste verzameling 1 tot en met 4. Elke groep bepaalt nu zelf zijn
+ * functies, dus of een waarde geldig is hangt af van de groep waar hij bij hoort.
+ */
+async function functieIdsPerWaarneemgroep(
+  idwaarneemgroepen: number[]
+): Promise<Map<number, Set<number>>> {
+  const perGroep = new Map<number, Set<number>>();
+  if (idwaarneemgroepen.length === 0) return perGroep;
+  const rows = await db
+    .select({
+      id: praktijkplannerfuncties.id,
+      idwaarneemgroep: praktijkplannerfuncties.idwaarneemgroep,
+    })
+    .from(praktijkplannerfuncties)
+    .where(inArray(praktijkplannerfuncties.idwaarneemgroep, idwaarneemgroepen));
+  for (const row of rows) {
+    const set = perGroep.get(row.idwaarneemgroep) ?? new Set<number>();
+    set.add(row.id);
+    perGroep.set(row.idwaarneemgroep, set);
+  }
+  return perGroep;
+}
 
 /**
  * Controleert het meegestuurde huidige wachtwoord tegen de opgeslagen hash.
@@ -266,7 +291,7 @@ export default async function handler(
         .map((m) => m.idwaarneemgroep)
         .filter((id): id is number => id != null);
 
-      const [expertiseCatalogRows, selectedExpertiseRows] = await Promise.all([
+      const [expertiseCatalogRows, selectedExpertiseRows, functieCatalogRows] = await Promise.all([
         membershipWgIds.length > 0
           ? db
               .select({
@@ -291,7 +316,35 @@ export default async function handler(
           .from(deelnemerexpertises)
           .innerJoin(expertises, eq(deelnemerexpertises.idexpertise, expertises.id))
           .where(eq(deelnemerexpertises.iddeelnemer, targetDeelnemerId)),
+        membershipWgIds.length > 0
+          ? db
+              .select({
+                id: praktijkplannerfuncties.id,
+                naam: praktijkplannerfuncties.naam,
+                actief: praktijkplannerfuncties.actief,
+                idwaarneemgroep: praktijkplannerfuncties.idwaarneemgroep,
+              })
+              .from(praktijkplannerfuncties)
+              .where(inArray(praktijkplannerfuncties.idwaarneemgroep, membershipWgIds))
+              .orderBy(asc(praktijkplannerfuncties.naam))
+          : Promise.resolve([]),
       ]);
+
+      /*
+        Actieve functies, plus de gearchiveerde functie die deze deelnemer zelf nog heeft. Zonder
+        die uitzondering zou de keuzelijst zijn eigen functie niet bevatten en leest het scherm
+        alsof er niets is ingevuld.
+      */
+      const functiesByWg = new Map<number, { id: number; naam: string }[]>();
+      const eigenFuncties = new Set(
+        membershipRows.map((m) => m.idfunctie).filter((id): id is number => id != null)
+      );
+      for (const row of functieCatalogRows) {
+        if (!row.actief && !eigenFuncties.has(row.id)) continue;
+        const list = functiesByWg.get(row.idwaarneemgroep) ?? [];
+        list.push({ id: row.id, naam: row.naam });
+        functiesByWg.set(row.idwaarneemgroep, list);
+      }
 
       const selectedByWg = new Map<number, number[]>();
       const selectedInactiveByWg = new Map<
@@ -349,10 +402,8 @@ export default async function handler(
             naam: m.naam ?? null,
             idgroep: m.idgroep ?? null,
             fte: m.fte != null && Number.isFinite(m.fte) ? m.fte : null,
-            idfunctie:
-              m.idfunctie != null && GELDIGE_WAARNEEMGROEP_FUNCTIES.has(m.idfunctie)
-                ? m.idfunctie
-                : null,
+            idfunctie: m.idfunctie ?? null,
+            functies: functiesByWg.get(wgId) ?? [],
             expertises: expertisesForWg,
             selectedExpertiseIds: selectedByWg.get(wgId) ?? [],
           };
@@ -736,6 +787,11 @@ export default async function handler(
       if (!Array.isArray(raw)) {
         return res.status(400).json({ error: 'waarneemgroepFte moet een array zijn' });
       }
+      const functiesPerGroep = await functieIdsPerWaarneemgroep(
+        raw
+          .map((row) => (row as { idwaarneemgroep?: unknown })?.idwaarneemgroep)
+          .filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0)
+      );
       for (let i = 0; i < raw.length; i++) {
         const row = raw[i];
         if (!row || typeof row !== 'object') {
@@ -757,17 +813,17 @@ export default async function handler(
           functieVal !== null &&
           (typeof functieVal !== 'number' ||
             !Number.isInteger(functieVal) ||
-            !GELDIGE_WAARNEEMGROEP_FUNCTIES.has(functieVal))
+            !(functiesPerGroep.get(idwg)?.has(functieVal) ?? false))
         ) {
           return res.status(400).json({
-            error: `Functie moet een van de toegestane waarden zijn (waarneemgroep ${idwg})`,
+            error: `Deze functie hoort niet bij waarneemgroep ${idwg}`,
           });
         }
       }
       for (const row of raw) {
         const idwg = (row as { idwaarneemgroep: number }).idwaarneemgroep;
         const fteVal = (row as { fte: number }).fte;
-        const functieVal = (row as { idfunctie?: 1 | 2 | 3 | 4 | null }).idfunctie;
+        const functieVal = (row as { idfunctie?: number | null }).idfunctie;
         const upd = await db
           .update(waarneemgroepdeelnemers)
           .set({

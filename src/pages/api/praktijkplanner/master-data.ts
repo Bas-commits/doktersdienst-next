@@ -14,6 +14,7 @@ type Entity =
   | 'specification'
   | 'location'
   | 'absenceType'
+  | 'functie'
   | 'availabilityType'
   | 'task';
 
@@ -139,9 +140,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const { idwaarneemgroep } = accessResult.access;
 
   if (
-    !['expertise', 'activity', 'specification', 'location', 'absenceType', 'availabilityType', 'task'].includes(
-      entity
-    ) ||
+    ![
+      'expertise',
+      'activity',
+      'specification',
+      'location',
+      'absenceType',
+      'availabilityType',
+      'task',
+      'functie',
+    ].includes(entity) ||
     !['create', 'update', 'archive'].includes(String(action))
   ) {
     return res.status(400).json({ error: 'Ongeldige beheeractie.' });
@@ -161,6 +169,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             actief: true,
           })
           .returning({ id: schema.expertises.id });
+        return res.status(201).json({ success: true, id: created.id });
+      }
+
+      if (entity === 'functie') {
+        const naam = textValue(body.naam, { required: true, max: 100 });
+        if (!naam) return res.status(400).json({ error: 'Een functienaam is verplicht.' });
+        const [created] = await db
+          .insert(schema.praktijkplannerfuncties)
+          .values({
+            naam,
+            idwaarneemgroep,
+            actief: true,
+            updatedBy: accessResult.access.user.id,
+          })
+          .onConflictDoNothing()
+          .returning({ id: schema.praktijkplannerfuncties.id });
+        if (!created) {
+          return res.status(409).json({ error: 'Deze functie bestaat al in deze waarneemgroep.' });
+        }
         return res.status(201).json({ success: true, id: created.id });
       }
 
@@ -307,6 +334,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
               eq(schema.afwezigheidstypen.idwaarneemgroep, idwaarneemgroep)
             )
           );
+      } else if (entity === 'functie') {
+        /*
+          Archiveren en niet verwijderen: er kunnen deelnemers aan hangen, en die houden hun
+          functie. Een gearchiveerde functie verdwijnt alleen uit de keuzelijst.
+        */
+        await db
+          .update(schema.praktijkplannerfuncties)
+          .set({ actief: false, updatedBy: accessResult.access.user.id, updatedAt: new Date().toISOString() })
+          .where(
+            and(
+              eq(schema.praktijkplannerfuncties.id, id),
+              eq(schema.praktijkplannerfuncties.idwaarneemgroep, idwaarneemgroep)
+            )
+          );
       } else if (entity === 'availabilityType') {
         await db
           .update(schema.beschikbaarheidstypen)
@@ -333,6 +374,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         .update(schema.expertises)
         .set({ naam, afkorting: optionalText(body.afkorting, 50), actief: activeValue(body.actief) })
         .where(and(eq(schema.expertises.id, id), eq(schema.expertises.idwaarneemgroep, idwaarneemgroep)));
+    } else if (entity === 'functie') {
+      const naam = textValue(body.naam, { required: true, max: 100 });
+      if (!naam) return res.status(400).json({ error: 'Een functienaam is verplicht.' });
+      await db
+        .update(schema.praktijkplannerfuncties)
+        .set({
+          naam,
+          actief: activeValue(body.actief),
+          updatedBy: accessResult.access.user.id,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(
+          and(
+            eq(schema.praktijkplannerfuncties.id, id),
+            eq(schema.praktijkplannerfuncties.idwaarneemgroep, idwaarneemgroep)
+          )
+        );
     } else if (entity === 'activity') {
       const naam = textValue(body.naam, { required: true, max: 255 });
       if (!naam) return res.status(400).json({ error: 'Een activiteitsnaam is verplicht.' });

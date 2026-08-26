@@ -20,7 +20,8 @@ type Entity =
   | 'location'
   | 'absenceType'
   | 'availabilityType'
-  | 'task';
+  | 'task'
+  | 'functie';
 
 type BeheerTab = Entity | 'dayparts';
 
@@ -33,6 +34,7 @@ const TABS: Array<{ id: BeheerTab; label: string }> = [
   { id: 'absenceType', label: 'Afwezigheidstypen' },
   // { id: 'availabilityType', label: 'Beschikbaarheid' },
   { id: 'expertise', label: 'Expertises' },
+  { id: 'functie', label: 'Functies' },
   { id: 'dayparts', label: 'Dagdelen' },
   // { id: 'specification', label: 'Specificaties' },
 
@@ -58,6 +60,8 @@ function getItems(masterData: PraktijkplannerMasterData, entity: Entity) {
       return masterData.availabilityTypes;
     case 'task':
       return masterData.tasks;
+    case 'functie':
+      return masterData.functies ?? [];
   }
 }
 
@@ -69,11 +73,25 @@ function itemFullName(entity: Entity, item: Record<string, unknown>): string {
 }
 
 function itemShortLabel(entity: Entity, item: Record<string, unknown>): string {
+  if (entity === 'functie') return '';
   if (['absenceType', 'availabilityType'].includes(entity)) {
     return String(item.code ?? '');
   }
   return String(item.afkorting ?? '');
 }
+
+/** Een functie heeft alleen een naam, dus de tweede kolom zou daar altijd leeg zijn. */
+function heeftTweedeKolom(entity: Entity): boolean {
+  return entity !== 'functie';
+}
+
+/**
+ * Voorbeelden die een secretaris met een klik overneemt.
+ *
+ * Voorbeelden, geen vaste lijst: elke groep bepaalt zelf welke functies hij heeft. Ze staan
+ * hier omdat een leeg tabblad geen idee geeft van wat er wordt bedoeld.
+ */
+const FUNCTIE_VOORBEELDEN = ['Specialist', 'Assistent', 'Ajo', 'Toa'];
 
 function compareItemsByName(entity: Entity, a: Record<string, unknown>, b: Record<string, unknown>): number {
   return itemFullName(entity, a).localeCompare(itemFullName(entity, b), 'nl', { sensitivity: 'base' });
@@ -89,7 +107,7 @@ function hasRequiredName(entity: Entity, form: Form): boolean {
 }
 
 function requiresAfkorting(entity: Entity): boolean {
-  return !['absenceType', 'availabilityType'].includes(entity);
+  return !['absenceType', 'availabilityType', 'functie'].includes(entity);
 }
 
 function hasRequiredAfkorting(entity: Entity, form: Form): boolean {
@@ -316,6 +334,17 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
     );
   }
 
+  // Voorbeelden die deze groep nog niet heeft. Alles al aanwezig betekent geen voorbeeldenblok.
+  const openVoorbeelden =
+    entity === 'functie'
+      ? FUNCTIE_VOORBEELDEN.filter(
+          (voorbeeld) =>
+            !items.some(
+              (item) => String(item.naam ?? '').toLowerCase() === voorbeeld.toLowerCase()
+            )
+        )
+      : [];
+
   const showExpertise = ['activity', 'task'].includes(entity);
   const showActivity = entity === 'specification';
   const showCode = ['absenceType', 'availabilityType'].includes(entity);
@@ -343,9 +372,18 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
         <div className="max-h-[620px] overflow-y-auto">
           {loading ? <p className="p-2 text-sm text-muted-foreground">Laden…</p> : null}
           {!loading && items.length > 0 ? (
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,6rem)] gap-x-2 border-b px-2 py-1.5 text-xs font-medium text-muted-foreground">
+            <div
+              className={[
+                'grid gap-x-2 border-b px-2 py-1.5 text-xs font-medium text-muted-foreground',
+                heeftTweedeKolom(entity)
+                  ? 'grid-cols-[minmax(0,1fr)_minmax(0,6rem)]'
+                  : 'grid-cols-1',
+              ].join(' ')}
+            >
               <span>Naam</span>
-              <span>{['absenceType', 'availabilityType'].includes(entity) ? 'Code' : 'Afkorting'}</span>
+              {heeftTweedeKolom(entity) ? (
+                <span>{['absenceType', 'availabilityType'].includes(entity) ? 'Code' : 'Afkorting'}</span>
+              ) : null}
             </div>
           ) : null}
           <div className="space-y-1">
@@ -358,19 +396,52 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
                   key={Number(item.id)}
                   onClick={() => selectItem(item)}
                   className={[
-                    'grid w-full grid-cols-[minmax(0,1fr)_minmax(0,6rem)] gap-x-2 rounded px-2 py-2 text-left text-sm hover:bg-muted',
+                    'grid w-full gap-x-2 rounded px-2 py-2 text-left text-sm hover:bg-muted',
+                    heeftTweedeKolom(entity)
+                      ? 'grid-cols-[minmax(0,1fr)_minmax(0,6rem)]'
+                      : 'grid-cols-1',
                     editingId === Number(item.id) ? 'bg-muted' : '',
                     !active ? 'opacity-50' : '',
                   ].join(' ')}
                 >
                   <span className="truncate">{itemFullName(entity, item)}</span>
-                  <span className="truncate text-muted-foreground">{shortLabel || '—'}</span>
+                  {heeftTweedeKolom(entity) ? (
+                    <span className="truncate text-muted-foreground">{shortLabel || '—'}</span>
+                  ) : null}
                 </button>
               );
             })}
           </div>
-          {items.length === 0 && !loading ? <p className="p-2 text-sm text-muted-foreground">Nog geen gegevens.</p> : null}
+          {items.length === 0 && !loading ? (
+            <p className="p-2 text-sm text-muted-foreground">
+              {entity === 'functie'
+                ? 'Nog geen functies. Deze waarneemgroep bepaalt zelf welke functies hij heeft.'
+                : 'Nog geen gegevens.'}
+            </p>
+          ) : null}
         </div>
+        {entity === 'functie' && openVoorbeelden.length > 0 ? (
+          <div className="mt-3 border-t pt-3">
+            <p className="mb-1.5 text-xs text-muted-foreground">
+              Voorbeelden, klik om over te nemen:
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {openVoorbeelden.map((voorbeeld) => (
+                <button
+                  key={voorbeeld}
+                  type="button"
+                  onClick={() => {
+                    setEditingId(null);
+                    setForm({ ...initialForm(), naam: voorbeeld });
+                  }}
+                  className="rounded border px-2 py-1 text-xs hover:bg-muted"
+                >
+                  {voorbeeld}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-xl border bg-card p-4 shadow-sm">

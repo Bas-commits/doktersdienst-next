@@ -31,6 +31,13 @@ export type PraktijkplannerExpertise = {
   actief: boolean;
 };
 
+/** Een functie van deze waarneemgroep, zoals Specialist of Assistent. */
+export type PraktijkplannerFunctie = {
+  id: number;
+  naam: string;
+  actief: boolean;
+};
+
 export type PraktijkplannerActivity = {
   id: number;
   naam: string;
@@ -144,6 +151,7 @@ export type PraktijkplannerMasterData = {
   locations: PraktijkplannerLocation[];
   availabilityTypes: PraktijkplannerAvailabilityType[];
   absenceTypes: PraktijkplannerAbsenceType[];
+  functies: PraktijkplannerFunctie[];
   schedulableDayparts: PraktijkplannerSchedulableDaypart[];
   participantSchedulableDayparts: PraktijkplannerParticipantSchedulableDaypart[];
 };

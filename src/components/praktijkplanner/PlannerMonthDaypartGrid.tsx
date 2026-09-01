@@ -188,7 +188,7 @@ export function PlannerMonthDaypartGrid({
                           if (unavailable && !opruimbaar) setUnavailableCursor(null);
                         }}
                         className={[
-                          'group/cell relative flex min-h-12 w-full items-center justify-center rounded border px-1 text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default',
+                          'group/cell relative flex min-h-12 w-full items-center justify-center rounded-md border text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default',
                           unavailable
                             ? opruimbaar
                               ? 'border-dashed border-destructive/50 bg-muted/40 opacity-70'

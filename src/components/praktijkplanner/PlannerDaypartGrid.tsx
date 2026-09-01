@@ -329,7 +329,7 @@ export function PlannerDaypartGrid({
                           // de twee vakjes vallen. 56 is gekozen omdat twee vakjes onder elkaar
                           // de regel even hoog houden als hij was met een vaste regelhoogte,
                           // zodat avond en nacht erbij zetten geen ruimte kost.
-                          'group/cell relative flex size-14 rounded border text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default',
+                          'group/cell relative flex size-14 rounded-md border text-left text-[10px] enabled:cursor-pointer enabled:hover:border-primary/60 enabled:hover:bg-muted disabled:cursor-default',
                           unavailable
                             ? opruimbaar
                               ? // Wel grijs, maar met een streepjesrand: dit vakje hoort hier niet
@@ -338,7 +338,7 @@ export function PlannerDaypartGrid({
                                 'border-dashed border-destructive/50 bg-muted/40 opacity-70'
                               : 'cursor-none border-border/40 bg-muted/40 opacity-50'
                             : 'border-border/70 disabled:opacity-80',
-                          filled ? 'items-stretch p-0.5' : 'items-center justify-center p-1',
+                          filled ? 'items-stretch' : 'items-center justify-center p-1',
                           isNu ? 'ring-2 ring-inset ring-emerald-600' : '',
                           !unavailable ? getCellClassName?.(cell) : undefined
                         )}
@@ -350,10 +350,20 @@ export function PlannerDaypartGrid({
                             : ''
                         }`}
                       >
+                        {/*
+                          Zelfde achtergrond als op het scherm van de dokter: de letter van het
+                          dagdeel in de hoek en het icoon eronder wat kleiner en lichter. Het
+                          icoon stond hier op volle sterkte en was daarmee net zo opvallend als
+                          wat er in het vakje gepland staat, terwijl het alleen zegt welk dagdeel
+                          het is.
+                        */}
+                        <span className="absolute top-0.5 left-1 text-[8px] text-muted-foreground">
+                          {daypart.naam.slice(0, 1)}
+                        </span>
                         {!filled ? (
                           <DaypartIcon
                             volgorde={daypart.volgorde}
-                            className="pointer-events-none absolute inset-0 m-auto size-7"
+                            className="pointer-events-none absolute inset-0 m-auto size-6 opacity-60"
                           />
                         ) : null}
                         <span

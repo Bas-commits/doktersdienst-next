@@ -35,9 +35,12 @@ export function AbsenceDaypartCell({
   const heeftDeelnemerKader = Boolean(participantColor);
   const kaderKleur = participantColor || '#c4c4c4';
 
+  // Vullend staat de tegel op een pixel van de rand van zijn vakje. Dat was vier pixels, en
+  // samen met de opvulling van het vakje zelf bleef er een rand grijs omheen staan die eruitzag
+  // als een vakje dat maar half gevuld was.
   return (
     <span
-      className={fill ? 'absolute inset-0.5 block' : 'relative block size-10'}
+      className={fill ? 'absolute inset-px block' : 'relative block size-10'}
       title={label}
     >
       <span

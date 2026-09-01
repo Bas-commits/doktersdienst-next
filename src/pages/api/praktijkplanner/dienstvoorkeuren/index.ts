@@ -6,7 +6,7 @@ import {
   resolvePraktijkplannerAccess,
   sendPraktijkplannerAccessError,
 } from '@/lib/praktijkplanner/access';
-import { isIsoDate, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
+import { isDatumVoorbij, isIsoDate, parsePositiveInteger } from '@/lib/praktijkplanner/dates';
 import type {
   PraktijkplannerDienstvoorkeur,
   PraktijkplannerDienstvoorkeurWaarde,
@@ -47,21 +47,6 @@ function parseWaarde(value: unknown): PraktijkplannerDienstvoorkeurWaarde | null
   return WAARDEN.includes(value as PraktijkplannerDienstvoorkeurWaarde)
     ? (value as PraktijkplannerDienstvoorkeurWaarde)
     : null;
-}
-
-/**
- * De dag is voorbij.
- *
- * DoktersDienst weigert hetzelfde, met de reden dat een voorkeur uit het verleden de
- * vastlegging is waarop het rooster is gebouwd. Hier wordt op de dag afgerond en niet op het
- * dagdeel: een dagdeel heeft geen eindtijd, dus wanneer de nacht van gisteren precies afliep is
- * niet uit de gegevens te halen. De dag erna is het antwoord dat niemand hoeft uit te leggen.
- */
-function isVoorbij(datum: string): boolean {
-  const nu = new Date();
-  const maand = String(nu.getMonth() + 1).padStart(2, '0');
-  const dag = String(nu.getDate()).padStart(2, '0');
-  return datum < [nu.getFullYear(), maand, dag].join('-');
 }
 
 async function laadVoorkeuren(
@@ -225,9 +210,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       /*
         Ook weghalen mag niet meer als de dag voorbij is. Dat is geen slordigheid: het rooster is
         op die voorkeur gebouwd, dus hem achteraf wissen maakt onnavolgbaar waarom iemand die
-        dienst kreeg.
+        dienst kreeg. DoktersDienst weigert dit om dezelfde reden.
+
+        Het dokterscherm maakt zulke vakjes niet meer aanklikbaar, dus hier komt niemand meer per
+        ongeluk langs. Deze controle blijft staan omdat het scherm niet de plek is waar dit
+        vastligt.
       */
-      if (isVoorbij(mutatie.datum)) {
+      if (isDatumVoorbij(mutatie.datum)) {
         throw new VoorkeurError(
           'Een dienstvoorkeur uit het verleden kan niet meer worden aangepast.'
         );

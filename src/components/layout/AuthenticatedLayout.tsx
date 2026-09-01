@@ -107,7 +107,11 @@ function AuthenticatedLayoutShell({
         showSectionSwitch
       />
       <div className="flex min-h-0 flex-1">
-        <Sidebar roleTier={resolvedRoleTier} section={section} />
+        <Sidebar
+          roleTier={resolvedRoleTier}
+          section={section}
+          plantDiensten={activeWaarneemgroep?.plantDiensten === true}
+        />
         <main className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</main>
       </div>
     </div>

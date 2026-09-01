@@ -1,13 +1,37 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { findDeelnemerBySessionEmail, GROEP_ADMINISTRATOR } from '@/lib/api-auth';
 
-const { waarneemgroepen, waarneemgroepdeelnemers, deelnemers } = schema;
+const { waarneemgroepen, waarneemgroepdeelnemers, deelnemers, taaktypen } = schema;
 
 type WaarneemgroepRow = typeof waarneemgroepen.$inferSelect;
-type WaarneemgroepRowWithRole = WaarneemgroepRow & { idgroep: number | null };
+type WaarneemgroepRowWithRole = WaarneemgroepRow & {
+  idgroep: number | null;
+  plantDiensten: boolean;
+};
+
+/**
+ * De waarneemgroepen die minstens een taaktype als dienst hebben aangemerkt.
+ *
+ * Hangt hier aan de lijst met groepen en niet aan de plannercontext, omdat de zijbalk het
+ * nodig heeft en die op elke pagina staat. De lijst wordt toch al opgehaald en in de browser
+ * bewaard, dus dit kost geen extra verzoek. De plannercontext levert hetzelfde signaal voor de
+ * schermen zelf; zie groepPlantDiensten.
+ */
+async function groepenMetDiensten(): Promise<Set<number>> {
+  const rijen = await db
+    .select({ idwaarneemgroep: taaktypen.idwaarneemgroep })
+    .from(taaktypen)
+    .where(
+      and(
+        eq(taaktypen.isDienst, true),
+        or(isNull(taaktypen.verwijderd), eq(taaktypen.verwijderd, 0))
+      )
+    );
+  return new Set(rijen.flatMap((rij) => (rij.idwaarneemgroep == null ? [] : [rij.idwaarneemgroep])));
+}
 type Data =
   | { waarneemgroepen: WaarneemgroepRowWithRole[] }
   | { error: string };
@@ -68,10 +92,10 @@ export default async function handler(
     const isAdmin = deelnemer?.idgroep === GROEP_ADMINISTRATOR;
     if (isAdmin) {
       const t2 = Date.now();
-      const rows = await db
-        .select({ wg: waarneemgroepen })
-        .from(waarneemgroepen)
-        .where(eq(waarneemgroepen.afgemeld, false));
+      const [rows, metDiensten] = await Promise.all([
+        db.select({ wg: waarneemgroepen }).from(waarneemgroepen).where(eq(waarneemgroepen.afgemeld, false)),
+        groepenMetDiensten(),
+      ]);
       const tQuery = Date.now() - t2;
 
       if (process.env.NODE_ENV === 'development') {
@@ -85,11 +109,16 @@ export default async function handler(
       }
 
       return res.status(200).json({
-        waarneemgroepen: rows.map((r) => ({ ...r.wg, idgroep: GROEP_ADMINISTRATOR })),
+        waarneemgroepen: rows.map((r) => ({
+          ...r.wg,
+          idgroep: GROEP_ADMINISTRATOR,
+          plantDiensten: r.wg.id != null && metDiensten.has(r.wg.id),
+        })),
       });
     }
 
     const t2 = Date.now();
+    const metDiensten = await groepenMetDiensten();
     const rows = await db
       .select({
         wg: waarneemgroepen,
@@ -125,7 +154,11 @@ export default async function handler(
       const key = r.wg.id ?? `noid-${i}`;
       const existing = wgMap.get(key);
       if (!existing || r.wgdIddeelnemer === idDeelnemer) {
-        wgMap.set(key, { ...r.wg, idgroep: r.wgdIdgroep ?? null });
+        wgMap.set(key, {
+          ...r.wg,
+          idgroep: r.wgdIdgroep ?? null,
+          plantDiensten: r.wg.id != null && metDiensten.has(r.wg.id),
+        });
       }
     });
 

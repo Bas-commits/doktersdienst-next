@@ -46,6 +46,16 @@ describe('Praktijkplanner Sidebar', () => {
     expect(screen.queryByText('Plannerbeheer')).not.toBeInTheDocument();
   });
 
+  it('noemt het afwezigheidsscherm zoals het scherm zichzelf noemt', () => {
+    // De menuoptie heette altijd "Afwezigheidsplanner dokter", ook bij een groep waar de kop van
+    // dat scherm "Afwezigheids- en dienstvoorkeur" is. Twee namen voor hetzelfde scherm.
+    cleanup();
+    render(<Sidebar section="praktijkplanner" roleTier={GROEP_DEELNEMER} plantDiensten />);
+
+    expect(screen.getByText('Afwezigheids- en dienstvoorkeur')).toBeInTheDocument();
+    expect(screen.queryByText('Afwezigheidsplanner dokter')).not.toBeInTheDocument();
+  });
+
   it('shows secretaris pages including Plannerbeheer and doktersdienst embeds', () => {
     cleanup();
     render(<Sidebar section="praktijkplanner" roleTier={GROEP_SECRETARIS} />);

@@ -36,6 +36,7 @@ import {
 import {
   addDays,
   datesBetweenInclusive,
+  isDatumVoorbij,
   weekdayFromIsoDate,
   maandVanWeek,
   monthBounds,
@@ -554,6 +555,12 @@ export function PlannerAbsenceEditor({
       daypart: { id: number };
     }) => {
       if (!editable) return;
+      /*
+        Het eigen scherm van de dokter is voor dagen die voorbij zijn alleen om in te zien. De
+        vakjes zijn daar al niet meer aanklikbaar; dit vangt de slepende variant af, die met
+        ctrl ingedrukt over de vakjes gaat en dus niet elk vakje zelf aanklikt.
+      */
+      if (isDoctorMode && isDatumVoorbij(datum)) return;
       const participantId = isDoctorMode ? data.userId : participant.id;
       const key = keyFor(participantId, datum, daypart.id);
       const existing = slotMap.get(key);
@@ -1041,7 +1048,13 @@ export function PlannerAbsenceEditor({
               onCellPointerEnter={(cell, event) => {
                 if (event.ctrlKey) void applyCell(cell);
               }}
-              isCellDisabled={() => !editable}
+              /*
+                Wat voorbij is kan alleen nog bekeken worden. Een vakje van vorige maand zag er
+                net zo aanklikbaar uit als een van volgende week, en pas na de klik kwam de
+                melding dat het niet meer mag. Nu gebeurt er niets, wat de melding overbodig
+                maakt: de afwezigheden en dienstvoorkeuren die er staan blijven gewoon zichtbaar.
+              */
+              isCellDisabled={({ datum }) => !editable || isDatumVoorbij(datum)}
               isCellUnavailable={({ participant, datum, daypart }) =>
                 !isDaypartSchedulableForParticipant(
                   data.masterData.schedulableDayparts ?? [],

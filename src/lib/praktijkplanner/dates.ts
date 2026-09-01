@@ -142,6 +142,20 @@ export function datesBetweenInclusive(start: string, end: string): string[] {
   return dates;
 }
 
+/**
+ * Ligt deze dag voor vandaag?
+ *
+ * Er wordt op de dag afgerond en niet op het dagdeel: een dagdeel heeft geen eindtijd, dus
+ * wanneer de nacht van gisteren precies afliep is niet uit de gegevens te halen. De dag erna is
+ * het antwoord dat niemand hoeft uit te leggen. Vandaag zelf telt dus nog niet mee.
+ *
+ * Staat hier zodat het scherm en de server dezelfde grens gebruiken. Liepen ze uiteen, dan zou
+ * een vakje er bewerkbaar uitzien en pas bij het opslaan geweigerd worden.
+ */
+export function isDatumVoorbij(datum: string, vandaag: Date = new Date()): boolean {
+  return datum < formatIsoDate(vandaag);
+}
+
 export function isDateRange(value: { start?: unknown; end?: unknown }): value is { start: string; end: string } {
   return isIsoDate(value.start) && isIsoDate(value.end) && value.start <= value.end;
 }

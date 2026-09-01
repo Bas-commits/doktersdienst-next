@@ -28,6 +28,8 @@ export interface WaarneemgroepItem {
   telnringaand?: string | null;
   /** Onze-centrale nummer (DB: `telnronzecentrale`) */
   telnronzecentrale?: string | null;
+  /** Merkt deze groep taaktypen aan als dienst? Bepaalt hoe het dokterscherm heet. */
+  plantDiensten?: boolean;
 }
 
 export interface HeaderUser {

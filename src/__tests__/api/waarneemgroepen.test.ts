@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-let selectCall = 0;
 let currentDeelnemer: { id: number | null; idgroep: number | null } | null = { id: 1, idgroep: 2 };
 type WaarneemgroepenApiRow = {
   wg: { id: number; naam: string; afgemeld: boolean };
@@ -9,48 +8,58 @@ type WaarneemgroepenApiRow = {
   wgdIddeelnemer?: number | null;
 };
 let waarneemgroepRows: WaarneemgroepenApiRow[] = [];
+/** De taaktypen die als dienst zijn aangemerkt, waar plantDiensten uit volgt. */
+let dienstTaakRows: { idwaarneemgroep: number | null }[] = [];
 
-const selectMock = vi.fn(() => {
-  selectCall += 1;
-  if (selectCall === 1) {
-    return {
-      from: vi.fn(() => ({
+// Op tabel en niet op volgorde: het handler doet de groepen en de taaktypen naast elkaar in
+// een Promise.all, dus welke select als eerste binnenkomt ligt niet vast.
+const selectMock = vi.fn(() => ({
+  from: vi.fn((tabel: unknown) => {
+    if (tabel === schemaMock.deelnemers) {
+      return {
         where: vi.fn(() => ({
           limit: vi.fn(() => Promise.resolve(currentDeelnemer ? [currentDeelnemer] : [])),
         })),
-      })),
-    };
-  }
-
-  return {
-    from: vi.fn(() => ({
+      };
+    }
+    if (tabel === schemaMock.taaktypen) {
+      return { where: vi.fn(() => Promise.resolve(dienstTaakRows)) };
+    }
+    return {
       where: vi.fn(() => Promise.resolve(waarneemgroepRows)),
       leftJoin: vi.fn(() => ({
         where: vi.fn(() => Promise.resolve(waarneemgroepRows)),
       })),
-    })),
-  };
-});
+    };
+  }),
+}));
+
+const schemaMock = {
+  deelnemers: { id: 'deelnemers.id', email: 'deelnemers.email', idgroep: 'deelnemers.idgroep' },
+  waarneemgroepen: {
+    id: 'waarneemgroepen.id',
+    naam: 'waarneemgroepen.naam',
+    afgemeld: 'waarneemgroepen.afgemeld',
+    idregio: 'waarneemgroepen.idregio',
+  },
+  waarneemgroepdeelnemers: {
+    aangemeld: 'waarneemgroepdeelnemers.aangemeld',
+    iddeelnemer: 'waarneemgroepdeelnemers.iddeelnemer',
+    idwaarneemgroep: 'waarneemgroepdeelnemers.idwaarneemgroep',
+    idgroep: 'waarneemgroepdeelnemers.idgroep',
+  },
+  taaktypen: {
+    idwaarneemgroep: 'taaktypen.idwaarneemgroep',
+    isDienst: 'taaktypen.isDienst',
+    verwijderd: 'taaktypen.verwijderd',
+  },
+};
 
 vi.mock('@/db', () => ({
   db: {
     select: selectMock,
   },
-  schema: {
-    deelnemers: { id: 'deelnemers.id', email: 'deelnemers.email', idgroep: 'deelnemers.idgroep' },
-    waarneemgroepen: {
-      id: 'waarneemgroepen.id',
-      naam: 'waarneemgroepen.naam',
-      afgemeld: 'waarneemgroepen.afgemeld',
-      idregio: 'waarneemgroepen.idregio',
-    },
-    waarneemgroepdeelnemers: {
-      aangemeld: 'waarneemgroepdeelnemers.aangemeld',
-      iddeelnemer: 'waarneemgroepdeelnemers.iddeelnemer',
-      idwaarneemgroep: 'waarneemgroepdeelnemers.idwaarneemgroep',
-      idgroep: 'waarneemgroepdeelnemers.idgroep',
-    },
-  },
+  schema: schemaMock,
 }));
 
 const mockGetSession = vi.fn();
@@ -66,6 +75,7 @@ vi.mock('drizzle-orm', () => ({
   and: vi.fn((...args: unknown[]) => args),
   eq: vi.fn((a: unknown, b: unknown) => [a, b]),
   or: vi.fn((...args: unknown[]) => args),
+  isNull: vi.fn((a: unknown) => ['isNull', a]),
 }));
 
 function makeReq(query: Record<string, string> = {}): NextApiRequest {
@@ -95,9 +105,9 @@ function makeRes(): NextApiResponse & { _status: number; _json: unknown } {
 describe('GET /api/waarneemgroepen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    selectCall = 0;
     currentDeelnemer = { id: 1, idgroep: 2 };
     waarneemgroepRows = [];
+    dienstTaakRows = [];
     mockGetSession.mockResolvedValue({
       user: { email: 'user@test.nl', id: '1' },
     });
@@ -118,8 +128,8 @@ describe('GET /api/waarneemgroepen', () => {
     expect(res._status).toBe(200);
     expect(res._json).toEqual({
       waarneemgroepen: [
-        { id: 10, naam: 'Groep A', afgemeld: false, idgroep: 5 },
-        { id: 20, naam: 'Groep B', afgemeld: false, idgroep: 5 },
+        { id: 10, naam: 'Groep A', afgemeld: false, idgroep: 5, plantDiensten: false },
+        { id: 20, naam: 'Groep B', afgemeld: false, idgroep: 5, plantDiensten: false },
       ],
     });
   });
@@ -139,7 +149,30 @@ describe('GET /api/waarneemgroepen', () => {
 
     expect(res._status).toBe(200);
     expect(res._json).toEqual({
-      waarneemgroepen: [{ id: 10, naam: 'Eigen groep', afgemeld: false, idgroep: 2 }],
+      waarneemgroepen: [
+        { id: 10, naam: 'Eigen groep', afgemeld: false, idgroep: 2, plantDiensten: false },
+      ],
+    });
+  });
+
+  it('markeert de groepen die een taaktype als dienst hebben aangemerkt', async () => {
+    // Hier hangt de naam van de menuoptie Afwezigheidsplanner van af; zie dokterMenuItems.
+    currentDeelnemer = { id: 1, idgroep: 5 };
+    waarneemgroepRows = [
+      { wg: { id: 10, naam: 'Groep A', afgemeld: false } },
+      { wg: { id: 20, naam: 'Groep B', afgemeld: false } },
+    ];
+    dienstTaakRows = [{ idwaarneemgroep: 20 }, { idwaarneemgroep: 20 }];
+
+    const { default: handler } = await import('@/pages/api/waarneemgroepen');
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    expect(res._json).toEqual({
+      waarneemgroepen: [
+        { id: 10, naam: 'Groep A', afgemeld: false, idgroep: 5, plantDiensten: false },
+        { id: 20, naam: 'Groep B', afgemeld: false, idgroep: 5, plantDiensten: true },
+      ],
     });
   });
 });

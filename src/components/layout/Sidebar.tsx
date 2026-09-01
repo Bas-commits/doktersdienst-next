@@ -28,6 +28,7 @@ import {
   type RoleTier,
 } from '@/lib/roles';
 import type { AppSection } from '@/lib/route-access';
+import { dokterAfwezigheidsschermTitel } from '@/lib/praktijkplanner/diensten-in-groep';
 
 type NavItem = {
   id: string;
@@ -142,6 +143,7 @@ const PRAKTIJKPLANNER_DEELNEMER_NAV_ITEMS: NavItem[] = [
   },
   {
     id: 'praktijkplanner-afwezigheidsplanner-dokter',
+    // De naam wordt hieronder vervangen door die van het scherm zelf. Zie dokterMenuItems.
     label: 'Afwezigheidsplanner dokter',
     href: '/praktijkplanner/afwezigheidsplanner-dokter',
     icon: <Palmtree className="size-4 shrink-0" />,
@@ -207,6 +209,25 @@ const PRAKTIJKPLANNER_SECRETARIS_NAV_ITEMS: NavItem[] = [
 
 const ACTIVE_BG = '#c91b23';
 
+/**
+ * De deelnemersmenu-items, met het afwezigheidsscherm onder de naam die het scherm zelf voert.
+ *
+ * De menuoptie heette altijd "Afwezigheidsplanner dokter" terwijl de kop van dat scherm
+ * "Afwezigheids- en dienstvoorkeur" werd zodra de groep taaktypen als dienst aanmerkt. Twee
+ * namen voor hetzelfde scherm, en de menuoptie was de verkeerde van de twee.
+ *
+ * Het signaal komt van buiten, uit de lijst met waarneemgroepen die de layout al heeft. Niet
+ * uit de plannercontext: de zijbalk staat op elke pagina en die context wordt alleen door de
+ * plannerschermen zelf opgehaald, dus dat zou een verzoek per pagina extra kosten.
+ */
+function dokterMenuItems(plantDiensten: boolean): NavItem[] {
+  return PRAKTIJKPLANNER_DEELNEMER_NAV_ITEMS.map((item) =>
+    item.id === 'praktijkplanner-afwezigheidsplanner-dokter'
+      ? { ...item, label: dokterAfwezigheidsschermTitel(plantDiensten) }
+      : item
+  );
+}
+
 function NavLinkList({ items, pathname }: { items: NavItem[]; pathname: string }) {
   return (
     <>
@@ -256,9 +277,15 @@ function SectionHeading({ label }: { label: string }) {
 export interface SidebarProps {
   roleTier?: RoleTier;
   section?: AppSection;
+  /** Merkt de gekozen waarneemgroep taaktypen aan als dienst? Zie dokterMenuItems. */
+  plantDiensten?: boolean;
 }
 
-export function Sidebar({ roleTier = GROEP_DEELNEMER, section = 'doktersdienst' }: SidebarProps) {
+export function Sidebar({
+  roleTier = GROEP_DEELNEMER,
+  section = 'doktersdienst',
+  plantDiensten = false,
+}: SidebarProps) {
   const router = useRouter();
   const pathname = router.pathname;
   const showSecretaris = hasSecretarisAccess(roleTier);
@@ -279,7 +306,10 @@ export function Sidebar({ roleTier = GROEP_DEELNEMER, section = 'doktersdienst' 
           {isPraktijkplanner ? (
             <>
               <SectionHeading label="Deelnemer" />
-              <NavLinkList items={PRAKTIJKPLANNER_DEELNEMER_NAV_ITEMS} pathname={pathname} />
+              <NavLinkList
+                items={dokterMenuItems(plantDiensten)}
+                pathname={pathname}
+              />
               {showSecretaris && (
                 <>
                   <SectionHeading label="Secretaris" />

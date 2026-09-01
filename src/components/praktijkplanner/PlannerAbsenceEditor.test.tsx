@@ -11,6 +11,24 @@ const mocks = vi.hoisted(() => ({
   toastInfo: vi.fn(),
 }));
 
+/**
+ * Vandaag, als ISO-datum.
+ *
+ * Op het dokterscherm is alles wat voorbij is alleen nog om in te zien, dus daar kan niet meer
+ * op geklikt worden. De eerste cel van de kalender is een dag van de vorige maand en dus altijd
+ * voorbij; vandaag staat er altijd op en is de laatste dag die nog wel mag.
+ */
+function vandaag(): string {
+  const nu = new Date();
+  const maand = String(nu.getMonth() + 1).padStart(2, '0');
+  const dag = String(nu.getDate()).padStart(2, '0');
+  return `${nu.getFullYear()}-${maand}-${dag}`;
+}
+
+function celVanVandaag(): HTMLElement {
+  return screen.getByRole('button', { name: new RegExp(`^${vandaag()} Ochtend$`) });
+}
+
 vi.mock('@/components/CalandarGrid/MonthNavigation', () => ({
   MonthNavigation: () => <div>Maandnavigatie</div>,
 }));
@@ -130,7 +148,7 @@ describe('PlannerAbsenceEditor doctor mode', () => {
     expect(screen.getAllByRole('button', { name: / Ochtend$/ }).length).toBeGreaterThan(7);
 
     fireEvent.click(screen.getByRole('button', { name: 'Vakantie?' }));
-    fireEvent.click(screen.getAllByRole('button', { name: / Ochtend$/ })[0]);
+    fireEvent.click(celVanVandaag());
 
     await waitFor(() => {
       const postCall = fetchMock.mock.calls.find(
@@ -160,14 +178,13 @@ describe('PlannerAbsenceEditor doctor mode', () => {
       if (url.startsWith('/api/praktijkplanner/voorkeuren')) {
         return Promise.resolve(response({ toonDag: true, toonNacht: true }));
       }
-      const start = new URL(url, 'http://localhost').searchParams.get('start');
       return Promise.resolve(
         response({
           slots: [
             {
               id: 10,
               iddeelnemer: 7,
-              datum: start,
+              datum: vandaag(),
               iddagdeel: 1,
               idafwezigheidstype: 5,
               isVoorlopig: false,
@@ -188,7 +205,7 @@ describe('PlannerAbsenceEditor doctor mode', () => {
     render(<PlannerAbsenceEditor context={context} mode="doctor" />);
     fireEvent.click(screen.getByRole('button', { name: 'Leegmaken' }));
     await waitFor(() => expect(screen.getAllByText('Vakantie')).toHaveLength(1));
-    fireEvent.click(screen.getAllByRole('button', { name: / Ochtend$/ })[0]);
+    fireEvent.click(celVanVandaag());
 
     expect(mocks.toastInfo).toHaveBeenCalledWith(
       'Deze afwezigheid is bevestigd en kan niet meer worden gewijzigd.',
@@ -302,12 +319,36 @@ describe('PlannerAbsenceEditor dienstvoorkeur', () => {
     });
   });
 
+  it('laat een dagdeel dat voorbij is alleen zien en niet meer aanklikken', async () => {
+    // Zo stond het op de kaart: geen ingaves voor het verleden, wel kunnen inzien. Het vakje
+    // gaf eerst pas na de klik een melding dat het niet mocht.
+    stubFetch();
+    render(<PlannerAbsenceEditor context={dienstContext} mode="doctor" />);
+
+    // Welke dagen de kalender laat zien hangt af van de dag waarop dit draait, dus de datum
+    // wordt uit de knop zelf gelezen in plaats van dat er een vaste plek wordt aangewezen.
+    // Alle dagdelen, ook die van een dagdeel waarop deze dokter niet ingeroosterd wordt: juist
+    // die bleven aanklikbaar toen alleen de gewone vakjes werden uitgezet.
+    const dagen = screen
+      .getAllByRole('button', { name: /^\d{4}-\d{2}-\d{2} / })
+      .map((knop) => ({ datum: knop.getAttribute('aria-label')?.slice(0, 10) ?? '', knop }));
+
+    expect(dagen.length).toBeGreaterThan(27);
+    dagen
+      .filter((dag) => dag.datum < vandaag())
+      .forEach((dag) => expect(dag.knop).toBeDisabled());
+    dagen
+      .filter((dag) => dag.datum > vandaag())
+      .forEach((dag) => expect(dag.knop).not.toBeDisabled());
+    expect(celVanVandaag()).not.toBeDisabled();
+  });
+
   it('slaat een dienstvoorkeur op het aangeklikte dagdeel op', async () => {
     stubFetch();
     render(<PlannerAbsenceEditor context={dienstContext} mode="doctor" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Dienst graag?' }));
-    fireEvent.click(screen.getAllByRole('button', { name: / Ochtend$/ })[0]);
+    fireEvent.click(celVanVandaag());
 
     await waitFor(() => {
       const postCall = fetchMock.mock.calls.find(
@@ -324,7 +365,8 @@ describe('PlannerAbsenceEditor dienstvoorkeur', () => {
   });
 
   it('waarschuwt bij graag dienst op een dagdeel met afwezigheid en bewaart pas na akkoord', async () => {
-    const datum = new Date().toISOString().slice(0, 8) + '15';
+    // Vandaag en niet de vijftiende: na de vijftiende is die dag voorbij en niet meer aanklikbaar.
+    const datum = vandaag();
     stubFetch([
       {
         id: 10,

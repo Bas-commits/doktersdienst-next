@@ -26,6 +26,7 @@ type ApiWaarneemgroep = {
   idgroep?: number | null;
   telnringaand?: string | null;
   telnronzecentrale?: string | null;
+  plantDiensten?: boolean;
   [key: string]: unknown;
 };
 
@@ -36,6 +37,7 @@ function toWaarneemgroepItem(row: ApiWaarneemgroep): WaarneemgroepItem {
     idgroep: row.idgroep ?? null,
     telnringaand: row.telnringaand ?? null,
     telnronzecentrale: row.telnronzecentrale ?? null,
+    plantDiensten: row.plantDiensten === true,
   };
 }
 

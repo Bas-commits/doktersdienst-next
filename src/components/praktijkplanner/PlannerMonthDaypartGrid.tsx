@@ -145,8 +145,15 @@ export function PlannerMonthDaypartGrid({
                     const isNu =
                       datum === huidigMoment?.datum && daypart.volgorde === huidigMoment.volgorde;
                     const unavailable = isCellUnavailable?.(cell) ?? false;
+                    /*
+                      Een niet-inplanbaar vakje blijft aanklikbaar, want wat er toch in staat
+                      moet eruit kunnen. Dat gold ook voor isCellDisabled, en daarmee bleven op
+                      het dokterscherm juist de vakjes uit het verleden aanklikbaar waar iets in
+                      stond. Een vakje dat de aanroeper uitzet gaat nu voor; alleen de
+                      feestdagsluiting houdt zijn uitzondering.
+                    */
                     const disabled =
-                      !unavailable && (blocked || isCellDisabled?.(cell) || !onCellClick);
+                      isCellDisabled?.(cell) || !onCellClick || (!unavailable && blocked);
                     const inhoud =
                       !unavailable || toonInhoudOpNietInplanbaar
                         ? blocked
@@ -194,7 +201,14 @@ export function PlannerMonthDaypartGrid({
                         <span className="absolute top-0.5 left-1 text-[8px] text-muted-foreground">
                           {daypart.naam.slice(0, 1)}
                         </span>
-                        <span className="min-w-0 max-w-full">{inhoud}</span>
+                        {/*
+                          Een blok met een echte hoogte, geen inline span. Een afwezigheidstegel
+                          rekent zijn maat uit als honderd procent van zijn ouder, en honderd
+                          procent van een inline span is nul. Wat er dan overbleef was de
+                          opvulling van het gekleurde randje: een bolletje van zes pixels in de
+                          kleur van de deelnemer, met het rode vlak en het icoon op nul.
+                        */}
+                        <span className="block h-full w-full min-w-0 max-w-full">{inhoud}</span>
                       </button>
                     );
                   })}

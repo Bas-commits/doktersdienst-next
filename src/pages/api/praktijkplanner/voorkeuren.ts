@@ -6,7 +6,10 @@ import {
   sendPraktijkplannerAccessError,
 } from '@/lib/praktijkplanner/access';
 
-type Data = { toonDag: boolean; toonNacht: boolean } | { success: true } | { error: string };
+type Data =
+  | { toonDag: boolean; toonNacht: boolean; toonWeekend: boolean }
+  | { success: true }
+  | { error: string };
 
 function oneQueryValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -30,6 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         .select({
           toonDag: schema.praktijkplannerweergavevoorkeuren.toonDag,
           toonNacht: schema.praktijkplannerweergavevoorkeuren.toonNacht,
+          toonWeekend: schema.praktijkplannerweergavevoorkeuren.toonWeekend,
         })
         .from(schema.praktijkplannerweergavevoorkeuren)
         .where(
@@ -47,6 +51,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         // Zonder rij staat de knop uit: avond en nacht verschijnen dan vanzelf zodra er iets
         // in staat, en blijven anders weg. Dat is het gedrag dat de meeste weken wil.
         toonNacht: preference?.toonNacht ?? false,
+        // Zonder rij staat het weekend er gewoon. Alleen wie het wegklikt heeft een mening.
+        toonWeekend: preference?.toonWeekend ?? true,
       });
     } catch (error) {
       console.error('[praktijkplanner/voorkeuren GET]', error);
@@ -58,8 +64,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  /*
+    Elk veld op zichzelf, want de twee knoppen zitten in verschillende schermonderdelen. Zou
+    een POST altijd alle drie moeten meesturen, dan schrijft de knop voor het weekend de stand
+    van avond en nacht mee terug zoals hij die toevallig kende, en zet hij die terug zodra die
+    twee niet gelijk liepen.
+  */
   const body = (req.body ?? {}) as Record<string, unknown>;
-  if (typeof body.toonDag !== 'boolean' || typeof body.toonNacht !== 'boolean') {
+  const velden = ['toonDag', 'toonNacht', 'toonWeekend'] as const;
+  if (velden.some((veld) => body[veld] !== undefined && typeof body[veld] !== 'boolean')) {
+    return res.status(400).json({ error: 'De weergavevoorkeuren zijn ongeldig.' });
+  }
+  const gevraagd = Object.fromEntries(
+    velden.filter((veld) => typeof body[veld] === 'boolean').map((veld) => [veld, body[veld]])
+  ) as Partial<Record<(typeof velden)[number], boolean>>;
+  if (Object.keys(gevraagd).length === 0) {
     return res.status(400).json({ error: 'De weergavevoorkeuren zijn ongeldig.' });
   }
 
@@ -80,17 +99,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       await db
         .update(schema.praktijkplannerweergavevoorkeuren)
         .set({
-          toonDag: body.toonDag,
-          toonNacht: body.toonNacht,
+          ...gevraagd,
           updatedAt: new Date().toISOString(),
         })
         .where(where);
     } else {
+      // Wat niet meekomt krijgt de standaard uit het schema, niet de waarde die de
+      // aanroeper niet noemde.
       await db.insert(schema.praktijkplannerweergavevoorkeuren).values({
         iddeelnemer: accessResult.access.user.id,
         idwaarneemgroep: accessResult.access.idwaarneemgroep,
-        toonDag: body.toonDag,
-        toonNacht: body.toonNacht,
+        ...gevraagd,
       });
     }
     return res.status(200).json({ success: true });

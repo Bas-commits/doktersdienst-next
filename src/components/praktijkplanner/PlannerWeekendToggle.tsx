@@ -5,9 +5,12 @@ import { CalendarOff } from 'lucide-react';
 /**
  * De knop die zaterdag en zondag uit het rooster haalt of terugzet.
  *
- * Puur beeld, net als de knop voor avond en nacht ernaast: er wordt niets opgeslagen of
- * weggegooid, en wat in het weekend gepland staat komt met dezelfde klik weer terug. Groepen
- * die alleen doordeweeks werken houden zo twee kolommen ruimte over.
+ * Puur beeld, net als de knop voor avond en nacht ernaast: er wordt niets aan de planning
+ * veranderd, en wat in het weekend staat komt met dezelfde klik weer terug. Groepen die alleen
+ * doordeweeks werken houden zo twee kolommen ruimte over.
+ *
+ * De stand zelf wordt wel bewaard, per deelnemer en waarneemgroep, in dezelfde tabel als die
+ * andere knop. Zie useWeekendVoorkeur.
  *
  * Alleen het icoontje, met de tekst in de tooltip, om dezelfde reden als bij die andere knop:
  * uitgeschreven past de koprij met de zijbalk open niet meer op een regel. De stand is aan de

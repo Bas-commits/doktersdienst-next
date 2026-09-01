@@ -3,7 +3,7 @@
 import { PlannerWeekendToggle } from '@/components/praktijkplanner/PlannerWeekendToggle';
 import {
   metVerborgenWeekend,
-  useWeekendVerbergen,
+  useWeekendVoorkeur,
 } from '@/hooks/praktijkplanner/useWeekendVerbergen';
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -123,7 +123,7 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
 
   // Een eis opgeven voor een dag die de groep nooit werkt heeft geen zin; die cel was hier al
   // niet invulbaar en hoort dus ook niet in het sjabloon te staan.
-  const { weekendVerborgen, setWeekendVerborgen } = useWeekendVerbergen();
+  const { weekendVerborgen, setWeekendVerborgen } = useWeekendVoorkeur(groupId);
   const verborgenWeekdagen = useMemo(
     () =>
       metVerborgenWeekend(

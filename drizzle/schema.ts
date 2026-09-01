@@ -918,6 +918,7 @@ export const praktijkplannerweergavevoorkeuren = pgTable("praktijkplannerweergav
 	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id, { onDelete: "cascade" }),
 	toonDag: boolean("toon_dag").notNull().default(true),
 	toonNacht: boolean("toon_nacht").notNull().default(false),
+	toonWeekend: boolean("toon_weekend").notNull().default(true),
 	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
 }, (table) => [
 	primaryKey({ columns: [table.iddeelnemer, table.idwaarneemgroep] }),

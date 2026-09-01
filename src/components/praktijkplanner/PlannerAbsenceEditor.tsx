@@ -3,7 +3,7 @@
 import { PlannerWeekendToggle } from './PlannerWeekendToggle';
 import {
   metVerborgenWeekend,
-  useWeekendVerbergen,
+  useWeekendVoorkeur,
 } from '@/hooks/praktijkplanner/useWeekendVerbergen';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, Mail, Minus, Moon, Plus, RotateCcw, Sun, Trash2 } from 'lucide-react';
@@ -183,7 +183,7 @@ export function PlannerAbsenceEditor({
     ? data.participants.filter((participant) => participant.id === data.userId)
     : data.participants;
   const editable = isDoctorMode || data.isManager;
-  const { weekendVerborgen, setWeekendVerborgen } = useWeekendVerbergen();
+  const { weekendVerborgen, setWeekendVerborgen } = useWeekendVoorkeur(groupId);
   const verborgenWeekdagen = useMemo(
     () =>
       metVerborgenWeekend(

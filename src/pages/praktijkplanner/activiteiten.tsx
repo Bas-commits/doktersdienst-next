@@ -3,7 +3,7 @@
 import { PlannerWeekendToggle } from '@/components/praktijkplanner/PlannerWeekendToggle';
 import {
   metVerborgenWeekend,
-  useWeekendVerbergen,
+  useWeekendVoorkeur,
 } from '@/hooks/praktijkplanner/useWeekendVerbergen';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -196,7 +196,7 @@ export function ActivitiesContent({
         : data.participants.filter((participant) => participant.id === participantFilter),
     [data.participants, participantFilter]
   );
-  const { weekendVerborgen, setWeekendVerborgen } = useWeekendVerbergen();
+  const { weekendVerborgen, setWeekendVerborgen } = useWeekendVoorkeur(groupId);
   const verborgenWeekdagen = useMemo(
     () =>
       metVerborgenWeekend(

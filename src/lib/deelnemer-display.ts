@@ -34,6 +34,23 @@ export function formatDeelnemerDisplayName(row: DeelnemerNameFields): string | n
 }
 
 /**
+ * De naam waarmee we iemand aanspreken op zijn eigen schermen: alleen de voornaam.
+ *
+ * Bewust niet de hele naam. Het veld `voorletterstussenvoegsel` bevat allebei die dingen door
+ * elkaar, en er is geen manier om ze uit elkaar te halen: `V D` kan "van der" zijn of de
+ * voorletters van Victor Daniel, en in dat veld staat niets waarmee je dat onderscheidt. Een
+ * hele naam samenstellen levert dus of "Bart B Veltenaar", of bij het weglaten van dat veld
+ * "Jacob Beek" in plaats van "Jacob van Beek". Kort en juist is beter dan volledig en soms
+ * fout, zeker op een scherm waar je je eigen naam leest en de initialen er al naast staan.
+ *
+ * Voor de naam van een *ander* is dit niet genoeg: daar moet je naamgenoten kunnen scheiden.
+ * Zie deelnemerRoosterNaam en de opbouw in de overname-popover.
+ */
+export function deelnemerRoepnaam(row: DeelnemerNameFields): string | null {
+  return row.voornaam?.trim() || row.achternaam?.trim() || row.initialen?.trim() || null;
+}
+
+/**
  * De naam zoals de roosterschermen hem tonen: achternaam eerst, dan voornaam.
  *
  * Dezelfde volgorde als in de lijst deelnemers, en anders dan formatDeelnemerDisplayName. Op een

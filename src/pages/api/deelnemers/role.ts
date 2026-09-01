@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { eq } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/api-auth';
 import { db, schema } from '@/db';
-import { formatDeelnemerDisplayName } from '@/lib/deelnemer-display';
+import { deelnemerRoepnaam } from '@/lib/deelnemer-display';
 import { normalizeRoleTier, type RoleTier } from '@/lib/roles';
 
 const { deelnemers } = schema;
@@ -44,7 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     .where(eq(deelnemers.id, user.id))
     .limit(1);
 
-  const displayName = formatDeelnemerDisplayName(profile ?? {}) ?? user.email;
+  const displayName = deelnemerRoepnaam(profile ?? {}) ?? user.email;
 
   return res.status(200).json({
     isAdmin: user.isAdmin,

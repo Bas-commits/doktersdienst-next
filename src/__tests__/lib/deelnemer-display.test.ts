@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deelnemerChipInitials,
   deelnemerInitialsFromDisplayName,
+  deelnemerRoepnaam,
   formatDeelnemerDisplayName,
 } from '@/lib/deelnemer-display';
 import { headerUserFromSession } from '@/lib/header-defaults';
@@ -35,6 +36,31 @@ describe('formatDeelnemerDisplayName', () => {
 
   it('returns null when no name fields are set', () => {
     expect(formatDeelnemerDisplayName({})).toBeNull();
+  });
+});
+
+describe('deelnemerRoepnaam', () => {
+  it('gebruikt de voornaam en laat voorletters en tussenvoegsel weg', () => {
+    expect(
+      deelnemerRoepnaam({
+        name: 'Bart',
+        voornaam: 'Jacob',
+        voorletterstussenvoegsel: 'J.B.H. van',
+        achternaam: 'Beek',
+      })
+    ).toBe('Jacob');
+  });
+
+  it('valt terug op de achternaam als de voornaam leeg is', () => {
+    expect(deelnemerRoepnaam({ voornaam: '  ', achternaam: 'Beek', initialen: 'JB' })).toBe('Beek');
+  });
+
+  it('valt terug op de initialen als voor- en achternaam leeg zijn', () => {
+    expect(deelnemerRoepnaam({ initialen: 'JB' })).toBe('JB');
+  });
+
+  it('geeft null als er niets in te vullen valt', () => {
+    expect(deelnemerRoepnaam({ name: 'Bart' })).toBeNull();
   });
 });
 

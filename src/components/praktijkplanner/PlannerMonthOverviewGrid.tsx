@@ -17,6 +17,41 @@ const WEEKDAG_LETTERS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 const NAAM_BREEDTE_PX = 176;
 const DAGDEEL_BREEDTE_PX = 24;
 
+/**
+ * Hoogte van de weeknummerrij, zodat de datumrij eronder weet waar hij moet blijven hangen.
+ *
+ * Een vaste maat en geen meting: de rij bevat één regel tekst van 10 pixels en verandert
+ * nergens van hoogte. Zou hij dat ooit wel doen, dan schuift de datumrij zichtbaar mis en is
+ * dat hier in één getal te herstellen.
+ */
+const WEEKKOP_HOOGTE_PX = 22;
+
+/**
+ * Dekkende variant van een doorzichtige tint, alvast gemengd met de kaartachtergrond.
+ *
+ * De kop blijft bij het scrollen staan en de rijen schuiven eronder door. Een half
+ * doorzichtige achtergrond laat die rijen dan door de kop heen schemeren, en dan lees je de
+ * datums niet meer. Dit mengt dezelfde tint met de achtergrond waar hij toch al op lag, dus
+ * de kop ziet er hetzelfde uit maar laat niets meer door. Via color-mix, zodat het donkere
+ * thema meeverandert.
+ */
+function dekkendeTint(percentage: number): string {
+  return `color-mix(in oklab, var(--muted) ${percentage}%, var(--card))`;
+}
+
+/*
+ * Laagvolgorde in dit rooster, van onder naar boven:
+ *
+ *   z-20  het "?"-vlaggetje op een fiche, gezet in PlannerCombinedDaypartChip
+ *   z-30  de namenkolom, die bij zijwaarts scrollen blijft staan
+ *   z-40  de kop met weeknummers en datums, die bij scrollen omlaag blijft staan
+ *   z-50  de twee hoekcellen, die in beide richtingen blijven staan
+ *
+ * Deze vier moeten uit elkaar liggen. Stond de kop op dezelfde laag als het vlaggetje, dan won
+ * het vlaggetje omdat het later in de HTML staat, en dan piepen er stukjes fiche door de kop
+ * heen. Hetzelfde gold voor de namenkolom bij zijwaarts scrollen.
+ */
+
 /** Achternaam eerst, net als in de weekweergave en in de lijst deelnemers. */
 function deelnemerNaam(participant: PraktijkplannerParticipant): string {
   return [participant.achternaam, participant.voornaam].filter(Boolean).join(', ');
@@ -92,18 +127,35 @@ export function PlannerMonthOverviewGrid({
             {/*
               De namenkolom blijft staan bij het zijwaarts scrollen. Zonder dat weet je bij dag
               20 niet meer naar wiens rij je kijkt, en dat is nu juist wat dit overzicht doet.
+
+              De kop blijft om dezelfde reden staan bij het scrollen naar beneden: anders zie je
+              vanaf de vierde deelnemer alleen nog gekleurde blokjes zonder te weten welke dag
+              welke is. Deze twee cellen staan in beide richtingen vast, want ze zitten in de
+              hoek waar de twee elkaar kruisen.
             */}
             <th
               rowSpan={2}
-              style={{ width: NAAM_BREEDTE_PX, minWidth: NAAM_BREEDTE_PX, left: 0 }}
-              className="sticky z-20 border-r border-b bg-muted/40 px-2 py-1 text-left font-semibold text-muted-foreground"
+              style={{
+                width: NAAM_BREEDTE_PX,
+                minWidth: NAAM_BREEDTE_PX,
+                left: 0,
+                top: 0,
+                backgroundColor: dekkendeTint(40),
+              }}
+              className="sticky z-50 border-r border-b px-2 py-1 text-left font-semibold text-muted-foreground"
             >
               Deelnemer
             </th>
             <th
               rowSpan={2}
-              style={{ width: DAGDEEL_BREEDTE_PX, minWidth: DAGDEEL_BREEDTE_PX, left: NAAM_BREEDTE_PX }}
-              className="sticky z-20 border-r border-b bg-muted/40 px-1 py-1 text-center font-semibold text-muted-foreground"
+              style={{
+                width: DAGDEEL_BREEDTE_PX,
+                minWidth: DAGDEEL_BREEDTE_PX,
+                left: NAAM_BREEDTE_PX,
+                top: 0,
+                backgroundColor: dekkendeTint(40),
+              }}
+              className="sticky z-50 border-r border-b px-1 py-1 text-center font-semibold text-muted-foreground"
             >
               <span className="sr-only">Dagdeel</span>
             </th>
@@ -111,7 +163,8 @@ export function PlannerMonthOverviewGrid({
               <th
                 key={`${groep.week}-${index}`}
                 colSpan={groep.dagen}
-                className="border-r border-b bg-muted/40 px-1 py-1 text-center font-semibold text-muted-foreground"
+                style={{ top: 0, height: WEEKKOP_HOOGTE_PX, backgroundColor: dekkendeTint(40) }}
+                className="sticky z-40 border-r border-b px-1 py-1 text-center font-semibold text-muted-foreground"
               >
                 Week {groep.week}
               </th>
@@ -124,10 +177,14 @@ export function PlannerMonthOverviewGrid({
               return (
                 <th
                   key={datum}
-                  style={{ width: celGrootte, minWidth: celGrootte }}
+                  style={{
+                    width: celGrootte,
+                    minWidth: celGrootte,
+                    top: WEEKKOP_HOOGTE_PX,
+                    backgroundColor: dekkendeTint(weekdag >= 6 ? 60 : 20),
+                  }}
                   className={[
-                    'border-r border-b px-0 py-1 text-center font-medium',
-                    weekdag >= 6 ? 'bg-muted/60' : 'bg-muted/20',
+                    'sticky z-40 border-r border-b px-0 py-1 text-center font-medium',
                     feestdagen.length > 0 ? 'text-rose-700' : 'text-muted-foreground',
                   ].join(' ')}
                   title={feestdagen.length > 0 ? feestdagen.join(', ') : undefined}
@@ -149,7 +206,7 @@ export function PlannerMonthOverviewGrid({
                   <th
                     rowSpan={geordendeDagdelen.length}
                     style={{ width: NAAM_BREEDTE_PX, minWidth: NAAM_BREEDTE_PX, left: 0 }}
-                    className="sticky z-10 border-r border-b-2 bg-card px-2 py-1 text-left align-top font-medium"
+                    className="sticky z-30 border-r border-b-2 bg-card px-2 py-1 text-left align-top font-medium"
                   >
                     {onParticipantNameClick ? (
                       <button
@@ -167,7 +224,7 @@ export function PlannerMonthOverviewGrid({
                 <th
                   style={{ width: DAGDEEL_BREEDTE_PX, minWidth: DAGDEEL_BREEDTE_PX, left: NAAM_BREEDTE_PX }}
                   className={[
-                    'sticky z-10 border-r bg-card px-1 text-center text-[9px] font-normal text-muted-foreground',
+                    'sticky z-30 border-r bg-card px-1 text-center text-[9px] font-normal text-muted-foreground',
                     index === geordendeDagdelen.length - 1 ? 'border-b-2' : 'border-b',
                   ].join(' ')}
                   title={daypart.naam}

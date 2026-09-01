@@ -62,6 +62,35 @@ describe('PlannerMonthOverviewGrid', () => {
     expect(within(tabel).getAllByText('M').length).toBe(participants.length);
   });
 
+  it('laat de kop staan als je door de rijen scrolt', () => {
+    renderGrid();
+
+    // De weeknummerrij plakt bovenaan, de datumrij eronder. Zonder dit verdween de kop zodra
+    // je naar beneden scrolde en wist je bij de vierde deelnemer niet meer welke dag welke was.
+    const week = screen.getByText('Week 32');
+    expect(week.className).toContain('sticky');
+    expect(week.style.top).toBe('0px');
+
+    const dag = screen.getByText('15').closest('th');
+    expect(dag?.className).toContain('sticky');
+    expect(dag?.style.top).toBe(week.style.height);
+    expect(dag?.style.top).not.toBe('0px');
+  });
+
+  it('legt de kop boven de fiches en boven de namenkolom', () => {
+    renderGrid();
+
+    // Het vlaggetje op een fiche staat op z-20. Ligt de kop daar niet boven, dan piepen er
+    // stukjes fiche doorheen, want bij gelijke laag wint wat later in de HTML staat.
+    const hoek = screen.getByText('Deelnemer');
+    const week = screen.getByText('Week 32');
+    const naam = screen.getByText('Achout, Carola').closest('th');
+
+    expect(hoek.className).toContain('z-50');
+    expect(week.className).toContain('z-40');
+    expect(naam?.className).toContain('z-30');
+  });
+
   it('markeert een feestdag bij de dag zelf', () => {
     renderGrid({ holidayLabels: new Map([['2026-08-15', ['Maria Hemelvaart']]]) });
 

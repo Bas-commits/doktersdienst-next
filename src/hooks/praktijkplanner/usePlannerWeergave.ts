@@ -38,6 +38,23 @@ function huidigeWeek() {
   return startOfIsoWeek(formatIsoDate(new Date()));
 }
 
+/**
+ * De week waar het vorige roosterscherm op stond, binnen dit tabblad.
+ *
+ * Van de Activiteiten planner naar de Afwezigheidsplanner klikken haalt het ene scherm weg en
+ * zet het andere neer, dus de state van het eerste bestaat niet meer. Het kanaal helpt daar
+ * niet: dat bereikt alleen schermen die op dat moment openstaan, en het scherm dat de week
+ * kende is juist net verdwenen.
+ *
+ * Bewust een variabele in deze module en geen opslag in de browser. Hij leeft precies zolang
+ * als de pagina in dit tabblad: navigeren binnen de app neemt de week mee, opnieuw laden begint
+ * weer op de huidige week. Dat laatste is de keuze die hieronder staat en die blijft staan.
+ *
+ * Hij wordt ook nooit op de server gevuld, want effecten draaien daar niet. De server tekent
+ * dus altijd de huidige week en de browser begint met dezelfde waarde.
+ */
+let laatsteWeek: { idwaarneemgroep: number; weekStart: string } | null = null;
+
 function isWeergaveBericht(value: unknown): value is WeergaveBericht {
   if (typeof value !== 'object' || value === null) return false;
   const bericht = value as Record<string, unknown>;
@@ -62,9 +79,13 @@ function isWeergaveBericht(value: unknown): value is WeergaveBericht {
  * of het nevenscherm de maand is en tonen anders hun week. Zo blijft er één begrip rondgaan
  * in plaats van twee die uit elkaar lopen.
  *
- * De keuze wordt niet bewaard: een scherm opent altijd op de huidige week, en pas daarna
- * volgen open schermen elkaar. Anders begin je een ochtend onbedoeld in een week van vorige
- * maand omdat je daar gisteren naar keek.
+ * De keuze wordt niet bewaard: opnieuw laden opent op de huidige week, en pas daarna volgen
+ * open schermen elkaar. Anders begin je een ochtend onbedoeld in een week van vorige maand
+ * omdat je daar gisteren naar keek. Binnen hetzelfde tabblad gaat de week wel mee naar het
+ * volgende roosterscherm; zie laatsteWeek voor waarom dat iets anders is.
+ *
+ * Alleen de week gaat mee, niet wat ernaast staat. De week is waar je bent en die wil je
+ * houden; het nevenscherm is hoe je kijkt, en elk scherm kent daar zijn eigen keuzes in.
  *
  * Args:
  *     idwaarneemgroep: Berichten van een andere waarneemgroep worden genegeerd. Twee vensters
@@ -75,7 +96,8 @@ export function usePlannerWeergave(idwaarneemgroep: number): PlannerWeergave & {
   setNevenscherm: (nevenscherm: PlannerNevenscherm) => void;
 } {
   const [weergave, setWeergave] = useState<PlannerWeergave>(() => ({
-    weekStart: huidigeWeek(),
+    weekStart:
+      laatsteWeek?.idwaarneemgroep === idwaarneemgroep ? laatsteWeek.weekStart : huidigeWeek(),
     nevenscherm: 'geen',
   }));
   const kanaal = useRef<BroadcastChannel | null>(null);
@@ -116,6 +138,10 @@ export function usePlannerWeergave(idwaarneemgroep: number): PlannerWeergave & {
     laatsteBericht.current = inhoud;
     kanaal.current?.postMessage({ idwaarneemgroep, ...weergave } satisfies WeergaveBericht);
   }, [idwaarneemgroep, weergave]);
+
+  useEffect(() => {
+    laatsteWeek = { idwaarneemgroep, weekStart: weergave.weekStart };
+  }, [idwaarneemgroep, weergave.weekStart]);
 
   const setWeekStart = useCallback((weekStart: string) => {
     setWeergave((huidig) => (huidig.weekStart === weekStart ? huidig : { ...huidig, weekStart }));

@@ -62,6 +62,29 @@ describe('usePlannerWeergave', () => {
     expect(rechts.result.current.weekStart).toBe(ongewijzigd);
   });
 
+  it('neemt de week mee naar het volgende scherm in hetzelfde tabblad', () => {
+    // Van de Activiteiten planner naar de Afwezigheidsplanner klikken sluit het ene scherm en
+    // opent het andere. Het kanaal helpt daar niet, want er staat niets meer open dat de week
+    // kent.
+    const activiteiten = renderHook(() => usePlannerWeergave(20));
+    act(() => activiteiten.result.current.setWeekStart('2026-08-24'));
+    activiteiten.unmount();
+
+    const afwezigheid = renderHook(() => usePlannerWeergave(20));
+
+    expect(afwezigheid.result.current.weekStart).toBe('2026-08-24');
+  });
+
+  it('neemt de week niet mee naar een ander scherm van een andere waarneemgroep', () => {
+    const eerste = renderHook(() => usePlannerWeergave(21));
+    act(() => eerste.result.current.setWeekStart('2026-08-24'));
+    eerste.unmount();
+
+    const tweede = renderHook(() => usePlannerWeergave(22));
+
+    expect(tweede.result.current.weekStart).not.toBe('2026-08-24');
+  });
+
   it('zendt bij het openen niets uit, zodat een nieuw scherm de rest niet terugzet', async () => {
     const links = renderHook(() => usePlannerWeergave(10));
     act(() => links.result.current.setWeekStart('2026-08-24'));

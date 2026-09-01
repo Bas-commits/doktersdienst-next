@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  metVerborgenWeekend,
+  useWeekendVerbergen,
+} from '@/hooks/praktijkplanner/useWeekendVerbergen';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CapacityRequirementList } from './CapacityRequirementList';
 import { CapacityWeekGrid } from './CapacityWeekGrid';
@@ -197,9 +201,14 @@ export function CapacityOverviewGrid({
 
   // Dagen en dagdelen die de groep nooit gebruikt horen hier net zo goed niet thuis als in de
   // planners: anders vergelijkt dit scherm een bezetting met een eis die niet bestaat.
+  const { weekendVerborgen } = useWeekendVerbergen();
   const verborgenWeekdagen = useMemo(
-    () => weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
-    [data.masterData.schedulableDayparts]
+    () =>
+      metVerborgenWeekend(
+        weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
+        weekendVerborgen
+      ),
+    [data.masterData.schedulableDayparts, weekendVerborgen]
   );
   const dayparts = useMemo(() => {
     const weg = dagdelenZonderRooster(

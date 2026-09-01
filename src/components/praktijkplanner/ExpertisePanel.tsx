@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  metVerborgenWeekend,
+  useWeekendVerbergen,
+} from '@/hooks/praktijkplanner/useWeekendVerbergen';
 import { useMemo, useState } from 'react';
 import { CapacityLocatieKeuze } from './CapacityOverview';
 import { CapacityWeekGrid } from './CapacityWeekGrid';
@@ -103,9 +107,14 @@ export function ExpertisePanel({
   const effectiveLocationId = locationId ?? data.masterData.locations[0]?.id ?? null;
   const huidigMoment = useHuidigMoment();
 
+  const { weekendVerborgen } = useWeekendVerbergen();
   const verborgenWeekdagen = useMemo(
-    () => weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
-    [data.masterData.schedulableDayparts]
+    () =>
+      metVerborgenWeekend(
+        weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
+        weekendVerborgen
+      ),
+    [data.masterData.schedulableDayparts, weekendVerborgen]
   );
   const dayparts = useMemo(() => {
     const weg = dagdelenZonderRooster(

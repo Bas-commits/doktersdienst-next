@@ -1,5 +1,10 @@
 'use client';
 
+import { PlannerWeekendToggle } from '@/components/praktijkplanner/PlannerWeekendToggle';
+import {
+  metVerborgenWeekend,
+  useWeekendVerbergen,
+} from '@/hooks/praktijkplanner/useWeekendVerbergen';
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -118,9 +123,14 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
 
   // Een eis opgeven voor een dag die de groep nooit werkt heeft geen zin; die cel was hier al
   // niet invulbaar en hoort dus ook niet in het sjabloon te staan.
+  const { weekendVerborgen, setWeekendVerborgen } = useWeekendVerbergen();
   const verborgenWeekdagen = useMemo(
-    () => weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
-    [data.masterData.schedulableDayparts]
+    () =>
+      metVerborgenWeekend(
+        weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
+        weekendVerborgen
+      ),
+    [data.masterData.schedulableDayparts, weekendVerborgen]
   );
   const dayparts = useMemo(() => {
     const weg = dagdelenZonderRooster(
@@ -568,6 +578,7 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
   return (
     <div className="space-y-4">
       <PraktijkplannerTitleAside>
+        <PlannerWeekendToggle verborgen={weekendVerborgen} onChange={setWeekendVerborgen} />
         <label className="flex items-center gap-2 text-base">
           <span className="font-medium">Locatie</span>
           <select

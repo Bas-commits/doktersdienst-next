@@ -1,5 +1,10 @@
 'use client';
 
+import { PlannerWeekendToggle } from '@/components/praktijkplanner/PlannerWeekendToggle';
+import {
+  metVerborgenWeekend,
+  useWeekendVerbergen,
+} from '@/hooks/praktijkplanner/useWeekendVerbergen';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -191,9 +196,14 @@ export function ActivitiesContent({
         : data.participants.filter((participant) => participant.id === participantFilter),
     [data.participants, participantFilter]
   );
+  const { weekendVerborgen, setWeekendVerborgen } = useWeekendVerbergen();
   const verborgenWeekdagen = useMemo(
-    () => weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
-    [data.masterData.schedulableDayparts]
+    () =>
+      metVerborgenWeekend(
+        weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
+        weekendVerborgen
+      ),
+    [data.masterData.schedulableDayparts, weekendVerborgen]
   );
   const visibleDayparts = useMemo(() => {
     const weg = dagdelenZonderRooster(
@@ -1247,6 +1257,12 @@ export function ActivitiesContent({
           {canEdit ? (
             <PlannerAvondNachtToggle aan={showNight} onChange={updateVisibility} />
           ) : null}
+          {/*
+            Deze wel voor iedereen, anders dan de knop hiernaast. Avond en nacht tonen is er om
+            er iets in te kunnen zetten; het weekend verbergen is alleen kijken, en wie het
+            rooster inziet heeft daar net zoveel aan.
+          */}
+          <PlannerWeekendToggle verborgen={weekendVerborgen} onChange={setWeekendVerborgen} />
           {/*
             Het capaciteitsoverzicht is er alleen voor secretarissen en beheerders, net als de
             eigen pagina ervan. Een knop aanbieden die op een 403 uitloopt is erger dan geen

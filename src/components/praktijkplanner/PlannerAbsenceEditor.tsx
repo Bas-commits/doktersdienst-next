@@ -1,5 +1,10 @@
 'use client';
 
+import { PlannerWeekendToggle } from './PlannerWeekendToggle';
+import {
+  metVerborgenWeekend,
+  useWeekendVerbergen,
+} from '@/hooks/praktijkplanner/useWeekendVerbergen';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, Mail, Minus, Moon, Plus, RotateCcw, Sun, Trash2 } from 'lucide-react';
 import Image from 'next/image';
@@ -178,9 +183,14 @@ export function PlannerAbsenceEditor({
     ? data.participants.filter((participant) => participant.id === data.userId)
     : data.participants;
   const editable = isDoctorMode || data.isManager;
+  const { weekendVerborgen, setWeekendVerborgen } = useWeekendVerbergen();
   const verborgenWeekdagen = useMemo(
-    () => weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
-    [data.masterData.schedulableDayparts]
+    () =>
+      metVerborgenWeekend(
+        weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
+        weekendVerborgen
+      ),
+    [data.masterData.schedulableDayparts, weekendVerborgen]
   );
   const visibleDayparts = useMemo(() => {
     const weg = dagdelenZonderRooster(
@@ -886,6 +896,7 @@ export function PlannerAbsenceEditor({
       {editable ? (
         <PlannerAvondNachtToggle aan={showNight} onChange={updateVisibility} />
       ) : null}
+      <PlannerWeekendToggle verborgen={weekendVerborgen} onChange={setWeekendVerborgen} />
       {/*
         Dit scherm zet nooit twee panelen naast elkaar, dus de maand komt hier altijd in de
         plaats van de week. Capaciteit en locatie horen bij de planner en staan hier niet.
@@ -1043,6 +1054,7 @@ export function PlannerAbsenceEditor({
                 onChange={updateVisibility}
               />
             ) : null}
+            <PlannerWeekendToggle verborgen={weekendVerborgen} onChange={setWeekendVerborgen} />
             {downloadKnop}
           </PraktijkplannerTitleAside>
           <div className="overflow-x-auto pb-2">

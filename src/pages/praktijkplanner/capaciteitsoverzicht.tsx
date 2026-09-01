@@ -1,5 +1,7 @@
 'use client';
 
+import { PlannerWeekendToggle } from '@/components/praktijkplanner/PlannerWeekendToggle';
+import { useWeekendVerbergen } from '@/hooks/praktijkplanner/useWeekendVerbergen';
 import Head from 'next/head';
 import {
   CapacityLocatieKeuze,
@@ -23,6 +25,7 @@ import {
 function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) {
   // Dit scherm heeft geen nevenscherm: het is er zelf een. Alleen de week doet hier iets.
   const { weekStart, setWeekStart } = usePlannerWeergave(groupId);
+  const { weekendVerborgen, setWeekendVerborgen } = useWeekendVerbergen();
   const { cells, loading, locationId, setLocationId, weekRegime } = useCapacityOverview(
     groupId,
     data,
@@ -68,6 +71,7 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
       */}
       <PraktijkplannerTitleAside>
         <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
+        <PlannerWeekendToggle verborgen={weekendVerborgen} onChange={setWeekendVerborgen} />
         <CapacityLocatieKeuze
           locations={data.masterData.locations}
           value={locationId}

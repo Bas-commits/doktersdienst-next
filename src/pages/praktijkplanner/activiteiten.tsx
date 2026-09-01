@@ -407,6 +407,7 @@ export function ActivitiesContent({
       daypart,
       hoverEnabled,
       variant = 'week',
+      ruimteBovenFiche = true,
     }: {
       participant: PraktijkplannerParticipant;
       datum: string;
@@ -418,6 +419,15 @@ export function ActivitiesContent({
        * met de initialen, want daar is bij die maat geen ruimte voor.
        */
       variant?: 'week' | 'month';
+      /**
+       * Of er boven het fiche plek is om iets te laten uitsteken.
+       *
+       * In de week wel: een dagvakje heeft vier pixels rand en de fiches erbinnen staan vier
+       * pixels uit elkaar. In de maand niet: daar staan de dagdelen tegen elkaar aan en zou
+       * een uitstekend bordje het fiche van de ochtend afdekken. Dit hangt dus aan het rooster
+       * waarin de fiche staat en niet aan zijn maat.
+       */
+      ruimteBovenFiche?: boolean;
     }) => {
       const key = slotKey(participant.id, datum, daypart.id);
       const existing = baseSlotMap.get(key);
@@ -505,6 +515,9 @@ export function ActivitiesContent({
       // De bordjes staan bovenop het fiche. Op de helft van de maat moeten ze mee krimpen,
       // anders dekt een vraagteken van zestien pixels het halve vakje af.
       const isMaand = variant === 'month';
+      // Boven het fiche is het bordje het enige dat daar staat, dus mag het een maat kleiner:
+      // het hoeft niet op te boksen tegen de kleuren van een band.
+      const markeringMaat = ruimteBovenFiche ? 'size-3' : isMaand ? 'size-2.5' : 'size-3.5';
       const provisionalBadge = (
         <span
           className={[
@@ -554,27 +567,36 @@ export function ActivitiesContent({
             Linksboven, en met zijn tweeen naast elkaar als er zowel een afwijking als een
             opmerking is. Ze stapelen zou er een van de twee onder de ander leggen, en dan is
             er geen manier om te zien dat het er twee zijn.
+
+            Waar er plek boven het fiche is hangen ze half erboven. Ze stonden er helemaal in,
+            en dan legde een strook van achttien pixels de takenband van achttien pixels
+            helemaal dicht: met een afwijking en een opmerking naast elkaar was niet meer te
+            lezen welke taak er stond. Half erboven neemt de strook nog een derde van die band
+            en blijft de tekst leesbaar.
+
+            In de maand blijven ze in het fiche, want daar raakt een uitstekende strook het
+            fiche van de ochtend. Bij de kleinste maat kost dat niets, want de banden dragen
+            daar geen tekst. Bij de grootste maat dekt de strook de takenband nog steeds af,
+            net als eerst, en dat blijft zo tot de maand ruimte tussen zijn rijen krijgt.
           */}
           {existing?.isUitzondering || existing?.opmerking ? (
             <span
               className={[
-                'pointer-events-none absolute top-0.5 left-0.5 z-20 flex items-center gap-0.5 rounded bg-background/90',
-                isMaand ? 'p-0' : 'p-0.5',
+                'pointer-events-none absolute left-0.5 z-20 flex items-center gap-0.5 rounded bg-background/90',
+                ruimteBovenFiche
+                  ? 'top-0 -translate-y-1/2 px-0.5 py-px ring-1 ring-border'
+                  : isMaand
+                    ? 'top-0.5 p-0'
+                    : 'top-0.5 p-0.5',
               ].join(' ')}
             >
               {existing?.isUitzondering ? (
-                <TriangleAlert
-                  className={[isMaand ? 'size-2.5' : 'size-3.5', 'text-amber-500'].join(' ')}
-                  aria-hidden
-                >
+                <TriangleAlert className={[markeringMaat, 'text-amber-500'].join(' ')} aria-hidden>
                   <title>{afwijkingTekst(existing.recurrenceSourceWeek)}</title>
                 </TriangleAlert>
               ) : null}
               {existing?.opmerking ? (
-                <Paperclip
-                  className={[isMaand ? 'size-2.5' : 'size-3.5', 'text-slate-600'].join(' ')}
-                  aria-hidden
-                >
+                <Paperclip className={[markeringMaat, 'text-slate-600'].join(' ')} aria-hidden>
                   <title>Er staat een opmerking bij dit fiche</title>
                 </Paperclip>
               ) : null}
@@ -1414,6 +1436,7 @@ export function ActivitiesContent({
                     // Bij de weekmaat past het fiche zoals de week hem tekent, met tekst en
                     // met het telefoonicoontje. Dat hangt aan de maat en niet aan het knopje.
                     variant: toontTekstInMaand(maandCelGrootte) ? 'week' : 'month',
+                    ruimteBovenFiche: false,
                   })
                 }
                 holidayLabels={holidays}

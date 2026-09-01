@@ -7,14 +7,19 @@ import {
 import { headerUserFromSession } from '@/lib/header-defaults';
 
 describe('formatDeelnemerDisplayName', () => {
-  it('prefers name column when set', () => {
+  it('prefers the editable name fields over the stale name column', () => {
     expect(
       formatDeelnemerDisplayName({
-        name: 'Dr. Jan',
+        name: 'Jan',
         voornaam: 'Jan',
+        voorletterstussenvoegsel: 'J. de',
         achternaam: 'Tester',
       })
-    ).toBe('Dr. Jan');
+    ).toBe('Jan J. de Tester');
+  });
+
+  it('falls back to the name column when no name fields are set', () => {
+    expect(formatDeelnemerDisplayName({ name: 'Dr. Jan' })).toBe('Dr. Jan');
   });
 
   it('builds from voornaam and achternaam when name is empty', () => {

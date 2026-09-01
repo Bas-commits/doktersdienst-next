@@ -17,6 +17,7 @@ import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import type { MijnGegevensProfile, MijnGegevensLookup, MijnGegevensUpdateBody, TelnrSlot } from '@/types/mijn-gegevens';
 import { ROL_LABELS } from '@/lib/rol-labels';
 import { BEHEERDER_WIJZIGT_ANDERMANS_EMAIL_TEKST } from '@/lib/beheerder-contact';
+import { formatDeelnemerDisplayName } from '@/lib/deelnemer-display';
 
 const TELNR_SPECIAL_TYPES = [
   { id: 1001, naam: 'Mobiel' },
@@ -683,8 +684,13 @@ export default function MijnGegevensPage() {
               <CardTitle>
                 <h1 className="text-2xl font-semibold tracking-tight">Gegevens deelnemer</h1>
               </CardTitle>
+              {/*
+                Dezelfde functie als de kop rechtsboven, zodat beide plekken niet uit elkaar
+                kunnen lopen. Eerder stond hier alleen voornaam en achternaam, waardoor het
+                tussenvoegsel wegviel.
+              */}
               <p className="text-sm text-muted-foreground">
-                {profile?.deelnemer.voornaam} {profile?.deelnemer.achternaam}
+                {profile ? formatDeelnemerDisplayName(profile.deelnemer) : null}
               </p>
             </div>
             <Button

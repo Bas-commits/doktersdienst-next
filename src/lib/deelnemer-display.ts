@@ -13,16 +13,24 @@ export type DeelnemerChipInitialsOptions = {
   fallback?: string;
 };
 
-/** Prefer `name`, otherwise voornaam + tussenvoegsel + achternaam (legacy deelnemers rows). */
+/**
+ * Voornaam + tussenvoegsel + achternaam, en pas als die alle drie leeg zijn de kolom `name`.
+ *
+ * De losse velden zijn wat de deelnemer zelf invult in Mijn gegevens. De kolom `name` wordt
+ * alleen gevuld bij het aanmaken van een deelnemer en daarna nooit meer bijgewerkt, dus zodra
+ * iemand zijn naam wijzigt loopt die kolom achter. Bij de oudste rijen staat er niet eens een
+ * hele naam in, alleen de voornaam. Kreeg `name` voorrang, dan toonde de kop van het scherm een
+ * andere naam dan het scherm eronder. `name` blijft staan als terugval voor rijen zonder losse
+ * velden.
+ */
 export function formatDeelnemerDisplayName(row: DeelnemerNameFields): string | null {
-  const fromName = row.name?.trim();
-  if (fromName) return fromName;
-
   const parts = [row.voornaam, row.voorletterstussenvoegsel, row.achternaam]
     .map((part) => part?.trim())
     .filter((part): part is string => Boolean(part));
 
-  return parts.length > 0 ? parts.join(' ') : null;
+  if (parts.length > 0) return parts.join(' ');
+
+  return row.name?.trim() || null;
 }
 
 /**

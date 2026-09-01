@@ -29,7 +29,7 @@ export type PlannerDaypartChipItem = {
  * van de drie banden, het kader in de kleur van de deelnemer en het icoon van de activiteit.
  * De hoverkaart toont onveranderd de hele fiche met alle namen.
  */
-type ChipDensity = 'micro' | 'compact' | 'popover';
+export type ChipDensity = 'micro' | 'compact' | 'popover';
 
 type ChipBandProps = {
   row: 'tasks' | 'activity' | 'location';
@@ -230,28 +230,45 @@ export function PlannerCombinedDaypartChip({
         </span>
       </span>
 
-      {/*
-        In de maandweergave staat de naam al aan het begin van de rij en hangt het bolletje
-        half buiten het fiche, dus over de rij eronder. Daar zegt het niets en dekt het wel af.
-      */}
-      {participantColor && initials && density !== 'micro' ? (
-        <span
-          aria-hidden
-          className={cn(
-            'absolute left-1/2 z-20 flex -translate-x-1/2 items-center justify-center truncate rounded-full px-1 font-bold leading-none',
-            density === 'popover'
-              ? // Fully below the face; only the top half of the badge kisses the border.
-                'top-full h-4 w-[60%] -translate-y-1/3 text-[11px]'
-              : 'bottom-0 h-2 w-1/2 translate-y-1/2 text-[7px]'
-          )}
-          style={{
-            backgroundColor: participantColor,
-            color: getContrastTextColor(participantColor),
-          }}
-        >
-          {initials.slice(0, 4).toUpperCase()}
-        </span>
-      ) : null}
+      <PlannerChipInitials initials={initials} color={participantColor} density={density} />
+    </span>
+  );
+}
+
+/**
+ * Het bolletje met de initialen van de deelnemer, onderaan een fiche.
+ *
+ * Staat hier los zodat een afwezigheidstegel hetzelfde bolletje kan tekenen als een fiche met
+ * taken. Stonden er twee versies naast elkaar, dan zou de ene meeveranderen met de andere pas
+ * als iemand het toevallig ziet, en het is juist de gelijkheid die de kaart vroeg.
+ *
+ * Geeft niets terug in de maandweergave: daar staat de naam al aan het begin van de rij en
+ * hangt het bolletje half buiten het fiche, dus over de rij eronder. Daar zegt het niets en
+ * dekt het wel af.
+ */
+export function PlannerChipInitials({
+  initials,
+  color,
+  density = 'compact',
+}: {
+  initials?: string | null;
+  color?: string | null;
+  density?: ChipDensity;
+}) {
+  if (!color || !initials || density === 'micro') return null;
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'absolute left-1/2 z-20 flex -translate-x-1/2 items-center justify-center truncate rounded-full px-1 font-bold leading-none',
+        density === 'popover'
+          ? // Fully below the face; only the top half of the badge kisses the border.
+            'top-full h-4 w-[60%] -translate-y-1/3 text-[11px]'
+          : 'bottom-0 h-2 w-1/2 translate-y-1/2 text-[7px]'
+      )}
+      style={{ backgroundColor: color, color: getContrastTextColor(color) }}
+    >
+      {initials.slice(0, 4).toUpperCase()}
     </span>
   );
 }

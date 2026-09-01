@@ -425,6 +425,13 @@ export function PlannerAbsenceEditor({
             absence={absence}
             provisional={provisional}
             participantColor={participant.color}
+            /*
+              Op het eigen scherm van de dokter staat er maar een deelnemer in het rooster, dus
+              zeggen zijn eigen initialen op elke tegel niets. Bij de planner staan de rijen van
+              alle deelnemers door elkaar en is het bolletje juist waar je op afgaat.
+            */
+            participantInitials={isDoctorMode ? null : deelnemerChipInitials(participant)}
+            density={!isDoctorMode && toontMaand ? 'micro' : 'compact'}
             fill
           />
           {voorkeur ? (
@@ -460,7 +467,16 @@ export function PlannerAbsenceEditor({
         </PlannerDaypartHoverPreview>
       );
     },
-    [clearMode, dienstKeuze, editable, isDoctorMode, resolveAbsence, selectedTypeId, voorkeurMap]
+    [
+      clearMode,
+      dienstKeuze,
+      editable,
+      isDoctorMode,
+      resolveAbsence,
+      selectedTypeId,
+      toontMaand,
+      voorkeurMap,
+    ]
   );
 
   const isCellFilled = useCallback(

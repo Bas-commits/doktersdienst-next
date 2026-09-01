@@ -2,6 +2,7 @@
 
 import { absenceDisplayBackground, absenceForegroundIconPath } from './absence-icons';
 import { PlannerIconImage } from './PlannerIconImage';
+import { PlannerChipInitials, type ChipDensity } from './PlannerCombinedDaypartChip';
 import { cn } from '@/lib/utils';
 import type { PraktijkplannerAbsenceType } from '@/types/praktijkplanner';
 
@@ -12,13 +13,16 @@ export function AbsenceDaypartCell({
   provisional,
   participantInitials,
   participantColor,
+  density = 'compact',
   fill = false,
 }: {
   absence: AbsenceDaypartCellType;
   provisional?: boolean;
-  participantInitials?: string;
+  /** Initialen van de deelnemer, als bolletje onderaan. Zelfde bolletje als op een fiche. */
+  participantInitials?: string | null;
   /** Kleur van het kadertje. Zonder deelnemer valt hij terug op hetzelfde grijs als een fiche. */
   participantColor?: string | null;
+  density?: ChipDensity;
   fill?: boolean;
 }) {
   const background = absenceDisplayBackground(absence.code, absence.kleur, provisional === true);
@@ -74,14 +78,11 @@ export function AbsenceDaypartCell({
           )}
         </span>
       </span>
-      {participantInitials ? (
-        <span
-          className="absolute -right-0.5 -bottom-0.5 rounded-full px-1 text-[8px] leading-4 font-bold text-white ring-1 ring-white/70"
-          style={{ background }}
-        >
-          {participantInitials}
-        </span>
-      ) : null}
+      <PlannerChipInitials
+        initials={participantInitials}
+        color={participantColor}
+        density={density}
+      />
       <span className="sr-only">{label}</span>
     </span>
   );

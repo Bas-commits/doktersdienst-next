@@ -452,6 +452,8 @@ export function ActivitiesContent({
             absence={absence.absenceType}
             provisional={provisional}
             participantColor={participant.color}
+            participantInitials={initials}
+            density={variant === 'month' ? 'micro' : 'compact'}
             fill
           />
         );

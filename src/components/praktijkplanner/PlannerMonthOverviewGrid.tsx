@@ -6,7 +6,9 @@ import {
   datesBetweenInclusive,
   isoWeekNumber,
   monthBounds,
+  startOfIsoWeek,
   weekdayFromIsoDate,
+  weekRangeLabel,
 } from '@/lib/praktijkplanner/dates';
 import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
 import { MAAND_CEL_STANDAARD } from '@/lib/praktijkplanner/maand-celgrootte';
@@ -57,13 +59,37 @@ function deelnemerNaam(participant: PraktijkplannerParticipant): string {
   return [participant.achternaam, participant.voornaam].filter(Boolean).join(', ');
 }
 
-function weekGroepen(dates: string[]): Array<{ week: number; dagen: number }> {
-  const groepen: Array<{ week: number; dagen: number }> = [];
+/**
+ * Wat er van de weekkop past bij deze breedte.
+ *
+ * Een maand begint en eindigt zelden op een weekgrens, dus de eerste en de laatste week staan
+ * soms boven één kolom van 34 pixels. Daar past "Week 36 · 31 aug - 6 sep" niet in, en
+ * afkappen liet er "We..." van over: een kop die niets meer zegt. De grenzen zijn geschat op
+ * ongeveer vijf pixels per teken bij tien pixels tekst, niet gemeten. Ruim genomen, want te
+ * vroeg inkorten kost alleen een datum en te laat kost het weeknummer zelf. De volledige regel
+ * staat altijd in de titel van de cel.
+ */
+function weekkopVorm(breedtePx: number): 'volledig' | 'nummer' | 'kort' {
+  if (breedtePx >= 140) return 'volledig';
+  if (breedtePx >= 52) return 'nummer';
+  return 'kort';
+}
+
+/**
+ * De weken waar de dagen van deze maand in vallen.
+ *
+ * De periode is die van de hele week en niet van de kolommen eronder. Een maand begint zelden
+ * op maandag, dus week 36 staat hier boven 1 tot en met 6 september terwijl hij op 31 augustus
+ * begint. Zonder die datums las je alleen een weeknummer boven een halve week en klopte het
+ * niet met de weekbalk bovenin, die wel de hele week noemt.
+ */
+function weekGroepen(dates: string[]): Array<{ week: number; periode: string; dagen: number }> {
+  const groepen: Array<{ week: number; periode: string; dagen: number }> = [];
   for (const datum of dates) {
     const week = isoWeekNumber(datum);
     const laatste = groepen[groepen.length - 1];
     if (laatste && laatste.week === week) laatste.dagen += 1;
-    else groepen.push({ week, dagen: 1 });
+    else groepen.push({ week, periode: weekRangeLabel(startOfIsoWeek(datum)), dagen: 1 });
   }
   return groepen;
 }
@@ -164,9 +190,29 @@ export function PlannerMonthOverviewGrid({
                 key={`${groep.week}-${index}`}
                 colSpan={groep.dagen}
                 style={{ top: 0, height: WEEKKOP_HOOGTE_PX, backgroundColor: dekkendeTint(40) }}
-                className="sticky z-40 border-r border-b px-1 py-1 text-center font-semibold text-muted-foreground"
+                className="sticky z-40 border-r border-b p-0 text-center font-semibold text-muted-foreground"
+                title={`Week ${groep.week}, ${groep.periode}`}
               >
-                Week {groep.week}
+                {/*
+                  De tekst hangt los in de cel en telt dus niet mee voor de kolombreedte. Een
+                  week die met één dag in de maand valt is 34 pixels breed; zou de tekst wel
+                  meetellen, dan trok die ene week de kolommen eronder uit elkaar en liep de
+                  maand niet meer gelijk met de dagen. Past het niet, dan valt het einde weg en
+                  blijft het weeknummer staan; de hele regel staat in de titel.
+                */}
+                <span className="absolute inset-0 flex items-center justify-center overflow-hidden px-1">
+                  {weekkopVorm(groep.dagen * celGrootte) === 'volledig' ? (
+                    <span className="min-w-0 truncate">
+                      Week {groep.week} <span className="font-normal">· {groep.periode}</span>
+                    </span>
+                  ) : (
+                    <span className="min-w-0 truncate">
+                      {weekkopVorm(groep.dagen * celGrootte) === 'kort'
+                        ? `W${groep.week}`
+                        : `Week ${groep.week}`}
+                    </span>
+                  )}
+                </span>
               </th>
             ))}
           </tr>

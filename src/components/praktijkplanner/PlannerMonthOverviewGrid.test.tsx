@@ -46,10 +46,19 @@ describe('PlannerMonthOverviewGrid', () => {
     renderGrid();
 
     // 1 augustus 2026 is een zaterdag, dus de eerste week is er maar twee dagen van te zien.
-    const eersteWeek = screen.getByText('Week 31');
-    expect(eersteWeek.getAttribute('colspan')).toBe('2');
-    expect(screen.getByText('Week 32').getAttribute('colspan')).toBe('7');
-    expect(screen.getByText('Week 36').getAttribute('colspan')).toBe('1');
+    expect(screen.getByText('Week 31').closest('th')?.getAttribute('colspan')).toBe('2');
+    expect(screen.getByTitle('Week 32, 3 – 9 aug').getAttribute('colspan')).toBe('7');
+    // 31 augustus is de enige dag van week 36 die in deze maand valt, en in één kolom past
+    // alleen het korte nummer.
+    expect(screen.getByText('W36').closest('th')?.getAttribute('colspan')).toBe('1');
+  });
+
+  it('noemt bij de weekkop de hele week, ook als de maand er middenin begint', () => {
+    renderGrid({ month: 9 });
+
+    // September 2026 begint op dinsdag, dus van week 36 staan hier alleen 1 tot en met 6. De
+    // kop hoort de week te noemen zoals de weekbalk dat doet, dus vanaf maandag 31 augustus.
+    expect(screen.getByTitle('Week 36, 31 aug – 6 sep')).not.toBeNull();
   });
 
   it('geeft elke deelnemer een rij per dagdeel', () => {
@@ -67,7 +76,7 @@ describe('PlannerMonthOverviewGrid', () => {
 
     // De weeknummerrij plakt bovenaan, de datumrij eronder. Zonder dit verdween de kop zodra
     // je naar beneden scrolde en wist je bij de vierde deelnemer niet meer welke dag welke was.
-    const week = screen.getByText('Week 32');
+    const week = screen.getByTitle('Week 32, 3 – 9 aug');
     expect(week.className).toContain('sticky');
     expect(week.style.top).toBe('0px');
 
@@ -83,7 +92,7 @@ describe('PlannerMonthOverviewGrid', () => {
     // Het vlaggetje op een fiche staat op z-20. Ligt de kop daar niet boven, dan piepen er
     // stukjes fiche doorheen, want bij gelijke laag wint wat later in de HTML staat.
     const hoek = screen.getByText('Deelnemer');
-    const week = screen.getByText('Week 32');
+    const week = screen.getByTitle('Week 32, 3 – 9 aug');
     const naam = screen.getByText('Achout, Carola').closest('th');
 
     expect(hoek.className).toContain('z-50');

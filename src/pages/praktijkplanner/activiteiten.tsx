@@ -33,6 +33,7 @@ import { PlannerMonthOverviewGrid } from '@/components/praktijkplanner/PlannerMo
 import { PlannerNotifyPlanningModal } from '@/components/praktijkplanner/PlannerNotifyPlanningModal';
 import { PlannerRepeatWeekModal } from '@/components/praktijkplanner/PlannerRepeatWeekModal';
 import { PlannerNevenschermKeuze } from '@/components/praktijkplanner/PlannerNevenschermKeuze';
+import { PlannerMaandNavigatie } from '@/components/praktijkplanner/PlannerMaandNavigatie';
 import { PlannerWeekBar } from '@/components/praktijkplanner/PlannerWeekBar';
 import { PraktijkplannerPage, PraktijkplannerTitleAside, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
 import {
@@ -65,8 +66,10 @@ import {
 import { deelnemerChipInitials, deelnemerRoosterNaam } from '@/lib/deelnemer-display';
 import {
   addDays,
+  formatIsoDate,
   maandVanWeek,
   monthBounds,
+  startOfIsoWeek,
   weekDates,
   weekRangeLabel,
   weekdayFromIsoDate,
@@ -151,6 +154,20 @@ export function ActivitiesContent({
   const monthRange = useMemo(
     () => monthBounds(monthAnchor.year, monthAnchor.month),
     [monthAnchor]
+  );
+  /*
+    Een maand terug of vooruit is hier een week verzetten, want de maand wordt uit de week
+    afgeleid. De 4e is de dag die het altijd goed doet: die valt in elke maand in de week
+    waarvan de donderdag ook in die maand ligt, en dat is dezelfde regel als maandVanWeek.
+    Rekenen met Date en niet met de maand zelf, zodat december naar januari van het jaar erna
+    gaat zonder een eigen rekensom.
+  */
+  const verzetMaand = useCallback(
+    (stap: number) => {
+      const doelmaand = new Date(monthAnchor.year, monthAnchor.month - 1 + stap, 4, 12);
+      setWeekStart(startOfIsoWeek(formatIsoDate(doelmaand)));
+    },
+    [monthAnchor, setWeekStart]
   );
   // De maand haalt een hele maand op, ook als hij naast de week staat: het paneel toont dan
   // dezelfde maand, alleen smaller.
@@ -1282,6 +1299,18 @@ export function ActivitiesContent({
             Plus en min horen bij de maand en staan er dus alleen als die er is. In dezelfde
             rij als de rest: het is een knop over wat je ziet, net als de keuze ernaast.
           */}
+          {/*
+            Welke maand er getoond wordt stond nergens op het scherm. De weekbalk noemt een
+            week die over een maandgrens loopt, dus bij 31 aug - 6 sep viel niet af te lezen of
+            het overzicht augustus of september was.
+          */}
+          {paneel === 'maand' ? (
+            <PlannerMaandNavigatie
+              year={monthAnchor.year}
+              month={monthAnchor.month}
+              onMaandVerzetten={verzetMaand}
+            />
+          ) : null}
           {paneel === 'maand' ? (
             <div className="inline-flex shrink-0 overflow-hidden rounded-md border text-muted-foreground">
               <button

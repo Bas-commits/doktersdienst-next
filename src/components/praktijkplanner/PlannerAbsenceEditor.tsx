@@ -1005,6 +1005,9 @@ export function PlannerAbsenceEditor({
               renderCell={({ participant, datum, daypart }) =>
                 renderCell(participant, datum, daypart)
               }
+              isCellFilled={({ participant, datum, daypart }) =>
+                isCellFilled(participant.id, datum, daypart)
+              }
               holidayLabels={holidayData.labels}
             />
           ) : (

@@ -66,9 +66,49 @@ describe('PlannerMonthOverviewGrid', () => {
 
     const naam = screen.getByText('Achout, Carola');
     expect(naam.closest('th')?.getAttribute('rowspan')).toBe('2');
+    // De letterkolom O/M/A/N is weg. De rijkop blijft er voor een schermlezer wel, met de
+    // hele naam van het dagdeel erin.
     const tabel = screen.getByRole('table');
-    expect(within(tabel).getAllByText('O').length).toBe(participants.length);
-    expect(within(tabel).getAllByText('M').length).toBe(participants.length);
+    expect(within(tabel).getAllByText('Ochtend').length).toBe(participants.length);
+    expect(within(tabel).getAllByText('Middag').length).toBe(participants.length);
+    expect(within(tabel).queryByText('O')).toBeNull();
+  });
+
+  it('geeft elke rij precies zoveel vakjes als er datums in de kop staan', () => {
+    renderGrid();
+
+    /*
+      Een cel te veel in de rij en alles schuift een dag op ten opzichte van de datumkop,
+      zonder dat er iets scheef uitziet. Dat gebeurde toen de rij een eigen kop kreeg voor de
+      naam van het dagdeel: die telde als kolom en de kop had er geen.
+    */
+    const tabel = screen.getByRole('table');
+    const datumrij = tabel.querySelectorAll('thead tr')[1];
+    const dagen = datumrij.querySelectorAll('th').length;
+    expect(dagen).toBe(31);
+
+    for (const rij of tabel.querySelectorAll('tbody tr')) {
+      expect(rij.querySelectorAll('td').length).toBe(dagen);
+      // Alleen de namenkolom mag nog een kop zijn, en die staat op de eerste rij van elke
+      // deelnemer. Elke extra kop is een kolom die de datumkop niet heeft.
+      expect(rij.querySelectorAll('th').length).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('zet het plaatje van het dagdeel alleen in een leeg vakje', () => {
+    renderGrid({
+      isCellFilled: ({ datum }) => datum === '2026-08-03',
+    });
+
+    // Twee deelnemers, twee dagdelen, 31 dagen, waarvan er één gevuld is.
+    const plaatjes = screen.getAllByRole('presentation', { hidden: true });
+    expect(plaatjes.length).toBe(2 * 2 * 30);
+  });
+
+  it('tekent geen plaatje als het rooster niet weet wat er gevuld is', () => {
+    renderGrid();
+
+    expect(screen.queryAllByRole('presentation', { hidden: true }).length).toBe(0);
   });
 
   it('laat de kop staan als je door de rijen scrolt', () => {

@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
@@ -15,18 +14,12 @@ import {
   usePlannerCursorTool,
   type PlannerCursorTool,
 } from './PlannerCursorTool';
+import { DaypartIcon } from './DaypartIcon';
 import { PlannerWeekBar } from './PlannerWeekBar';
 import { PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX, PLANNER_GRID_NAV_MARGIN_PX } from './planner-grid-layout';
 
 export const UNAVAILABLE_DAYPART_TOAST =
   'Dit dagdeel is niet beschikbaar voor deze deelnemer/waarneemgroep';
-
-const DAYPART_ICONS: Record<number, string> = {
-  1: '/icons/sunrise.svg',
-  2: '/icons/sunset.svg',
-  3: '/icons/moon-down.svg',
-  4: '/icons/moon-up.svg',
-};
 
 export type PlannerDaypartCell = {
   participant: PraktijkplannerParticipant;
@@ -56,12 +49,6 @@ function dayLabel(date: string): { weekday: string; day: number } {
     weekday: new Intl.DateTimeFormat('nl-NL', { weekday: 'short' }).format(value),
     day: value.getDate(),
   };
-}
-
-function DaypartIcon({ volgorde, className }: { volgorde: number; className?: string }) {
-  const icon = DAYPART_ICONS[volgorde];
-  if (!icon) return null;
-  return <Image src={icon} alt="" width={28} height={28} className={className ?? 'size-7'} />;
 }
 
 export function PlannerDaypartGrid({

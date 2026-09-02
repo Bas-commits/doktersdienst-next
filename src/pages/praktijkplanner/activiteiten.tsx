@@ -1486,6 +1486,7 @@ export function ActivitiesContent({
                     ruimteBovenFiche: false,
                   })
                 }
+                isCellFilled={isCellFilled}
                 holidayLabels={holidays}
                 onParticipantNameClick={readOnly ? undefined : openDeelnemerGegevens}
               />

@@ -12,12 +12,23 @@ import {
 } from '@/lib/praktijkplanner/dates';
 import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
 import { MAAND_CEL_STANDAARD } from '@/lib/praktijkplanner/maand-celgrootte';
+import { DaypartIcon } from './DaypartIcon';
 import type { PlannerDaypartCell } from './PlannerDaypartGrid';
 
 const WEEKDAG_LETTERS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
 const NAAM_BREEDTE_PX = 176;
-const DAGDEEL_BREEDTE_PX = 24;
+
+/**
+ * De maat van het dagdeelplaatje in een leeg vakje.
+ *
+ * 24 is wat de weekweergave gebruikt. Het kleinste maandvakje is 34 pixels en daar zou dat
+ * tegen de randen aan lopen, dus houdt dit twaalf pixels lucht over tot het plaatje bij de
+ * grotere maten op zijn gewone maat uitkomt.
+ */
+function icoonMaat(celGrootte: number): number {
+  return Math.min(24, celGrootte - 12);
+}
 
 /**
  * Hoogte van de weeknummerrij, zodat de datumrij eronder weet waar hij moet blijven hangen.
@@ -102,6 +113,10 @@ function weekGroepen(dates: string[]): Array<{ week: number; periode: string; da
  * scherm. Daarom staat hier per dag maar één kolom en krijgt elk dagdeel een eigen rij onder
  * de deelnemer.
  *
+ * Welk dagdeel een rij is stond in een eigen letterkolom, O/M/A/N. Die kolom is weg: een leeg
+ * vakje toont het plaatje van zijn dagdeel, net als in de week, en dat zegt hetzelfde zonder
+ * breedte te kosten. Zie isCellFilled.
+ *
  * In die kolom staat hetzelfde fiche als in de week, alleen kleiner getekend: de fiches zijn
  * wat een planner afleest, dus een letter in plaats daarvan haalt de maand leeg. Zie de
  * dichtheid `micro` in PlannerCombinedDaypartChip voor wat er bij 34 pixels overblijft.
@@ -118,6 +133,7 @@ export function PlannerMonthOverviewGrid({
   year,
   month,
   renderCell,
+  isCellFilled,
   holidayLabels,
   onParticipantNameClick,
   verborgenWeekdagen,
@@ -128,6 +144,14 @@ export function PlannerMonthOverviewGrid({
   year: number;
   month: number;
   renderCell: (cell: PlannerDaypartCell) => ReactNode;
+  /**
+   * Of er in dit vakje al iets staat. Alleen een leeg vakje krijgt het plaatje van zijn dagdeel.
+   *
+   * Zonder deze functie tekent dit rooster geen enkel plaatje. Dat is de veilige kant op: een
+   * plaatje dat door een fiche heen schemert is zichtbaar fout, een plaatje dat ontbreekt is
+   * alleen minder behulpzaam.
+   */
+  isCellFilled?: (cell: PlannerDaypartCell) => boolean;
   holidayLabels?: ReadonlyMap<string, string[]>;
   onParticipantNameClick?: (participant: PraktijkplannerParticipant) => void;
   /** ISO-weekdagen die de groep nooit gebruikt. Zie weekdagenZonderRooster. */
@@ -171,19 +195,6 @@ export function PlannerMonthOverviewGrid({
               className="sticky z-50 border-r border-b px-2 py-1 text-left font-semibold text-muted-foreground"
             >
               Deelnemer
-            </th>
-            <th
-              rowSpan={2}
-              style={{
-                width: DAGDEEL_BREEDTE_PX,
-                minWidth: DAGDEEL_BREEDTE_PX,
-                left: NAAM_BREEDTE_PX,
-                top: 0,
-                backgroundColor: dekkendeTint(40),
-              }}
-              className="sticky z-50 border-r border-b px-1 py-1 text-center font-semibold text-muted-foreground"
-            >
-              <span className="sr-only">Dagdeel</span>
             </th>
             {groepen.map((groep, index) => (
               <th
@@ -267,17 +278,7 @@ export function PlannerMonthOverviewGrid({
                     )}
                   </th>
                 ) : null}
-                <th
-                  style={{ width: DAGDEEL_BREEDTE_PX, minWidth: DAGDEEL_BREEDTE_PX, left: NAAM_BREEDTE_PX }}
-                  className={[
-                    'sticky z-30 border-r bg-card px-1 text-center text-[9px] font-normal text-muted-foreground',
-                    index === geordendeDagdelen.length - 1 ? 'border-b-2' : 'border-b',
-                  ].join(' ')}
-                  title={daypart.naam}
-                >
-                  {daypart.naam.slice(0, 1)}
-                </th>
-                {dates.map((datum) => {
+                {dates.map((datum, dagIndex) => {
                   const weekdag = weekdayFromIsoDate(datum);
                   const isNu =
                     datum === huidigMoment?.datum && daypart.volgorde === huidigMoment.volgorde;
@@ -298,6 +299,23 @@ export function PlannerMonthOverviewGrid({
                         door, dus staat de hoogte hier op het blokje eromheen.
                       */}
                       <div className="relative" style={{ height: celGrootte }}>
+                        {/*
+                          De naam van het dagdeel voor een schermlezer, eenmaal per rij.
+
+                          Niet als eigen <th>: die telde als kolom, en omdat de kop er geen heeft
+                          schoof daarmee elke rij een dag op. De fiches van dinsdag stonden dan
+                          onder woensdag, zonder dat er iets misstond in de opmaak. Vandaar hier,
+                          binnen het eerste vakje van de rij.
+                        */}
+                        {dagIndex === 0 ? <span className="sr-only">{daypart.naam}</span> : null}
+                        {isCellFilled?.({ participant, datum, daypart }) === false ? (
+                          <DaypartIcon
+                            volgorde={daypart.volgorde}
+                            maatPx={icoonMaat(celGrootte)}
+                            title={daypart.naam}
+                            className="pointer-events-none absolute inset-0 m-auto opacity-60"
+                          />
+                        ) : null}
                         {renderCell({ participant, datum, daypart })}
                       </div>
                     </td>

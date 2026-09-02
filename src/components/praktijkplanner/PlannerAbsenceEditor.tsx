@@ -1020,6 +1020,16 @@ export function PlannerAbsenceEditor({
           renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}
           isCellFilled={({ participant, datum, daypart }) => isCellFilled(participant.id, datum, daypart)}
           onCellClick={applyCell}
+          /*
+            Meerdere dagdelen in een beweging, met ctrl ingedrukt. Precies wat het scherm van de
+            dokter zelf al deed; hier moest de planner elk vakje los aanklikken.
+
+            Ctrl is de voorwaarde en niet de ingedrukte muisknop, want zo doet het andere scherm
+            het ook. Zonder die eis zou de muis over het rooster bewegen al invoer doen.
+          */
+          onCellPointerEnter={(cell, event) => {
+            if (event.ctrlKey) void applyCell(cell);
+          }}
           isCellDisabled={() => !editable}
           isCellUnavailable={({ participant, datum, daypart }) =>
             !isDaypartSchedulableForParticipant(

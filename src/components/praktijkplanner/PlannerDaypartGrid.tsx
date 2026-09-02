@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
 import { weekDates } from '@/lib/praktijkplanner/dates';
@@ -59,6 +59,7 @@ export function PlannerDaypartGrid({
   zoom,
   renderCell,
   onCellClick,
+  onCellPointerEnter,
   isCellDisabled,
   isCellUnavailable,
   isCellFilled,
@@ -78,6 +79,14 @@ export function PlannerDaypartGrid({
   zoom?: string | number;
   renderCell: (cell: PlannerDaypartCell) => ReactNode;
   onCellClick?: (cell: PlannerDaypartCell) => void;
+  /**
+   * Het vakje komt onder de muis door terwijl die eroverheen beweegt: het slepen.
+   *
+   * Of daar iets van komt bepaalt de aanroeper, en onder welke voorwaarde. De
+   * afwezigheidsplanner eist ctrl, want anders zou langs het rooster bewegen al invoer doen.
+   * Zelfde vorm als op het scherm van de dokter zelf, zie PlannerMonthDaypartGrid.
+   */
+  onCellPointerEnter?: (cell: PlannerDaypartCell, event: PointerEvent<HTMLButtonElement>) => void;
   isCellDisabled?: (cell: PlannerDaypartCell) => boolean;
   /** Non-schedulable dayparts: always gray placeholder, never clickable. */
   isCellUnavailable?: (cell: PlannerDaypartCell) => boolean;
@@ -301,7 +310,11 @@ export function PlannerDaypartGrid({
                           onCellClick?.(cell);
                         }}
                         onPointerEnter={(event) => {
-                          if (unavailable && !opruimbaar) trackUnavailableCursor(event);
+                          if (unavailable && !opruimbaar) {
+                            trackUnavailableCursor(event);
+                            return;
+                          }
+                          onCellPointerEnter?.(cell, event);
                         }}
                         onPointerMove={(event) => {
                           if (unavailable && !opruimbaar) trackUnavailableCursor(event);

@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { TbSwitch3 } from 'react-icons/tb';
 import { authClient } from '@/lib/auth-client';
-import { Trash2, CircleQuestionMark } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { FaRedo } from "react-icons/fa";
 import { overnameVerwijzingNaarQuery } from "@/lib/overname-recreate";
 import { toast } from 'sonner';
@@ -601,60 +601,46 @@ export function DoktersdienstHeader({
                       </div>
                     </div>
 
-                    <div className="flex justify-center gap-4">
-                      {isDeclined ? (
-                        // <button
-                        //   type="button"
-                        //   className={`flex cursor-pointer items-center justify-center h-10 px-6 rounded-md border border-gray-300 bg-white text-sm hover:bg-red-300 ${inactiveLifecycle}`}
-                        //   onClick={() => {
-                        //     if (!caps.canManageProposalLifecycle) {
-                        //       toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
-                        //       return;
-                        //     }
-                        //     handleVerzoekRespond('delete');
-                        //   }}
-                        //   aria-label="Afgewezen verzoek verwijderen"
-                        //   data-testid="overname-delete"
-                        // >
-                        //   <Trash2 className="w-5 h-5 text-[#333] mr-1" /> Verwijderen
-                        // </button>
-                        <div><CircleQuestionMark className="w-8 h-8 text-[#333] mr-1" /></div>
-                        
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className={`flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-green-300 ${inactiveRespond}`}
-                            onClick={() => {
-                              if (!caps.canRespondPending) {
-                                toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
-                                return;
-                              }
-                              handleVerzoekRespond('accept');
-                            }}
-                            aria-label="Verzoek accepteren"
-                            data-testid="overname-accept"
-                          >
-                            <Check className="w-6 h-6 text-[#333]" />
-                          </button>
-                          <button
-                            type="button"
-                            className={`flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-red-300 ${inactiveRespond}`}
-                            onClick={() => {
-                              if (!caps.canRespondPending) {
-                                toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
-                                return;
-                              }
-                              handleVerzoekRespond('decline');
-                            }}
-                            aria-label="Verzoek afwijzen"
-                            data-testid="overname-decline"
-                          >
-                            <X className="w-6 h-6 text-[#333]" />
-                          </button>
-                        </>
-                      )}
-                    </div>
+                    {/*
+                      Bij een afgewezen voorstel staat hier niets meer. Er stond een vraagteken:
+                      dat was wat overbleef toen de knop Verwijderen uit commentaar werd gezet.
+                      Het icoontje deed niets, was niet aanklikbaar en verwees nergens naar.
+                      Een afgewezen voorstel opruimen kan met het prullenbakje bovenin.
+                    */}
+                    {isDeclined ? null : (
+                      <div className="flex justify-center gap-4">
+                        <button
+                          type="button"
+                          className={`flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-green-300 ${inactiveRespond}`}
+                          onClick={() => {
+                            if (!caps.canRespondPending) {
+                              toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                              return;
+                            }
+                            handleVerzoekRespond('accept');
+                          }}
+                          aria-label="Verzoek accepteren"
+                          data-testid="overname-accept"
+                        >
+                          <Check className="w-6 h-6 text-[#333]" />
+                        </button>
+                        <button
+                          type="button"
+                          className={`flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-red-300 ${inactiveRespond}`}
+                          onClick={() => {
+                            if (!caps.canRespondPending) {
+                              toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                              return;
+                            }
+                            handleVerzoekRespond('decline');
+                          }}
+                          aria-label="Verzoek afwijzen"
+                          data-testid="overname-decline"
+                        >
+                          <X className="w-6 h-6 text-[#333]" />
+                        </button>
+                      </div>
+                    )}
                     </div>
                   </div>
                 );

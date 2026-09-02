@@ -6,6 +6,7 @@ import { TbSwitch3 } from 'react-icons/tb';
 import { authClient } from '@/lib/auth-client';
 import { Trash2, CircleQuestionMark } from 'lucide-react';
 import { FaRedo } from "react-icons/fa";
+import { overnameVerwijzingNaarQuery } from "@/lib/overname-recreate";
 import { toast } from 'sonner';
 
 import { BEHEERDER_EMAIL, BEHEERDER_TELEFOON } from '@/lib/beheerder-contact';
@@ -240,11 +241,23 @@ export function DoktersdienstHeader({
           return;
         }
         setVerzoekPopoverOpen(false);
-        const query = new URLSearchParams({ recreate: String(v.iddienstovern) });
-        if (typeof v.overnameId === 'number' && v.overnameId > 0) {
-          query.set('recreateProposal', String(v.overnameId));
-        }
-        router.push(`/overnames?${query.toString()}`);
+        /*
+          Het voorstel gaat mee als hele verwijzing en niet als het nummer van de dienst.
+          Dat nummer is 0 op negen van de eenentwintig overnamerijen, en daar liep de knop
+          op stuk: de pagina hiernaast zag geen geldig nummer en deed niets, zonder melding.
+        */
+        const query = overnameVerwijzingNaarQuery({
+          iddienstovern: Number(v.iddienstovern ?? 0),
+          ...(typeof v.overnameId === 'number' && v.overnameId > 0
+            ? { overnameId: v.overnameId }
+            : {}),
+          idwaarneemgroep: Number(v.idwaarneemgroep ?? 0),
+          van: Number(v.overnameVanUnix ?? 0),
+          tot: Number(v.overnameTotUnix ?? 0),
+          ...(Number(v.iddeelnemer ?? 0) > 0 ? { iddeelnemer: Number(v.iddeelnemer) } : {}),
+          ...(Number(v.iddeelnovern ?? 0) > 0 ? { iddeelnovern: Number(v.iddeelnovern) } : {}),
+        });
+        router.push(`/overnames?${query}`);
         return;
       }
 

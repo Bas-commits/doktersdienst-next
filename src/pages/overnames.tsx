@@ -16,6 +16,11 @@ import { computeOvernameCaps, canCurrentUserProposeOvername, OVERNAME_ACTION_FOR
 import { deriveEffectiveRoleTier, GROEP_DEELNEMER } from '@/lib/roles';
 import { OvernameModal } from '@/components/OvernameModal';
 import { OvernameDetailModal } from '@/components/OvernameDetailModal';
+import {
+  overnameVerwijzingSleutel,
+  overnameVerwijzingUitQuery,
+  type OvernameVerwijzing,
+} from '@/lib/overname-recreate';
 import type { OvernameDoctor } from '@/components/OvernameModal';
 import type { ShiftBlockView } from '@/types/diensten';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
@@ -134,7 +139,12 @@ export default function OvernamesPage() {
   const [allDoctors, setAllDoctors] = useState<(OvernameDoctor & { waarneemgroepIds: number[] })[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [pendingRecreateDelete, setPendingRecreateDelete] = useState<{ iddienstovern: number; overnameId?: number } | null>(null);
+  /*
+    Het afgewezen voorstel dat weg moet zodra het nieuwe verstuurd is. Dit was alleen het
+    nummer van de dienst; dat is 0 op negen van de eenentwintig overnamerijen, en dan wees het
+    naar niets. Nu de hele verwijzing, dezelfde die respond gebruikt om de rij te vinden.
+  */
+  const [pendingRecreateDelete, setPendingRecreateDelete] = useState<OvernameVerwijzing | null>(null);
 
   // Detail/management modal state (for existing overname blocks)
   const [selectedOvernameBlock, setSelectedOvernameBlock] = useState<ShiftBlockView | null>(null);
@@ -335,11 +345,8 @@ export default function OvernamesPage() {
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              ...pendingRecreateDelete,
               action: 'delete',
-              iddienstovern: pendingRecreateDelete.iddienstovern,
-              ...(pendingRecreateDelete.overnameId != null && pendingRecreateDelete.overnameId > 0
-                ? { overnameId: pendingRecreateDelete.overnameId }
-                : {}),
               deleteStatus: 'declined',
             }),
           });
@@ -414,28 +421,44 @@ export default function OvernamesPage() {
     [selectedOvernameBlock, currentDeelnemerId, globalIdgroep, roleTier]
   );
 
-  const recreateByIdDienstOvern = useCallback(async (iddienstovern: number, overnameId?: number) => {
+  /**
+   * Opent het voorstelscherm opnieuw voor de dienst waar een afgewezen voorstel bij hoort.
+   *
+   * De dienst wordt op drie manieren gezocht, van zeker naar behelpen: op het nummer van de
+   * dienst als de rij dat heeft, anders op overlap in de geladen maand, en anders uit de lijst
+   * openstaande verzoeken. Die laatste zocht op het nummer van de dienst en dus op 0, wat de
+   * eerste de beste oude rij opleverde in plaats van deze; nu op groep, begin en eind, en die
+   * drie samen wijzen een rij aan.
+   */
+  const startOvernameOpnieuw = useCallback(async (
+    verwijzing: OvernameVerwijzing,
+    /*
+      Waar een melding terechtkomt. Vanuit het rooster staat de popup nog open en hoort hij
+      daarin; vanuit de knop bovenin het scherm is er geen popup, en daar ging een melding
+      eerder verloren: het scherm sprong naar deze pagina en er gebeurde zichtbaar niets.
+    */
+    melding: 'popup' | 'toast' = 'popup',
+  ) => {
+    const meld = (tekst: string) => {
+      if (melding === 'toast') toast.error(tekst);
+      else setDetailError(tekst);
+    };
     setDetailError(null);
     const allBlocks = rows.flatMap((r) => r.shiftBlocks);
-    const directMatch = allBlocks.find(
-      (b) => !b.overnameType && (b.assignedDienstId === iddienstovern || b.id === iddienstovern)
-    );
-    let originalBlock = directMatch;
+    const overlapt = (b: ShiftBlockView) =>
+      (b.idwaarneemgroep == null || b.idwaarneemgroep === verwijzing.idwaarneemgroep) &&
+      b.van < verwijzing.tot &&
+      b.tot > verwijzing.van;
 
-    if (!originalBlock) {
-      const proposalBlock = overnameId != null && overnameId > 0
-        ? allBlocks.find((b) => b.overnameType && b.id === overnameId)
-        : allBlocks.find((b) => b.overnameType === 'vraagtekenOvername' && b.iddienstovern === iddienstovern);
-      if (proposalBlock) {
-        originalBlock = allBlocks.find(
-          (b) =>
-            !b.overnameType &&
-            b.idwaarneemgroep === proposalBlock.idwaarneemgroep &&
-            b.van < proposalBlock.tot &&
-            b.tot > proposalBlock.van
-        );
-      }
-    }
+    let originalBlock =
+      (verwijzing.iddienstovern > 0
+        ? allBlocks.find(
+            (b) =>
+              !b.overnameType &&
+              (b.assignedDienstId === verwijzing.iddienstovern ||
+                b.id === verwijzing.iddienstovern)
+          )
+        : undefined) ?? allBlocks.find((b) => !b.overnameType && overlapt(b));
 
     if (!originalBlock) {
       setDetailSubmitting(true);
@@ -444,8 +467,6 @@ export default function OvernamesPage() {
         const pendingJson = await pendingRes.json();
         const verzoeken = Array.isArray(pendingJson?.verzoeken) ? pendingJson.verzoeken : [];
         const fallback = verzoeken.find((v: {
-          overnameId?: number;
-          iddienstovern?: number;
           status?: string | null;
           idwaarneemgroep?: number | null;
           originalVanUnix?: number | null;
@@ -454,13 +475,16 @@ export default function OvernamesPage() {
           overnameTotUnix?: number;
           vanArts?: { initialen?: string; naam?: string; color?: string };
         }) =>
-          (overnameId != null && overnameId > 0
-            ? Number(v.overnameId ?? 0) === overnameId
-            : Number(v.iddienstovern ?? 0) === iddienstovern) &&
+          Number(v.idwaarneemgroep ?? 0) === verwijzing.idwaarneemgroep &&
+          Number(v.overnameVanUnix ?? 0) === verwijzing.van &&
+          Number(v.overnameTotUnix ?? 0) === verwijzing.tot &&
           (v.status == null || String(v.status).toLowerCase() === 'declined')
         );
 
         if (fallback) {
+          // Bij voorkeur de grenzen van de oorspronkelijke dienst. Die ontbreken als de rij
+          // geen dienst aanwijst, en dan zijn de grenzen van het voorstel het enige dat er is;
+          // bij een gedeeltelijke overname is dat smaller dan de dienst zelf.
           const startUnix =
             typeof fallback.originalVanUnix === 'number' && fallback.originalVanUnix > 0
               ? fallback.originalVanUnix
@@ -472,8 +496,8 @@ export default function OvernamesPage() {
           if (startUnix > 0 && endUnix > startUnix) {
             const startDate = new Date(startUnix * 1000);
             originalBlock = {
-              id: iddienstovern,
-              assignedDienstId: iddienstovern,
+              id: verwijzing.iddienstovern,
+              assignedDienstId: verwijzing.iddienstovern,
               day: startDate.getDate(),
               month: startDate.getMonth(),
               year: startDate.getFullYear(),
@@ -485,7 +509,7 @@ export default function OvernamesPage() {
               nextDate: new Date(endUnix * 1000).toISOString().slice(0, 19).replace('T', ' '),
               middle: fallback.vanArts
                 ? {
-                    id: 0,
+                    id: verwijzing.iddeelnemer ?? 0,
                     name: fallback.vanArts.naam ?? 'Onbekend',
                     shortName: fallback.vanArts.initialen ?? '??',
                     color: fallback.vanArts.color ?? '#7b2d8e',
@@ -493,10 +517,7 @@ export default function OvernamesPage() {
                 : null,
               top: null,
               bottom: null,
-              idwaarneemgroep:
-                typeof fallback.idwaarneemgroep === 'number' && fallback.idwaarneemgroep > 0
-                  ? fallback.idwaarneemgroep
-                  : undefined,
+              idwaarneemgroep: verwijzing.idwaarneemgroep,
             };
           }
         }
@@ -508,38 +529,56 @@ export default function OvernamesPage() {
     }
 
     if (!originalBlock) {
-      setDetailError('Kon de oorspronkelijke dienst niet vinden om opnieuw voor te stellen.');
+      meld('Kon de oorspronkelijke dienst niet vinden om opnieuw voor te stellen.');
+      return;
+    }
+
+    // Dezelfde grens als bij het aanklikken van een dienst. Een overname voor een dienst die
+    // al geweest is kan daar niet, dus hier ook niet; anders is de knop een sluiproute.
+    if (originalBlock.van < Math.floor(Date.now() / 1000)) {
+      meld('Het is niet mogelijk om een overname aan te maken voor een dienst in het verleden.');
       return;
     }
 
     setSelectedOvernameBlock(null);
     setSelectedShift(originalBlock);
     setSubmitError(null);
-    setPendingRecreateDelete({ iddienstovern, ...(overnameId != null && overnameId > 0 ? { overnameId } : {}) });
+    setPendingRecreateDelete(verwijzing);
   }, [rows]);
 
   const handleOvernameRecreate = useCallback(async () => {
-    if (!selectedOvernameBlock?.iddienstovern) return;
-    await recreateByIdDienstOvern(selectedOvernameBlock.iddienstovern, selectedOvernameBlock.id);
-  }, [selectedOvernameBlock, recreateByIdDienstOvern]);
+    const block = selectedOvernameBlock;
+    if (!block) return;
+    await startOvernameOpnieuw({
+      iddienstovern: Number(block.iddienstovern ?? 0),
+      ...(Number(block.id) > 0 ? { overnameId: Number(block.id) } : {}),
+      idwaarneemgroep: Number(block.idwaarneemgroep ?? activeWaarneemgroepId ?? 0),
+      van: block.van,
+      tot: block.tot,
+      ...(Number(block.iddeelnemer ?? block.originalDoctor?.id ?? 0) > 0
+        ? { iddeelnemer: Number(block.iddeelnemer ?? block.originalDoctor?.id) }
+        : {}),
+      ...(Number(block.iddeelnovern ?? block.middle?.id ?? 0) > 0
+        ? { iddeelnovern: Number(block.iddeelnovern ?? block.middle?.id) }
+        : {}),
+    });
+  }, [selectedOvernameBlock, activeWaarneemgroepId, startOvernameOpnieuw]);
 
-  // Auto-trigger recreate flow when arriving via ?recreate=<iddienstovern>
+  // De knop bovenin het scherm komt hier binnen met de verwijzing in de adresbalk.
   const router = useRouter();
-  const recreateHandledRef = useRef<number | null>(null);
+  const recreateHandledRef = useRef<string | null>(null);
   useEffect(() => {
-    const raw = router.query.recreate;
-    const rawProposal = router.query.recreateProposal;
-    const idStr = Array.isArray(raw) ? raw[0] : raw;
-    const proposalStr = Array.isArray(rawProposal) ? rawProposal[0] : rawProposal;
-    const id = idStr ? Number(idStr) : NaN;
-    const proposalId = proposalStr ? Number(proposalStr) : NaN;
-    if (!Number.isFinite(id) || id <= 0) return;
-    if (recreateHandledRef.current === id) return;
-    recreateHandledRef.current = id;
-    void recreateByIdDienstOvern(id, Number.isFinite(proposalId) && proposalId > 0 ? proposalId : undefined);
+    const verwijzing = overnameVerwijzingUitQuery(router.query);
+    if (!verwijzing) return;
+    // Op de sleutel en niet op het nummer van de dienst: dat is vaak 0 en zou de tweede
+    // opdracht voor een andere dienst als al afgehandeld aanzien.
+    const sleutel = overnameVerwijzingSleutel(verwijzing);
+    if (recreateHandledRef.current === sleutel) return;
+    recreateHandledRef.current = sleutel;
+    void startOvernameOpnieuw(verwijzing, 'toast');
     // Strip the query param so it doesn't re-trigger on reload
     router.replace('/overnames', undefined, { shallow: true });
-  }, [router, recreateByIdDienstOvern]);
+  }, [router, startOvernameOpnieuw]);
 
   return (
     <>

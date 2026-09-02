@@ -2,6 +2,8 @@ export interface DienstDeelnemer {
   id: number;
   voornaam: string;
   achternaam: string;
+  /** Nodig voor de naam met achternaam eerst, zoals de lijst deelnemers hem schrijft. */
+  voorletterstussenvoegsel?: string | null;
   initialen?: string | null;
   color: string;
 }
@@ -43,6 +45,8 @@ export interface DienstenResponse {
 export interface DoctorInfo {
   id: number;
   name: string;
+  /** Achternaam eerst, zoals de popup met overnameverzoeken de naam schrijft. */
+  listName?: string;
   shortName: string;
   color: string;
 }

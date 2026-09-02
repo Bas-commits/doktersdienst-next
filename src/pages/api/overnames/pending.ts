@@ -3,7 +3,7 @@ import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { alias } from 'drizzle-orm/pg-core';
-import { deelnemerChipInitials, formatDeelnemerDisplayName } from '@/lib/deelnemer-display';
+import { deelnemerChipInitials, deelnemerRoosterNaam } from '@/lib/deelnemer-display';
 import {
   formatAmsterdamDateLabelFromUnixSeconds,
   formatAmsterdamTimeFromUnixSeconds,
@@ -11,21 +11,6 @@ import {
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers, waarneemgroepen } = schema;
 const GROEP_SECRETARIS = 2;
-
-/** Same format as lijst deelnemers: achternaam, voornaam, voorletterstussenvoegsel */
-function formatDeelnemerListName(fields: {
-  achternaam: string | null;
-  voornaam: string | null;
-  voorletterstussenvoegsel: string | null;
-}): string {
-  return (
-    [fields.achternaam, fields.voornaam, fields.voorletterstussenvoegsel]
-      .filter(Boolean)
-      .join(', ') ||
-    formatDeelnemerDisplayName(fields) ||
-    'Onbekend'
-  );
-}
 
 function toHeaders(incoming: NextApiRequest['headers']): Headers {
   const h = new Headers();
@@ -195,7 +180,7 @@ export default async function handler(
       },
       { fallback: '??' }
     );
-    const originalNaam = formatDeelnemerListName({
+    const originalNaam = deelnemerRoosterNaam({
       achternaam: r.originalAchternaam,
       voornaam: r.originalVoornaam,
       voorletterstussenvoegsel: r.originalVoorletterstussenvoegsel,
@@ -208,7 +193,7 @@ export default async function handler(
       },
       { fallback: '??' }
     );
-    const targetNaam = formatDeelnemerListName({
+    const targetNaam = deelnemerRoosterNaam({
       achternaam: r.targetAchternaam,
       voornaam: r.targetVoornaam,
       voorletterstussenvoegsel: r.targetVoorletterstussenvoegsel,

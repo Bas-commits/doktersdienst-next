@@ -126,11 +126,13 @@ export default async function handler(
         deelnemerId: deelnemers.id,
         voornaam: deelnemers.voornaam,
         achternaam: deelnemers.achternaam,
+        voorletterstussenvoegsel: deelnemers.voorletterstussenvoegsel,
         initialen: deelnemers.initialen,
         color: deelnemers.color,
         targetDeelnemerId: targetDeelnemer.id,
         targetVoornaam: targetDeelnemer.voornaam,
         targetAchternaam: targetDeelnemer.achternaam,
+        targetVoorletterstussenvoegsel: targetDeelnemer.voorletterstussenvoegsel,
         targetInitialen: targetDeelnemer.initialen,
         targetColor: targetDeelnemer.color,
       })
@@ -162,6 +164,7 @@ export default async function handler(
               id: r.deelnemerId,
               voornaam: r.voornaam,
               achternaam: r.achternaam,
+              voorletterstussenvoegsel: r.voorletterstussenvoegsel,
               initialen: r.initialen,
               color: r.color,
             }
@@ -172,6 +175,7 @@ export default async function handler(
               id: r.targetDeelnemerId,
               voornaam: r.targetVoornaam,
               achternaam: r.targetAchternaam,
+              voorletterstussenvoegsel: r.targetVoorletterstussenvoegsel,
               initialen: r.targetInitialen,
               color: r.targetColor,
             }

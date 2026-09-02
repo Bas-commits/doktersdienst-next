@@ -61,6 +61,8 @@ describe('toDoctorInfo', () => {
     expect(info).toEqual({
       id: 42,
       name: 'Anna Berg',
+      // Achternaam eerst, voor de popup met overnames. Zie deelnemerRoosterNaam.
+      listName: 'Berg, Anna',
       shortName: 'AB',
       color: '#ff0000',
     });

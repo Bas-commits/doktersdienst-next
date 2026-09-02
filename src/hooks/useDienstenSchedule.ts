@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { DienstenResponse, ShiftBlockView, Dienst, DienstDeelnemer, DoctorInfo } from '@/types/diensten';
 import type { CalendarGridRow } from '@/components/CalandarGrid/CalendarGrid';
-import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { deelnemerChipInitials, deelnemerRoosterNaam } from '@/lib/deelnemer-display';
 
 function formatTwoDigits(n: number): string {
   return n.toString().padStart(2, '0');
@@ -34,6 +34,15 @@ export function toDoctorInfoFromDeelnemer(d: DienstDeelnemer): DoctorInfo {
   return {
     id: d.id,
     name: fullName || `Doctor ${d.id}`,
+    // Naast de naam ook de schrijfwijze met achternaam eerst. De popup met overnames toont
+    // die, hier en bovenin het scherm, en die twee schreven dezelfde arts verschillend op.
+    listName: deelnemerRoosterNaam({
+      id: d.id,
+      voornaam: d.voornaam,
+      achternaam: d.achternaam,
+      voorletterstussenvoegsel: d.voorletterstussenvoegsel,
+      initialen: d.initialen,
+    }),
     shortName,
     color: d.color || '#c686fd',
   };
@@ -285,10 +294,31 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
     )}-${formatTwoDigits(end.getDate())} ${endTime}:00`;
     const originalDoctor = toDoctorInfo(dienst);
     const overnameType = getOvernameType(dienst);
-    const originalDienst = response.data.diensten.find((candidate) => candidate.id === dienst.iddienstovern);
+    /*
+      Alleen opzoeken als er een echt nummer staat. Geen enkele dienst in deze database heeft
+      een id, dus ze krijgen hier allemaal 0, en zoeken op 0 leverde de eerste dienst uit de
+      lijst op: een willekeurige andere dienst, met bijna nooit dezelfde grenzen. Zo heette een
+      overname van een hele dienst hier "Overname gedeelte dienst" terwijl de popup bovenin het
+      scherm "volledige dienst" zei over hetzelfde voorstel.
+
+      Zonder dat nummer dezelfde regel als de server: bestaat er een dienst met precies deze
+      begin- en eindtijd, dan gaat het om de hele dienst. Zie alignsWithShiftBoundaries in de
+      api van de overnameverzoeken.
+    */
+    const originalDienst =
+      dienst.iddienstovern != null && dienst.iddienstovern > 0
+        ? response.data.diensten.find((candidate) => candidate.id === dienst.iddienstovern)
+        : undefined;
     const isPartial = originalDienst
       ? originalDienst.van !== dienst.van || originalDienst.tot !== dienst.tot
-      : dienst.isPartial;
+      : (dienst.isPartial ??
+        !response.data.diensten.some(
+          (candidate) =>
+            (candidate.type === 0 || candidate.type === 1) &&
+            candidate.idwaarneemgroep === dienst.idwaarneemgroep &&
+            candidate.van === dienst.van &&
+            candidate.tot === dienst.tot
+        ));
     // Keep target doctor data on `middle` for all overname states; the ShiftBlock UI decides
     // whether to render original (`vanArts`) or target (`naarArts`) as the primary assignee.
     const targetDoctor = dienst.target_deelnemers ? toDoctorInfoFromDeelnemer(dienst.target_deelnemers) : null;

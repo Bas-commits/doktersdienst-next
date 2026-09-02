@@ -669,6 +669,7 @@ export default function OvernamesPage() {
           error={detailError}
           canRespondPending={detailModalCaps.canRespondPending}
           canManageProposalLifecycle={detailModalCaps.canManageProposalLifecycle}
+          waarneemgroepNaam={activeWaarneemgroep?.naam ?? null}
         />
       )}
     </>

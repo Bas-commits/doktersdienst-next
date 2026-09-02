@@ -17,6 +17,7 @@ type ApiDienstDeelnemer = {
   id: number | null;
   voornaam: string | null;
   achternaam: string | null;
+  voorletterstussenvoegsel?: string | null;
   initialen?: string | null;
   color: string | null;
 };
@@ -51,6 +52,7 @@ export function toDienstenResponse(diensten: Array<{
           id: d.diensten_deelnemers.id ?? 0,
           voornaam: d.diensten_deelnemers.voornaam ?? '',
           achternaam: d.diensten_deelnemers.achternaam ?? '',
+          voorletterstussenvoegsel: d.diensten_deelnemers.voorletterstussenvoegsel ?? null,
           initialen: d.diensten_deelnemers.initialen ?? null,
           color: d.diensten_deelnemers.color ?? '',
         }
@@ -62,6 +64,7 @@ export function toDienstenResponse(diensten: Array<{
             id: td.id ?? 0,
             voornaam: td.voornaam ?? '',
             achternaam: td.achternaam ?? '',
+            voorletterstussenvoegsel: td.voorletterstussenvoegsel ?? null,
             initialen: td.initialen ?? null,
             color: td.color ?? '',
           }

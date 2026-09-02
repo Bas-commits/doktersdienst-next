@@ -17,10 +17,15 @@ export interface OvernameDetailModalProps {
   canRespondPending?: boolean;
   /** Delete, redo, trash, confirm delete. Defaults to true when omitted. */
   canManageProposalLifecycle?: boolean;
+  /** Naam van de waarneemgroep, zoals de popup bovenin het scherm hem boven het voorstel zet. */
+  waarneemgroepNaam?: string | null;
 }
 
 function DoctorRow({ doctor, label }: { doctor: DoctorInfo | null | undefined; label: string }) {
   if (!doctor) return null;
+  // Achternaam eerst, net als bovenin het scherm. Zonder terugval kan een oude rij zonder
+  // losse naamvelden hier leeg komen te staan.
+  const naam = doctor.listName || doctor.name;
   return (
     <div className="flex items-center justify-between text-sm">
       <div className="flex items-center gap-2">
@@ -32,7 +37,7 @@ function DoctorRow({ doctor, label }: { doctor: DoctorInfo | null | undefined; l
           {doctor.shortName}
         </span>
         <div>
-          <p className="font-medium leading-tight">{doctor.name}</p>
+          <p className="font-medium leading-tight">{naam}</p>
         </div>
       </div>
     </div>
@@ -48,6 +53,7 @@ export function OvernameDetailModal({
   error,
   canRespondPending = true,
   canManageProposalLifecycle = true,
+  waarneemgroepNaam,
 }: OvernameDetailModalProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const modalZIndex = 2000;
@@ -95,7 +101,10 @@ export function OvernameDetailModal({
 
   const vanDt = new Date(block.van * 1000);
   const totDt = new Date(block.tot * 1000);
+  // Met de dag van de week erbij, zoals de popup bovenin het scherm. Het jaartal blijft staan:
+  // daar staat het niet, en in een kalender die door de jaren loopt is dat er een te weinig.
   const dateOpts: Intl.DateTimeFormatOptions = {
+    weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -180,10 +189,14 @@ export function OvernameDetailModal({
                 aria-disabled={!redoEnabled}
                 title={redoTitle}
               >
-                <FaRedo className={`w-6 h-6 ${redoEnabled ? 'text-blue-500' : 'text-gray-400'}`} />
+                <FaRedo className={`w-6 h-6 ${redoEnabled ? 'text-red-500' : 'text-gray-400'}`} />
               </button>
             </div>
           </div>
+
+          {waarneemgroepNaam ? (
+            <p className="mb-2 text-center text-sm font-medium text-gray-700">{waarneemgroepNaam}</p>
+          ) : null}
 
           <div className="mb-3 flex items-center justify-between gap-2">
             <p className="text-sm font-bold">{overnameTypeLabel}</p>
@@ -266,35 +279,12 @@ export function OvernameDetailModal({
             </div>
           ) : null}
 
-          {isDeclined ? (
-            <div className="flex justify-center gap-4">
-              <button
-                type="button"
-                className={`flex cursor-pointer items-center justify-center h-10 px-6 rounded-md border border-gray-300 bg-white text-sm hover:bg-red-300 disabled:opacity-50 ${inactiveLifecycleClass}`}
-                onClick={handleDelete}
-                aria-label="Afgewezen verzoek verwijderen"
-                data-testid="overname-delete"
-                disabled={submitting}
-              >
-                <Trash2 className="w-5 h-5 text-[#333] mr-1" /> Verwijderen
-              </button>
-            </div>
-          ) : null}
-
-          {!isPending && !isDeclined && block.overnameType === 'overname' ? (
-            <div className="flex justify-center gap-4">
-              <button
-                type="button"
-                className={`flex cursor-pointer items-center justify-center h-10 px-6 rounded-md border border-gray-300 bg-white text-sm hover:bg-red-300 disabled:opacity-50 ${inactiveLifecycleClass}`}
-                onClick={handleDelete}
-                aria-label="Overname verwijderen"
-                data-testid="overname-delete"
-                disabled={submitting}
-              >
-                <Trash2 className="w-5 h-5 text-[#333] mr-1" /> Verwijderen
-              </button>
-            </div>
-          ) : null}
+          {/*
+            Geen aparte knop Verwijderen meer. Het prullenbakje bovenin deed al hetzelfde, en
+            de popup bovenin het scherm heeft die tweede knop ook niet. Twee wegen naar
+            dezelfde onomkeerbare handeling maakt het alleen maar makkelijker om er per
+            ongeluk een te nemen. Het prullenbakje vraagt bevestiging, en dat blijft.
+          */}
         </div>
       </div>
     </div>

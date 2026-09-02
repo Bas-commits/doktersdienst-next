@@ -142,6 +142,18 @@ export type PraktijkplannerParticipantSchedulableDaypart = PraktijkplannerSchedu
   iddeelnemer: number;
 };
 
+/**
+ * Begin- en eindtijd van een dagdeel binnen een waarneemgroep, als HH:MM.
+ *
+ * Ontbreekt een dagdeel in de lijst, dan heeft de groep er geen tijd voor ingevuld. Dat is
+ * geen fout: een dagdeel zonder tijd is gewoon een dagdeel.
+ */
+export type PraktijkplannerDaypartTime = {
+  iddagdeel: number;
+  begintijd: string;
+  eindtijd: string;
+};
+
 export type PraktijkplannerMasterData = {
   dayparts: PraktijkplannerDaypart[];
   expertises: PraktijkplannerExpertise[];
@@ -152,6 +164,7 @@ export type PraktijkplannerMasterData = {
   availabilityTypes: PraktijkplannerAvailabilityType[];
   absenceTypes: PraktijkplannerAbsenceType[];
   functies: PraktijkplannerFunctie[];
+  daypartTimes: PraktijkplannerDaypartTime[];
   schedulableDayparts: PraktijkplannerSchedulableDaypart[];
   participantSchedulableDayparts: PraktijkplannerParticipantSchedulableDaypart[];
 };

@@ -1,4 +1,4 @@
-import { pgTable, integer, varchar, uuid, doublePrecision, boolean, index, bigint, date, text, timestamp, serial, smallint, primaryKey, unique, check } from "drizzle-orm/pg-core"
+import { pgTable, integer, varchar, uuid, doublePrecision, boolean, index, bigint, date, text, time, timestamp, serial, smallint, primaryKey, unique, check } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 
@@ -911,6 +911,28 @@ export const praktijkplannerfuncties = pgTable("praktijkplannerfuncties", {
 }, (table) => [
 	unique("praktijkplannerfuncties_group_naam_unique").on(table.idwaarneemgroep, table.naam),
 	index("praktijkplannerfuncties_group_idx").on(table.idwaarneemgroep),
+]);
+
+/**
+ * Begin- en eindtijd per dagdeel, per waarneemgroep.
+ *
+ * De tabel dagdelen is globaal, dus daar kan geen tijd bij: elke groep heeft zijn eigen
+ * ochtend. Geen rij betekent dat de groep geen tijden heeft ingevuld, en dat is de toestand
+ * waarin iedereen begint.
+ *
+ * Begintijd na eindtijd is geldig en geen fout: de nacht gaat over middernacht heen.
+ */
+export const praktijkplannerdagdeeltijden = pgTable("praktijkplannerdagdeeltijden", {
+	id: serial().primaryKey().notNull(),
+	idwaarneemgroep: integer().notNull().references(() => waarneemgroepen.id, { onDelete: "cascade" }),
+	iddagdeel: integer().notNull().references(() => dagdelen.id),
+	begintijd: time().notNull(),
+	eindtijd: time().notNull(),
+	updatedBy: integer("updated_by").references(() => deelnemers.id),
+	updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+	unique("praktijkplannerdagdeeltijden_group_daypart_unique").on(table.idwaarneemgroep, table.iddagdeel),
+	index("praktijkplannerdagdeeltijden_group_idx").on(table.idwaarneemgroep),
 ]);
 
 export const praktijkplannerweergavevoorkeuren = pgTable("praktijkplannerweergavevoorkeuren", {

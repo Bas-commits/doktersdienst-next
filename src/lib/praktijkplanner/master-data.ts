@@ -1,5 +1,6 @@
 import { and, asc, eq, isNull, or } from 'drizzle-orm';
 import { db, schema } from '@/db';
+import { loadDaypartTimes } from '@/lib/praktijkplanner/daypart-times-db';
 import type { PraktijkplannerMasterData } from '@/types/praktijkplanner';
 
 export async function getPraktijkplannerMasterData(
@@ -68,6 +69,7 @@ export async function getPraktijkplannerMasterData(
     functieRows,
     schedulableDaypartRows,
     participantSchedulableDaypartRows,
+    daypartTimeRows,
   ] = await Promise.all([
     db
       .select({
@@ -195,6 +197,7 @@ export async function getPraktijkplannerMasterData(
       })
       .from(schema.praktijkplannerdeelnemerdagdelen)
       .where(eq(schema.praktijkplannerdeelnemerdagdelen.idwaarneemgroep, idwaarneemgroep)),
+    loadDaypartTimes(idwaarneemgroep),
   ]);
 
   return {
@@ -294,6 +297,7 @@ export async function getPraktijkplannerMasterData(
         row.id != null && row.naam != null && row.actief != null
       )
       .map((row) => ({ id: row.id, naam: row.naam, actief: row.actief })),
+    daypartTimes: daypartTimeRows,
     schedulableDayparts: schedulableDaypartRows
       .filter(
         (row): row is typeof row & { weekdag: number; iddagdeel: number; actief: boolean } =>

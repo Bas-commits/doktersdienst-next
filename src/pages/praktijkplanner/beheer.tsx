@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { PraktijkplannerPage, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
 import { ActiviteitenIconPicker } from '@/components/praktijkplanner/ActiviteitenIconPicker';
 import { SchedulableDaypartsEditor } from '@/components/praktijkplanner/SchedulableDaypartsEditor';
+import { DaypartTimesEditor } from '@/components/praktijkplanner/DaypartTimesEditor';
 import { ParticipantSchedulableDaypartsEditor } from '@/components/praktijkplanner/ParticipantSchedulableDaypartsEditor';
 import type { PraktijkplannerMasterData } from '@/types/praktijkplanner';
 
@@ -152,6 +153,7 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
   }, [router]);
   const [masterData, setMasterData] = useState<PraktijkplannerMasterData>({
     ...data.masterData,
+    daypartTimes: data.masterData.daypartTimes ?? [],
     schedulableDayparts: data.masterData.schedulableDayparts ?? [],
     participantSchedulableDayparts: data.masterData.participantSchedulableDayparts ?? [],
   });
@@ -308,6 +310,15 @@ function BeheerContent({ groupId, data, reload: reloadContext }: Praktijkplanner
           schedulableDayparts={masterData.schedulableDayparts ?? []}
           onSaved={(next) => {
             setMasterData((current) => ({ ...current, schedulableDayparts: next }));
+            reloadContext();
+          }}
+        />
+        <DaypartTimesEditor
+          groupId={groupId}
+          dayparts={masterData.dayparts}
+          daypartTimes={masterData.daypartTimes ?? []}
+          onSaved={(next) => {
+            setMasterData((current) => ({ ...current, daypartTimes: next }));
             reloadContext();
           }}
         />

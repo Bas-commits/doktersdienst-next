@@ -82,6 +82,7 @@ const context: PraktijkplannerPageContext = {
         { id: 1, naam: 'Ochtend', volgorde: 1 },
         { id: 2, naam: 'Middag', volgorde: 2 },
       ],
+      daypartTimes: [],
       expertises: [],
       activities: [],
       specifications: [],

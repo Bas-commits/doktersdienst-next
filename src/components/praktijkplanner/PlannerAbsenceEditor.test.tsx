@@ -135,6 +135,12 @@ describe('PlannerAbsenceEditor doctor mode', () => {
     vi.clearAllMocks();
   });
 
+  /*
+    Ruimer dan de standaard vijf seconden. Deze test tekent een hele maand voor een dokter,
+    honderdvierentwintig vakjes, en zoekt daar met een reguliere expressie knoppen in op. Dat
+    duurde hier al ruim vier seconden en viel af en toe om zodra de rest van de suite ernaast
+    draaide. Het is geen trage code maar een dure test; de grens stond te krap.
+  */
   it('uses a full self-only month view with preliminary absence choices', async () => {
     render(<PlannerAbsenceEditor context={context} mode="doctor" />);
 
@@ -169,7 +175,7 @@ describe('PlannerAbsenceEditor doctor mode', () => {
         ],
       });
     });
-  });
+  }, 20000);
 
   it('prevents doctors from changing confirmed absences', async () => {
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {

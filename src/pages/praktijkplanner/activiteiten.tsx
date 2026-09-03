@@ -27,6 +27,7 @@ import {
 import type { PlannerCursorTool } from '@/components/praktijkplanner/PlannerCursorTool';
 import { PlannerCopyWeekModal } from '@/components/praktijkplanner/PlannerCopyWeekModal';
 import { PlannerDaypartGrid } from '@/components/praktijkplanner/PlannerDaypartGrid';
+import { tijdLabel } from '@/lib/praktijkplanner/daypart-times';
 import { PlannerDaypartHoverPreview } from '@/components/praktijkplanner/PlannerDaypartHoverPreview';
 import { PlannerManageHerhalingModal } from '@/components/praktijkplanner/PlannerManageHerhalingModal';
 import { PlannerMonthOverviewGrid } from '@/components/praktijkplanner/PlannerMonthOverviewGrid';
@@ -491,6 +492,7 @@ export function ActivitiesContent({
             initials={initials}
             datum={datum}
             daypartName={daypart.naam}
+            daypartTime={tijdLabel(data.masterData.daypartTimes ?? [], daypart.id)}
             fromRepetition={false}
             isException={false}
             absence={{ type: absence.absenceType.naam, aangevraagd: provisional }}
@@ -642,6 +644,7 @@ export function ActivitiesContent({
           initials={initials}
           datum={datum}
           daypartName={daypart.naam}
+          daypartTime={tijdLabel(data.masterData.daypartTimes ?? [], daypart.id)}
           fromRepetition={existing?.recurrenceId != null}
           isException={Boolean(existing?.isUitzondering)}
           recurrenceSourceWeek={existing?.recurrenceSourceWeek ?? null}
@@ -679,7 +682,7 @@ export function ActivitiesContent({
         </PlannerDaypartHoverPreview>
       );
     },
-    [absenceMap, baseSlotMap]
+    [absenceMap, baseSlotMap, data.masterData.daypartTimes]
   );
 
   const isCellFilled = useCallback(
@@ -1442,6 +1445,7 @@ export function ActivitiesContent({
               onCellClick={canEdit ? queueCell : undefined}
               isCellDisabled={isCellDisabled}
               isCellUnavailable={isCellUnavailable}
+              daypartTimes={data.masterData.daypartTimes ?? []}
               isCellFilled={isCellFilled}
               getCellClassName={getCellClassName}
               holidayLabels={holidays}
@@ -1486,6 +1490,7 @@ export function ActivitiesContent({
                     ruimteBovenFiche: false,
                   })
                 }
+                daypartTimes={data.masterData.daypartTimes ?? []}
                 isCellFilled={isCellFilled}
                 holidayLabels={holidays}
                 onParticipantNameClick={readOnly ? undefined : openDeelnemerGegevens}

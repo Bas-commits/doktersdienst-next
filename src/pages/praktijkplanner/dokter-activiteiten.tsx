@@ -19,7 +19,9 @@ import {
   type RapportageRegel,
 } from '@/lib/capaciteitsrapportage-export';
 import { naamVoorBestandsnaam } from '@/lib/excel-export';
+import { tijdLabel } from '@/lib/praktijkplanner/daypart-times';
 import { addDays, formatIsoDate, startOfIsoWeek } from '@/lib/praktijkplanner/dates';
+import type { PraktijkplannerDaypart } from '@/types/praktijkplanner';
 
 type ReportRow = {
   id: string;
@@ -146,6 +148,14 @@ function DoctorActivitiesContent({ groupId, data }: PraktijkplannerPageContext) 
     }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  const dagdeelTitel = useCallback(
+    (daypart: PraktijkplannerDaypart) => {
+      const tijd = tijdLabel(data.masterData.daypartTimes ?? [], daypart.id);
+      return tijd ? `${daypart.naam} ${tijd}` : daypart.naam;
+    },
+    [data.masterData.daypartTimes]
+  );
 
   const dayparts = useMemo(
     () => [...data.masterData.dayparts].sort((left, right) => left.volgorde - right.volgorde),
@@ -330,7 +340,15 @@ function DoctorActivitiesContent({ groupId, data }: PraktijkplannerPageContext) 
             <tr>
               {CAPACITY_WEEKDAYS.flatMap((weekday) =>
                 dayparts.map((daypart) => (
-                  <th key={`${weekday.id}-${daypart.id}`} className="min-w-8 border-r p-1 text-center font-medium text-muted-foreground">
+                  <th
+                    key={`${weekday.id}-${daypart.id}`}
+                    className="min-w-8 border-r p-1 text-center font-medium text-muted-foreground"
+                    /*
+                      Alleen de eerste letter past in deze kolom. Het ballonnetje maakt er de
+                      hele naam van, met de tijden erbij als de groep die heeft ingevuld.
+                    */
+                    title={dagdeelTitel(daypart)}
+                  >
                     {daypart.naam.slice(0, 1)}
                   </th>
                 ))

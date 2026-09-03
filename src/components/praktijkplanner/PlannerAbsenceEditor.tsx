@@ -11,6 +11,7 @@ import Image from 'next/image';
 import { toast } from 'sonner';
 import { PraktijkplannerTitleAside, type PraktijkplannerPageContext } from './PraktijkplannerPage';
 import { AbsenceDaypartCell } from './AbsenceDaypartCell';
+import { tijdLabel } from '@/lib/praktijkplanner/daypart-times';
 import { PlannerDaypartHoverPreview } from './PlannerDaypartHoverPreview';
 import { PlannerDienstvoorkeurConflictModal } from './PlannerDienstvoorkeurConflictModal';
 import {
@@ -465,6 +466,7 @@ export function PlannerAbsenceEditor({
           initials={deelnemerChipInitials(participant)}
           datum={datum}
           daypartName={daypart.naam}
+          daypartTime={tijdLabel(data.masterData.daypartTimes ?? [], daypart.id)}
           fromRepetition={false}
           isException={false}
           absence={absence ? { type: absence.naam, aangevraagd: provisional === true } : null}
@@ -479,6 +481,7 @@ export function PlannerAbsenceEditor({
     },
     [
       clearMode,
+      data.masterData.daypartTimes,
       dienstKeuze,
       editable,
       isDoctorMode,
@@ -1005,6 +1008,7 @@ export function PlannerAbsenceEditor({
               renderCell={({ participant, datum, daypart }) =>
                 renderCell(participant, datum, daypart)
               }
+              daypartTimes={data.masterData.daypartTimes ?? []}
               isCellFilled={({ participant, datum, daypart }) =>
                 isCellFilled(participant.id, datum, daypart)
               }
@@ -1018,6 +1022,7 @@ export function PlannerAbsenceEditor({
           verborgenWeekdagen={verborgenWeekdagen}
           toonInhoudOpNietInplanbaar
           renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}
+          daypartTimes={data.masterData.daypartTimes ?? []}
           isCellFilled={({ participant, datum, daypart }) => isCellFilled(participant.id, datum, daypart)}
           onCellClick={applyCell}
           /*
@@ -1078,6 +1083,10 @@ export function PlannerAbsenceEditor({
             }}
           >
             <PlannerMonthDaypartGrid
+              daypartTimes={data.masterData.daypartTimes ?? []}
+              isCellFilled={({ participant, datum, daypart }) =>
+                isCellFilled(participant.id, datum, daypart)
+              }
               verborgenWeekdagen={verborgenWeekdagen}
               toonInhoudOpNietInplanbaar
               participant={participants[0]}

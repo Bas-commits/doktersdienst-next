@@ -3,11 +3,16 @@
 import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
+import { tijdLabels } from '@/lib/praktijkplanner/daypart-times';
 import { weekDates } from '@/lib/praktijkplanner/dates';
 import { isoWeekdayFromDate } from '@/lib/praktijkplanner/schedulable-dayparts';
 import { cn } from '@/lib/utils';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
-import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
+import type {
+  PraktijkplannerDaypart,
+  PraktijkplannerDaypartTime,
+  PraktijkplannerParticipant,
+} from '@/types/praktijkplanner';
 import {
   PlannerCursorToolFollower,
   UNAVAILABLE_DAYPART_CURSOR_TOOL,
@@ -63,6 +68,7 @@ export function PlannerDaypartGrid({
   isCellDisabled,
   isCellUnavailable,
   isCellFilled,
+  daypartTimes,
   holidayLabels,
   cursorTool,
   onCursorToolDismiss,
@@ -91,6 +97,13 @@ export function PlannerDaypartGrid({
   /** Non-schedulable dayparts: always gray placeholder, never clickable. */
   isCellUnavailable?: (cell: PlannerDaypartCell) => boolean;
   isCellFilled?: (cell: PlannerDaypartCell) => boolean;
+  /**
+   * De tijden per dagdeel uit Plannerbeheer, voor het ballonnetje bij een leeg vakje.
+   *
+   * Alleen bij een leeg vakje: staat er iets in, dan hangt er al een eigen voorbeeld aan de
+   * muis, en twee ballonnetjes over elkaar leest niemand.
+   */
+  daypartTimes?: PraktijkplannerDaypartTime[];
   holidayLabels?: ReadonlyMap<string, string[]>;
   cursorTool?: PlannerCursorTool | null;
   onCursorToolDismiss?: () => void;
@@ -116,6 +129,10 @@ export function PlannerDaypartGrid({
     (datum) => !verborgenWeekdagen?.has(isoWeekdayFromDate(datum))
   );
   const orderedDayparts = [...dayparts].sort((a, b) => a.volgorde - b.volgorde);
+  /*
+    De tijden een keer opzoeken en niet per vakje: een rooster tekent er honderden.
+  */
+  const dagdeelTijden = tijdLabels(daypartTimes ?? []);
   const huidigMoment = useHuidigMoment();
   const gridRootRef = useRef<HTMLDivElement>(null);
   const [unavailableCursor, setUnavailableCursor] = useState<{ x: number; y: number } | null>(null);
@@ -342,6 +359,9 @@ export function PlannerDaypartGrid({
                           isNu ? 'ring-2 ring-inset ring-emerald-600' : '',
                           !unavailable ? getCellClassName?.(cell) : undefined
                         )}
+                        title={
+                          !filled ? dagdeelTijden.get(daypart.id) : undefined
+                        }
                         aria-label={`${participantLabel(participant)} ${datum} ${daypart.naam}${
                           unavailable
                             ? opruimbaar

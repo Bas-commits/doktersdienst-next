@@ -10,8 +10,13 @@ import {
   weekdayFromIsoDate,
   weekRangeLabel,
 } from '@/lib/praktijkplanner/dates';
-import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
+import type {
+  PraktijkplannerDaypart,
+  PraktijkplannerDaypartTime,
+  PraktijkplannerParticipant,
+} from '@/types/praktijkplanner';
 import { MAAND_CEL_STANDAARD } from '@/lib/praktijkplanner/maand-celgrootte';
+import { tijdLabels } from '@/lib/praktijkplanner/daypart-times';
 import { DaypartIcon } from './DaypartIcon';
 import type { PlannerDaypartCell } from './PlannerDaypartGrid';
 
@@ -134,6 +139,7 @@ export function PlannerMonthOverviewGrid({
   month,
   renderCell,
   isCellFilled,
+  daypartTimes,
   holidayLabels,
   onParticipantNameClick,
   verborgenWeekdagen,
@@ -152,12 +158,23 @@ export function PlannerMonthOverviewGrid({
    * alleen minder behulpzaam.
    */
   isCellFilled?: (cell: PlannerDaypartCell) => boolean;
+  /**
+   * De tijden per dagdeel uit Plannerbeheer, als ballonnetje bij het vakje.
+   *
+   * Dit scherm heeft geen plek om ze te laten staan: een rij is hier vier en dertig pixels hoog
+   * en er staan een en dertig dagen naast elkaar.
+   */
+  daypartTimes?: PraktijkplannerDaypartTime[];
   holidayLabels?: ReadonlyMap<string, string[]>;
   onParticipantNameClick?: (participant: PraktijkplannerParticipant) => void;
   /** ISO-weekdagen die de groep nooit gebruikt. Zie weekdagenZonderRooster. */
   verborgenWeekdagen?: ReadonlySet<number>;
   celGrootte?: number;
 }) {
+  /*
+    De tijden een keer opzoeken en niet per vakje: een rooster tekent er honderden.
+  */
+  const dagdeelTijden = tijdLabels(daypartTimes ?? []);
   const huidigMoment = useHuidigMoment();
   const bounds = monthBounds(year, month);
   if (!bounds) return null;
@@ -280,6 +297,7 @@ export function PlannerMonthOverviewGrid({
                 ) : null}
                 {dates.map((datum, dagIndex) => {
                   const weekdag = weekdayFromIsoDate(datum);
+                  const dagdeelTijd = dagdeelTijden.get(daypart.id);
                   const isNu =
                     datum === huidigMoment?.datum && daypart.volgorde === huidigMoment.volgorde;
                   return (
@@ -298,7 +316,11 @@ export function PlannerMonthOverviewGrid({
                         een hoogte in pixels heeft. Een td met alleen een klasse geeft die niet
                         door, dus staat de hoogte hier op het blokje eromheen.
                       */}
-                      <div className="relative" style={{ height: celGrootte }}>
+                      <div
+                        className="relative"
+                        style={{ height: celGrootte }}
+                        title={dagdeelTijd ? `${daypart.naam} ${dagdeelTijd}` : undefined}
+                      >
                         {/*
                           De naam van het dagdeel voor een schermlezer, eenmaal per rij.
 
@@ -307,7 +329,11 @@ export function PlannerMonthOverviewGrid({
                           onder woensdag, zonder dat er iets misstond in de opmaak. Vandaar hier,
                           binnen het eerste vakje van de rij.
                         */}
-                        {dagIndex === 0 ? <span className="sr-only">{daypart.naam}</span> : null}
+                        {dagIndex === 0 ? (
+                          <span className="sr-only">
+                            {dagdeelTijd ? `${daypart.naam} ${dagdeelTijd}` : daypart.naam}
+                          </span>
+                        ) : null}
                         {isCellFilled?.({ participant, datum, daypart }) === false ? (
                           <DaypartIcon
                             volgorde={daypart.volgorde}

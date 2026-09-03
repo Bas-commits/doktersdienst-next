@@ -8,7 +8,12 @@ import {
   monthCalendarBounds,
   weekdayFromIsoDate,
 } from '@/lib/praktijkplanner/dates';
-import type { PraktijkplannerDaypart, PraktijkplannerParticipant } from '@/types/praktijkplanner';
+import { tijdLabels } from '@/lib/praktijkplanner/daypart-times';
+import type {
+  PraktijkplannerDaypart,
+  PraktijkplannerDaypartTime,
+  PraktijkplannerParticipant,
+} from '@/types/praktijkplanner';
 import type { PlannerDaypartCell } from './PlannerDaypartGrid';
 import { UNAVAILABLE_DAYPART_TOAST } from './PlannerDaypartGrid';
 import {
@@ -39,6 +44,8 @@ export function PlannerMonthDaypartGrid({
   onCellClick,
   onCellPointerEnter,
   isCellDisabled,
+  isCellFilled,
+  daypartTimes,
   isCellUnavailable,
   holidayLabels,
   blockedDates,
@@ -56,6 +63,14 @@ export function PlannerMonthDaypartGrid({
   onCellClick?: (cell: PlannerDaypartCell) => void;
   onCellPointerEnter?: (cell: PlannerDaypartCell, event: PointerEvent<HTMLButtonElement>) => void;
   isCellDisabled?: (cell: PlannerDaypartCell) => boolean;
+  /**
+   * Of er iets in het vakje staat. Alleen nodig om te weten of het ballonnetje met de tijd van
+   * het dagdeel er wel of niet bij mag: bij een gevuld vakje hangt er al een eigen voorbeeld
+   * aan de muis.
+   */
+  isCellFilled?: (cell: PlannerDaypartCell) => boolean;
+  /** De tijden per dagdeel uit Plannerbeheer, voor dat ballonnetje. */
+  daypartTimes?: PraktijkplannerDaypartTime[];
   isCellUnavailable?: (cell: PlannerDaypartCell) => boolean;
   holidayLabels?: ReadonlyMap<string, string[]>;
   blockedDates?: ReadonlySet<string>;
@@ -75,6 +90,10 @@ export function PlannerMonthDaypartGrid({
     containerRef: gridRootRef,
     onDismiss: onCursorToolDismiss,
   });
+  /*
+    De tijden een keer opzoeken en niet per vakje: een rooster tekent er honderden.
+  */
+  const dagdeelTijden = tijdLabels(daypartTimes ?? []);
   const huidigMoment = useHuidigMoment();
   if (!bounds) return null;
 
@@ -196,6 +215,11 @@ export function PlannerMonthDaypartGrid({
                             : 'border-border/70 disabled:opacity-80',
                           isNu ? 'ring-2 ring-inset ring-emerald-600' : '',
                         ].join(' ')}
+                        title={
+                          isCellFilled?.(cell)
+                            ? undefined
+                            : dagdeelTijden.get(daypart.id)
+                        }
                         aria-label={`${datum} ${daypart.naam}${unavailable ? ' niet inplanbaar' : ''}${blocked ? ' feestdag' : ''}`}
                       >
                         <span className="absolute top-0.5 left-1 text-[8px] text-muted-foreground">

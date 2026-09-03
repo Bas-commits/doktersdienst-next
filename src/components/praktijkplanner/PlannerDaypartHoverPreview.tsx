@@ -77,6 +77,7 @@ export function PlannerDaypartHoverPreview({
   initials,
   datum,
   daypartName,
+  daypartTime,
   fromRepetition,
   isException,
   recurrenceSourceWeek,
@@ -97,6 +98,13 @@ export function PlannerDaypartHoverPreview({
   initials: string;
   datum: string;
   daypartName: string;
+  /**
+   * De tijden van dit dagdeel, als 08:00 - 13:00. Leeg als de groep ze niet heeft ingevuld.
+   *
+   * Komt uit Plannerbeheer en hoort bij het dagdeel, niet bij dit vakje. Staat hier omdat het
+   * rooster zelf geen plek heeft voor twee tijden naast een letter van acht pixels.
+   */
+  daypartTime?: string | null;
   fromRepetition: boolean;
   isException: boolean;
   /** Maandag van de week waarvan herhaald is; null bij herhalingen van voor die kolom. */
@@ -168,6 +176,7 @@ export function PlannerDaypartHoverPreview({
     chip,
     participantName,
     daypartName,
+    daypartTime,
     activityName,
     locationName,
     absence,
@@ -245,6 +254,9 @@ export function PlannerDaypartHoverPreview({
                   <dt className="text-muted-foreground">Datum / dagdeel</dt>
                   <dd className="text-right font-medium">
                     {formatDateLabel(datum)} · {daypartName}
+                    {daypartTime ? (
+                      <span className="block text-muted-foreground">{daypartTime}</span>
+                    ) : null}
                   </dd>
                 </div>
                 {showPlanningDetails ? (

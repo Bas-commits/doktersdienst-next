@@ -77,6 +77,23 @@ export function halfIngevuldeDagdelen(
 }
 
 /**
+ * Dezelfde labels, maar in een kaart om in op te zoeken.
+ *
+ * Een rooster tekent honderden vakjes en vraagt bij elk vakje naar het dagdeel. De lijst
+ * doorzoeken per vakje is werk dat een keer per keer tekenen gedaan kan worden.
+ */
+export function tijdLabels(
+  tijden: ReadonlyArray<PraktijkplannerDaypartTime>
+): Map<number, string> {
+  const kaart = new Map<number, string>();
+  for (const rij of tijden) {
+    const label = tijdLabel([rij], rij.iddagdeel);
+    if (label) kaart.set(rij.iddagdeel, label);
+  }
+  return kaart;
+}
+
+/**
  * Wat er achter de naam van een dagdeel komt te staan, bijvoorbeeld 08:00 - 13:00.
  *
  * Leeg als de groep geen tijden heeft ingevuld, zodat de aanroeper niets hoeft te weten van

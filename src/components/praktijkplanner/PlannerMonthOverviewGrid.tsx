@@ -22,7 +22,14 @@ import type { PlannerDaypartCell } from './PlannerDaypartGrid';
 
 const WEEKDAG_LETTERS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
-const NAAM_BREEDTE_PX = 176;
+/*
+  De namenkolom is smaller dan de 176 pixels die hij eerst had. Achternaam en voornaam kregen
+  hun eigen regel binnen de kolom, en de kolom bleef ook bij korte namen op zijn volle breedte
+  staan. Die ruimte gaat nu naar de dagen: bij het kleinste vakje van 34 pixels zijn dat er
+  anderhalve week extra in beeld. Een lange naam loopt over twee regels door, en dat past
+  omdat de cel over alle dagdelen van de deelnemer heen staat.
+*/
+const NAAM_BREEDTE_PX = 128;
 
 /**
  * De maat van het dagdeelplaatje in een leeg vakje.
@@ -209,7 +216,7 @@ export function PlannerMonthOverviewGrid({
                 top: 0,
                 backgroundColor: dekkendeTint(40),
               }}
-              className="sticky z-50 border-r border-b px-2 py-1 text-left font-semibold text-muted-foreground"
+              className="sticky z-50 border-r border-b px-1 py-1 text-left font-semibold text-muted-foreground"
             >
               Deelnemer
             </th>
@@ -280,18 +287,19 @@ export function PlannerMonthOverviewGrid({
                   <th
                     rowSpan={geordendeDagdelen.length}
                     style={{ width: NAAM_BREEDTE_PX, minWidth: NAAM_BREEDTE_PX, left: 0 }}
-                    className="sticky z-30 border-r border-b-2 bg-card px-2 py-1 text-left align-top font-medium"
+                    className="sticky z-30 border-r border-b-2 bg-card px-1 py-0.5 text-left align-top font-medium leading-tight"
                   >
                     {onParticipantNameClick ? (
                       <button
                         type="button"
-                        className="cursor-pointer text-left hover:underline"
+                        className="cursor-pointer text-left leading-tight hover:underline"
+                        title={deelnemerNaam(participant)}
                         onClick={() => onParticipantNameClick(participant)}
                       >
                         {deelnemerNaam(participant)}
                       </button>
                     ) : (
-                      <span>{deelnemerNaam(participant)}</span>
+                      <span title={deelnemerNaam(participant)}>{deelnemerNaam(participant)}</span>
                     )}
                   </th>
                 ) : null}

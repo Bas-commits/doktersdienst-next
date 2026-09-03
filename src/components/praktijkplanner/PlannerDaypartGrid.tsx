@@ -144,7 +144,11 @@ export function PlannerDaypartGrid({
 
   // Het aantal dagkolommen staat niet vast: dagen die de groep nooit gebruikt vallen weg. De
   // kopregel en elke deelnemersregel delen deze ene definitie, anders schuiven ze uit elkaar.
-  const kolommen = `minmax(10rem,12rem) repeat(${days.length}, minmax(8rem,9rem))`;
+  // De deelnemerskolom was 10 tot 12 rem breed. Dat was ruimer dan de naam nodig heeft: hij
+  // stond nu ook bij korte namen op zijn volle breedte, terwijl de dagkolommen ernaast juist
+  // krap zijn. Smaller betekent bij een breed venster een dagkolom extra in beeld, en bij een
+  // smal venster minder zijwaarts scrollen. Een lange naam loopt nog steeds over twee regels.
+  const kolommen = `minmax(8rem,9rem) repeat(${days.length}, minmax(8rem,9rem))`;
 
   const followerTool = unavailableCursor ? UNAVAILABLE_DAYPART_CURSOR_TOOL : cursorTool ?? null;
   const followerPosition = unavailableCursor ?? cursorPosition;
@@ -161,7 +165,7 @@ export function PlannerDaypartGrid({
       */}
       {onWeekStartChange ? (
         <div style={{ paddingBottom: `${PLANNER_GRID_NAV_MARGIN_PX}px` }}>
-          <div className="ml-44">
+          <div className="ml-36">
             <PlannerWeekBar weekStart={weekStart} onWeekStartChange={onWeekStartChange} />
           </div>
         </div>
@@ -249,13 +253,20 @@ export function PlannerDaypartGrid({
             className="grid snap-start border-b last:border-b-0"
             style={{ gridTemplateColumns: kolommen }}
           >
-            <div className="flex min-h-20 flex-col justify-center gap-1 p-3 text-left">
+            {/*
+              De hoogte van een regel wordt bij ochtend en middag alleen niet door de vakjes
+              bepaald maar door deze cel: die was met de knoppenrij, de naam over twee regels
+              en de expertises eronder hoger dan twee fiches naast elkaar. Vandaar de krappere
+              opvulling en de ondergrens van 16 in plaats van 20. Bij vier dagdelen maakt het
+              niets uit, want dan zijn de vakjes weer het hoogst.
+            */}
+            <div className="flex min-h-16 flex-col justify-center gap-0.5 px-2 py-1 text-left">
               {renderParticipantActions ? (
                 <div className="flex justify-start">{renderParticipantActions(participant)}</div>
               ) : null}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
               <span
-                className="inline-flex h-7 w-13 shrink-0 items-center justify-center rounded text-xs font-bold"
+                className="inline-flex h-6 w-9 shrink-0 items-center justify-center rounded text-[11px] font-bold"
                 style={{
                   backgroundColor: participant.color || '#64748b',
                   color: getContrastTextColor(participant.color || '#64748b'),
@@ -280,8 +291,13 @@ export function PlannerDaypartGrid({
                   </span>
                 )}
                 {expertises.length > 0 ? (
+                  /*
+                    Op een regel, want drie expertises kostten drie regels hoogte in elke
+                    deelnemersregel. Wat niet past valt weg; de volledige namen staan in de
+                    titel, zoals ze er al stonden.
+                  */
                   <p
-                    className="mt-1 text-[11px] leading-snug text-muted-foreground"
+                    className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted-foreground"
                     title={expertises.map((expertise) => expertise.naam).join(', ')}
                   >
                     {expertises.map((expertise) => expertiseLabel(expertise)).join(', ')}

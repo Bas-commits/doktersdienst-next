@@ -15,7 +15,7 @@ import {
   type PlannerDaypartChipItem,
 } from './PlannerCombinedDaypartChip';
 
-type BuilderSectionId = 'activities' | 'tasks' | 'locations' | 'availability';
+type BuilderSectionId = 'activities' | 'tasks' | 'locations';
 
 type Selection = {
   activityId: number | null;
@@ -202,7 +202,6 @@ export function PlannerActivityAssignmentBuilder({
     activities: true,
     tasks: true,
     locations: true,
-    availability: false,
   });
   const selectedActivity = useMemo(
     () => activities.find((activity) => activity.id === selection.activityId) ?? null,
@@ -551,44 +550,39 @@ export function PlannerActivityAssignmentBuilder({
           )}
         </BuilderSection>
 
-        {availabilityTypes.length > 0 ? (
-          <BuilderSection
-            id="availability"
-            title="FTE"
-            selectedCount={selection.availabilityId == null ? 0 : 1}
-            isOpen={openSections.availability}
-            onToggle={() => toggleSection('availability')}
-            onClear={() => onAvailabilityChange(null)}
-          >
-            <div className="space-y-1" role="radiogroup" aria-label="FTE">
-              {availabilityTypes.map((availability) => {
-                const selected = selection.availabilityId === availability.id;
-                return (
-                  <button
-                    key={availability.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    aria-label={availability.naam}
-                    onClick={() => selectAvailability(availability.id)}
-                    className={[
-                      'flex w-full items-center gap-2 rounded-md p-1 text-left text-xs transition hover:bg-muted',
-                      selected ? 'bg-muted' : '',
-                    ].join(' ')}
-                  >
-                    <SelectionIndicator selected={selected} type="radio" />
-                    <OptionPreview
-                      color={availability.kleur}
-                      label={availability.code || availability.naam}
-                      icon={activiteitenIconPath(availability.icon)}
-                    />
-                    <span className="min-w-0 truncate font-semibold">{availability.naam}</span>
-                  </button>
-                );
-              })}
+        {/*
+          Kaart dPp:Kopje FTE weghalen: een waarneemgroep heeft nooit meer dan een
+          beschikbaarheidstype en dat heet altijd FTE (zie beschikbaarheidstypen), dus een
+          eigen inklapbare sectie met als kopje "FTE" liet dat woord twee keer zien voor een
+          enkele knop. Hier staat hij daarom los, zonder kopje en zonder in- of uitklappen -
+          er valt toch niets in te klappen met één optie.
+        */}
+        {availabilityTypes.map((availability) => {
+          const selected = selection.availabilityId === availability.id;
+          return (
+            <div key={availability.id} className="border-t pt-2">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={selected}
+                aria-label={availability.naam}
+                onClick={() => selectAvailability(availability.id)}
+                className={[
+                  'flex w-full items-center gap-2 rounded-md p-1 text-left text-xs transition hover:bg-muted',
+                  selected ? 'bg-muted' : '',
+                ].join(' ')}
+              >
+                <SelectionIndicator selected={selected} type="radio" />
+                <OptionPreview
+                  color={availability.kleur}
+                  label={availability.code || availability.naam}
+                  icon={activiteitenIconPath(availability.icon)}
+                />
+                <span className="min-w-0 truncate font-semibold">{availability.naam}</span>
+              </button>
             </div>
-          </BuilderSection>
-        ) : null}
+          );
+        })}
       </div>
     </aside>
   );

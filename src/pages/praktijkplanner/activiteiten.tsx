@@ -20,6 +20,7 @@ import {
 } from '@/components/praktijkplanner/PlannerOpmerkingModal';
 import { PlannerActivityAssignmentBuilder } from '@/components/praktijkplanner/PlannerActivityAssignmentBuilder';
 import { PlannerAvondNachtToggle } from '@/components/praktijkplanner/PlannerAvondNachtToggle';
+import { PlannerDienstenToggle } from '@/components/praktijkplanner/PlannerDienstenToggle';
 import {
   PlannerCombinedDaypartChip,
   type PlannerDaypartChipItem,
@@ -62,6 +63,7 @@ import {
 } from '@/lib/praktijkplanner/activity-assignment';
 import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
 import {
+  isAvondOfNacht,
   zichtbareDagdelen,
 } from '@/lib/praktijkplanner/dagdeel-zichtbaarheid';
 import { deelnemerChipInitials, deelnemerRoosterNaam } from '@/lib/deelnemer-display';
@@ -113,6 +115,9 @@ function slotKey(iddeelnemer: number, datum: string, iddagdeel: number) {
   return `${iddeelnemer}:${datum}:${iddagdeel}`;
 }
 
+/** Zaterdag en zondag als ISO-weekdag, zoals ook WEEKENDDAGEN in useWeekendVerbergen.ts. */
+const WEEKEND_ISO_WEEKDAGEN = new Set([6, 7]);
+
 export function ActivitiesContent({
   groupId,
   data,
@@ -139,6 +144,7 @@ export function ActivitiesContent({
   const [opmerkingMode, setOpmerkingMode] = useState(false);
   const [opmerkingDoel, setOpmerkingDoel] = useState<PlannerOpmerkingDoel | null>(null);
   const [showNight, setShowNight] = useState(false);
+  const [showDiensten, setShowDiensten] = useState(false);
   const [participantFilter, setParticipantFilter] = useState<number | 'all'>('all');
   const [zoom, setZoom] = useState('100');
   const [actionModal, setActionModal] = useState<ParticipantActionModal | null>(null);
@@ -215,13 +221,56 @@ export function ActivitiesContent({
     [data.participants, participantFilter]
   );
   const { weekendVerborgen, setWeekendVerborgen } = useWeekendVoorkeur(groupId);
+
+  /**
+   * De taken die de groep als dienst heeft aangemerkt.
+   *
+   * Een nachtdienst valt per definitie buiten de uren waarop iemand werkt, dus de
+   * inroosterbaarheid mag er niet voor gelden. Zonder deze uitzondering is een dienst nergens
+   * neer te zetten waar hij hoort. Zie ook zetDienstNeer verderop.
+   */
+  const dienstTaakIds = useMemo(
+    () => new Set(data.masterData.tasks.filter((taak) => taak.isDienst).map((taak) => taak.id)),
+    [data.masterData.tasks]
+  );
+  const daypartVolgordeById = useMemo(
+    () => new Map(data.masterData.dayparts.map((daypart) => [daypart.id, daypart.volgorde])),
+    [data.masterData.dayparts]
+  );
+  /*
+    Kaart dPp:Diensten tonen: "+ Diensten" laat Avond/Nacht en het weekend alleen meekomen als
+    er in de geladen periode ook echt een dienst in staat. Een leeg weekend of een lege avond
+    blijft gewoon weg, ook met de knop aan - anders is de knop niet "diensten tonen" maar
+    "avond, nacht en weekend altijd tonen" onder een andere naam.
+  */
+  const dienstenInAvondNacht = useMemo(
+    () =>
+      slots.some(
+        (slot) =>
+          isAvondOfNacht({ volgorde: daypartVolgordeById.get(slot.iddagdeel) ?? 0 }) &&
+          slot.tasks.some((taak) => dienstTaakIds.has(taak.id))
+      ),
+    [slots, daypartVolgordeById, dienstTaakIds]
+  );
+  const dienstenInWeekend = useMemo(
+    () =>
+      slots.some(
+        (slot) =>
+          WEEKEND_ISO_WEEKDAGEN.has(weekdayFromIsoDate(slot.datum)) &&
+          slot.tasks.some((taak) => dienstTaakIds.has(taak.id))
+      ),
+    [slots, dienstTaakIds]
+  );
+  const effectiveShowNight = showNight || (showDiensten && dienstenInAvondNacht);
+  const effectiveWeekendVerborgen = weekendVerborgen && !(showDiensten && dienstenInWeekend);
+
   const verborgenWeekdagen = useMemo(
     () =>
       metVerborgenWeekend(
         weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
-        weekendVerborgen
+        effectiveWeekendVerborgen
       ),
-    [data.masterData.schedulableDayparts, weekendVerborgen]
+    [data.masterData.schedulableDayparts, effectiveWeekendVerborgen]
   );
   const visibleDayparts = useMemo(() => {
     const weg = dagdelenZonderRooster(
@@ -230,9 +279,9 @@ export function ActivitiesContent({
     );
     return zichtbareDagdelen(
       data.masterData.dayparts.filter((daypart) => !weg.has(daypart.id)),
-      { toonAvondNacht: showNight }
+      { toonAvondNacht: effectiveShowNight }
     );
-  }, [data.masterData.dayparts, data.masterData.schedulableDayparts, showNight]);
+  }, [data.masterData.dayparts, data.masterData.schedulableDayparts, effectiveShowNight]);
 
   useEffect(() => {
     setSelectedSpecificationId((current) => {
@@ -253,9 +302,10 @@ export function ActivitiesContent({
       signal: abortController.signal,
     })
       .then(async (response) => {
-        const payload = (await response.json()) as { toonNacht?: boolean };
+        const payload = (await response.json()) as { toonNacht?: boolean; toonDiensten?: boolean };
         if (!response.ok) return;
         if (typeof payload.toonNacht === 'boolean') setShowNight(payload.toonNacht);
+        if (typeof payload.toonDiensten === 'boolean') setShowDiensten(payload.toonDiensten);
       })
       .catch(() => undefined);
     return () => abortController.abort();
@@ -276,6 +326,24 @@ export function ActivitiesContent({
           toonDag: true,
           toonNacht: nextNight,
         }),
+      });
+    },
+    [groupId]
+  );
+
+  /**
+   * "+ Diensten": laat Avond/Nacht en het weekend automatisch meekomen zodra er een dienst in
+   * staat, zonder dat je ze daarvoor zelf hoeft aan te zetten. Zie {@link dienstenInAvondNacht}
+   * en {@link dienstenInWeekend} voor de "zodra er een dienst in staat"-voorwaarde zelf.
+   */
+  const updateDienstenVisibility = useCallback(
+    (nextDiensten: boolean) => {
+      setShowDiensten(nextDiensten);
+      void fetch('/api/praktijkplanner/voorkeuren', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idwaarneemgroep: groupId, toonDiensten: nextDiensten }),
       });
     },
     [groupId]
@@ -726,17 +794,7 @@ export function ActivitiesContent({
     [absenceMap, canEdit]
   );
 
-  /**
-   * De taken die de groep als dienst heeft aangemerkt.
-   *
-   * Een nachtdienst valt per definitie buiten de uren waarop iemand werkt, dus de
-   * inroosterbaarheid mag er niet voor gelden. Zonder deze uitzondering is een dienst nergens
-   * neer te zetten waar hij hoort.
-   */
-  const dienstTaakIds = useMemo(
-    () => new Set(data.masterData.tasks.filter((taak) => taak.isDienst).map((taak) => taak.id)),
-    [data.masterData.tasks]
-  );
+  // dienstTaakIds staat hierboven, bij visibleDayparts: die heeft hem ook nodig.
   const zetDienstNeer = useMemo(
     () => selectedTaskIds.some((id) => dienstTaakIds.has(id)),
     [dienstTaakIds, selectedTaskIds]
@@ -1281,7 +1339,18 @@ export function ActivitiesContent({
             Weekend verbergen is al voor iedereen, net als de knop hierboven nu: allebei gaan
             over wat je ziet, niet over wat je mag inplannen.
           */}
-          <PlannerWeekendToggle verborgen={weekendVerborgen} onChange={setWeekendVerborgen} />
+          <PlannerWeekendToggle
+            getoond={!weekendVerborgen}
+            onChange={(getoond) => setWeekendVerborgen(!getoond)}
+          />
+          {/*
+            Kaart dPp:Diensten tonen: hier zag je een dienst in Avond/Nacht of het weekend
+            eerder alleen als je toevallig zelf de knoppen hierboven al had aangezet. Deze knop
+            zet ze aan zodra dat ergens in de geladen periode nodig is - zie
+            dienstenInAvondNacht en dienstenInWeekend - en laat ze met rust als er niets te
+            tonen valt.
+          */}
+          <PlannerDienstenToggle aan={showDiensten} onChange={updateDienstenVisibility} />
           {/*
             Het capaciteitsoverzicht is er alleen voor secretarissen en beheerders, net als de
             eigen pagina ervan. Een knop aanbieden die op een 403 uitloopt is erger dan geen

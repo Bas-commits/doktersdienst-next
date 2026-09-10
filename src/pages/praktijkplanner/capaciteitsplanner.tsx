@@ -578,7 +578,10 @@ function CapacityPlannerContent(context: PraktijkplannerPageContext) {
   return (
     <div className="space-y-4">
       <PraktijkplannerTitleAside>
-        <PlannerWeekendToggle verborgen={weekendVerborgen} onChange={setWeekendVerborgen} />
+        <PlannerWeekendToggle
+          getoond={!weekendVerborgen}
+          onChange={(getoond) => setWeekendVerborgen(!getoond)}
+        />
         <label className="flex items-center gap-2 text-base">
           <span className="font-medium">Locatie</span>
           <select

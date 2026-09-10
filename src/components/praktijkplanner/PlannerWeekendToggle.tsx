@@ -16,31 +16,34 @@ import { CalendarOff } from 'lucide-react';
  * uitgeschreven past de koprij met de zijbalk open niet meer op een regel. De stand is aan de
  * kleur te zien.
  *
- * De knop staat aan als het weekend weg is. Dat is de kant die iets doet, en het is ook hoe de
- * kaart hem noemt: weekend niet tonen, aan of uit.
+ * De knop staat aan als het weekend te zien is, net als bij avond en nacht ernaast: gevuld
+ * betekent daar ook "wordt getoond", niet "de klik heeft iets gedaan". Eerder stond hij aan
+ * als het weekend juist weg was - dezelfde kleur betekende dan het tegenovergestelde van bij
+ * de knop ernaast, en dat was voor de kaart dPp:Diensten tonen de reden om de twee gelijk te
+ * trekken.
  */
 export function PlannerWeekendToggle({
-  verborgen,
+  getoond,
   onChange,
 }: {
-  verborgen: boolean;
-  onChange: (verborgen: boolean) => void;
+  getoond: boolean;
+  onChange: (getoond: boolean) => void;
 }) {
-  const label = verborgen ? 'Weekend tonen' : 'Weekend verbergen';
+  const label = getoond ? 'Weekend verbergen' : 'Weekend tonen';
   return (
     <button
       type="button"
-      aria-pressed={verborgen}
+      aria-pressed={getoond}
       aria-label={label}
-      onClick={() => onChange(!verborgen)}
+      onClick={() => onChange(!getoond)}
       title={
-        verborgen
-          ? 'Zaterdag en zondag weer tonen'
-          : 'Zaterdag en zondag verbergen. Er wordt niets verwijderd; wat er staat komt terug zodra je ze weer toont.'
+        getoond
+          ? 'Zaterdag en zondag verbergen. Er wordt niets verwijderd; wat er staat komt terug zodra je ze weer toont.'
+          : 'Zaterdag en zondag weer tonen'
       }
       className={[
         'inline-flex items-center justify-center rounded-md border p-1.5 transition',
-        verborgen ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+        getoond ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
       ].join(' ')}
     >
       <CalendarOff className="size-4" aria-hidden />

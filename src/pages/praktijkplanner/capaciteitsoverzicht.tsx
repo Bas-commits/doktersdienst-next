@@ -71,7 +71,10 @@ function CapacityOverviewContent({ groupId, data }: PraktijkplannerPageContext) 
       */}
       <PraktijkplannerTitleAside>
         <PlannerWeekBar weekStart={weekStart} onWeekStartChange={setWeekStart} />
-        <PlannerWeekendToggle verborgen={weekendVerborgen} onChange={setWeekendVerborgen} />
+        <PlannerWeekendToggle
+          getoond={!weekendVerborgen}
+          onChange={(getoond) => setWeekendVerborgen(!getoond)}
+        />
         <CapacityLocatieKeuze
           locations={data.masterData.locations}
           value={locationId}

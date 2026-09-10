@@ -9,18 +9,18 @@ import { metVerborgenWeekend } from '@/hooks/praktijkplanner/useWeekendVerbergen
 afterEach(cleanup);
 
 describe('PlannerWeekendToggle', () => {
-  it('staat aan als het weekend weg is', () => {
-    render(<PlannerWeekendToggle verborgen onChange={() => {}} />);
+  it('staat aan als het weekend te zien is', () => {
+    render(<PlannerWeekendToggle getoond onChange={() => {}} />);
 
-    const knop = screen.getByRole('button', { name: 'Weekend tonen' });
+    const knop = screen.getByRole('button', { name: 'Weekend verbergen' });
     expect(knop.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('vraagt om verbergen als het weekend er nog staat', () => {
+  it('vraagt om tonen als het weekend weg is', () => {
     const onChange = vi.fn();
-    render(<PlannerWeekendToggle verborgen={false} onChange={onChange} />);
+    render(<PlannerWeekendToggle getoond={false} onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Weekend verbergen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Weekend tonen' }));
     expect(onChange).toHaveBeenCalledWith(true);
   });
 });

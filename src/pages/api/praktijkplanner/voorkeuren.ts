@@ -7,7 +7,7 @@ import {
 } from '@/lib/praktijkplanner/access';
 
 type Data =
-  | { toonDag: boolean; toonNacht: boolean; toonWeekend: boolean }
+  | { toonDag: boolean; toonNacht: boolean; toonWeekend: boolean; toonDiensten: boolean }
   | { success: true }
   | { error: string };
 
@@ -34,6 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           toonDag: schema.praktijkplannerweergavevoorkeuren.toonDag,
           toonNacht: schema.praktijkplannerweergavevoorkeuren.toonNacht,
           toonWeekend: schema.praktijkplannerweergavevoorkeuren.toonWeekend,
+          toonDiensten: schema.praktijkplannerweergavevoorkeuren.toonDiensten,
         })
         .from(schema.praktijkplannerweergavevoorkeuren)
         .where(
@@ -53,6 +54,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         toonNacht: preference?.toonNacht ?? false,
         // Zonder rij staat het weekend er gewoon. Alleen wie het wegklikt heeft een mening.
         toonWeekend: preference?.toonWeekend ?? true,
+        // Zonder rij staat de knop uit, net als toonNacht: diensten in een dagdeel of dag die
+        // toch al verborgen is, komen dan niet vanzelf mee.
+        toonDiensten: preference?.toonDiensten ?? false,
       });
     } catch (error) {
       console.error('[praktijkplanner/voorkeuren GET]', error);
@@ -65,13 +69,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
 
   /*
-    Elk veld op zichzelf, want de twee knoppen zitten in verschillende schermonderdelen. Zou
-    een POST altijd alle drie moeten meesturen, dan schrijft de knop voor het weekend de stand
-    van avond en nacht mee terug zoals hij die toevallig kende, en zet hij die terug zodra die
-    twee niet gelijk liepen.
+    Elk veld op zichzelf, want de knoppen zitten in verschillende schermonderdelen. Zou een
+    POST altijd alle velden moeten meesturen, dan schrijft de knop voor het weekend de stand
+    van de andere knoppen mee terug zoals hij die toevallig kende, en zet hij die terug zodra
+    ze niet gelijk liepen.
   */
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const velden = ['toonDag', 'toonNacht', 'toonWeekend'] as const;
+  const velden = ['toonDag', 'toonNacht', 'toonWeekend', 'toonDiensten'] as const;
   if (velden.some((veld) => body[veld] !== undefined && typeof body[veld] !== 'boolean')) {
     return res.status(400).json({ error: 'De weergavevoorkeuren zijn ongeldig.' });
   }

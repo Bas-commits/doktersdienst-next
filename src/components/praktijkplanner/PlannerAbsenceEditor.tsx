@@ -899,7 +899,10 @@ export function PlannerAbsenceEditor({
       {editable ? (
         <PlannerAvondNachtToggle aan={showNight} onChange={updateVisibility} />
       ) : null}
-      <PlannerWeekendToggle verborgen={weekendVerborgen} onChange={setWeekendVerborgen} />
+      <PlannerWeekendToggle
+        getoond={!weekendVerborgen}
+        onChange={(getoond) => setWeekendVerborgen(!getoond)}
+      />
       {/*
         Dit scherm zet nooit twee panelen naast elkaar, dus de maand komt hier altijd in de
         plaats van de week. Capaciteit en locatie horen bij de planner en staan hier niet.
@@ -1072,7 +1075,10 @@ export function PlannerAbsenceEditor({
                 onChange={updateVisibility}
               />
             ) : null}
-            <PlannerWeekendToggle verborgen={weekendVerborgen} onChange={setWeekendVerborgen} />
+            <PlannerWeekendToggle
+              getoond={!weekendVerborgen}
+              onChange={(getoond) => setWeekendVerborgen(!getoond)}
+            />
             {downloadKnop}
           </PraktijkplannerTitleAside>
           <div className="overflow-x-auto pb-2">

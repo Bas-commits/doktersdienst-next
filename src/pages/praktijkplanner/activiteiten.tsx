@@ -1271,16 +1271,15 @@ export function ActivitiesContent({
             lopen en dan weet je niet meer welke van de twee je aan het verzetten bent.
           */}
           {/*
-            Alleen voor wie plant. Wie het rooster inziet heeft niets aan een lege rij, en
-            heeft er ook geen eerste avond in te zetten.
+            Voor iedereen, ook wie alleen leest: wie het rooster inziet wil een avond- of
+            nachtdienst net zo goed kunnen zien, ook zonder dat diegene er iets in kan zetten.
+            Het voorkeuren-endpoint vraagt alleen leesrechten, dus opslaan werkt ook voor een
+            read-only kijker.
           */}
-          {canEdit ? (
-            <PlannerAvondNachtToggle aan={showNight} onChange={updateVisibility} />
-          ) : null}
+          <PlannerAvondNachtToggle aan={showNight} onChange={updateVisibility} />
           {/*
-            Deze wel voor iedereen, anders dan de knop hiernaast. Avond en nacht tonen is er om
-            er iets in te kunnen zetten; het weekend verbergen is alleen kijken, en wie het
-            rooster inziet heeft daar net zoveel aan.
+            Weekend verbergen is al voor iedereen, net als de knop hierboven nu: allebei gaan
+            over wat je ziet, niet over wat je mag inplannen.
           */}
           <PlannerWeekendToggle verborgen={weekendVerborgen} onChange={setWeekendVerborgen} />
           {/*

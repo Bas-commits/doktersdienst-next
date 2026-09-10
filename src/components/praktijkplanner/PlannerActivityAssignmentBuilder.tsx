@@ -6,7 +6,6 @@ import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen'
 import type {
   PraktijkplannerActivity,
   PraktijkplannerActivitySpecification,
-  PraktijkplannerAvailabilityType,
   PraktijkplannerLocation,
   PraktijkplannerTaskType,
 } from '@/types/praktijkplanner';
@@ -22,7 +21,6 @@ type Selection = {
   specificationId: number | null;
   taskIds: number[];
   locationId: number | null;
-  availabilityId: number | null;
 };
 
 type BuilderSectionProps = {
@@ -167,7 +165,6 @@ export function PlannerActivityAssignmentBuilder({
   specifications,
   tasks,
   locations,
-  availabilityTypes,
   selection,
   clearMode,
   opmerkingMode,
@@ -175,7 +172,6 @@ export function PlannerActivityAssignmentBuilder({
   onSpecificationChange,
   onTaskChange,
   onLocationChange,
-  onAvailabilityChange,
   onClearSelection,
   onClearModeChange,
   onOpmerkingModeChange,
@@ -184,7 +180,6 @@ export function PlannerActivityAssignmentBuilder({
   specifications: PraktijkplannerActivitySpecification[];
   tasks: PraktijkplannerTaskType[];
   locations: PraktijkplannerLocation[];
-  availabilityTypes: PraktijkplannerAvailabilityType[];
   selection: Selection;
   clearMode: boolean;
   /** Aan betekent: de volgende klik op een fiche opent de opmerking in plaats van te plannen. */
@@ -193,7 +188,6 @@ export function PlannerActivityAssignmentBuilder({
   onSpecificationChange: (id: number | null) => void;
   onTaskChange: (ids: number[]) => void;
   onLocationChange: (id: number | null) => void;
-  onAvailabilityChange: (id: number | null) => void;
   onClearSelection: () => void;
   onClearModeChange: (enabled: boolean) => void;
   onOpmerkingModeChange: (enabled: boolean) => void;
@@ -219,10 +213,6 @@ export function PlannerActivityAssignmentBuilder({
     () => locations.find((location) => location.id === selection.locationId) ?? null,
     [locations, selection.locationId]
   );
-  const selectedAvailability = useMemo(
-    () => availabilityTypes.find((availability) => availability.id === selection.availabilityId) ?? null,
-    [availabilityTypes, selection.availabilityId]
-  );
   const selectedSpecifications = useMemo(
     () => specifications.filter((specification) => specification.idactiviteit === selection.activityId),
     [selection.activityId, specifications]
@@ -230,8 +220,7 @@ export function PlannerActivityAssignmentBuilder({
   const hasSelection =
     selection.activityId != null ||
     selection.taskIds.length > 0 ||
-    selection.locationId != null ||
-    selection.availabilityId != null;
+    selection.locationId != null;
 
   const toggleSection = (id: BuilderSectionId) => {
     setOpenSections((current) => ({ ...current, [id]: !current[id] }));
@@ -261,11 +250,6 @@ export function PlannerActivityAssignmentBuilder({
   const selectLocation = (id: number) => {
     onClearModeChange(false);
     onLocationChange(selection.locationId === id ? null : id);
-  };
-
-  const selectAvailability = (id: number) => {
-    onClearModeChange(false);
-    onAvailabilityChange(selection.availabilityId === id ? null : id);
   };
 
   return (
@@ -306,11 +290,6 @@ export function PlannerActivityAssignmentBuilder({
               {selectedLocation ? (
                 <ChipPreview color={selectedLocation.kleur}>
                   {selectedLocation.afkorting || selectedLocation.naam}
-                </ChipPreview>
-              ) : null}
-              {selectedAvailability ? (
-                <ChipPreview color={selectedAvailability.kleur}>
-                  {selectedAvailability.code || selectedAvailability.naam}
                 </ChipPreview>
               ) : null}
             </div>
@@ -549,40 +528,13 @@ export function PlannerActivityAssignmentBuilder({
             <p className="text-xs text-muted-foreground">Geen taken beschikbaar.</p>
           )}
         </BuilderSection>
-
         {/*
-          Kaart dPp:Kopje FTE weghalen: een waarneemgroep heeft nooit meer dan een
-          beschikbaarheidstype en dat heet altijd FTE (zie beschikbaarheidstypen), dus een
-          eigen inklapbare sectie met als kopje "FTE" liet dat woord twee keer zien voor een
-          enkele knop. Hier staat hij daarom los, zonder kopje en zonder in- of uitklappen -
-          er valt toch niets in te klappen met één optie.
+          Kaart dPp:Kopje FTE weghalen: er is hier bewust geen keuzemogelijkheid meer voor het
+          beschikbaarheidstype (FTE). Een dagdeel dat al een beschikbaarheidstype heeft blijft
+          dat gewoon houden - buildActivityAssignmentSlot valt terug op de bestaande waarde
+          zolang activiteiten.tsx zelf nooit meer een availabilityId meestuurt - maar er is
+          nergens meer een knop om er zelf een te kiezen.
         */}
-        {availabilityTypes.map((availability) => {
-          const selected = selection.availabilityId === availability.id;
-          return (
-            <div key={availability.id} className="border-t pt-2">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={selected}
-                aria-label={availability.naam}
-                onClick={() => selectAvailability(availability.id)}
-                className={[
-                  'flex w-full items-center gap-2 rounded-md p-1 text-left text-xs transition hover:bg-muted',
-                  selected ? 'bg-muted' : '',
-                ].join(' ')}
-              >
-                <SelectionIndicator selected={selected} type="radio" />
-                <OptionPreview
-                  color={availability.kleur}
-                  label={availability.code || availability.naam}
-                  icon={activiteitenIconPath(availability.icon)}
-                />
-                <span className="min-w-0 truncate font-semibold">{availability.naam}</span>
-              </button>
-            </div>
-          );
-        })}
       </div>
     </aside>
   );

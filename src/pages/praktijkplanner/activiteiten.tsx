@@ -137,7 +137,6 @@ export function ActivitiesContent({
   const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
   const [selectedSpecificationId, setSelectedSpecificationId] = useState<number | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
-  const [selectedAvailabilityId, setSelectedAvailabilityId] = useState<number | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
   const [clearMode, setClearMode] = useState(false);
   // Aan betekent: de volgende klik op een fiche opent de opmerking in plaats van te plannen.
@@ -850,7 +849,6 @@ export function ActivitiesContent({
     setSelectedActivityId(null);
     setSelectedSpecificationId(null);
     setSelectedLocationId(null);
-    setSelectedAvailabilityId(null);
     setSelectedTaskIds([]);
   }, []);
 
@@ -861,7 +859,6 @@ export function ActivitiesContent({
     setSelectedActivityId(null);
     setSelectedSpecificationId(null);
     setSelectedLocationId(null);
-    setSelectedAvailabilityId(null);
     setSelectedTaskIds([]);
   }, []);
 
@@ -877,7 +874,6 @@ export function ActivitiesContent({
     setSelectedActivityId(null);
     setSelectedSpecificationId(null);
     setSelectedLocationId(null);
-    setSelectedAvailabilityId(null);
     setSelectedTaskIds([]);
   }, []);
 
@@ -917,13 +913,10 @@ export function ActivitiesContent({
       (item) => item.id === selectedSpecificationId
     );
     const location = data.masterData.locations.find((item) => item.id === selectedLocationId);
-    const availability = data.masterData.availabilityTypes.find(
-      (item) => item.id === selectedAvailabilityId
-    );
     const tasks = selectedTaskIds.flatMap(
       (id) => data.masterData.tasks.find((task) => task.id === id) ?? []
     );
-    if (!activity && !location && !availability && tasks.length === 0) return null;
+    if (!activity && !location && tasks.length === 0) return null;
 
     const labels = [
       activity
@@ -936,21 +929,12 @@ export function ActivitiesContent({
         : null,
       ...tasks.map((task) => task.afkorting || task.omschrijving),
       location ? location.afkorting || location.naam : null,
-      availability ? availability.code || availability.naam : null,
     ].filter(Boolean);
-    const icon =
-      activiteitenIconPath(activity?.icon) ??
-      activiteitenIconPath(availability?.icon) ??
-      null;
+    const icon = activiteitenIconPath(activity?.icon) ?? null;
 
     return {
       icon,
-      color:
-        activity?.kleur ??
-        availability?.kleur ??
-        location?.kleur ??
-        tasks[0]?.kleur ??
-        '#64748b',
+      color: activity?.kleur ?? location?.kleur ?? tasks[0]?.kleur ?? '#64748b',
       label: labels.join(' · '),
       preview:
         activity || location || tasks.length > 0 ? (
@@ -994,12 +978,10 @@ export function ActivitiesContent({
     clearMode,
     opmerkingMode,
     data.masterData.activities,
-    data.masterData.availabilityTypes,
     data.masterData.locations,
     data.masterData.specifications,
     data.masterData.tasks,
     selectedActivityId,
-    selectedAvailabilityId,
     selectedLocationId,
     selectedSpecificationId,
     selectedTaskIds,
@@ -1076,11 +1058,14 @@ export function ActivitiesContent({
         specificationId: selectedSpecificationId,
         taskIds: selectedTaskIds,
         locationId: selectedLocationId,
-        availabilityId: selectedAvailabilityId,
+        // FTE is niet meer te kiezen (kaart dPp:Kopje FTE weghalen), maar een bestaand
+        // beschikbaarheidstype op dit dagdeel blijft staan: buildActivityAssignmentSlot valt
+        // terug op currentAssignment.idbeschikbaarheidstype zolang dit veld null is.
+        availabilityId: null,
       };
 
       if (!clearMode && !hasActivityAssignmentSelection(selection)) {
-        toast.info('Kies eerst een activiteit, locatie, beschikbaarheidstype of taak.');
+        toast.info('Kies eerst een activiteit, locatie of taak.');
         return;
       }
 
@@ -1240,7 +1225,6 @@ export function ActivitiesContent({
       groupId,
       refreshSlots,
       selectedActivityId,
-      selectedAvailabilityId,
       selectedLocationId,
       selectedSpecificationId,
       selectedTaskIds,
@@ -1443,13 +1427,11 @@ export function ActivitiesContent({
                 specifications={data.masterData.specifications}
                 tasks={data.masterData.tasks}
                 locations={data.masterData.locations}
-                availabilityTypes={data.masterData.availabilityTypes}
                 selection={{
                   activityId: selectedActivityId,
                   specificationId: selectedSpecificationId,
                   taskIds: selectedTaskIds,
                   locationId: selectedLocationId,
-                  availabilityId: selectedAvailabilityId,
                 }}
                 clearMode={clearMode}
                 onActivityChange={(id) => {
@@ -1468,10 +1450,6 @@ export function ActivitiesContent({
                 onLocationChange={(id) => {
                   setPlanModus();
                   setSelectedLocationId(id);
-                }}
-                onAvailabilityChange={(id) => {
-                  setPlanModus();
-                  setSelectedAvailabilityId(id);
                 }}
                 onClearSelection={clearSelection}
                 onClearModeChange={setAssignmentClearMode}

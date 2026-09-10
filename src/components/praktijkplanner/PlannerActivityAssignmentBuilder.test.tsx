@@ -11,7 +11,6 @@ type Selection = {
   specificationId: number | null;
   taskIds: number[];
   locationId: number | null;
-  availabilityId: number | null;
 };
 
 const activities = [
@@ -63,7 +62,6 @@ function BuilderHarness() {
     specificationId: null,
     taskIds: [],
     locationId: null,
-    availabilityId: null,
   });
   const [clearMode, setClearMode] = useState(false);
   const [opmerkingMode, setOpmerkingMode] = useState(false);
@@ -74,7 +72,6 @@ function BuilderHarness() {
       specifications={specifications}
       tasks={tasks}
       locations={locations}
-      availabilityTypes={[]}
       selection={selection}
       clearMode={clearMode}
       opmerkingMode={opmerkingMode}
@@ -91,16 +88,12 @@ function BuilderHarness() {
       }
       onTaskChange={(taskIds) => setSelection((current) => ({ ...current, taskIds }))}
       onLocationChange={(locationId) => setSelection((current) => ({ ...current, locationId }))}
-      onAvailabilityChange={(availabilityId) =>
-        setSelection((current) => ({ ...current, availabilityId }))
-      }
       onClearSelection={() =>
         setSelection({
           activityId: null,
           specificationId: null,
           taskIds: [],
           locationId: null,
-          availabilityId: null,
         })
       }
       onClearModeChange={setClearMode}

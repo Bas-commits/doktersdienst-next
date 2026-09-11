@@ -435,34 +435,129 @@ async function materializeSeriesWithTx(
   );
   if (schedulablePlans.length === 0) return;
 
-  const created = await tx
-    .insert(schema.planning)
-    .values(
-      schedulablePlans.map((plan) => ({
-        idwaarneemgroep: input.idwaarneemgroep,
-        iddeelnemer: input.iddeelnemer,
-        datum: plan.datum,
-        iddagdeel: plan.iddagdeel,
-        idactiviteit: plan.idactiviteit,
-        idactiviteitspecificatie: plan.idactiviteitspecificatie,
-        idplannerlocatie: plan.idplannerlocatie,
-        createdBy: input.userId,
-        updatedBy: input.userId,
-      }))
-    )
-    .returning({
+  /*
+    Kaart dPp Diensten: wat te doen met een herhaling als er al diensten in het dagrooster
+    staan. Een dagdeel met een dienst is hierboven bewust niet leeggemaakt en telt niet mee
+    als botsing, dus zijn rij in planning staat er nog als we hier komen. Gewoon meesturen in
+    de insert hieronder zou op zo'n dagdeel de unique constraint
+    planning_group_participant_date_daypart_unique raken en de hele materialisatie laten
+    knallen op een enkele dienst. Bestaande rijen op deze deelnemer-datum-dagdeel-sleutels
+    gaan daarom niet via insert maar via update: de dienst blijft staan, de rest van het
+    sjabloon komt erbij.
+  */
+  const targetDates = [...new Set(schedulablePlans.map((plan) => plan.datum))];
+  const existingRows = await tx
+    .select({
       id: schema.planning.id,
       datum: schema.planning.datum,
       iddagdeel: schema.planning.iddagdeel,
-    });
-
-  const idByKey = new Map<string, number>();
-  for (const row of created as Array<{ id: number | null; datum: string | null; iddagdeel: number | null }>) {
+    })
+    .from(schema.planning)
+    .where(
+      and(
+        eq(schema.planning.idwaarneemgroep, input.idwaarneemgroep),
+        eq(schema.planning.iddeelnemer, input.iddeelnemer),
+        inArray(schema.planning.datum, targetDates)
+      )
+    );
+  const existingIdByKey = new Map<string, number>();
+  for (const row of existingRows as Array<{ id: number | null; datum: string | null; iddagdeel: number | null }>) {
     if (row.id == null || row.datum == null || row.iddagdeel == null) continue;
-    idByKey.set(occurrenceKey(row.datum, row.iddagdeel), row.id);
+    existingIdByKey.set(occurrenceKey(row.datum, row.iddagdeel), row.id);
   }
 
-  const tasks = schedulablePlans.flatMap((plan) => {
+  const plansToInsert = schedulablePlans.filter(
+    (plan) => !existingIdByKey.has(occurrenceKey(plan.datum, plan.iddagdeel))
+  );
+  const plansToMerge = schedulablePlans.filter((plan) =>
+    existingIdByKey.has(occurrenceKey(plan.datum, plan.iddagdeel))
+  );
+
+  const idByKey = new Map<string, number>();
+
+  if (plansToInsert.length > 0) {
+    const created = await tx
+      .insert(schema.planning)
+      .values(
+        plansToInsert.map((plan) => ({
+          idwaarneemgroep: input.idwaarneemgroep,
+          iddeelnemer: input.iddeelnemer,
+          datum: plan.datum,
+          iddagdeel: plan.iddagdeel,
+          idactiviteit: plan.idactiviteit,
+          idactiviteitspecificatie: plan.idactiviteitspecificatie,
+          idplannerlocatie: plan.idplannerlocatie,
+          createdBy: input.userId,
+          updatedBy: input.userId,
+        }))
+      )
+      .returning({
+        id: schema.planning.id,
+        datum: schema.planning.datum,
+        iddagdeel: schema.planning.iddagdeel,
+      });
+    for (const row of created as Array<{ id: number | null; datum: string | null; iddagdeel: number | null }>) {
+      if (row.id == null || row.datum == null || row.iddagdeel == null) continue;
+      idByKey.set(occurrenceKey(row.datum, row.iddagdeel), row.id);
+    }
+  }
+
+  // Positieslots (1 t/m 3, uniek per rij) en taaktypen die de dienst daar al bezet houdt, per
+  // samengevoegde rij - zie planningtaak_positie_check en de primary key (idplanning, idtaaktype).
+  const mergeOccupiedPositions = new Map<number, Set<number>>();
+  const mergeOccupiedTaskTypes = new Map<number, Set<number>>();
+  if (plansToMerge.length > 0) {
+    const mergeIds = plansToMerge.map(
+      (plan) => existingIdByKey.get(occurrenceKey(plan.datum, plan.iddagdeel))!
+    );
+    const existingTasks = await tx
+      .select({
+        idplanning: schema.planningtaak.idplanning,
+        positie: schema.planningtaak.positie,
+        idtaaktype: schema.planningtaak.idtaaktype,
+      })
+      .from(schema.planningtaak)
+      .where(inArray(schema.planningtaak.idplanning, mergeIds));
+    for (const row of existingTasks as Array<{
+      idplanning: number | null;
+      positie: number | null;
+      idtaaktype: number | null;
+    }>) {
+      if (row.idplanning == null || row.positie == null || row.idtaaktype == null) continue;
+      const bezettePosities = mergeOccupiedPositions.get(row.idplanning) ?? new Set<number>();
+      bezettePosities.add(row.positie);
+      mergeOccupiedPositions.set(row.idplanning, bezettePosities);
+      const bezetteTaaktypen = mergeOccupiedTaskTypes.get(row.idplanning) ?? new Set<number>();
+      bezetteTaaktypen.add(row.idtaaktype);
+      mergeOccupiedTaskTypes.set(row.idplanning, bezetteTaaktypen);
+    }
+
+    for (const plan of plansToMerge) {
+      const idplanning = existingIdByKey.get(occurrenceKey(plan.datum, plan.iddagdeel))!;
+      idByKey.set(occurrenceKey(plan.datum, plan.iddagdeel), idplanning);
+      await tx
+        .update(schema.planning)
+        .set({
+          idactiviteit: plan.idactiviteit,
+          idactiviteitspecificatie: plan.idactiviteitspecificatie,
+          idplannerlocatie: plan.idplannerlocatie,
+          updatedBy: input.userId,
+          updatedAt: new Date().toISOString(),
+          version: sql`${schema.planning.version} + 1`,
+        })
+        .where(eq(schema.planning.id, idplanning));
+      // Een dienst heeft altijd zijn eigen rij gehad, dus nooit al een beschikbaarheidstype
+      // erop - maar mocht dat ooit anders zijn, dan vervangt het sjabloon het net als bij een
+      // gewone insert, niet ernaast.
+      if (plan.idbeschikbaarheidstype != null) {
+        await tx
+          .delete(schema.planningbeschikbaarheid)
+          .where(eq(schema.planningbeschikbaarheid.idplanning, idplanning));
+      }
+    }
+  }
+
+  const tasks = plansToInsert.flatMap((plan) => {
     const idplanning = idByKey.get(occurrenceKey(plan.datum, plan.iddagdeel));
     if (idplanning == null) return [];
     return plan.tasks.map((task) => ({
@@ -471,6 +566,33 @@ async function materializeSeriesWithTx(
       positie: task.positie,
     }));
   });
+  for (const plan of plansToMerge) {
+    const idplanning = existingIdByKey.get(occurrenceKey(plan.datum, plan.iddagdeel));
+    if (idplanning == null) continue;
+    const bezettePosities = mergeOccupiedPositions.get(idplanning) ?? new Set<number>();
+    const bezetteTaaktypen = mergeOccupiedTaskTypes.get(idplanning) ?? new Set<number>();
+    for (const task of plan.tasks) {
+      // Deze taak staat al op de rij (bv. een eerdere materialisatie van dezelfde reeks):
+      // niets aan toe te voegen, en een tweede keer zou de primary key raken.
+      if (bezetteTaaktypen.has(task.idtaaktype)) continue;
+      let vrijePositie: number | null = null;
+      for (let kandidaat = 1; kandidaat <= 3; kandidaat += 1) {
+        if (!bezettePosities.has(kandidaat)) {
+          vrijePositie = kandidaat;
+          break;
+        }
+      }
+      // Dienst plus drie taken uit het sjabloon past niet in de drie beschikbare plekken. De
+      // taken die nog wel passen komen erbij; de rest valt weg, net als een leeg dagdeel dat
+      // het sjabloon niets oplevert.
+      if (vrijePositie == null) continue;
+      bezettePosities.add(vrijePositie);
+      bezetteTaaktypen.add(task.idtaaktype);
+      tasks.push({ idplanning, idtaaktype: task.idtaaktype, positie: vrijePositie });
+    }
+    mergeOccupiedPositions.set(idplanning, bezettePosities);
+    mergeOccupiedTaskTypes.set(idplanning, bezetteTaaktypen);
+  }
   if (tasks.length > 0) {
     await tx.insert(schema.planningtaak).values(tasks);
   }
@@ -491,7 +613,11 @@ async function materializeSeriesWithTx(
     await tx.insert(schema.planningbeschikbaarheid).values(availability);
   }
 
-  const links = schedulablePlans.flatMap((plan) => {
+  // Alleen de rijen die deze materialisatie zelf heeft aangemaakt worden aan de reeks
+  // gekoppeld. Een samengevoegde rij bestond al vóór deze reeks - vaak, maar niet per se,
+  // handmatig neergezet - en planningherhalingslots_planning_unique staat sowieso maar één
+  // koppeling per rij toe. Die blijft dus bij wat hij al was.
+  const links = plansToInsert.flatMap((plan) => {
     const idplanning = idByKey.get(occurrenceKey(plan.datum, plan.iddagdeel));
     if (idplanning == null) return [];
     return [

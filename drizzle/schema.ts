@@ -342,7 +342,7 @@ export const deelnemers = pgTable("deelnemers", {
 	ownObservationMessage: boolean("own_observation_message"),
 	mijnExpertises: varchar("mijn_expertises", { length: 500 }),
 	isForgotPassword: varchar("is_forgot_password", { length: 500 }),
-	emailVerified: boolean("email_verified"),
+	emailVerified: boolean("email_verified").default(false),
 	image: varchar({ length: 255 }),
 	createdAt: timestamp("created_at", { mode: 'string' }),
 	updatedAt: timestamp("updated_at", { mode: 'string' }),

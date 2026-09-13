@@ -7,4 +7,4 @@
 -- stored identically (startdatum = einddatum, frequentie 1) and the repeat modal permits
 -- that shape, so there is no rule that separates them after the fact. Flagging by shape
 -- would hide real series from the planner, which is worse than leaving old copies visible.
-ALTER TABLE "planningherhalingen" ADD COLUMN "is_kopie" boolean DEFAULT false NOT NULL;
+ALTER TABLE "planningherhalingen" ADD COLUMN IF NOT EXISTS "is_kopie" boolean DEFAULT false NOT NULL;

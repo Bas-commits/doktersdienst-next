@@ -85,6 +85,132 @@
       "when": 1784621000000,
       "tag": "0011_praktijkplanner_deelnemer_dagdelen",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1784621010000,
+      "tag": "0012_planningherhaling_kopie",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784621020000,
+      "tag": "0013_login_kleine_letters",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1784621030000,
+      "tag": "0014_planningherhaling_bronweek",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1784621040000,
+      "tag": "0015_toon_nacht_betekent_forceren",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1784621050000,
+      "tag": "0016_capaciteitsregimes",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784621060000,
+      "tag": "0017_capaciteit_zonder_locatie",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784621070000,
+      "tag": "0018_taaktype_inbelbaar",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784621080000,
+      "tag": "0019_taaktype_is_dienst",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784621090000,
+      "tag": "0020_dienstvoorkeuren",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1784621100000,
+      "tag": "0021_dienstvoorkeur_aangevraagd",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1784621110000,
+      "tag": "0022_taaktype_inbelnummer",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784621120000,
+      "tag": "0023_planning_opmerking",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784621130000,
+      "tag": "0024_praktijkplannerfuncties",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784621140000,
+      "tag": "0025_weergavevoorkeur_toon_weekend",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784621150000,
+      "tag": "0026_praktijkplanner_dagdeeltijden",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1784621160000,
+      "tag": "0027_weergavevoorkeur_toon_diensten",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1789308346383,
+      "tag": "0028_deelnemers_email_verified_default",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789308657036,
+      "tag": "0029_better_auth_tables",
+      "breakpoints": true
     }
   ]
 }

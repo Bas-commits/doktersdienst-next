@@ -6,4 +6,4 @@
 -- startdatum is een gok die misgaat zodra iemand een gat heeft gelaten tussen de bronweek
 -- en de eerste doelweek, en dan staat er een verkeerde week bij het bordje. Geen week is
 -- beter dan een verkeerde week.
-ALTER TABLE "planningherhalingen" ADD COLUMN "bronstartdatum" date;
+ALTER TABLE "planningherhalingen" ADD COLUMN IF NOT EXISTS "bronstartdatum" date;

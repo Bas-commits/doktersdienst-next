@@ -1588,7 +1588,13 @@ export function ActivitiesContent({
               />
             ) : null}
             {paneel === 'voorkeuren' ? (
-              <VoorkeurenPanel groupId={groupId} data={data} weekStart={weekStart} />
+              <VoorkeurenPanel
+                groupId={groupId}
+                data={data}
+                weekStart={weekStart}
+                dayparts={visibleDayparts}
+                verborgenWeekdagen={verborgenWeekdagen}
+              />
             ) : null}
           </div>
         ) : null}

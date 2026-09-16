@@ -1,59 +1,92 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import {
-  metVerborgenWeekend,
-  useWeekendVerbergen,
-} from '@/hooks/praktijkplanner/useWeekendVerbergen';
-import { useHuidigMoment } from '@/hooks/praktijkplanner/useHuidigMoment';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDays } from '@/lib/praktijkplanner/dates';
-import { deelnemerRoosterNaam } from '@/lib/deelnemer-display';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { groepPlantDiensten } from '@/lib/praktijkplanner/diensten-in-groep';
 import {
-  dagdelenZonderRooster,
-  isDaypartSchedulable,
-  weekdagenZonderRooster,
+  isDaypartSchedulableForParticipant,
+  participantMatrixFor,
 } from '@/lib/praktijkplanner/schedulable-dayparts';
-import { CapacityWeekGrid } from './CapacityWeekGrid';
-import { dienstvoorkeurKleur, dienstvoorkeurLabel } from './PlannerDienstvoorkeurMark';
+import { AbsenceDaypartCell } from './AbsenceDaypartCell';
+import { PlannerDaypartGrid } from './PlannerDaypartGrid';
+import { PlannerDienstvoorkeurMark } from './PlannerDienstvoorkeurMark';
 import type { PraktijkplannerContextData } from '@/hooks/praktijkplanner/usePraktijkplannerContext';
-import type { PraktijkplannerDienstvoorkeur } from '@/types/praktijkplanner';
+import type {
+  PraktijkplannerAbsenceSlot,
+  PraktijkplannerDaypart,
+  PraktijkplannerDienstvoorkeur,
+  PraktijkplannerParticipant,
+} from '@/types/praktijkplanner';
 
-type VoorkeurRij = {
-  naam: string;
-  voorkeur: PraktijkplannerDienstvoorkeur['voorkeur'];
-  isVoorlopig: boolean;
-};
+function keyFor(iddeelnemer: number, datum: string, iddagdeel: number) {
+  return `${iddeelnemer}:${datum}:${iddagdeel}`;
+}
 
 /**
- * Wie voor deze week een dienst graag of liever niet wil, per dagdeel naast elkaar.
+ * Wie voor deze week afwezig is of een dienst graag/liever niet wil, naast de week.
  *
- * De voorkeuren zelf worden vastgelegd op het dagdeel in de Afwezigheidsplanner, niet hier: dit
- * paneel is alleen om te kijken, zodat de planner ze kan meewegen terwijl hij plant zonder heen
- * en weer te schakelen tussen twee schermen. Zie ExpertisePanel voor hetzelfde idee met
- * expertises in plaats van voorkeuren.
+ * Dit is bewust hetzelfde beeld als de Afwezigheidsplanner - dezelfde vakjes
+ * (AbsenceDaypartCell), dezelfde dienstvoorkeur-tekens - in plaats van een eigen, vereenvoudigde
+ * samenvatting. Een planner die hier "iemand is er niet" wil zien wil de afwezigheid zelf zien,
+ * niet een aparte telling ernaast die toch weer net iets anders oogt.
  *
- * Eigen ophaalactie in plaats van een prop met slots: voorkeuren horen niet bij de planning die
- * al in het rooster hangt, en dit paneel is de enige plek in de Activiteiten planner die ze
- * nodig heeft.
+ * Alleen om te kijken: PlannerDaypartGrid krijgt bewust geen onCellClick, waarmee elk vakje
+ * vanzelf niet-klikbaar wordt (zie de `disabled`-afleiding daar). Wijzigen blijft het werk van
+ * de Afwezigheidsplanner, waar de voorkeur en de afwezigheid ook vandaan komen.
+ *
+ * Eigen ophaalacties in plaats van een prop met slots: dit paneel is de enige plek in de
+ * Activiteiten planner die afwezigheden en dienstvoorkeuren nodig heeft.
  */
 export function VoorkeurenPanel({
   groupId,
   data,
   weekStart,
+  dayparts,
+  verborgenWeekdagen,
 }: {
   groupId: number;
   data: PraktijkplannerContextData;
   weekStart: string;
+  dayparts: PraktijkplannerDaypart[];
+  verborgenWeekdagen: ReadonlySet<number>;
 }) {
+  const [slots, setSlots] = useState<PraktijkplannerAbsenceSlot[]>([]);
   const [voorkeuren, setVoorkeuren] = useState<PraktijkplannerDienstvoorkeur[]>([]);
-  const [loading, setLoading] = useState(false);
-  const huidigMoment = useHuidigMoment();
-  const { weekendVerborgen } = useWeekendVerbergen();
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
+  // Dezelfde afleiding als op de Afwezigheidsplanner: een groep die geen diensten plant heeft
+  // ook geen dienstvoorkeuren om op te halen of te tonen.
+  const heeftDienstTaken = useMemo(
+    () => groepPlantDiensten(data.masterData.tasks),
+    [data.masterData.tasks]
+  );
 
   useEffect(() => {
     const abortController = new AbortController();
-    setLoading(true);
+    fetch(
+      `/api/praktijkplanner/afwezigheden?idwaarneemgroep=${groupId}&start=${weekStart}&end=${weekEnd}`,
+      { credentials: 'include', signal: abortController.signal }
+    )
+      .then(async (response) => {
+        const payload = (await response.json()) as {
+          slots?: PraktijkplannerAbsenceSlot[];
+          error?: string;
+        };
+        if (!response.ok || !payload.slots) {
+          throw new Error(payload.error || 'Afwezigheden konden niet worden geladen.');
+        }
+        setSlots(payload.slots);
+      })
+      .catch(() => undefined);
+    return () => abortController.abort();
+  }, [groupId, weekStart, weekEnd]);
+
+  useEffect(() => {
+    if (!heeftDienstTaken) {
+      setVoorkeuren([]);
+      return;
+    }
+    const abortController = new AbortController();
     fetch(
       `/api/praktijkplanner/dienstvoorkeuren?idwaarneemgroep=${groupId}&start=${weekStart}&end=${weekEnd}`,
       { credentials: 'include', signal: abortController.signal }
@@ -68,124 +101,91 @@ export function VoorkeurenPanel({
         }
         setVoorkeuren(payload.voorkeuren);
       })
-      .catch(() => undefined)
-      .finally(() => setLoading(false));
+      .catch(() => undefined);
     return () => abortController.abort();
-  }, [groupId, weekStart, weekEnd]);
+  }, [groupId, heeftDienstTaken, weekStart, weekEnd]);
 
-  const naamPerDeelnemer = useMemo(
+  const slotMap = useMemo(
+    () => new Map(slots.map((slot) => [keyFor(slot.iddeelnemer, slot.datum, slot.iddagdeel), slot])),
+    [slots]
+  );
+  const voorkeurMap = useMemo(
     () =>
       new Map(
-        data.participants.map((deelnemer) => [deelnemer.id, deelnemerRoosterNaam(deelnemer)])
+        voorkeuren.map((voorkeur) => [
+          keyFor(voorkeur.iddeelnemer, voorkeur.datum, voorkeur.iddagdeel),
+          voorkeur,
+        ])
       ),
-    [data.participants]
+    [voorkeuren]
   );
 
-  const perDagdeel = useMemo(() => {
-    const kaart = new Map<string, VoorkeurRij[]>();
-    for (const voorkeur of voorkeuren) {
-      const naam = naamPerDeelnemer.get(voorkeur.iddeelnemer);
-      if (!naam) continue; // Niet meer in deze groep; de rij blijft gewoon weg.
-      const sleutel = `${voorkeur.datum}:${voorkeur.iddagdeel}`;
-      const rijen = kaart.get(sleutel) ?? [];
-      rijen.push({ naam, voorkeur: voorkeur.voorkeur, isVoorlopig: voorkeur.isVoorlopig });
-      kaart.set(sleutel, rijen);
-    }
-    for (const rijen of kaart.values()) {
-      rijen.sort((links, rechts) => links.naam.localeCompare(rechts.naam));
-    }
-    return kaart;
-  }, [voorkeuren, naamPerDeelnemer]);
-
-  const verborgenWeekdagen = useMemo(
-    () =>
-      metVerborgenWeekend(
-        weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
-        weekendVerborgen
-      ),
-    [data.masterData.schedulableDayparts, weekendVerborgen]
+  const isCellFilled = useCallback(
+    (iddeelnemer: number, datum: string, iddagdeel: number) =>
+      slotMap.has(keyFor(iddeelnemer, datum, iddagdeel)) ||
+      voorkeurMap.has(keyFor(iddeelnemer, datum, iddagdeel)),
+    [slotMap, voorkeurMap]
   );
-  const dayparts = useMemo(() => {
-    const weg = dagdelenZonderRooster(
-      data.masterData.schedulableDayparts ?? [],
-      data.masterData.dayparts.map((daypart) => daypart.id)
-    );
-    return [...data.masterData.dayparts]
-      .filter((daypart) => !weg.has(daypart.id))
-      .sort((links, rechts) => links.volgorde - rechts.volgorde);
-  }, [data.masterData.dayparts, data.masterData.schedulableDayparts]);
 
-  const weekDates = useMemo(
-    () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
-    [weekStart]
-  );
-  const weekdayHeaders = useMemo(
-    () =>
-      weekDates.map((datum) => (
-        <span
-          key={datum}
-          className={
-            datum === huidigMoment?.datum
-              ? 'block normal-case tracking-normal text-emerald-600'
-              : 'block normal-case tracking-normal'
-          }
-        >
-          {new Intl.DateTimeFormat('nl-NL', {
-            weekday: 'short',
-            day: 'numeric',
-            month: 'short',
-          }).format(new Date(`${datum}T12:00:00`))}
-        </span>
-      )),
-    [huidigMoment?.datum, weekDates]
+  const renderCell = useCallback(
+    (participant: PraktijkplannerParticipant, datum: string, daypart: PraktijkplannerDaypart) => {
+      const sleutel = keyFor(participant.id, datum, daypart.id);
+      const slot = slotMap.get(sleutel);
+      const voorkeur = voorkeurMap.get(sleutel) ?? null;
+      if (!slot && !voorkeur) return null;
+
+      // Allebei tegelijk kan: een dagdeel met vakantie waarop de dokter toch graag dienst doet.
+      // De afwezigheid houdt dan het vlak en de voorkeur wordt een hoekje, net als op de
+      // Afwezigheidsplanner - zie PlannerDienstvoorkeurMark voor waarom dat de afspraak is.
+      if (slot) {
+        return (
+          <div className="relative h-full w-full">
+            <AbsenceDaypartCell
+              absence={slot.absenceType}
+              provisional={slot.isVoorlopig}
+              participantInitials={deelnemerChipInitials(participant)}
+              participantColor={participant.color}
+              fill
+            />
+            {voorkeur ? (
+              <PlannerDienstvoorkeurMark
+                voorkeur={voorkeur.voorkeur}
+                aangevraagd={voorkeur.isVoorlopig}
+                variant="hoek"
+              />
+            ) : null}
+          </div>
+        );
+      }
+      return voorkeur ? (
+        <PlannerDienstvoorkeurMark voorkeur={voorkeur.voorkeur} aangevraagd={voorkeur.isVoorlopig} />
+      ) : null;
+    },
+    [slotMap, voorkeurMap]
   );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      {loading && voorkeuren.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Bezig met laden...</p>
-      ) : null}
-      {/*
-        Het rooster scrollt binnen het paneel, niet de pagina eromheen. Zelfde reden als bij
-        ExpertisePanel: anders schuift het weekrooster links mee omhoog.
-      */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <CapacityWeekGrid
+        <PlannerDaypartGrid
+          participants={data.participants}
           dayparts={dayparts}
-          weekdayHeaders={weekdayHeaders}
+          weekStart={weekStart}
           verborgenWeekdagen={verborgenWeekdagen}
-          isCellUnavailable={(weekday, daypart) =>
-            !isDaypartSchedulable(data.masterData.schedulableDayparts ?? [], weekday.id, daypart.id)
+          toonInhoudOpNietInplanbaar
+          renderCell={({ participant, datum, daypart }) => renderCell(participant, datum, daypart)}
+          daypartTimes={data.masterData.daypartTimes ?? []}
+          isCellFilled={({ participant, datum, daypart }) =>
+            isCellFilled(participant.id, datum, daypart.id)
           }
-          isCurrentCell={(weekday, daypart) =>
-            weekDates[weekday.id - 1] === huidigMoment?.datum &&
-            daypart.volgorde === huidigMoment.volgorde
+          isCellUnavailable={({ participant, datum, daypart }) =>
+            !isDaypartSchedulableForParticipant(
+              data.masterData.schedulableDayparts ?? [],
+              participantMatrixFor(data.masterData.participantSchedulableDayparts ?? [], participant.id),
+              datum,
+              daypart.id
+            )
           }
-          renderCell={(weekday, daypart) => {
-            const datum = weekDates[weekday.id - 1];
-            const rijen = perDagdeel.get(`${datum}:${daypart.id}`) ?? [];
-            if (rijen.length === 0) return null;
-            return (
-              <div className="space-y-1 text-xs">
-                {rijen.map((rij, index) => (
-                  <div
-                    key={`${rij.naam}:${index}`}
-                    className="flex items-center gap-1.5"
-                    title={dienstvoorkeurLabel(rij.voorkeur, rij.isVoorlopig)}
-                  >
-                    <span
-                      className={[
-                        'inline-block size-2 shrink-0 rounded-full',
-                        rij.isVoorlopig ? 'border border-dashed border-current' : '',
-                      ].join(' ')}
-                      style={{ background: dienstvoorkeurKleur(rij.voorkeur, rij.isVoorlopig) }}
-                    />
-                    <span className="truncate">{rij.naam}</span>
-                  </div>
-                ))}
-              </div>
-            );
-          }}
         />
       </div>
     </div>

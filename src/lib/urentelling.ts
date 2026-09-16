@@ -174,6 +174,30 @@ export function resolveAantekeningId(
   return NO_AANTEKENING_COLUMN_ID;
 }
 
+/**
+ * Als resolveAantekeningId, maar valt terug op "geen aantekening" wanneer het gevonden id niet
+ * bij deze groep hoort.
+ *
+ * Een dienstslot (type 1) slaat zijn idaantekening zelf op, zonder foreign key naar
+ * dienstaantekening - een handmatig aangemaakte waarneemgroep (zoals Test10) of een
+ * waarneemgroep waarvan een aantekening later is verwijderd kan dus een id bevatten dat niet in
+ * de eigen aantekeningenlijst voorkomt, of zelfs een id van een andere groep. Zonder deze
+ * validatie bouwt buildUrentellingColumns daar geen kolom voor - urenPerAantekening blijft dan
+ * voor iedereen leeg en het Totaal valt stil op 0,00, terwijl de uren wel degelijk gepland zijn.
+ * Het "geen aantekening"-vak bestaat al voor precies dit soort niet-gecategoriseerde uren, dus
+ * daar komen ze in plaats van te verdwijnen.
+ */
+export function resolveKnownAantekeningId(
+  dienst: Pick<UrentellingDienst, 'van' | 'tot'>,
+  baseSlots: UrentellingBaseSlot[],
+  aantekeningen: UrentellingAantekening[],
+): number {
+  const idaantekening = resolveAantekeningId(dienst, baseSlots);
+  if (idaantekening === NO_AANTEKENING_COLUMN_ID) return idaantekening;
+  const bestaatVoorDezeGroep = aantekeningen.some((a) => a.id === idaantekening);
+  return bestaatVoorDezeGroep ? idaantekening : NO_AANTEKENING_COLUMN_ID;
+}
+
 function aantekeningLabelById(
   aantekeningen: UrentellingAantekening[],
   idaantekening: number,
@@ -305,7 +329,7 @@ export function aggregateUrentelling(
     const seconds = clippedSeconds(dienst.van, dienst.tot, windowStart, windowEnd);
     if (seconds <= 0) continue;
 
-    const idaantekening = resolveAantekeningId(dienst, baseSlots);
+    const idaantekening = resolveKnownAantekeningId(dienst, baseSlots, aantekeningen);
 
     if (category === 'overnameAccepted') {
       const original = dienst.iddeelnemer;
@@ -371,7 +395,7 @@ export function collectUrentellingDetails(
 
     const interval = clippedInterval(dienst.van, dienst.tot, windowStart, windowEnd);
     const uren = secondsToDecimalHours(seconds);
-    const idaantekening = resolveAantekeningId(dienst, baseSlots);
+    const idaantekening = resolveKnownAantekeningId(dienst, baseSlots, aantekeningen);
     const aantekening = aantekeningLabelById(aantekeningen, idaantekening);
 
     if (category === 'overnameAccepted') {

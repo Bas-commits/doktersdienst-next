@@ -6,6 +6,7 @@ import {
   clippedSeconds,
   collectUrentellingDetails,
   resolveAantekeningId,
+  resolveKnownAantekeningId,
   type UrentellingAantekening,
   type UrentellingBaseSlot,
   type UrentellingDienst,
@@ -95,6 +96,29 @@ describe('resolveAantekeningId', () => {
   });
 });
 
+describe('resolveKnownAantekeningId', () => {
+  it('keeps an id that exists in the group its own aantekeningen', () => {
+    const baseSlots = [baseSlot(windowStart, windowStart + 8 * HOUR, 10)];
+    const dienst = { van: windowStart, tot: windowStart + 4 * HOUR };
+    expect(resolveKnownAantekeningId(dienst, baseSlots, aantekeningen)).toBe(10);
+  });
+
+  it('falls back to "geen aantekening" for an id belonging to another groep', () => {
+    // Een dienstslot (type 1) bewaart idaantekening zonder foreign-key check, dus een
+    // handmatig aangemaakte of verweesde waarneemgroep kan een id opslaan dat bij een
+    // andere groep hoort. Dit is precies wat groep Test10 liet zien: 0,00 voor iedereen.
+    const baseSlots = [baseSlot(windowStart, windowStart + 8 * HOUR, 999)];
+    const dienst = { van: windowStart, tot: windowStart + 4 * HOUR };
+    expect(resolveKnownAantekeningId(dienst, baseSlots, aantekeningen)).toBe(0);
+  });
+
+  it('falls back to "geen aantekening" for an id that no longer exists', () => {
+    const baseSlots = [baseSlot(windowStart, windowStart + 8 * HOUR, 999)];
+    const dienst = { van: windowStart, tot: windowStart + 4 * HOUR };
+    expect(resolveKnownAantekeningId(dienst, baseSlots, [])).toBe(0);
+  });
+});
+
 describe('buildUrentellingColumns', () => {
   it('orders columns by prio then tekst', () => {
     const columns = buildUrentellingColumns(aantekeningen, new Set());
@@ -153,6 +177,32 @@ describe('aggregateUrentelling', () => {
     expect(pietersen.urenPerAantekening).toEqual([0, 0]);
     expect(pietersen.achterwachtPerAantekening).toEqual([2, 1]);
     expect(pietersen.totaalAchterwacht).toBe(3);
+  });
+
+  it('still counts hours whose idaantekening does not belong to this groep', () => {
+    // Regressie voor de dPp-secretaris kaart: een waarneemgroep (zoals Test10) waarvan de
+    // dienstslots een idaantekening van een andere groep dragen liet iedereen 0,00 zien,
+    // omdat buildUrentellingColumns geen kolom bouwt voor een onbekend id en de uren dus
+    // nergens terechtkwamen. Ze horen in het bestaande "geen aantekening"-vak te landen.
+    const vreemdeBaseSlots = [
+      baseSlot(windowStart, windowStart + 8 * HOUR, 999),
+      baseSlot(windowStart + 8 * HOUR, windowStart + 16 * HOUR, 998),
+    ];
+    const diensten: UrentellingDienst[] = [
+      { iddeelnemer: 1, van: windowStart, tot: windowStart + 4 * HOUR, type: 0, status: null },
+    ];
+
+    const { columns, rows } = aggregateUrentelling(
+      diensten,
+      members,
+      windowStart,
+      windowEnd,
+      vreemdeBaseSlots,
+      aantekeningen,
+    );
+    expect(columns.map((c) => c.id)).toEqual([10, 20, 0]);
+    const jansen = rows.find((r) => r.iddeelnemer === 1)!;
+    expect(jansen.totaalDienst).toBe(4);
   });
 
   it('excludes extra dokter hours', () => {

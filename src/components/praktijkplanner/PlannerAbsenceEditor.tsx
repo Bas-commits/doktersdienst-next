@@ -25,6 +25,7 @@ import { PlannerChipPalette } from './PlannerChipPalette';
 import type { PlannerCursorTool } from './PlannerCursorTool';
 import { PlannerDaypartGrid } from './PlannerDaypartGrid';
 import { PlannerMonthDaypartGrid } from './PlannerMonthDaypartGrid';
+import { PlannerMaandNavigatie } from './PlannerMaandNavigatie';
 import { PlannerMonthOverviewGrid } from './PlannerMonthOverviewGrid';
 import { PlannerAvondNachtToggle } from './PlannerAvondNachtToggle';
 import { PlannerNevenschermKeuze } from './PlannerNevenschermKeuze';
@@ -777,6 +778,16 @@ export function PlannerAbsenceEditor({
     setWeekStart(weekVanMaand(nextYear, nextMonth));
   }, [setWeekStart]);
 
+  // Voor de PlannerMaandNavigatie-knoppen naast de Week/Maand-schakelaar: die werken in stappen
+  // (-1/1) in plaats van een absoluut jaar en maand, dus reken de stap om naar changeMonth toe.
+  const verzetMaand = useCallback(
+    (stap: number) => {
+      const totalMonths = overviewMonth.year * 12 + (overviewMonth.month - 1) + stap;
+      changeMonth(Math.floor(totalMonths / 12), (totalMonths % 12) + 1);
+    },
+    [overviewMonth, changeMonth]
+  );
+
   const paletteItems = useMemo(() => {
     const orderedTypes = sortAbsenceTypesForPalette(data.masterData.absenceTypes);
     const absenceItems =
@@ -913,6 +924,18 @@ export function PlannerAbsenceEditor({
         keuzes={['geen', 'maand']}
         naastElkaar={false}
       />
+      {/*
+        Welke maand er getoond wordt stond nergens op dit scherm, net als bij de Activiteiten
+        planner voor de knop Maand kwam (kaart thOcyRbe). Alleen zichtbaar bij de maandweergave,
+        net als bij de andere schermen met deze knop.
+      */}
+      {toontMaand ? (
+        <PlannerMaandNavigatie
+          year={overviewMonth.year}
+          month={overviewMonth.month}
+          onMaandVerzetten={verzetMaand}
+        />
+      ) : null}
     </>
   );
 

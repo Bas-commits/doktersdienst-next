@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { CalendarGrid, type CalendarGridRow } from './CalendarGrid';
 import type { ShiftBlockView } from '@/types/diensten';
 import type { ChipDefinition, VoorkeurItem } from '@/types/voorkeuren';
@@ -65,6 +65,8 @@ export interface CalendarGridWithNavStateProps {
   vakanties?: CalendarVakantieItem[];
   /** When true, shift blocks whose end moment has passed render dimmed and inert. */
   disableEndedShiftBlocks?: boolean;
+  /** Extra knoppen naast de maandnavigatie. Zie CalendarGridProps.monthNavAside. */
+  monthNavAside?: ReactNode;
 }
 
 /**
@@ -100,6 +102,7 @@ export function CalendarGridWithNavState({
   onShiftDelete,
   vakanties,
   disableEndedShiftBlocks,
+  monthNavAside,
 }: CalendarGridWithNavStateProps) {
   const [internalViewMonth, setInternalViewMonth] = useState(initialViewMonth);
   const [internalViewYear, setInternalViewYear] = useState(initialViewYear);
@@ -148,6 +151,7 @@ export function CalendarGridWithNavState({
       onShiftDelete={onShiftDelete}
       vakanties={vakanties}
       disableEndedShiftBlocks={disableEndedShiftBlocks}
+      monthNavAside={monthNavAside}
     />
   );
 }

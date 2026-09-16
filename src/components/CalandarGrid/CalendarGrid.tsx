@@ -89,6 +89,12 @@ export interface CalendarGridProps {
    * Set on /voorkeuren; roster views leave it off so history stays clickable there.
    */
   disableEndedShiftBlocks?: boolean;
+  /**
+   * Extra knoppen naast de maandnavigatie (bijv. de Urentelling-schakelaar in
+   * rooster-maken-secretaris.tsx). Alleen zichtbaar samen met de maandnavigatie zelf
+   * (onViewMonthChange), anders zou een knop over een lege plek zweven.
+   */
+  monthNavAside?: React.ReactNode;
 }
 
 /** Width of the right-hand column that shows waarneemgroep names per row (when multiple rows). */
@@ -441,6 +447,7 @@ export function CalendarGrid({
   hideOwnerNameInTooltip = false,
   hideUnassignedAantekening = false,
   disableEndedShiftBlocks = false,
+  monthNavAside,
 }: CalendarGridProps) {
   const paintSessionRef = useRef<{ active: boolean; keysTouched: Set<string> }>({
     active: false,
@@ -825,13 +832,23 @@ export function CalendarGrid({
     <div>
       {onViewMonthChange && (
         <div
-          className={`mb-4 ml-[60px]${gridRows.length > 2 ? ' mr-[140px]' : ''}`}
+          className={`relative mb-4 ml-[60px]${gridRows.length > 2 ? ' mr-[140px]' : ''}`}
         >
-          <MonthNavigation
-            month={viewMonth}
-            year={viewYear}
-            onSelectMonth={onViewMonthChange}
-          />
+          {/*
+            De maandnavigatie blijft gecentreerd zoals altijd; de extra knoppen komen er
+            absoluut naast te hangen in plaats van in dezelfde flexrij, anders duwt hun breedte
+            de navigatie uit het midden.
+          */}
+          <div className="flex justify-center">
+            <MonthNavigation
+              month={viewMonth}
+              year={viewYear}
+              onSelectMonth={onViewMonthChange}
+            />
+          </div>
+          {monthNavAside && (
+            <div className="absolute top-1/2 right-0 -translate-y-1/2">{monthNavAside}</div>
+          )}
         </div>
       )}
       {content}

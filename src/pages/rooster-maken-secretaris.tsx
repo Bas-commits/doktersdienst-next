@@ -5,7 +5,6 @@ import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { FaFilter } from 'react-icons/fa';
-import { BsCalculator } from 'react-icons/bs';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -342,8 +341,12 @@ export default function RoosterMakenSecretarisPage() {
   const [toontUrentelling, setToontUrentelling] = useState(false);
   const magSplitsen = beschikbareBreedte - SIDEBAR_BREEDTE_PX >= PANEEL_DREMPEL_PX;
   const [gesplitstGewenst, setGesplitstGewenst] = useState(true);
+  // Anders dan bij de Activiteiten planner is er geen "los van het rooster"-stand: het rooster
+  // is hier altijd het hoofdscherm en blijft dus altijd staan. Past de Urentelling niet naast
+  // het rooster, dan verschijnt hij niet, in plaats van het rooster te vervangen - de
+  // maandnavigatie (en daarmee de knoppen ernaast) moet altijd bereikbaar blijven.
   const naastElkaar = magSplitsen && gesplitstGewenst;
-  const toontKalender = !toontUrentelling || naastElkaar;
+  const toontUrentellingPaneel = toontUrentelling && naastElkaar;
 
   const panelGroupId = useMemo(() => {
     if (!activeWaarneemgroepId) return null;
@@ -754,7 +757,7 @@ export default function RoosterMakenSecretarisPage() {
         </div>
       )}
 
-      <div className="mx-auto max-w-[2000px] space-y-6 px-4 py-8">
+      <div className={`mx-auto space-y-6 px-4 py-8 ${toontUrentellingPaneel ? '' : 'max-w-[2000px]'}`}>
         <Card className="overflow-visible">
           <CardHeader className="overflow-visible">
             <CardTitle>
@@ -767,32 +770,6 @@ export default function RoosterMakenSecretarisPage() {
                   onToggle={toggleWaarneemgroep}
                 />
                 Rooster maken <InfoPopover />
-                <span className="ml-auto flex items-center gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={toontUrentelling}
-                    aria-label={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling naast het rooster'}
-                    title={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling naast het rooster'}
-                    onClick={() => setToontUrentelling((prev) => !prev)}
-                    className={[
-                      'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-normal transition',
-                      toontUrentelling
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted',
-                    ].join(' ')}
-                  >
-                    <BsCalculator className="size-4" aria-hidden />
-                    Urentelling
-                  </button>
-                  {toontUrentelling ? (
-                    <PlannerSplitsToggle
-                      aan={gesplitstGewenst}
-                      disabled={!magSplitsen}
-                      onChange={setGesplitstGewenst}
-                      hoofdscherm="het rooster"
-                    />
-                  ) : null}
-                </span>
               </h1>
             </CardTitle>
           </CardHeader>
@@ -936,41 +913,66 @@ export default function RoosterMakenSecretarisPage() {
           </div>
 
           {/* Calendar */}
-          {toontKalender ? (
-            <Card className="min-w-0 flex-1">
-              <CardHeader>
+          <Card className="min-w-0 flex-1">
+            <CardHeader>
 
-              </CardHeader>
-              <CardContent>
-                {error && (
-                  <p className="mb-4 text-sm text-destructive" role="alert">{error}</p>
-                )}
-                {loading && !dienstenResponse && (
-                  <p className="mb-4 text-sm text-muted-foreground">Rooster laden…</p>
-                )}
-                <div ref={calendarRef}>
-                  <CalendarGridWithNavState
-                    rows={rows}
-                    initialViewMonth={now.getMonth()}
-                    initialViewYear={now.getFullYear()}
-                    viewMonth={viewMonth}
-                    viewYear={viewYear}
-                    onViewMonthChange={(month, year) => {
-                      setViewMonth(month);
-                      setViewYear(year);
-                    }}
-                    voorkeuren={voorkeuren ?? undefined}
-                    highlightedVoorkeurUserIds={highlightedVoorkeurUserIds}
-                    onSectionShiftClick={handleSectionShiftClick}
-                    vakanties={calendarVakanties}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
+            </CardHeader>
+            <CardContent>
+              {error && (
+                <p className="mb-4 text-sm text-destructive" role="alert">{error}</p>
+              )}
+              {loading && !dienstenResponse && (
+                <p className="mb-4 text-sm text-muted-foreground">Rooster laden…</p>
+              )}
+              <div ref={calendarRef}>
+                <CalendarGridWithNavState
+                  rows={rows}
+                  initialViewMonth={now.getMonth()}
+                  initialViewYear={now.getFullYear()}
+                  viewMonth={viewMonth}
+                  viewYear={viewYear}
+                  onViewMonthChange={(month, year) => {
+                    setViewMonth(month);
+                    setViewYear(year);
+                  }}
+                  voorkeuren={voorkeuren ?? undefined}
+                  highlightedVoorkeurUserIds={highlightedVoorkeurUserIds}
+                  onSectionShiftClick={handleSectionShiftClick}
+                  vakanties={calendarVakanties}
+                  monthNavAside={
+                    <span className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        aria-pressed={toontUrentelling}
+                        aria-label={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling naast het rooster'}
+                        title={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling naast het rooster'}
+                        onClick={() => setToontUrentelling((prev) => !prev)}
+                        className={[
+                          'inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm font-normal transition',
+                          toontUrentelling
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:bg-muted',
+                        ].join(' ')}
+                      >
+                        Urentelling
+                      </button>
+                      {toontUrentelling ? (
+                        <PlannerSplitsToggle
+                          aan={gesplitstGewenst}
+                          disabled={!magSplitsen}
+                          onChange={setGesplitstGewenst}
+                          hoofdscherm="het rooster"
+                        />
+                      ) : null}
+                    </span>
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-          {/* Urentelling naast (of in de plaats van) het rooster */}
-          {toontUrentelling ? (
+          {/* Urentelling naast het rooster */}
+          {toontUrentellingPaneel ? (
             <Card className="min-w-0 flex-1">
               <CardContent className="pt-6">
                 <UrentellingPanel

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  afwezigheidsplannerTitel,
   dienstTaakIds,
   dokterAfwezigheidsschermTitel,
   groepPlantDiensten,
@@ -38,6 +39,13 @@ describe('dokterAfwezigheidsschermTitel', () => {
   it('noemt de dienstvoorkeur alleen als de groep diensten plant', () => {
     expect(dokterAfwezigheidsschermTitel(true)).toBe('Afwezigheids- en dienstvoorkeur');
     expect(dokterAfwezigheidsschermTitel(false)).toBe('Afwezigheidsplanner dokter');
+  });
+});
+
+describe('afwezigheidsplannerTitel', () => {
+  it('noemt diensten alleen als de groep ze plant', () => {
+    expect(afwezigheidsplannerTitel(true)).toBe('Afwezigheids- en diensten planner');
+    expect(afwezigheidsplannerTitel(false)).toBe('Afwezigheidsplanner');
   });
 });
 

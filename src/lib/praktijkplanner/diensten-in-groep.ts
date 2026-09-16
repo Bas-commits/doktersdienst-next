@@ -22,6 +22,17 @@ export function dokterAfwezigheidsschermTitel(plantDiensten: boolean): string {
   return plantDiensten ? 'Afwezigheids- en dienstvoorkeur' : 'Afwezigheidsplanner dokter';
 }
 
+/**
+ * De naam van het afwezigheidsscherm van de planner.
+ *
+ * Zelfde signaal als dokterAfwezigheidsschermTitel hierboven, maar met "diensten" in plaats van
+ * "dienstvoorkeur": de planner ziet en legt hier diensten van de hele groep vast, niet zijn
+ * eigen wens erover.
+ */
+export function afwezigheidsplannerTitel(plantDiensten: boolean): string {
+  return plantDiensten ? 'Afwezigheids- en diensten planner' : 'Afwezigheidsplanner';
+}
+
 /** De taaktypen die een dienst zijn, op id. */
 export function dienstTaakIds(tasks: readonly PraktijkplannerTaskType[]): Set<number> {
   return new Set(tasks.filter((taak) => taak.isDienst).map((taak) => taak.id));

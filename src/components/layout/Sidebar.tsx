@@ -28,7 +28,10 @@ import {
   type RoleTier,
 } from '@/lib/roles';
 import type { AppSection } from '@/lib/route-access';
-import { dokterAfwezigheidsschermTitel } from '@/lib/praktijkplanner/diensten-in-groep';
+import {
+  afwezigheidsplannerTitel,
+  dokterAfwezigheidsschermTitel,
+} from '@/lib/praktijkplanner/diensten-in-groep';
 
 type NavItem = {
   id: string;
@@ -228,6 +231,15 @@ function dokterMenuItems(plantDiensten: boolean): NavItem[] {
   );
 }
 
+/** Dezelfde afweging als dokterMenuItems hierboven, maar voor het scherm van de secretaris. */
+function secretarisMenuItems(plantDiensten: boolean): NavItem[] {
+  return PRAKTIJKPLANNER_SECRETARIS_NAV_ITEMS.map((item) =>
+    item.id === 'praktijkplanner-afwezigheidsplanner'
+      ? { ...item, label: afwezigheidsplannerTitel(plantDiensten) }
+      : item
+  );
+}
+
 function NavLinkList({ items, pathname }: { items: NavItem[]; pathname: string }) {
   return (
     <>
@@ -313,7 +325,7 @@ export function Sidebar({
               {showSecretaris && (
                 <>
                   <SectionHeading label="Secretaris" />
-                  <NavLinkList items={PRAKTIJKPLANNER_SECRETARIS_NAV_ITEMS} pathname={pathname} />
+                  <NavLinkList items={secretarisMenuItems(plantDiensten)} pathname={pathname} />
                 </>
               )}
             </>

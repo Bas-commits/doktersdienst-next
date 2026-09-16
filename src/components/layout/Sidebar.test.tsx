@@ -78,6 +78,15 @@ describe('Praktijkplanner Sidebar', () => {
     );
   });
 
+  it('noemt het afwezigheidsscherm van de secretaris ook zoals het scherm zichzelf noemt', () => {
+    // Zelfde afweging als bij de dokterversie hierboven: één naam voor hetzelfde scherm.
+    cleanup();
+    render(<Sidebar section="praktijkplanner" roleTier={GROEP_SECRETARIS} plantDiensten />);
+
+    expect(screen.getByText('Afwezigheids- en diensten planner')).toBeInTheDocument();
+    expect(screen.queryByText('Afwezigheidsplanner')).not.toBeInTheDocument();
+  });
+
   it('shows deelnemer and secretaris pages for an administrator', () => {
     cleanup();
     render(<Sidebar section="praktijkplanner" roleTier={GROEP_ADMINISTRATOR} />);

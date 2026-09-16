@@ -16,6 +16,10 @@ import type { PlannerNevenscherm } from '@/hooks/praktijkplanner/usePlannerWeerg
  * Capaciteit blijft daarnaast aan de beheerder voorbehouden, net als de eigen pagina ervan.
  * Een knop aanbieden die op een 403 uitloopt is erger dan geen knop.
  *
+ * Voorkeuren hoort om dezelfde reden bij de beheerder: het paneel bestaat om de planner te
+ * helpen bij het inplannen, en niet om zelf voorkeuren op te geven (dat blijft de
+ * Afwezigheidsplanner). Kaart: https://trello.com/c/TXhh6XbM
+ *
  * Args:
  *     alleenLezen: Of dit Rooster inzien is. Niet hetzelfde als "mag niet plannen".
  *     isBeheerder: Of deze gebruiker secretaris of beheerder is. De Activiteiten planner
@@ -28,6 +32,8 @@ export function nevenschermKeuzes(opties: {
   isBeheerder: boolean;
 }): readonly PlannerNevenscherm[] {
   if (opties.alleenLezen) return ['geen', 'maand', 'locatie'];
-  if (opties.isBeheerder) return ['geen', 'maand', 'capaciteit', 'expertise', 'locatie'];
+  if (opties.isBeheerder) {
+    return ['geen', 'maand', 'capaciteit', 'expertise', 'locatie', 'voorkeuren'];
+  }
   return ['geen', 'maand', 'expertise', 'locatie'];
 }

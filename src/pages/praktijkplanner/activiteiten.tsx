@@ -14,6 +14,7 @@ import { AbsenceDaypartCell } from '@/components/praktijkplanner/AbsenceDaypartC
 import { CapacityOverviewPanel } from '@/components/praktijkplanner/CapacityOverview';
 import { ExpertisePanel } from '@/components/praktijkplanner/ExpertisePanel';
 import { LocatieFichesPanel } from '@/components/praktijkplanner/LocatieFichesPanel';
+import { VoorkeurenPanel } from '@/components/praktijkplanner/VoorkeurenPanel';
 import {
   PlannerOpmerkingModal,
   type PlannerOpmerkingDoel,
@@ -35,6 +36,7 @@ import { PlannerMonthOverviewGrid } from '@/components/praktijkplanner/PlannerMo
 import { PlannerNotifyPlanningModal } from '@/components/praktijkplanner/PlannerNotifyPlanningModal';
 import { PlannerRepeatWeekModal } from '@/components/praktijkplanner/PlannerRepeatWeekModal';
 import { PlannerNevenschermKeuze } from '@/components/praktijkplanner/PlannerNevenschermKeuze';
+import { PlannerSplitsToggle } from '@/components/praktijkplanner/PlannerSplitsToggle';
 import { PlannerMaandNavigatie } from '@/components/praktijkplanner/PlannerMaandNavigatie';
 import { PlannerWeekBar } from '@/components/praktijkplanner/PlannerWeekBar';
 import { PraktijkplannerPage, PraktijkplannerTitleAside, type PraktijkplannerPageContext } from '@/components/praktijkplanner/PraktijkplannerPage';
@@ -189,8 +191,19 @@ export function ActivitiesContent({
     Het palet gaat van de beschikbare ruimte af, dus dat wordt er hier afgetrokken in plaats
     van gemeten. Zie useBeschikbareBreedte voor waarom meten hier zou gaan flikkeren.
   */
-  const naastElkaar =
+  const magSplitsen =
     beschikbareBreedte - (canEdit ? PALET_BREEDTE_PX : 0) >= PANEEL_DREMPEL_PX;
+  /*
+    Splitsen ging tot nu toe vanzelf zodra het scherm breed genoeg was, zonder dat de planner
+    er iets over te zeggen had. Kaart dPp: Concept van duo scherm vraagt om een knop die dat
+    aan- en uitzet: bewust splitsen in plaats van iets dat gewoon gebeurt zodra het past.
+
+    Begint op true, zodat een breed scherm zich gedraagt zoals voorheen totdat iemand de knop
+    zelf uitzet. Niet bewaard tussen bezoeken, net als de keuze naast de week zelf (nevenscherm)
+    en maandCelGrootte hierboven: een scherm opent altijd hetzelfde.
+  */
+  const [gesplitstGewenst, setGesplitstGewenst] = useState(true);
+  const naastElkaar = magSplitsen && gesplitstGewenst;
   const keuzes = useMemo(
     () => nevenschermKeuzes({ alleenLezen: readOnly, isBeheerder: data.isManager }),
     [readOnly, data.isManager]
@@ -1351,6 +1364,17 @@ export function ActivitiesContent({
             naastElkaar={naastElkaar}
           />
           {/*
+            Alleen zinvol als er iets naast de week zou kunnen staan. Bij Week is er niets om
+            te splitsen, en de knop zou daar alleen verwarren.
+          */}
+          {paneel !== null ? (
+            <PlannerSplitsToggle
+              aan={gesplitstGewenst}
+              disabled={!magSplitsen}
+              onChange={setGesplitstGewenst}
+            />
+          ) : null}
+          {/*
             Plus en min horen bij de maand en staan er dus alleen als die er is. In dezelfde
             rij als de rest: het is een knop over wat je ziet, net als de keuze ernaast.
           */}
@@ -1562,6 +1586,9 @@ export function ActivitiesContent({
                 isAfwezig={isAfwezig}
                 renderSlot={renderSlot}
               />
+            ) : null}
+            {paneel === 'voorkeuren' ? (
+              <VoorkeurenPanel groupId={groupId} data={data} weekStart={weekStart} />
             ) : null}
           </div>
         ) : null}

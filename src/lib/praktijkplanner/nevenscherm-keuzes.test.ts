@@ -24,14 +24,21 @@ describe('nevenschermKeuzes', () => {
     expect(keuzes).not.toContain('expertise');
   });
 
-  it('geeft de planner ook Capaciteit, Expertise en Locatie', () => {
+  it('geeft de planner ook Capaciteit, Expertise, Locatie en Voorkeuren', () => {
     expect(nevenschermKeuzes({ alleenLezen: false, isBeheerder: true })).toEqual([
       'geen',
       'maand',
       'capaciteit',
       'expertise',
       'locatie',
+      'voorkeuren',
     ]);
+  });
+
+  it('houdt Voorkeuren weg bij wie er geen recht op heeft', () => {
+    expect(nevenschermKeuzes({ alleenLezen: false, isBeheerder: false })).not.toContain(
+      'voorkeuren'
+    );
   });
 
   it('houdt Capaciteit weg bij wie er geen recht op heeft', () => {

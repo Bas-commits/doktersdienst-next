@@ -1,9 +1,11 @@
 'use client';
 
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { FaFilter } from 'react-icons/fa';
+import { BsCalculator } from 'react-icons/bs';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -16,6 +18,12 @@ import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgro
 import { useDienstenSubscription, clearCacheByPrefix } from '@/hooks/useDienstenSubscription';
 import { useVoorkeurenSubscription } from '@/hooks/useVoorkeurenSubscription';
 import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
+import {
+  PANEEL_DREMPEL_PX,
+  useBeschikbareBreedte,
+} from '@/hooks/praktijkplanner/useBeschikbareBreedte';
+import { PlannerSplitsToggle } from '@/components/praktijkplanner/PlannerSplitsToggle';
+import { UrentellingPanel } from '@/components/UrentellingPanel';
 import type { ShiftBlockView, DoctorInfo } from '@/types/diensten';
 import { shiftKeyFromBlock } from '@/types/voorkeuren';
 import type { VoorkeurItem } from '@/types/voorkeuren';
@@ -25,6 +33,13 @@ import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
+
+/**
+ * Breedte van de dokters-zijbalk (lg:w-56 = 14rem), afgetrokken van de gemeten rijbreedte om te
+ * bepalen of rooster en Urentelling naast elkaar passen. Zie useBeschikbareBreedte voor waarom
+ * de meting zelf niet om het paneel heen kan meten.
+ */
+const SIDEBAR_BREEDTE_PX = 224;
 
 function vanGteForMonth(viewMonth: number, viewYear: number): number {
   return Math.floor(new Date(viewYear, viewMonth, 1, 0, 0, 0, 0).getTime() / 1000) - TWO_WEEKS_SECONDS;
@@ -310,12 +325,44 @@ function assignInFlightKey(shiftKey: string, section: StripeSection): string {
 }
 
 export default function RoosterMakenSecretarisPage() {
+  const router = useRouter();
   const { activeWaarneemgroepId, waarneemgroepen, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
 
   const now = useMemo(() => new Date(), []);
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const calendarVakanties = useCalendarVakanties(viewYear);
+
+  // De rij met zijbalk, rooster en Urentelling-paneel. De breedte daarvan hangt niet af van wat
+  // erin komt te staan, dus de meting kan zichzelf niet achterna lopen (zie activiteiten.tsx).
+  const roosterRij = useRef<HTMLDivElement>(null);
+  const beschikbareBreedte = useBeschikbareBreedte(roosterRij);
+  // Kaart dDd: Rooster maken twee schermen naast elkaar, zoals in dPp.
+  // https://trello.com/c/8lHwuHjv/
+  const [toontUrentelling, setToontUrentelling] = useState(false);
+  const magSplitsen = beschikbareBreedte - SIDEBAR_BREEDTE_PX >= PANEEL_DREMPEL_PX;
+  const [gesplitstGewenst, setGesplitstGewenst] = useState(true);
+  const naastElkaar = magSplitsen && gesplitstGewenst;
+  const toontKalender = !toontUrentelling || naastElkaar;
+
+  const panelGroupId = useMemo(() => {
+    if (!activeWaarneemgroepId) return null;
+    const parsed = Number(activeWaarneemgroepId);
+    return Number.isNaN(parsed) ? null : parsed;
+  }, [activeWaarneemgroepId]);
+
+  const panelGroupName = useMemo(() => {
+    if (panelGroupId == null) return 'waarneemgroep';
+    const wg = (waarneemgroepen ?? []).find((g) => g.ID === panelGroupId);
+    return (wg?.naam ?? 'waarneemgroep').replace(/[^\w\-]+/g, '-');
+  }, [panelGroupId, waarneemgroepen]);
+
+  const openDeelnemerGegevens = useCallback(
+    (deelnemerId: number) => {
+      void router.push(`/mijn-gegevens?deelnemerId=${deelnemerId}`);
+    },
+    [router]
+  );
 
   // All doctors fetched from API
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
@@ -720,6 +767,32 @@ export default function RoosterMakenSecretarisPage() {
                   onToggle={toggleWaarneemgroep}
                 />
                 Rooster maken <InfoPopover />
+                <span className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={toontUrentelling}
+                    aria-label={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling naast het rooster'}
+                    title={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling naast het rooster'}
+                    onClick={() => setToontUrentelling((prev) => !prev)}
+                    className={[
+                      'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-normal transition',
+                      toontUrentelling
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted',
+                    ].join(' ')}
+                  >
+                    <BsCalculator className="size-4" aria-hidden />
+                    Urentelling
+                  </button>
+                  {toontUrentelling ? (
+                    <PlannerSplitsToggle
+                      aan={gesplitstGewenst}
+                      disabled={!magSplitsen}
+                      onChange={setGesplitstGewenst}
+                      hoofdscherm="het rooster"
+                    />
+                  ) : null}
+                </span>
               </h1>
             </CardTitle>
           </CardHeader>
@@ -732,7 +805,7 @@ export default function RoosterMakenSecretarisPage() {
           )}
         </Card>
 
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div ref={roosterRij} className="flex flex-col gap-6 lg:flex-row lg:items-start">
           {/* Doctor sidebar */}
           <div ref={sidebarRef} className="sticky top-2 w-full shrink-0 self-start lg:top-4 lg:h-[calc(100vh-1rem)] lg:w-56 lg:flex lg:flex-col">
             <Card className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
@@ -863,36 +936,53 @@ export default function RoosterMakenSecretarisPage() {
           </div>
 
           {/* Calendar */}
-          <Card className="min-w-0 flex-1">
-            <CardHeader>
-              
-            </CardHeader>
-            <CardContent>
-              {error && (
-                <p className="mb-4 text-sm text-destructive" role="alert">{error}</p>
-              )}
-              {loading && !dienstenResponse && (
-                <p className="mb-4 text-sm text-muted-foreground">Rooster laden…</p>
-              )}
-              <div ref={calendarRef}>
-                <CalendarGridWithNavState
-                  rows={rows}
-                  initialViewMonth={now.getMonth()}
-                  initialViewYear={now.getFullYear()}
+          {toontKalender ? (
+            <Card className="min-w-0 flex-1">
+              <CardHeader>
+
+              </CardHeader>
+              <CardContent>
+                {error && (
+                  <p className="mb-4 text-sm text-destructive" role="alert">{error}</p>
+                )}
+                {loading && !dienstenResponse && (
+                  <p className="mb-4 text-sm text-muted-foreground">Rooster laden…</p>
+                )}
+                <div ref={calendarRef}>
+                  <CalendarGridWithNavState
+                    rows={rows}
+                    initialViewMonth={now.getMonth()}
+                    initialViewYear={now.getFullYear()}
+                    viewMonth={viewMonth}
+                    viewYear={viewYear}
+                    onViewMonthChange={(month, year) => {
+                      setViewMonth(month);
+                      setViewYear(year);
+                    }}
+                    voorkeuren={voorkeuren ?? undefined}
+                    highlightedVoorkeurUserIds={highlightedVoorkeurUserIds}
+                    onSectionShiftClick={handleSectionShiftClick}
+                    vakanties={calendarVakanties}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {/* Urentelling naast (of in de plaats van) het rooster */}
+          {toontUrentelling ? (
+            <Card className="min-w-0 flex-1">
+              <CardContent className="pt-6">
+                <UrentellingPanel
+                  idwaarneemgroep={panelGroupId}
                   viewMonth={viewMonth}
                   viewYear={viewYear}
-                  onViewMonthChange={(month, year) => {
-                    setViewMonth(month);
-                    setViewYear(year);
-                  }}
-                  voorkeuren={voorkeuren ?? undefined}
-                  highlightedVoorkeurUserIds={highlightedVoorkeurUserIds}
-                  onSectionShiftClick={handleSectionShiftClick}
-                  vakanties={calendarVakanties}
+                  activeGroupName={panelGroupName}
+                  onOpenDeelnemer={openDeelnemerGegevens}
                 />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </div>
     </>

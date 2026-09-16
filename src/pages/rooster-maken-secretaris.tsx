@@ -341,12 +341,15 @@ export default function RoosterMakenSecretarisPage() {
   const [toontUrentelling, setToontUrentelling] = useState(false);
   const magSplitsen = beschikbareBreedte - SIDEBAR_BREEDTE_PX >= PANEEL_DREMPEL_PX;
   const [gesplitstGewenst, setGesplitstGewenst] = useState(true);
-  // Anders dan bij de Activiteiten planner is er geen "los van het rooster"-stand: het rooster
-  // is hier altijd het hoofdscherm en blijft dus altijd staan. Past de Urentelling niet naast
-  // het rooster, dan verschijnt hij niet, in plaats van het rooster te vervangen - de
-  // maandnavigatie (en daarmee de knoppen ernaast) moet altijd bereikbaar blijven.
   const naastElkaar = magSplitsen && gesplitstGewenst;
-  const toontUrentellingPaneel = toontUrentelling && naastElkaar;
+  /*
+    Past de Urentelling niet naast het rooster (smal scherm, of de splitsknop staat uit), dan
+    komt hij in de plaats van het rooster - net als het nevenscherm bij de Activiteiten planner.
+    Zo kun je op een klein scherm, of gewoon zonder duo-scherm te willen, nog steeds snel tussen
+    rooster en Urentelling wisselen in plaats van dat de knop dan niets meer doet.
+  */
+  const toontKalender = !toontUrentelling || naastElkaar;
+  const toontUrentellingPaneel = toontUrentelling;
 
   const panelGroupId = useMemo(() => {
     if (!activeWaarneemgroepId) return null;
@@ -703,6 +706,37 @@ export default function RoosterMakenSecretarisPage() {
   const loading = waarneemgroepenLoading || (dienstenWaarneemgroepIds.length > 0 && dienstenLoading);
   const error = waarneemgroepenError ?? dienstenError;
 
+  // Dezelfde knoppen staan naast de maandnavigatie als het rooster te zien is, en boven het
+  // paneel als de Urentelling het rooster heeft vervangen - anders is de weg terug alleen te
+  // vinden door het scherm breder te maken.
+  const urentellingBediening = (
+    <span className="flex items-center gap-2">
+      <button
+        type="button"
+        aria-pressed={toontUrentelling}
+        aria-label={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling'}
+        title={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling'}
+        onClick={() => setToontUrentelling((prev) => !prev)}
+        className={[
+          'inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm font-normal transition',
+          toontUrentelling
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:bg-muted',
+        ].join(' ')}
+      >
+        Urentelling
+      </button>
+      {toontUrentelling ? (
+        <PlannerSplitsToggle
+          aan={gesplitstGewenst}
+          disabled={!magSplitsen}
+          onChange={setGesplitstGewenst}
+          hoofdscherm="het rooster"
+        />
+      ) : null}
+    </span>
+  );
+
   return (
     <>
       <Head>
@@ -913,68 +947,51 @@ export default function RoosterMakenSecretarisPage() {
           </div>
 
           {/* Calendar */}
-          <Card className="min-w-0 flex-1">
-            <CardHeader>
+          {toontKalender ? (
+            <Card className="min-w-0 flex-1">
+              <CardHeader>
 
-            </CardHeader>
-            <CardContent>
-              {error && (
-                <p className="mb-4 text-sm text-destructive" role="alert">{error}</p>
-              )}
-              {loading && !dienstenResponse && (
-                <p className="mb-4 text-sm text-muted-foreground">Rooster laden…</p>
-              )}
-              <div ref={calendarRef}>
-                <CalendarGridWithNavState
-                  rows={rows}
-                  initialViewMonth={now.getMonth()}
-                  initialViewYear={now.getFullYear()}
-                  viewMonth={viewMonth}
-                  viewYear={viewYear}
-                  onViewMonthChange={(month, year) => {
-                    setViewMonth(month);
-                    setViewYear(year);
-                  }}
-                  voorkeuren={voorkeuren ?? undefined}
-                  highlightedVoorkeurUserIds={highlightedVoorkeurUserIds}
-                  onSectionShiftClick={handleSectionShiftClick}
-                  vakanties={calendarVakanties}
-                  monthNavAside={
-                    <span className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        aria-pressed={toontUrentelling}
-                        aria-label={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling naast het rooster'}
-                        title={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling naast het rooster'}
-                        onClick={() => setToontUrentelling((prev) => !prev)}
-                        className={[
-                          'inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm font-normal transition',
-                          toontUrentelling
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:bg-muted',
-                        ].join(' ')}
-                      >
-                        Urentelling
-                      </button>
-                      {toontUrentelling ? (
-                        <PlannerSplitsToggle
-                          aan={gesplitstGewenst}
-                          disabled={!magSplitsen}
-                          onChange={setGesplitstGewenst}
-                          hoofdscherm="het rooster"
-                        />
-                      ) : null}
-                    </span>
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent>
+                {error && (
+                  <p className="mb-4 text-sm text-destructive" role="alert">{error}</p>
+                )}
+                {loading && !dienstenResponse && (
+                  <p className="mb-4 text-sm text-muted-foreground">Rooster laden…</p>
+                )}
+                <div ref={calendarRef}>
+                  <CalendarGridWithNavState
+                    rows={rows}
+                    initialViewMonth={now.getMonth()}
+                    initialViewYear={now.getFullYear()}
+                    viewMonth={viewMonth}
+                    viewYear={viewYear}
+                    onViewMonthChange={(month, year) => {
+                      setViewMonth(month);
+                      setViewYear(year);
+                    }}
+                    voorkeuren={voorkeuren ?? undefined}
+                    highlightedVoorkeurUserIds={highlightedVoorkeurUserIds}
+                    onSectionShiftClick={handleSectionShiftClick}
+                    vakanties={calendarVakanties}
+                    monthNavAside={urentellingBediening}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
-          {/* Urentelling naast het rooster */}
+          {/* Urentelling, naast het rooster of - op een smal scherm of met de splitsknop uit - in de plaats ervan */}
           {toontUrentellingPaneel ? (
             <Card className="min-w-0 flex-1">
               <CardContent className="pt-6">
+                {/*
+                  Staat het rooster er niet naast, dan zou de schakelknop anders verdwijnen
+                  zodra hij het meest nodig is: terug naar het rooster op een klein scherm.
+                */}
+                {!toontKalender ? (
+                  <div className="mb-4 flex justify-end">{urentellingBediening}</div>
+                ) : null}
                 <UrentellingPanel
                   idwaarneemgroep={panelGroupId}
                   viewMonth={viewMonth}

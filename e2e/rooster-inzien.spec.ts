@@ -25,6 +25,18 @@ test.describe('Rooster inzien', () => {
     // own assertions run, otherwise they race the reload and see stale/half-loaded state.
     await page.getByTestId('header-group-select').selectOption(TEST_WAARNEEMGROEP_ID);
     await page.waitForLoadState('networkidle');
+    // For an account with a large waarneemgroep footprint (e.g. a global admin), the reload can
+    // still momentarily bounce the active group back to the system-wide default even after the
+    // explicit selection above. Poll and re-select rather than trusting a single wait.
+    await expect(async () => {
+      let value = await page.getByTestId('header-group-select').inputValue();
+      if (value !== TEST_WAARNEEMGROEP_ID) {
+        await page.getByTestId('header-group-select').selectOption(TEST_WAARNEEMGROEP_ID);
+        await page.waitForLoadState('networkidle');
+        value = await page.getByTestId('header-group-select').inputValue();
+      }
+      expect(value).toBe(TEST_WAARNEEMGROEP_ID);
+    }).toPass({ timeout: 15_000 });
     // The waarneemgroep checkboxes live behind this collapsed filter toggle.
     await page.getByRole('button', { name: 'Filter waarneemgroepen' }).click();
   });

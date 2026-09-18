@@ -63,6 +63,18 @@ test.describe('Voorkeuren', () => {
     // away ourselves, otherwise the two navigations race and the group pick can get lost.
     await page.getByTestId('header-group-select').selectOption(TEST_WAARNEEMGROEP_ID);
     await page.waitForLoadState('networkidle');
+    // For an account with a large waarneemgroep footprint (e.g. a global admin), the reload can
+    // still momentarily bounce the active group back to the system-wide default even after the
+    // explicit selection above. Poll and re-select rather than trusting a single wait.
+    await expect(async () => {
+      let value = await page.getByTestId('header-group-select').inputValue();
+      if (value !== TEST_WAARNEEMGROEP_ID) {
+        await page.getByTestId('header-group-select').selectOption(TEST_WAARNEEMGROEP_ID);
+        await page.waitForLoadState('networkidle');
+        value = await page.getByTestId('header-group-select').inputValue();
+      }
+      expect(value).toBe(TEST_WAARNEEMGROEP_ID);
+    }).toPass({ timeout: 15_000 });
     await page.goto('/voorkeuren');
     await expect(page.getByRole('heading', { name: 'Voorkeuren' })).toBeVisible();
   });

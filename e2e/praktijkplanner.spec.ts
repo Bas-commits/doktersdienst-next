@@ -4,7 +4,7 @@ type Credentials = { email?: string; password?: string };
 
 async function signIn(page: import('@playwright/test').Page, credentials: Credentials) {
   await page.goto('/login');
-  await page.getByRole('textbox', { name: 'E-mail' }).fill(credentials.email!);
+  await page.getByRole('textbox', { name: 'Email' }).fill(credentials.email!);
   await page.getByRole('textbox', { name: 'Wachtwoord' }).fill(credentials.password!);
   await page.getByTestId('login-submit').click();
   await page.waitForURL('/rooster-inzien');

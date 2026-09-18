@@ -1,13 +1,57 @@
 import { test, expect } from '@playwright/test';
 
+const secretarisEmail = process.env.PLAYWRIGHT_SECRETARIS_EMAIL;
+const secretarisPassword = process.env.PLAYWRIGHT_SECRETARIS_PASSWORD;
+
+test.skip(
+  !secretarisEmail || !secretarisPassword,
+  'Set PLAYWRIGHT_SECRETARIS_EMAIL and PLAYWRIGHT_SECRETARIS_PASSWORD to run this suite.'
+);
+
+// Test10 (id 78) is the dedicated e2e-fixture waarneemgroep with shift data spanning years
+// ahead. A fresh (storage-less) session otherwise defaults to the first waarneemgroep in the
+// whole system, which this account isn't even a member of, so the calendar stays empty.
+const TEST_WAARNEEMGROEP_ID = '78';
+
+// The calendar's visible month always includes a few padding days before "today"; shift blocks
+// on those days are ended and inert (ShiftBlock.tsx's `isEnded` gate disables ALL click handlers
+// on the top/middle/bottom stripes of that day), so `.first()`/`.nth(N)` on any stripe collection
+// can silently pick a block that no-ops on click. Only shift-block-middle carries a
+// `data-current-date` attribute, but top/middle/bottom stripes for the same day render together
+// in the same DOM order, so the index of the first future middle block applies to all three.
+//
+// This page also renders a second "preferences row" strip using the same ShiftBlock component
+// (see the "must NOT render preference colors" test below), so the search is scoped to main
+// shift blocks only, the same way that test already does.
+async function futureBlockIndex(page: import('@playwright/test').Page): Promise<number> {
+  const index = await page.evaluate(() => {
+    const now = Date.now();
+    const blocks = Array.from(
+      document.querySelectorAll(
+        '[data-testid="shift-block-middle"]:not([aria-label="preferences row"] [data-testid="shift-block-middle"])'
+      )
+    );
+    return blocks.findIndex((el) => {
+      const raw = el.getAttribute('data-current-date');
+      return raw != null && new Date(raw.replace(' ', 'T')).getTime() > now;
+    });
+  });
+  if (index < 0) throw new Error('No shift block with a future start time found');
+  return index;
+}
+
 test.describe.configure({ mode: 'serial' });
 test.describe('Rooster maken secretaris — shift assignment', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/login');
-    await page.getByRole('textbox', { name: 'E-mail' }).fill('bartveltggdhvb@sivision.nl');
-    await page.getByRole('textbox', { name: 'Wachtwoord' }).fill('bassophie2016');
+    await page.getByRole('textbox', { name: 'Email' }).fill(secretarisEmail!);
+    await page.getByRole('textbox', { name: 'Wachtwoord' }).fill(secretarisPassword!);
     await page.getByTestId('login-submit').click();
     await page.waitForURL('/rooster-inzien');
+    // Selecting fires the header's own router.reload(); wait for it to settle before navigating
+    // away ourselves, otherwise the two navigations race and the group pick can get lost.
+    await page.getByTestId('header-group-select').selectOption(TEST_WAARNEEMGROEP_ID);
+    await page.waitForLoadState('networkidle');
     await page.goto('/rooster-maken-secretaris');
     await expect(page.getByRole('heading', { name: 'Rooster maken' })).toBeVisible();
 
@@ -42,13 +86,17 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
   test('T018: assign doctor to middle stripe', async ({ page }) => {
     await selectFirstDoctor(page);
 
-    // Find an empty middle stripe (data-doctor="0" means unassigned)
-    const emptyMiddle = page.getByTestId('shift-block-middle').filter({ hasAttribute: 'data-doctor' }).first();
+    // Find an empty middle stripe (data-doctor="0" means unassigned) that is still in the future
+    const startIndex = await futureBlockIndex(page);
+    const emptyMiddle = page.getByTestId('shift-block-middle').nth(startIndex);
 
     const assignResponse = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await emptyMiddle.click();
+    // force: true — Test10 has overlapping legacy dienst records on some days, whose absolutely
+    // positioned wrapper (data-box-type="morning") can sit on top of a sibling day's block and
+    // intercept the click even though the target block itself is fully visible and enabled.
+    await emptyMiddle.click({ force: true });
     const response = await assignResponse;
     expect(response.status()).toBe(200);
 
@@ -59,12 +107,13 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
   test('T020: delete middle stripe assignment', async ({ page }) => {
     // First assign a doctor
     await selectFirstDoctor(page);
-    const middleBlock = page.getByTestId('shift-block-middle').first();
+    const startIndex = await futureBlockIndex(page);
+    const middleBlock = page.getByTestId('shift-block-middle').nth(startIndex);
 
     const assignResponse = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await middleBlock.click();
+    await middleBlock.click({ force: true });
     await assignResponse;
     await page.waitForTimeout(500);
 
@@ -79,7 +128,7 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
     const deleteResponse = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await middleBlock.click();
+    await middleBlock.click({ force: true });
     const response = await deleteResponse;
     expect(response.status()).toBe(200);
   });
@@ -90,13 +139,14 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
     await selectFirstDoctor(page);
 
     // Find a top stripe and click it
-    const topStripe = page.getByTestId('shift-block-top').first();
+    const startIndex = await futureBlockIndex(page);
+    const topStripe = page.getByTestId('shift-block-top').nth(startIndex);
     await expect(topStripe).toBeVisible();
 
     const assignResponse = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await topStripe.click();
+    await topStripe.click({ force: true });
     const response = await assignResponse;
     expect(response.status()).toBe(200);
 
@@ -109,7 +159,7 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
       ),
       page.waitForTimeout(2000),
     ]);
-    await topStripe.click();
+    await topStripe.click({ force: true });
     await maybeCleanup;
   });
 
@@ -119,13 +169,14 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
     await selectFirstDoctor(page);
 
     // Find a bottom stripe and click it
-    const bottomStripe = page.getByTestId('shift-block-bottom').first();
+    const startIndex = await futureBlockIndex(page);
+    const bottomStripe = page.getByTestId('shift-block-bottom').nth(startIndex);
     await expect(bottomStripe).toBeVisible();
 
     const assignResponse = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await bottomStripe.click();
+    await bottomStripe.click({ force: true });
     const response = await assignResponse;
     expect(response.status()).toBe(200);
 
@@ -138,7 +189,7 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
       ),
       page.waitForTimeout(2000),
     ]);
-    await bottomStripe.click();
+    await bottomStripe.click({ force: true });
     await maybeCleanup;
   });
 
@@ -151,46 +202,53 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
     const middleStripes = page.getByTestId('shift-block-middle');
     const bottomStripes = page.getByTestId('shift-block-bottom');
 
-    await expect(topStripes.first()).toBeVisible();
-    await expect(middleStripes.first()).toBeVisible();
-    await expect(bottomStripes.first()).toBeVisible();
+    const startIndex = await futureBlockIndex(page);
+    const topStripe = topStripes.nth(startIndex);
+    const middleStripe = middleStripes.nth(startIndex);
+    const bottomStripe = bottomStripes.nth(startIndex);
+    await expect(topStripe).toBeVisible();
+    await expect(middleStripe).toBeVisible();
+    await expect(bottomStripe).toBeVisible();
 
     // Select doctor and assign to middle
     await selectFirstDoctor(page);
     let response = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await middleStripes.first().click();
+    await middleStripe.click({ force: true });
     expect((await response).status()).toBe(200);
-    await page.waitForTimeout(500);
+    // Each successful assign shows a sonner toast; it can still be animating/visible over the
+    // corner of the viewport where the next stripe happens to render, so wait for it to clear
+    // rather than a fixed timeout.
+    await page.locator('[data-sonner-toast]').first().waitFor({ state: 'hidden', timeout: 6_000 }).catch(() => {});
 
     // Assign to top
     response = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await topStripes.first().click();
+    await topStripe.click({ force: true });
     expect((await response).status()).toBe(200);
-    await page.waitForTimeout(500);
+    await page.locator('[data-sonner-toast]').first().waitFor({ state: 'hidden', timeout: 6_000 }).catch(() => {});
 
     // Assign to bottom
     response = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await bottomStripes.first().click();
+    await bottomStripe.click({ force: true });
     expect((await response).status()).toBe(200);
 
     // Cleanup: delete all three (best-effort — some stripes may already be empty after refresh)
     await page.keyboard.press('Escape');
     await enableDeleteMode(page);
 
-    for (const stripe of [topStripes.first(), middleStripes.first(), bottomStripes.first()]) {
+    for (const stripe of [topStripe, middleStripe, bottomStripe]) {
       const maybeCleanup = Promise.race([
         page.waitForResponse(
           (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
         ),
         page.waitForTimeout(2000),
       ]);
-      await stripe.click();
+      await stripe.click({ force: true });
       await maybeCleanup;
     }
   });
@@ -199,18 +257,22 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
 
   test('T049: assignments persist after page reload', async ({ page }) => {
     await selectFirstDoctor(page);
-    const middleBlock = page.getByTestId('shift-block-middle').first();
+    const startIndex = await futureBlockIndex(page);
+    const middleBlock = page.getByTestId('shift-block-middle').nth(startIndex);
 
     // Assign
     const assignResponse = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await middleBlock.click();
+    await middleBlock.click({ force: true });
     expect((await assignResponse).status()).toBe(200);
     await page.waitForTimeout(1000);
 
-    // Read the assigned doctor ID and block identifiers
+    // Read the assigned doctor ID and block identifiers. data-current-date (the exact shift start
+    // timestamp) disambiguates Test10's overlapping legacy dienst records on the same calendar
+    // day — data-date/month/year alone can match more than one block on those days.
     const doctorIdBefore = await middleBlock.getAttribute('data-doctor');
+    const currentDateAttr = await middleBlock.getAttribute('data-current-date');
     const dateAttr = await middleBlock.getAttribute('data-date');
     const monthAttr = await middleBlock.getAttribute('data-month');
     const yearAttr = await middleBlock.getAttribute('data-year');
@@ -223,7 +285,7 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
 
     // Find the same block after reload
     const reloadedBlock = page.locator(
-      `[data-testid="shift-block-middle"][data-date="${dateAttr}"][data-month="${monthAttr}"][data-year="${yearAttr}"]`
+      `[data-testid="shift-block-middle"][data-date="${dateAttr}"][data-month="${monthAttr}"][data-year="${yearAttr}"][data-current-date="${currentDateAttr}"]`
     ).first();
     await expect(reloadedBlock).toBeVisible({ timeout: 5_000 });
     const doctorIdAfter = await reloadedBlock.getAttribute('data-doctor');
@@ -235,7 +297,7 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
     const cleanupResponse = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await reloadedBlock.click();
+    await reloadedBlock.click({ force: true });
     await cleanupResponse;
   });
 
@@ -246,7 +308,7 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
     const doctorBefore = await middleBlock.getAttribute('data-doctor');
 
     // Click without selecting any doctor or delete mode
-    await middleBlock.click();
+    await middleBlock.click({ force: true });
 
     // No API call should fire — wait briefly and check doctor hasn't changed
     await page.waitForTimeout(500);
@@ -310,11 +372,12 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
     await expect(page.getByText('geselecteerd')).toBeVisible();
 
     // Clicking a shift block should ASSIGN (not delete)
-    const middleBlock = page.getByTestId('shift-block-middle').first();
+    const startIndex = await futureBlockIndex(page);
+    const middleBlock = page.getByTestId('shift-block-middle').nth(startIndex);
     const assignResponse = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await middleBlock.click();
+    await middleBlock.click({ force: true });
     const response = await assignResponse;
     expect(response.status()).toBe(200);
 
@@ -329,21 +392,21 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
     const cleanup = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await middleBlock.click();
+    await middleBlock.click({ force: true });
     await cleanup;
   });
 
   test('assigning the same stripe twice replaces the record instead of creating a duplicate', async ({ page }) => {
     await selectFirstDoctor(page);
-    // Use a block further down to avoid legacy-polluted first slots
-    const middleBlock = page.getByTestId('shift-block-middle').nth(3);
+    const startIndex = await futureBlockIndex(page);
+    const middleBlock = page.getByTestId('shift-block-middle').nth(startIndex);
     await expect(middleBlock).toBeVisible();
 
     // First assignment
     let resp = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await middleBlock.click();
+    await middleBlock.click({ force: true });
     const firstRes = await resp;
     expect(firstRes.status()).toBe(200);
     const body = firstRes.request().postDataJSON();
@@ -353,7 +416,7 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
     resp = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await middleBlock.click();
+    await middleBlock.click({ force: true });
     expect((await resp).status()).toBe(200);
     await page.waitForTimeout(1000);
 
@@ -382,31 +445,32 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
       ),
       page.waitForTimeout(2000),
     ]);
-    await middleBlock.click();
+    await middleBlock.click({ force: true });
     await cleanupResp;
   });
 
   test('assigning achterwacht then reassigning produces exactly one type=5 record', async ({ page }) => {
     await selectFirstDoctor(page);
-    // Use a block further down to avoid legacy-polluted first slots
-    const topStripe = page.getByTestId('shift-block-top').nth(3);
+    const startIndex = await futureBlockIndex(page);
+    const topStripe = page.getByTestId('shift-block-top').nth(startIndex);
     await expect(topStripe).toBeVisible();
 
     // First achterwacht assignment
     let resp = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await topStripe.click();
+    await topStripe.click({ force: true });
     const firstRes = await resp;
     expect(firstRes.status()).toBe(200);
     const body = firstRes.request().postDataJSON();
-    await page.waitForTimeout(500);
+    // The assign toast can still be visible over the same stripe on the immediate re-click.
+    await page.locator('[data-sonner-toast]').first().waitFor({ state: 'hidden', timeout: 6_000 }).catch(() => {});
 
     // Second achterwacht assignment to the same stripe
     resp = page.waitForResponse(
       (r) => r.url().includes('/api/diensten/assign') && r.request().method() === 'POST'
     );
-    await topStripe.click();
+    await topStripe.click({ force: true });
     expect((await resp).status()).toBe(200);
     await page.waitForTimeout(500);
 
@@ -434,7 +498,7 @@ test.describe('Rooster maken secretaris — shift assignment', () => {
       ),
       page.waitForTimeout(2000),
     ]);
-    await topStripe.click();
+    await topStripe.click({ force: true });
     await achtCleanup;
   });
 });

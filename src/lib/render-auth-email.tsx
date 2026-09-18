@@ -11,6 +11,8 @@ import PraktijkplannerScheduleEmail from '@email/praktijkplanner-schedule';
 import type { PraktijkplannerScheduleEmailProps } from '@email/praktijkplanner-schedule';
 import PraktijkplannerPlanningAvailableEmail from '@email/praktijkplanner-planning-available';
 import type { PraktijkplannerPlanningAvailableEmailProps } from '@email/praktijkplanner-planning-available';
+import DoktersdienstRoosterEmail from '@email/doktersdienst-rooster';
+import type { DoktersdienstRoosterEmailProps } from '@email/doktersdienst-rooster';
 
 /** Publieke origin voor shell (logo-fallback `{origin}/logo.png`); logo meestal via `EMAIL_LOGO_URL`. */
 export function getEmailTemplateSiteUrl(): string {
@@ -98,6 +100,13 @@ export async function renderPraktijkplannerScheduleBodies(
 ): Promise<{ html: string; text: string }> {
   const siteUrl = getEmailTemplateSiteUrl();
   return toHtmlAndText(<PraktijkplannerScheduleEmail {...params} siteUrl={siteUrl} />);
+}
+
+export async function renderDoktersdienstRoosterBodies(
+  params: Omit<DoktersdienstRoosterEmailProps, 'siteUrl' | 'logoSrc'>
+): Promise<{ html: string; text: string }> {
+  const siteUrl = getEmailTemplateSiteUrl();
+  return toHtmlAndText(<DoktersdienstRoosterEmail {...params} siteUrl={siteUrl} />);
 }
 
 export async function renderPraktijkplannerPlanningAvailableBodies(

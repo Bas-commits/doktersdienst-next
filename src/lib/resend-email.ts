@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import { logger } from '@/lib/logger';
 import {
+  renderDoktersdienstRoosterBodies,
   renderEmailChangeNoticeBodies,
   renderMagicLinkBodies,
   renderPasswordResetBodies,
@@ -9,6 +10,7 @@ import {
   renderVerificationBodies,
 } from '@/lib/render-auth-email';
 import type { PraktijkplannerScheduleEntry } from '@email/praktijkplanner-schedule';
+import type { RoosterEmailEntry } from '@email/doktersdienst-rooster';
 
 const log = logger.child({ module: 'resend-email' });
 
@@ -322,6 +324,43 @@ export async function sendPraktijkplannerScheduleEmailViaResend(params: {
       entries: params.entries.length,
     },
     errorLabel: 'Resend Praktijkplanner schedule email failed',
+  });
+}
+
+export async function sendDoktersdienstRoosterEmailViaResend(params: {
+  to: string;
+  userName?: string | null;
+  periode: string;
+  eigenDiensten: boolean;
+  entries: RoosterEmailEntry[];
+  bevestiging?: boolean;
+}): Promise<void> {
+  const subject = params.bevestiging
+    ? `Uw diensten ter bevestiging — ${params.periode}`
+    : params.eigenDiensten
+      ? `Uw diensten ${params.periode}`
+      : `Rooster ${params.periode}`;
+  const { html, text } = await renderDoktersdienstRoosterBodies({
+    userName: params.userName,
+    periode: params.periode,
+    eigenDiensten: params.eigenDiensten,
+    entries: params.entries,
+    bevestiging: params.bevestiging,
+  });
+
+  await sendRenderedEmail({
+    to: params.to,
+    subject,
+    html,
+    text,
+    devLogPayload: {
+      to: params.to,
+      subject,
+      eigenDiensten: params.eigenDiensten,
+      entries: params.entries.length,
+    },
+    warnMessage: 'Resend niet geconfigureerd; rooster-mail alleen gelogd',
+    errorLabel: 'Resend Doktersdienst rooster email failed',
   });
 }
 

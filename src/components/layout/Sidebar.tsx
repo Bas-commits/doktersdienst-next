@@ -18,6 +18,7 @@ import {
   Trash2,
   PhoneCall,
   Clock,
+  Mail,
 } from 'lucide-react';
 import { FaCalendarPlus } from 'react-icons/fa';
 import { DEFAULT_ROUTES } from '@/lib/header-defaults';
@@ -55,6 +56,12 @@ const MAIN_NAV_ITEMS: NavItem[] = [
     label: 'Locaties',
     href: '/locaties',
     icon: <MapPin className="size-4 shrink-0" />,
+  },
+  {
+    id: 'rooster-email',
+    label: 'Email',
+    href: '/rooster-email',
+    icon: <Mail className="size-4 shrink-0" />,
   },
 ];
 

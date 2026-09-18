@@ -14,6 +14,7 @@ export const MAIN_ROUTES = [
   '/overnames',
   '/urentelling',
   '/locaties',
+  '/rooster-email',
 ] as const;
 
 export const SECRETARIS_ROUTES = [

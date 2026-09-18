@@ -25,15 +25,6 @@ import {
 
 const WEEKDAYS = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 
-/** Display order left-to-right, top-to-bottom: Ochtend, Middag, Avond, Nacht. */
-const DAYPART_SEQUENCE = ['Ochtend', 'Middag', 'Avond', 'Nacht'] as const;
-
-function compareDayparts(a: PraktijkplannerDaypart, b: PraktijkplannerDaypart): number {
-  const ai = DAYPART_SEQUENCE.indexOf(a.naam as (typeof DAYPART_SEQUENCE)[number]);
-  const bi = DAYPART_SEQUENCE.indexOf(b.naam as (typeof DAYPART_SEQUENCE)[number]);
-  if (ai !== -1 && bi !== -1) return ai - bi;
-  return a.volgorde - b.volgorde;
-}
 
 export function PlannerMonthDaypartGrid({
   participant,
@@ -105,7 +96,7 @@ export function PlannerMonthDaypartGrid({
   const dates = datesBetweenInclusive(bounds.start, bounds.end).filter(
     (datum) => !verborgenWeekdagen?.has(weekdayFromIsoDate(datum))
   );
-  const orderedDayparts = [...dayparts].sort(compareDayparts);
+  const orderedDayparts = [...dayparts].sort((a, b) => a.volgorde - b.volgorde);
   const followerTool = unavailableCursor ? UNAVAILABLE_DAYPART_CURSOR_TOOL : cursorTool ?? null;
   const followerPosition = unavailableCursor ?? cursorPosition;
 

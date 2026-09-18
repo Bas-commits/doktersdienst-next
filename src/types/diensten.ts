@@ -100,5 +100,13 @@ export interface ShiftBlockView {
   isPartial?: boolean;
   /** Original doctor info (for overname overlay blocks where middle shows the target doctor). */
   originalDoctor?: DoctorInfo | null;
+  /**
+   * Autoplanning-voorstel voor een lege sectie: kleur + initialen van de voorgestelde dokter.
+   * Alleen gezet op nog-onbevestigde blokken uit /api/autoplanning/generate; via de bestaande
+   * pendingDoctor(Top/Bottom)-props van ShiftBlock, dus geen apart visueel systeem.
+   */
+  proposedMiddle?: { color: string; shortName: string } | null;
+  proposedTop?: { color: string; shortName: string } | null;
+  proposedBottom?: { color: string; shortName: string } | null;
 }
 

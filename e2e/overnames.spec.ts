@@ -139,7 +139,10 @@ test.describe('Overnames', () => {
     const shiftBlocks = page.getByTestId('shift-block-middle');
     await expect(shiftBlocks.first()).toBeVisible({ timeout: 15_000 });
 
-    const assignedBlock = await futureAssignedBlockLocator(page);
+    // requireNoOvername=true: a shift that already carries a pending/accepted overname from an
+    // earlier run renders as its own assigned-looking block (see futureAssignedBlockLocator's own
+    // comment) but is backed by a type=4/6 record, not type=0 — proposing against it 400s.
+    const assignedBlock = await futureAssignedBlockLocator(page, /* requireNoOvername */ true);
     await expect(assignedBlock).toBeVisible({ timeout: 10_000 });
     await assignedBlock.dispatchEvent('click');
 

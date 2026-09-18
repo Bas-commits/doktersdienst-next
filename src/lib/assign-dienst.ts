@@ -1,0 +1,115 @@
+import { and, eq, gt, inArray, lt } from 'drizzle-orm';
+import { db, schema } from '@/db';
+
+const { diensten: dienstenTable } = schema;
+
+export type DienstSection = 'middle' | 'top' | 'bottom';
+
+const SECTION_TYPE: Record<DienstSection, number> = {
+  middle: 0,
+  top: 5,
+  bottom: 11, // Extra Dokter assignment
+};
+
+/** Legacy DB: Standaard rows may be type 0, 4, or 6 (see PHP diensten.verwijderen / shift.persoon2). */
+const MIDDLE_ASSIGNMENT_TYPES = [0, 4, 6] as const;
+
+/** Extra Dokter assignment rows are stored as type 11. */
+const BOTTOM_ASSIGNMENT_TYPES = [11] as const;
+
+export type ApplyAssignmentParams = {
+  idwaarneemgroep: number;
+  van: number;
+  tot: number;
+  /** Doctor to assign; null/undefined unassigns. */
+  iddeelnemer: number | null | undefined;
+  section: DienstSection;
+};
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Assigns or removes a doctor from a shift stripe (middle/top/bottom), within an existing
+ * transaction. Shared by /api/diensten/assign and /api/autoplanning/confirm so both write
+ * paths apply the exact same delete-then-insert semantics.
+ *
+ * Database model:
+ *   - type=1 record: always present, defines the unassigned slot (never modified here)
+ *   - type=0, 4, or 6: regular (Standaard) assignment  → section=middle (legacy uses 4 and 6 too)
+ *   - type=5: Achterwacht assignment           → section=top
+ *   - type=11: Extra Dokter                    → section=bottom
+ *
+ * Behaviour:
+ *   - If an assignment record of the target type already exists → update iddeelnemer
+ *   - Otherwise → insert a new record, copying idpraktijk/idshift/currDate/nextDate
+ *     from the type=1 base record.
+ *   - If iddeelnemer is null (unassign) → delete the assignment record if it exists.
+ *   - Middle (Standaard): legacy rows may span a wider interval than the type=1 chunk; match
+ *     using interval overlap (van < slotTot AND tot > slotVan), same as PHP shift.persoon2.
+ */
+export async function applyAssignment(tx: Transaction, params: ApplyAssignmentParams): Promise<void> {
+  const { idwaarneemgroep, van, tot, iddeelnemer, section } = params;
+  const targetType = SECTION_TYPE[section];
+  const isUnassign = iddeelnemer == null;
+
+  // Find the type=1 base record (iddeelnemer=0 is the convention for unassigned base slots)
+  const [base] = await tx
+    .select({
+      id: dienstenTable.id,
+      idpraktijk: dienstenTable.idpraktijk,
+      idshift: dienstenTable.idshift,
+      currDate: dienstenTable.currDate,
+      nextDate: dienstenTable.nextDate,
+    })
+    .from(dienstenTable)
+    .where(
+      and(
+        eq(dienstenTable.van, van),
+        eq(dienstenTable.tot, tot),
+        eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+        eq(dienstenTable.type, 1),
+      ),
+    )
+    .limit(1);
+
+  // Build the overlap clause for this section's assignment types.
+  // Overlap matching handles legacy split assignments whose van/tot
+  // may be a sub-range of the type=1 base slot.
+  const sectionTypes =
+    section === 'middle'
+      ? [...MIDDLE_ASSIGNMENT_TYPES]
+      : section === 'bottom'
+        ? [...BOTTOM_ASSIGNMENT_TYPES]
+        : [targetType];
+  const overlapClause = and(
+    eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+    inArray(dienstenTable.type, sectionTypes),
+    lt(dienstenTable.van, tot),
+    gt(dienstenTable.tot, van),
+  );
+
+  if (isUnassign) {
+    // Delete ALL overlapping assignment records for this section.
+    // Uses the WHERE clause directly — safe even for rows with NULL id.
+    await tx.delete(dienstenTable).where(overlapClause);
+    return;
+  }
+
+  // Delete-then-insert strategy: remove ALL existing overlapping records for this
+  // section first, then insert exactly one. This prevents duplicates (legacy data or
+  // race conditions) and cleans up split assignments from the PHP system.
+  // Uses WHERE clause directly — safe even for rows with NULL id.
+  await tx.delete(dienstenTable).where(overlapClause);
+
+  await tx.insert(dienstenTable).values({
+    idwaarneemgroep,
+    van,
+    tot,
+    type: targetType,
+    iddeelnemer: iddeelnemer as number,
+    idpraktijk: base?.idpraktijk ?? null,
+    idshift: base?.idshift ?? null,
+    currDate: base?.currDate ?? null,
+    nextDate: base?.nextDate ?? null,
+  });
+}

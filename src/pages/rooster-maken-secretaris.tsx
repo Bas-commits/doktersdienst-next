@@ -3,7 +3,7 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Wand2 } from 'lucide-react';
 import { FaFilter } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +30,7 @@ import { shiftBlockToastDescription } from '@/utils/shiftToastContext';
 import type { CalendarGridRow } from '@/components/CalandarGrid/CalendarGrid';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
+import type { AutoplanningAssignment, AutoplanningSection, AutoplanningSlot } from '@/lib/autoplanning';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -46,6 +47,41 @@ function vanGteForMonth(viewMonth: number, viewYear: number): number {
 
 function totLteForMonth(viewMonth: number, viewYear: number): number {
   return Math.floor(new Date(viewYear, viewMonth + 1, 0, 23, 59, 59, 999).getTime() / 1000) + TWO_WEEKS_SECONDS;
+}
+
+type ClearScope = 'week' | 'month' | 'year';
+
+const CLEAR_SCOPE_LABEL: Record<ClearScope, string> = {
+  week: 'deze week',
+  month: 'deze maand',
+  year: 'dit jaar',
+};
+
+/** Periodegrenzen voor "Rooster leegmaken" — [van, tot) in Unix seconden, tot exclusief.
+ *  "Week" is bewust de kalenderweek van vandaag (er is geen aparte weekselectie in deze
+ *  pagina); maand/jaar volgen de al zichtbare maandnavigatie. */
+function clearRangeFor(scope: ClearScope, viewMonth: number, viewYear: number): { van: number; tot: number } {
+  if (scope === 'year') {
+    return {
+      van: Math.floor(new Date(viewYear, 0, 1).getTime() / 1000),
+      tot: Math.floor(new Date(viewYear + 1, 0, 1).getTime() / 1000),
+    };
+  }
+  if (scope === 'month') {
+    return {
+      van: Math.floor(new Date(viewYear, viewMonth, 1).getTime() / 1000),
+      tot: Math.floor(new Date(viewYear, viewMonth + 1, 1).getTime() / 1000),
+    };
+  }
+  const now = new Date();
+  // Maandag als weekstart; getDay() is 0=zondag..6=zaterdag.
+  const dayOffset = (now.getDay() + 6) % 7;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOffset);
+  const nextMonday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7);
+  return {
+    van: Math.floor(monday.getTime() / 1000),
+    tot: Math.floor(nextMonday.getTime() / 1000),
+  };
 }
 
 interface Doctor {
@@ -323,6 +359,58 @@ function assignInFlightKey(shiftKey: string, section: StripeSection): string {
   return `${shiftKey}::${section}`;
 }
 
+type AutoplanningProposal = {
+  idwaarneemgroep: number;
+  slots: AutoplanningSlot[];
+  assignments: AutoplanningAssignment[];
+  unfilled: string[];
+};
+
+/** Merge een autoplanning-voorstel in de rijen via de bestaande pendingDoctor(Top/Bottom)-props
+ *  van ShiftBlock — die tonen al kleur+initialen op een lege stripe, precies wat een voorstel
+ *  nodig heeft, zonder een apart visueel systeem te bouwen. Raakt alleen de rij van de eigen
+ *  waarneemgroep, anders zou een identiek tijdvak in een andere zichtbare groep meeliften. */
+function mergeRowsWithProposal(
+  rows: CalendarGridRow[],
+  proposal: AutoplanningProposal | null,
+  doctors: Doctor[],
+): CalendarGridRow[] {
+  if (!proposal || proposal.assignments.length === 0) return rows;
+
+  const slotById = new Map(proposal.slots.map((s) => [s.id, s]));
+  const bySlotKey = new Map<string, Partial<Record<AutoplanningSection, { color: string; shortName: string }>>>();
+
+  for (const a of proposal.assignments) {
+    const slot = slotById.get(a.slotId);
+    if (!slot) continue;
+    const doctor = doctors.find((d) => d.id === a.iddeelnemer);
+    if (!doctor) continue;
+    const key = `${slot.van}:${slot.tot}`;
+    const existing = bySlotKey.get(key) ?? {};
+    existing[slot.section] = { color: doctor.color ?? '#c686fd', shortName: doctor.initials };
+    bySlotKey.set(key, existing);
+  }
+
+  if (bySlotKey.size === 0) return rows;
+
+  return rows.map((row) => {
+    if (row.id !== proposal.idwaarneemgroep) return row;
+    return {
+      ...row,
+      shiftBlocks: row.shiftBlocks.map((block) => {
+        const patch = bySlotKey.get(`${block.van}:${block.tot}`);
+        if (!patch) return block;
+        return {
+          ...block,
+          proposedMiddle: patch.middle ?? block.proposedMiddle,
+          proposedTop: patch.top ?? block.proposedTop,
+          proposedBottom: patch.bottom ?? block.proposedBottom,
+        };
+      }),
+    };
+  });
+}
+
 export default function RoosterMakenSecretarisPage() {
   const router = useRouter();
   const { activeWaarneemgroepId, waarneemgroepen, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
@@ -388,6 +476,14 @@ export default function RoosterMakenSecretarisPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   /** When null, effective selection is "only header-selected". When set, user has toggled checkboxes. */
   const [selectedIds, setSelectedIds] = useState<Set<number> | null>(null);
+  const [proposal, setProposal] = useState<AutoplanningProposal | null>(null);
+  const [proposalLoading, setProposalLoading] = useState(false);
+  const [clearScope, setClearScope] = useState<ClearScope>('month');
+  const [clearLoading, setClearLoading] = useState(false);
+  /** Same two-step in-page confirm pattern as OvernameDetailModal's delete — a native
+   *  window.confirm() blocks the tab's own event loop (including in Playwright/CDP-driven
+   *  browsers), so a destructive action needs an in-app confirm step instead. */
+  const [clearConfirming, setClearConfirming] = useState(false);
 
   const isAdmin = useMemo(
     () => (waarneemgroepen ?? []).some((wg) => wg.idgroep === GROEP_ADMINISTRATOR),
@@ -473,8 +569,9 @@ export default function RoosterMakenSecretarisPage() {
       allRows.filter((row) => idsToShow.has(row.id)),
       waarneemgroepNameSource
     );
-    return mergeRowsWithOptimistic(base, optimisticStripes);
-  }, [allRows, idsToShow, waarneemgroepNameSource, optimisticStripes]);
+    const withOptimistic = mergeRowsWithOptimistic(base, optimisticStripes);
+    return mergeRowsWithProposal(withOptimistic, proposal, allDoctors);
+  }, [allRows, idsToShow, waarneemgroepNameSource, optimisticStripes, proposal, allDoctors]);
 
   useEffect(() => {
     if (!dienstenResponse) return;
@@ -703,6 +800,118 @@ export default function RoosterMakenSecretarisPage() {
     [selectedDoctor, deleteMode, callAssign]
   );
 
+  /** Genereert een roostervoorstel voor de actieve waarneemgroep en de huidig getoonde maand
+   *  (dezelfde maandnavigatie die de secretaris al gebruikt is de periodekeuze voor v1). */
+  const handleGenerateProposal = useCallback(async () => {
+    if (panelGroupId == null) return;
+    setProposalLoading(true);
+    try {
+      const res = await fetch('/api/autoplanning/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idwaarneemgroep: panelGroupId,
+          vanMaand: viewMonth,
+          vanJaar: viewYear,
+          totMaand: viewMonth,
+          totJaar: viewYear,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error ?? 'Genereren van voorstel mislukt');
+        return;
+      }
+      setProposal({ idwaarneemgroep: panelGroupId, ...data });
+      setSelectedDoctor(null);
+      setDeleteMode(false);
+    } catch {
+      toast.error('Netwerkfout bij genereren van voorstel');
+    } finally {
+      setProposalLoading(false);
+    }
+  }, [panelGroupId, viewMonth, viewYear]);
+
+  const handleRejectProposal = useCallback(() => {
+    setProposal(null);
+  }, []);
+
+  const handleConfirmProposal = useCallback(async () => {
+    if (!proposal) return;
+    const slotById = new Map(proposal.slots.map((s) => [s.id, s]));
+    const assignments = proposal.assignments
+      .map((a) => {
+        const slot = slotById.get(a.slotId);
+        if (!slot) return null;
+        return { van: slot.van, tot: slot.tot, section: slot.section, iddeelnemer: a.iddeelnemer };
+      })
+      .filter((a): a is NonNullable<typeof a> => a !== null);
+
+    if (assignments.length === 0) {
+      setProposal(null);
+      return;
+    }
+
+    setProposalLoading(true);
+    try {
+      const res = await fetch('/api/autoplanning/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idwaarneemgroep: proposal.idwaarneemgroep, assignments }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error ?? 'Bevestigen van voorstel mislukt');
+        return;
+      }
+      toast.success(`${assignments.length} toewijzingen bevestigd`);
+      setProposal(null);
+      clearCacheByPrefix('/api/diensten');
+      setRefreshKey((k) => k + 1);
+    } catch {
+      toast.error('Netwerkfout bij bevestigen van voorstel');
+    } finally {
+      setProposalLoading(false);
+    }
+  }, [proposal]);
+
+  /** Verwijdert alle Standaard/Achterwacht/Extra Dokter-toewijzingen (niet de basisslots) voor
+   *  de actieve waarneemgroep binnen de gekozen periode. Eerste klik zet clearConfirming, pas de
+   *  tweede klik voert echt uit — dit is niet ongedaan te maken. */
+  const handleClearRooster = useCallback(async () => {
+    if (panelGroupId == null) return;
+    if (!clearConfirming) {
+      setClearConfirming(true);
+      return;
+    }
+    setClearConfirming(false);
+    const { van, tot } = clearRangeFor(clearScope, viewMonth, viewYear);
+
+    setClearLoading(true);
+    try {
+      const res = await fetch('/api/diensten/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idwaarneemgroep: panelGroupId, van, tot }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error ?? 'Leegmaken van rooster mislukt');
+        return;
+      }
+      toast.success(`${data.deleted ?? 0} toewijzingen verwijderd`);
+      setProposal(null);
+      clearCacheByPrefix('/api/diensten');
+      setRefreshKey((k) => k + 1);
+    } catch {
+      toast.error('Netwerkfout bij leegmaken van rooster');
+    } finally {
+      setClearLoading(false);
+    }
+  }, [panelGroupId, clearConfirming, clearScope, viewMonth, viewYear]);
+
+  const handleCancelClear = useCallback(() => setClearConfirming(false), []);
+
   const loading = waarneemgroepenLoading || (dienstenWaarneemgroepIds.length > 0 && dienstenLoading);
   const error = waarneemgroepenError ?? dienstenError;
 
@@ -848,6 +1057,71 @@ export default function RoosterMakenSecretarisPage() {
                   {deleteMode && <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-destructive" />}
                 </button>
 
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateProposal()}
+                  disabled={proposalLoading || panelGroupId == null}
+                  data-testid="autoplanning-generate"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {/*
+                    Bewust GEEN h-7 w-7 op deze wrapper: e2e's selectFirstDoctor() vindt de
+                    dokterknoppen via een filter op '.h-7.w-7' en pakt .nth(1) (na Verwijderen) —
+                    een knop hier met diezelfde klassen zou als "eerste dokter" gezien worden.
+                  */}
+                  <span className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+                    <Wand2 size={13} />
+                  </span>
+                  <span className="truncate">
+                    {proposalLoading ? 'Bezig…' : 'Automatisch plannen'}
+                  </span>
+                </button>
+
+                <div className="flex w-full items-center gap-1 px-2 py-1">
+                  <select
+                    value={clearScope}
+                    onChange={(e) => {
+                      setClearScope(e.target.value as ClearScope);
+                      setClearConfirming(false);
+                    }}
+                    disabled={clearLoading}
+                    data-testid="clear-rooster-scope"
+                    className="rounded border border-input bg-background px-1 py-1 text-xs text-muted-foreground"
+                    aria-label="Periode voor leegmaken"
+                  >
+                    <option value="week">Week</option>
+                    <option value="month">Maand</option>
+                    <option value="year">Jaar</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void handleClearRooster()}
+                    disabled={clearLoading || panelGroupId == null}
+                    data-testid={clearConfirming ? 'clear-rooster-confirm' : 'clear-rooster'}
+                    className={`flex-1 rounded-md px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                      clearConfirming
+                        ? 'bg-destructive text-white hover:bg-destructive/90'
+                        : 'text-destructive hover:bg-destructive/10'
+                    }`}
+                  >
+                    {clearLoading
+                      ? 'Bezig…'
+                      : clearConfirming
+                        ? `Zeker weten? (${CLEAR_SCOPE_LABEL[clearScope]})`
+                        : 'Rooster leegmaken'}
+                  </button>
+                  {clearConfirming && !clearLoading && (
+                    <button
+                      type="button"
+                      onClick={handleCancelClear}
+                      data-testid="clear-rooster-cancel"
+                      className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    >
+                      Annuleren
+                    </button>
+                  )}
+                </div>
+
                 <div className="my-1 border-t border-border" />
 
                 {doctorsLoading && (
@@ -958,6 +1232,37 @@ export default function RoosterMakenSecretarisPage() {
                 )}
                 {loading && !dienstenResponse && (
                   <p className="mb-4 text-sm text-muted-foreground">Rooster laden…</p>
+                )}
+                {proposal && (
+                  <div
+                    data-testid="autoplanning-bar"
+                    className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-300 bg-blue-50 px-4 py-2 text-sm text-blue-900"
+                  >
+                    <span>
+                      {proposal.assignments.length} toewijzingen voorgesteld
+                      {proposal.unfilled.length > 0 ? `, ${proposal.unfilled.length} niet ingevuld` : ''}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleRejectProposal}
+                        disabled={proposalLoading}
+                        data-testid="autoplanning-reject"
+                        className="rounded-md border border-blue-300 px-3 py-1 text-blue-900 transition hover:bg-blue-100 disabled:opacity-50"
+                      >
+                        Verwerpen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleConfirmProposal()}
+                        disabled={proposalLoading || proposal.assignments.length === 0}
+                        data-testid="autoplanning-confirm"
+                        className="rounded-md bg-blue-600 px-3 py-1 text-white transition hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        Bevestigen
+                      </button>
+                    </span>
+                  </div>
                 )}
                 <div ref={calendarRef}>
                   <CalendarGridWithNavState

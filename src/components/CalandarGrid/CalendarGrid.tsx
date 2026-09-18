@@ -674,6 +674,9 @@ export function CalendarGrid({
                                     hideBottomStrip={hideBottomStrip}
                                     showEmptyTopStripBorder={onSectionShiftClick != null}
                                     showEmptyBottomStripBorder={onSectionShiftClick != null}
+                                    pendingDoctor={block.proposedMiddle ?? undefined}
+                                    pendingDoctorTop={block.proposedTop ?? undefined}
+                                    pendingDoctorBottom={block.proposedBottom ?? undefined}
                                     onDelete={
                                       onShiftDelete
                                         ? () => onShiftDelete(block)

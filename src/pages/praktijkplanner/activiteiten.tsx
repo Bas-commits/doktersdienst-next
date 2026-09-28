@@ -265,32 +265,6 @@ export function ActivitiesContent({
     () => new Map(data.masterData.dayparts.map((daypart) => [daypart.id, daypart.volgorde])),
     [data.masterData.dayparts]
   );
-  /*
-    Kaart dPp:Diensten tonen: "+ Diensten" laat Avond/Nacht en het weekend alleen meekomen als
-    er in de geladen periode ook echt een dienst in staat. Een leeg weekend of een lege avond
-    blijft gewoon weg, ook met de knop aan - anders is de knop niet "diensten tonen" maar
-    "avond, nacht en weekend altijd tonen" onder een andere naam.
-  */
-  const dienstenInAvondNacht = useMemo(
-    () =>
-      slots.some(
-        (slot) =>
-          isAvondOfNacht({ volgorde: daypartVolgordeById.get(slot.iddagdeel) ?? 0 }) &&
-          slot.tasks.some((taak) => dienstTaakIds.has(taak.id))
-      ),
-    [slots, daypartVolgordeById, dienstTaakIds]
-  );
-  const dienstenInWeekend = useMemo(
-    () =>
-      slots.some(
-        (slot) =>
-          WEEKEND_ISO_WEEKDAGEN.has(weekdayFromIsoDate(slot.datum)) &&
-          slot.tasks.some((taak) => dienstTaakIds.has(taak.id))
-      ),
-    [slots, dienstTaakIds]
-  );
-  const effectiveShowNight = showNight || (showDiensten && dienstenInAvondNacht);
-  const effectiveWeekendVerborgen = weekendVerborgen && !(showDiensten && dienstenInWeekend);
   const dagenZonderRooster = useMemo(
     () => weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
     [data.masterData.schedulableDayparts]
@@ -303,6 +277,49 @@ export function ActivitiesContent({
       ),
     [data.masterData.dayparts, data.masterData.schedulableDayparts]
   );
+  const zichtbareDeelnemerIds = useMemo(
+    () => new Set(visibleParticipants.map((participant) => participant.id)),
+    [visibleParticipants]
+  );
+  /*
+    Kaart dPp:Diensten tonen: "+ Diensten" laat Avond/Nacht en het weekend alleen meekomen als
+    er in de geladen periode ook echt een dienst in staat. Een leeg weekend of een lege avond
+    blijft gewoon weg, ook met de knop aan - anders is de knop niet "diensten tonen" maar
+    "avond, nacht en weekend altijd tonen" onder een andere naam.
+
+    Alleen diensten die daarna ook te zien zijn tellen mee: van een deelnemer in het rooster, op
+    een dag en dagdeel die de groep roostert. slots bevat ook planning van mensen die niet (meer)
+    in het rooster staan; die haalde anders rijen of kolommen naar boven waar vervolgens niets
+    in stond. Niet filteren op wat de knoppen nu tonen - dat hangt hier zelf van af.
+  */
+  const dienstenInAvondNacht = useMemo(
+    () =>
+      slots.some(
+        (slot) =>
+          zichtbareDeelnemerIds.has(slot.iddeelnemer) &&
+          isAvondOfNacht({ volgorde: daypartVolgordeById.get(slot.iddagdeel) ?? 0 }) &&
+          !dagdelenWeg.has(slot.iddagdeel) &&
+          !dagenZonderRooster.has(weekdayFromIsoDate(slot.datum)) &&
+          slot.tasks.some((taak) => dienstTaakIds.has(taak.id))
+      ),
+    [slots, zichtbareDeelnemerIds, daypartVolgordeById, dagdelenWeg, dagenZonderRooster, dienstTaakIds]
+  );
+  const dienstenInWeekend = useMemo(
+    () =>
+      slots.some((slot) => {
+        const weekdag = weekdayFromIsoDate(slot.datum);
+        return (
+          zichtbareDeelnemerIds.has(slot.iddeelnemer) &&
+          WEEKEND_ISO_WEEKDAGEN.has(weekdag) &&
+          !dagenZonderRooster.has(weekdag) &&
+          !dagdelenWeg.has(slot.iddagdeel) &&
+          slot.tasks.some((taak) => dienstTaakIds.has(taak.id))
+        );
+      }),
+    [slots, zichtbareDeelnemerIds, dagenZonderRooster, dagdelenWeg, dienstTaakIds]
+  );
+  const effectiveShowNight = showNight || (showDiensten && dienstenInAvondNacht);
+  const effectiveWeekendVerborgen = weekendVerborgen && !(showDiensten && dienstenInWeekend);
   const verborgenWeekdagen = useMemo(
     () => metVerborgenWeekend(dagenZonderRooster, effectiveWeekendVerborgen),
     [dagenZonderRooster, effectiveWeekendVerborgen]
@@ -328,10 +345,6 @@ export function ActivitiesContent({
     niet te zien, en omgekeerd. Zonder die filters werd de knop grijs in een week waarin hij
     zichtbaar niets verborg.
   */
-  const zichtbareDeelnemerIds = useMemo(
-    () => new Set(visibleParticipants.map((participant) => participant.id)),
-    [visibleParticipants]
-  );
   const ietsInAvondNacht = useMemo(
     () =>
       slots.some(
@@ -370,6 +383,15 @@ export function ActivitiesContent({
   */
   const avondNachtVerbergtIets = !loadingSlots && !effectiveShowNight && ietsInAvondNacht;
   const weekendVerbergtIets = !loadingSlots && effectiveWeekendVerborgen && ietsInWeekend;
+  /*
+    +Diensten is grijs als hij uit staat terwijl er een dienst verborgen blijft die hij zou
+    tonen: in avond/nacht met de maanknop op verbergen, of in het weekend met de weekendknop
+    op verbergen. Staat hij aan, dan verbergt hij per definitie geen dienst.
+  */
+  const dienstenVerbergtIets =
+    !loadingSlots &&
+    !showDiensten &&
+    ((dienstenInAvondNacht && !showNight) || (dienstenInWeekend && weekendVerborgen));
 
   useEffect(() => {
     setSelectedSpecificationId((current) => {
@@ -1430,7 +1452,11 @@ export function ActivitiesContent({
             dienstenInAvondNacht en dienstenInWeekend - en laat ze met rust als er niets te
             tonen valt.
           */}
-          <PlannerDienstenToggle aan={showDiensten} onChange={updateDienstenVisibility} />
+          <PlannerDienstenToggle
+            aan={showDiensten}
+            verbergtIets={dienstenVerbergtIets}
+            onChange={updateDienstenVisibility}
+          />
           {/*
             Het capaciteitsoverzicht is er alleen voor secretarissen en beheerders, net als de
             eigen pagina ervan. Een knop aanbieden die op een 403 uitloopt is erger dan geen

@@ -14,16 +14,18 @@ import { Stethoscope } from 'lucide-react';
  * Kaart dPp:Diensten tonen: eerder moest je daarvoor zelf Avond/Nacht en Weekend aanzetten en
  * weer terugzetten, en was dat pas te zien als je toevallig de activiteit Diensten aanklikte.
  *
- * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: deze knop verbergt zelf
- * niets - hij toont juist iets dat de andere twee knoppen anders verborgen zouden houden. Nog
- * geen grijze "verbergt iets"-stand hier; wacht op een besluit over wat dat voor deze knop
- * zou moeten betekenen.
+ * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: uit is de knop wit, maar
+ * grijs (`verbergtIets`) zodra hij uit staat terwijl er een dienst in avond/nacht of het
+ * weekend verborgen blijft die hij zou tonen. Zelfde grijs als de twee knoppen ernaast.
  */
 export function PlannerDienstenToggle({
   aan,
+  verbergtIets = false,
   onChange,
 }: {
   aan: boolean;
+  /** Staat de knop uit terwijl er een dienst verborgen is die hij in beeld zou brengen. */
+  verbergtIets?: boolean;
   onChange: (aan: boolean) => void;
 }) {
   const label = aan ? 'Diensten niet meer automatisch tonen' : 'Diensten automatisch tonen';
@@ -36,11 +38,17 @@ export function PlannerDienstenToggle({
       title={
         aan
           ? 'Avond/Nacht en het weekend komen nu automatisch mee zodra er een dienst in staat.'
-          : 'Laat Avond/Nacht en het weekend automatisch zien zodra daar een dienst in gepland staat, ook als je ze verder verborgen houdt.'
+          : verbergtIets
+            ? 'Er staat een dienst in avond/nacht of het weekend die nu verborgen is. Klik om diensten automatisch te tonen.'
+            : 'Laat Avond/Nacht en het weekend automatisch zien zodra daar een dienst in gepland staat, ook als je ze verder verborgen houdt.'
       }
       className={[
         'inline-flex items-center justify-center rounded-md border p-1.5 transition',
-        aan ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+        aan
+          ? 'bg-primary text-primary-foreground'
+          : verbergtIets
+            ? 'bg-muted-foreground text-background'
+            : 'text-muted-foreground hover:bg-muted',
       ].join(' ')}
     >
       <Stethoscope className="size-4" aria-hidden />

@@ -15,12 +15,19 @@ import { Moon } from 'lucide-react';
  * De tooltip zegt wat de klik doet, niet in welke stand hij staat. Dat kan ook waargemaakt
  * worden: verbergen lukt altijd. Eerder hielden avond en nacht zichzelf zichtbaar zodra er
  * iets in stond, en dan deed de knop in de ene week niets en in de andere wel.
+ *
+ * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: staat deze knop op
+ * verbergen (aan false) maar toont +Diensten avond/nacht toch omdat er een dienst in staat,
+ * dan geeft overruled dat aan met een grijze vlakvulling - anders lijkt de knop "uit" terwijl
+ * er wel degelijk iets te zien is.
  */
 export function PlannerAvondNachtToggle({
   aan,
+  overruled = false,
   onChange,
 }: {
   aan: boolean;
+  overruled?: boolean;
   onChange: (aan: boolean) => void;
 }) {
   const label = aan ? 'Avond en nacht verbergen' : 'Avond en nacht tonen';
@@ -31,13 +38,19 @@ export function PlannerAvondNachtToggle({
       aria-label={label}
       onClick={() => onChange(!aan)}
       title={
-        aan
-          ? 'Avond en nacht verbergen. Er wordt niets verwijderd; wat gepland staat komt terug zodra je ze weer toont.'
-          : 'Avond en nacht tonen, ook als er niets in staat, zodat er iets in te plannen valt'
+        overruled
+          ? 'Avond en nacht staan aan omdat +Diensten een dienst laat zien, ook al staat deze knop op verbergen.'
+          : aan
+            ? 'Avond en nacht verbergen. Er wordt niets verwijderd; wat gepland staat komt terug zodra je ze weer toont.'
+            : 'Avond en nacht tonen, ook als er niets in staat, zodat er iets in te plannen valt'
       }
       className={[
         'inline-flex items-center justify-center rounded-md border p-1.5 transition',
-        aan ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+        overruled
+          ? 'bg-muted text-muted-foreground'
+          : aan
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:bg-muted',
       ].join(' ')}
     >
       <Moon className="size-4" aria-hidden />

@@ -21,12 +21,19 @@ import { CalendarOff } from 'lucide-react';
  * als het weekend juist weg was - dezelfde kleur betekende dan het tegenovergestelde van bij
  * de knop ernaast, en dat was voor de kaart dPp:Diensten tonen de reden om de twee gelijk te
  * trekken.
+ *
+ * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: staat deze knop op
+ * verbergen (getoond false) maar toont +Diensten het weekend toch omdat er een dienst in
+ * staat, dan geeft overruled dat aan met een grijze vlakvulling - alleen de Activiteiten
+ * planner kent +Diensten, dus overige schermen laten dit gewoon op false staan.
  */
 export function PlannerWeekendToggle({
   getoond,
+  overruled = false,
   onChange,
 }: {
   getoond: boolean;
+  overruled?: boolean;
   onChange: (getoond: boolean) => void;
 }) {
   const label = getoond ? 'Weekend verbergen' : 'Weekend tonen';
@@ -37,13 +44,19 @@ export function PlannerWeekendToggle({
       aria-label={label}
       onClick={() => onChange(!getoond)}
       title={
-        getoond
-          ? 'Zaterdag en zondag verbergen. Er wordt niets verwijderd; wat er staat komt terug zodra je ze weer toont.'
-          : 'Zaterdag en zondag weer tonen'
+        overruled
+          ? 'Het weekend staat aan omdat +Diensten een dienst laat zien, ook al staat deze knop op verbergen.'
+          : getoond
+            ? 'Zaterdag en zondag verbergen. Er wordt niets verwijderd; wat er staat komt terug zodra je ze weer toont.'
+            : 'Zaterdag en zondag weer tonen'
       }
       className={[
         'inline-flex items-center justify-center rounded-md border p-1.5 transition',
-        getoond ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+        overruled
+          ? 'bg-muted text-muted-foreground'
+          : getoond
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:bg-muted',
       ].join(' ')}
     >
       <CalendarOff className="size-4" aria-hidden />

@@ -275,6 +275,13 @@ export function ActivitiesContent({
   );
   const effectiveShowNight = showNight || (showDiensten && dienstenInAvondNacht);
   const effectiveWeekendVerborgen = weekendVerborgen && !(showDiensten && dienstenInWeekend);
+  /*
+    Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: de eigen knop zegt
+    "verbergen", maar +Diensten laat het toch zien. Alleen dan is de knop overruled - staat de
+    knop zelf al op tonen, dan is er niets om overrulet te worden.
+  */
+  const avondNachtOverruled = !showNight && effectiveShowNight;
+  const weekendOverruled = weekendVerborgen && !effectiveWeekendVerborgen;
 
   const verborgenWeekdagen = useMemo(
     () =>
@@ -1331,13 +1338,18 @@ export function ActivitiesContent({
             Het voorkeuren-endpoint vraagt alleen leesrechten, dus opslaan werkt ook voor een
             read-only kijker.
           */}
-          <PlannerAvondNachtToggle aan={showNight} onChange={updateVisibility} />
+          <PlannerAvondNachtToggle
+            aan={showNight}
+            overruled={avondNachtOverruled}
+            onChange={updateVisibility}
+          />
           {/*
             Weekend verbergen is al voor iedereen, net als de knop hierboven nu: allebei gaan
             over wat je ziet, niet over wat je mag inplannen.
           */}
           <PlannerWeekendToggle
             getoond={!weekendVerborgen}
+            overruled={weekendOverruled}
             onChange={(getoond) => setWeekendVerborgen(!getoond)}
           />
           {/*

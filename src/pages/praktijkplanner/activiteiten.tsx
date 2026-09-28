@@ -291,27 +291,76 @@ export function ActivitiesContent({
   );
   const effectiveShowNight = showNight || (showDiensten && dienstenInAvondNacht);
   const effectiveWeekendVerborgen = weekendVerborgen && !(showDiensten && dienstenInWeekend);
+  const dagenZonderRooster = useMemo(
+    () => weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
+    [data.masterData.schedulableDayparts]
+  );
+  const dagdelenWeg = useMemo(
+    () =>
+      dagdelenZonderRooster(
+        data.masterData.schedulableDayparts ?? [],
+        data.masterData.dayparts.map((daypart) => daypart.id)
+      ),
+    [data.masterData.dayparts, data.masterData.schedulableDayparts]
+  );
+  const verborgenWeekdagen = useMemo(
+    () => metVerborgenWeekend(dagenZonderRooster, effectiveWeekendVerborgen),
+    [dagenZonderRooster, effectiveWeekendVerborgen]
+  );
+  const visibleDayparts = useMemo(
+    () =>
+      zichtbareDagdelen(
+        data.masterData.dayparts.filter((daypart) => !dagdelenWeg.has(daypart.id)),
+        { toonAvondNacht: effectiveShowNight }
+      ),
+    [data.masterData.dayparts, dagdelenWeg, effectiveShowNight]
+  );
+
   /*
     Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: de knop is grijs zodra
     hij daadwerkelijk iets verbergt - elk fiche met inhoud, niet alleen een dienst. +Diensten
     zelf kijkt wel specifiek naar diensten (dienstenInAvondNacht/dienstenInWeekend hierboven),
     want dat is wat die knop hoort te doen; deze grijze indicator is een los, breder signaal.
+
+    Alleen fiches die de knop ook echt in beeld zou brengen tellen mee. slots bevat ook fiches
+    van mensen die niet (meer) in het rooster staan, en fiches op een dag of dagdeel dat om een
+    andere reden weg is. Een zondagavond is bij een verborgen weekend ook met avond/nacht aan
+    niet te zien, en omgekeerd. Zonder die filters werd de knop grijs in een week waarin hij
+    zichtbaar niets verborg.
   */
+  const zichtbareDeelnemerIds = useMemo(
+    () => new Set(visibleParticipants.map((participant) => participant.id)),
+    [visibleParticipants]
+  );
   const ietsInAvondNacht = useMemo(
     () =>
       slots.some(
         (slot) =>
+          zichtbareDeelnemerIds.has(slot.iddeelnemer) &&
           isAvondOfNacht({ volgorde: daypartVolgordeById.get(slot.iddagdeel) ?? 0 }) &&
+          !dagdelenWeg.has(slot.iddagdeel) &&
+          !verborgenWeekdagen.has(weekdayFromIsoDate(slot.datum)) &&
           fichHeeftInhoud(slot)
       ),
-    [slots, daypartVolgordeById]
+    [slots, zichtbareDeelnemerIds, daypartVolgordeById, dagdelenWeg, verborgenWeekdagen]
+  );
+  const zichtbareDagdeelIds = useMemo(
+    () => new Set(visibleDayparts.map((daypart) => daypart.id)),
+    [visibleDayparts]
   );
   const ietsInWeekend = useMemo(
     () =>
-      slots.some(
-        (slot) => WEEKEND_ISO_WEEKDAGEN.has(weekdayFromIsoDate(slot.datum)) && fichHeeftInhoud(slot)
-      ),
-    [slots]
+      slots.some((slot) => {
+        const weekdag = weekdayFromIsoDate(slot.datum);
+        return (
+          zichtbareDeelnemerIds.has(slot.iddeelnemer) &&
+          WEEKEND_ISO_WEEKDAGEN.has(weekdag) &&
+          !dagenZonderRooster.has(weekdag) &&
+          zichtbareDagdeelIds.has(slot.iddagdeel) &&
+          fichHeeftInhoud(slot)
+        );
+      }),
+    [slots, zichtbareDeelnemerIds, dagenZonderRooster, zichtbareDagdeelIds]
   );
   /*
     loadingSlots erbij: tijdens het laden van een nieuwe week of maand staan de fiches van de
@@ -321,25 +370,6 @@ export function ActivitiesContent({
   */
   const avondNachtVerbergtIets = !loadingSlots && !effectiveShowNight && ietsInAvondNacht;
   const weekendVerbergtIets = !loadingSlots && effectiveWeekendVerborgen && ietsInWeekend;
-
-  const verborgenWeekdagen = useMemo(
-    () =>
-      metVerborgenWeekend(
-        weekdagenZonderRooster(data.masterData.schedulableDayparts ?? []),
-        effectiveWeekendVerborgen
-      ),
-    [data.masterData.schedulableDayparts, effectiveWeekendVerborgen]
-  );
-  const visibleDayparts = useMemo(() => {
-    const weg = dagdelenZonderRooster(
-      data.masterData.schedulableDayparts ?? [],
-      data.masterData.dayparts.map((daypart) => daypart.id)
-    );
-    return zichtbareDagdelen(
-      data.masterData.dayparts.filter((daypart) => !weg.has(daypart.id)),
-      { toonAvondNacht: effectiveShowNight }
-    );
-  }, [data.masterData.dayparts, data.masterData.schedulableDayparts, effectiveShowNight]);
 
   useEffect(() => {
     setSelectedSpecificationId((current) => {

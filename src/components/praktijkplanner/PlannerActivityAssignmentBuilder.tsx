@@ -6,6 +6,7 @@ import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen'
 import type {
   PraktijkplannerActivity,
   PraktijkplannerActivitySpecification,
+  PraktijkplannerExpertise,
   PraktijkplannerLocation,
   PraktijkplannerTaskType,
 } from '@/types/praktijkplanner';
@@ -165,6 +166,7 @@ export function PlannerActivityAssignmentBuilder({
   specifications,
   tasks,
   locations,
+  expertises,
   selection,
   clearMode,
   opmerkingMode,
@@ -180,6 +182,8 @@ export function PlannerActivityAssignmentBuilder({
   specifications: PraktijkplannerActivitySpecification[];
   tasks: PraktijkplannerTaskType[];
   locations: PraktijkplannerLocation[];
+  /** Om bij een activiteit de vereiste expertise voluit te tonen, niet alleen het id. */
+  expertises: PraktijkplannerExpertise[];
   selection: Selection;
   clearMode: boolean;
   /** Aan betekent: de volgende klik op een fiche opent de opmerking in plaats van te plannen. */
@@ -216,6 +220,10 @@ export function PlannerActivityAssignmentBuilder({
   const selectedSpecifications = useMemo(
     () => specifications.filter((specification) => specification.idactiviteit === selection.activityId),
     [selection.activityId, specifications]
+  );
+  const expertiseById = useMemo(
+    () => new Map(expertises.map((expertise) => [expertise.id, expertise])),
+    [expertises]
   );
   const hasSelection =
     selection.activityId != null ||
@@ -357,6 +365,8 @@ export function PlannerActivityAssignmentBuilder({
                 const label = activity.afkorting
                   ? `${activity.afkorting} ${activity.naam}`
                   : activity.naam;
+                const expertise =
+                  activity.idexpertise != null ? expertiseById.get(activity.idexpertise) : undefined;
                 return (
                   <button
                     key={activity.id}
@@ -379,6 +389,11 @@ export function PlannerActivityAssignmentBuilder({
                     <span className="min-w-0">
                       <span className="block truncate font-semibold">{activity.afkorting || activity.naam}</span>
                       {activity.afkorting ? <span className="block truncate text-muted-foreground">{activity.naam}</span> : null}
+                      {expertise ? (
+                        <span className="block truncate text-[11px] text-muted-foreground/80">
+                          {expertise.naam}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 );

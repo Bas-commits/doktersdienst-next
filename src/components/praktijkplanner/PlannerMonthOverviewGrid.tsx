@@ -19,6 +19,7 @@ import { MAAND_CEL_STANDAARD } from '@/lib/praktijkplanner/maand-celgrootte';
 import { tijdLabels } from '@/lib/praktijkplanner/daypart-times';
 import { DaypartIcon } from './DaypartIcon';
 import type { PlannerDaypartCell } from './PlannerDaypartGrid';
+import { PlannerParticipantHoverPreview } from './PlannerParticipantHoverPreview';
 
 const WEEKDAG_LETTERS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
@@ -284,24 +285,31 @@ export function PlannerMonthOverviewGrid({
             geordendeDagdelen.map((daypart, index) => (
               <tr key={`${participant.id}-${daypart.id}`}>
                 {index === 0 ? (
-                  <th
-                    rowSpan={geordendeDagdelen.length}
-                    style={{ width: NAAM_BREEDTE_PX, minWidth: NAAM_BREEDTE_PX, left: 0 }}
-                    className="sticky z-30 border-r border-b-2 bg-card px-1 py-0.5 text-left align-top font-medium leading-tight"
-                  >
-                    {onParticipantNameClick ? (
-                      <button
-                        type="button"
-                        className="cursor-pointer text-left leading-tight hover:underline"
-                        title={deelnemerNaam(participant)}
-                        onClick={() => onParticipantNameClick(participant)}
+                  (() => {
+                    const naam = deelnemerNaam(participant);
+                    const expertises = participant.expertises ?? [];
+                    return (
+                      <th
+                        rowSpan={geordendeDagdelen.length}
+                        style={{ width: NAAM_BREEDTE_PX, minWidth: NAAM_BREEDTE_PX, left: 0 }}
+                        className="sticky z-30 border-r border-b-2 bg-card px-1 py-0.5 text-left align-top font-medium leading-tight"
                       >
-                        {deelnemerNaam(participant)}
-                      </button>
-                    ) : (
-                      <span title={deelnemerNaam(participant)}>{deelnemerNaam(participant)}</span>
-                    )}
-                  </th>
+                        <PlannerParticipantHoverPreview participantName={naam} expertises={expertises}>
+                          {onParticipantNameClick ? (
+                            <button
+                              type="button"
+                              className="cursor-pointer text-left leading-tight hover:underline"
+                              onClick={() => onParticipantNameClick(participant)}
+                            >
+                              {naam}
+                            </button>
+                          ) : (
+                            <span>{naam}</span>
+                          )}
+                        </PlannerParticipantHoverPreview>
+                      </th>
+                    );
+                  })()
                 ) : null}
                 {dates.map((datum, dagIndex) => {
                   const weekdag = weekdayFromIsoDate(datum);

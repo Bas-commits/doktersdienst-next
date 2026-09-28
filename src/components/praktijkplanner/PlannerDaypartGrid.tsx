@@ -20,6 +20,7 @@ import {
   type PlannerCursorTool,
 } from './PlannerCursorTool';
 import { DaypartIcon } from './DaypartIcon';
+import { PlannerParticipantHoverPreview } from './PlannerParticipantHoverPreview';
 import { PlannerWeekBar } from './PlannerWeekBar';
 import { PLANNER_DAYPART_GRID_HEADER_HEIGHT_PX, PLANNER_GRID_NAV_MARGIN_PX } from './planner-grid-layout';
 
@@ -42,10 +43,6 @@ function participantLabel(participant: PraktijkplannerParticipant): string {
     participant.initialen ||
     `Deelnemer ${participant.id}`
   );
-}
-
-function expertiseLabel(expertise: { naam: string; afkorting: string | null }): string {
-  return expertise.afkorting?.trim() || expertise.naam;
 }
 
 function dayLabel(date: string): { weekday: string; day: number } {
@@ -255,15 +252,16 @@ export function PlannerDaypartGrid({
           >
             {/*
               De hoogte van een regel wordt bij ochtend en middag alleen niet door de vakjes
-              bepaald maar door deze cel: die was met de knoppenrij, de naam over twee regels
-              en de expertises eronder hoger dan twee fiches naast elkaar. Vandaar de krappere
-              opvulling en de ondergrens van 16 in plaats van 20. Bij vier dagdelen maakt het
-              niets uit, want dan zijn de vakjes weer het hoogst.
+              bepaald maar door deze cel: die was met de knoppenrij en de naam over twee regels
+              hoger dan twee fiches naast elkaar. Vandaar de krappere opvulling en de ondergrens
+              van 16 in plaats van 20. Bij vier dagdelen maakt het niets uit, want dan zijn de
+              vakjes weer het hoogst.
             */}
             <div className="flex min-h-16 flex-col justify-center gap-0.5 px-2 py-1 text-left">
               {renderParticipantActions ? (
                 <div className="flex justify-start">{renderParticipantActions(participant)}</div>
               ) : null}
+              <PlannerParticipantHoverPreview participantName={label} expertises={expertises}>
               <div className="flex items-center gap-1.5">
               <span
                 className="inline-flex h-6 w-9 shrink-0 items-center justify-center rounded text-[11px] font-bold"
@@ -290,21 +288,9 @@ export function PlannerDaypartGrid({
                     {label}
                   </span>
                 )}
-                {expertises.length > 0 ? (
-                  /*
-                    Op een regel, want drie expertises kostten drie regels hoogte in elke
-                    deelnemersregel. Wat niet past valt weg; de volledige namen staan in de
-                    titel, zoals ze er al stonden.
-                  */
-                  <p
-                    className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted-foreground"
-                    title={expertises.map((expertise) => expertise.naam).join(', ')}
-                  >
-                    {expertises.map((expertise) => expertiseLabel(expertise)).join(', ')}
-                  </p>
-                ) : null}
               </div>
               </div>
+              </PlannerParticipantHoverPreview>
             </div>
             {days.map((datum) => (
               <div key={`${participant.id}-${datum}`} className="flex items-stretch border-l p-1">

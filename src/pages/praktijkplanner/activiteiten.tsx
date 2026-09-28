@@ -1451,6 +1451,7 @@ export function ActivitiesContent({
                 specifications={data.masterData.specifications}
                 tasks={data.masterData.tasks}
                 locations={data.masterData.locations}
+                expertises={data.masterData.expertises}
                 selection={{
                   activityId: selectedActivityId,
                   specificationId: selectedSpecificationId,

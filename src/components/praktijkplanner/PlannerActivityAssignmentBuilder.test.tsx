@@ -54,6 +54,8 @@ const locations = [
   },
 ];
 
+const expertises = [{ id: 31, naam: 'Apneu', afkorting: 'APN', actief: true }];
+
 afterEach(cleanup);
 
 function BuilderHarness() {
@@ -72,6 +74,7 @@ function BuilderHarness() {
       specifications={specifications}
       tasks={tasks}
       locations={locations}
+      expertises={expertises}
       selection={selection}
       clearMode={clearMode}
       opmerkingMode={opmerkingMode}

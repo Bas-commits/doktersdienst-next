@@ -9,12 +9,12 @@ import { afwijkingTekst, herhalingWeekLabel } from '@/lib/praktijkplanner/herhal
 import { cn } from '@/lib/utils';
 import type { PraktijkplannerDienstvoorkeurWaarde } from '@/types/praktijkplanner';
 
-const CURSOR_GAP = 50;
+export const CURSOR_GAP = 50;
 const VIEWPORT_PAD = 8;
 
-type HoverPosition = { x: number; y: number };
+export type HoverPosition = { x: number; y: number };
 
-function placeNearCursor(
+export function placeNearCursor(
   cursor: HoverPosition,
   width: number,
   height: number

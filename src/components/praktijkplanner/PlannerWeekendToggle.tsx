@@ -23,10 +23,11 @@ import { CalendarOff } from 'lucide-react';
  * trekken.
  *
  * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: standaard wit in de
- * uit-stand (er is niets te verbergen), maar grijs zodra er wél een dienst in het weekend
- * staat die daardoor niet te zien is - `verbergtIets` geeft dat aan. `effectiefGetoond` is
- * voor het scherm dat weet of +Diensten deze knop overrulet en dus toch iets toont; zonder dat
- * scherm valt hij terug op `getoond` en gedraagt de knop zich als voorheen (twee standen).
+ * uit-stand (er is niets te verbergen), maar grijs zodra er wél een fiche in het weekend
+ * staat dat daardoor niet te zien is - `verbergtIets` geeft dat aan, voor elk fiche met
+ * inhoud, niet alleen een dienst. `effectiefGetoond` is voor het scherm dat weet of
+ * +Diensten deze knop overrulet en dus toch iets toont; zonder dat scherm valt hij terug op
+ * `getoond` en gedraagt de knop zich als voorheen (twee standen).
  */
 export function PlannerWeekendToggle({
   getoond,
@@ -38,7 +39,7 @@ export function PlannerWeekendToggle({
   getoond: boolean;
   /** Is het weekend op dit moment echt te zien, inclusief een eventuele overrule door +Diensten. Standaard gelijk aan getoond. */
   effectiefGetoond?: boolean;
-  /** Staat de knop op verbergen terwijl er wél een dienst in het weekend staat. */
+  /** Staat de knop op verbergen terwijl er wél een fiche in het weekend staat. */
   verbergtIets?: boolean;
   onChange: (getoond: boolean) => void;
 }) {
@@ -54,7 +55,7 @@ export function PlannerWeekendToggle({
         isGetoond
           ? 'Zaterdag en zondag verbergen. Er wordt niets verwijderd; wat er staat komt terug zodra je ze weer toont.'
           : verbergtIets
-            ? 'Er staat een dienst in het weekend die nu verborgen is. Klik om te tonen, of zet +Diensten aan om diensten automatisch te laten zien.'
+            ? 'Er staat een fiche in het weekend dat nu verborgen is. Klik om te tonen.'
             : 'Zaterdag en zondag weer tonen'
       }
       className={[

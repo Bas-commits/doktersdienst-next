@@ -17,10 +17,12 @@ import { Moon } from 'lucide-react';
  * iets in stond, en dan deed de knop in de ene week niets en in de andere wel.
  *
  * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: standaard wit in de
- * uit-stand (er is niets te verbergen), maar grijs zodra er wél een dienst in avond of nacht
- * staat die daardoor niet te zien is - `verbergtIets` geeft dat aan. `getoond` is voor het
- * scherm dat wél weet of +Diensten deze knop overrulet en dus iets toont ondanks `aan` false;
- * zonder dat scherm valt hij terug op `aan` en gedraagt de knop zich als voorheen (twee standen).
+ * uit-stand (er is niets te verbergen), maar grijs zodra er wél een fiche in avond of nacht
+ * staat dat daardoor niet te zien is - `verbergtIets` geeft dat aan, voor elk fiche met
+ * inhoud (activiteit, locatie, beschikbaarheid of taak), niet alleen een dienst. `getoond` is
+ * voor het scherm dat wél weet of +Diensten deze knop overrulet en dus iets toont ondanks
+ * `aan` false; zonder dat scherm valt hij terug op `aan` en gedraagt de knop zich als voorheen
+ * (twee standen).
  */
 export function PlannerAvondNachtToggle({
   aan,
@@ -32,7 +34,7 @@ export function PlannerAvondNachtToggle({
   aan: boolean;
   /** Is avond/nacht op dit moment echt te zien, inclusief een eventuele overrule door +Diensten. Standaard gelijk aan aan. */
   getoond?: boolean;
-  /** Staat de knop op verbergen terwijl er wél een dienst in avond of nacht staat. */
+  /** Staat de knop op verbergen terwijl er wél een fiche in avond of nacht staat. */
   verbergtIets?: boolean;
   onChange: (aan: boolean) => void;
 }) {
@@ -48,7 +50,7 @@ export function PlannerAvondNachtToggle({
         isGetoond
           ? 'Avond en nacht verbergen. Er wordt niets verwijderd; wat gepland staat komt terug zodra je ze weer toont.'
           : verbergtIets
-            ? 'Er staat een dienst in avond of nacht die nu verborgen is. Klik om te tonen, of zet +Diensten aan om diensten automatisch te laten zien.'
+            ? 'Er staat een fiche in avond of nacht dat nu verborgen is. Klik om te tonen.'
             : 'Avond en nacht tonen, ook als er niets in staat, zodat er iets in te plannen valt'
       }
       className={[

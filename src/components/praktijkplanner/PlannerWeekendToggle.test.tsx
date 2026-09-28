@@ -34,12 +34,12 @@ describe('PlannerWeekendToggle', () => {
     expect(classes).not.toContain('bg-primary');
   });
 
-  it('is grijs met een uitleg-tooltip als de knop een dienst verbergt', () => {
+  it('is grijs met een uitleg-tooltip als de knop een fiche verbergt', () => {
     render(<PlannerWeekendToggle getoond={false} verbergtIets onChange={() => {}} />);
 
     const knop = screen.getByRole('button', { name: 'Weekend tonen' });
     expect(knop.className.split(' ')).toContain('bg-muted');
-    expect(knop.title).toMatch(/dienst/);
+    expect(knop.title).toMatch(/fiche/);
   });
 
   it('telt als getoond wanneer +Diensten hem overrulet, ook al staat de eigen voorkeur op verbergen', () => {

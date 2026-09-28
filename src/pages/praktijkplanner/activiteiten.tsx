@@ -117,6 +117,22 @@ function slotKey(iddeelnemer: number, datum: string, iddagdeel: number) {
   return `${iddeelnemer}:${datum}:${iddagdeel}`;
 }
 
+/**
+ * Staat er iets op dit fiche - activiteit, locatie, beschikbaarheid of een taak.
+ *
+ * Zelfde criterium als `heeftInhoud` in herhaling-herstel-db.ts, maar dan op het al opgehaalde
+ * planningsslot in plaats van een sjabloonrij. Een dienst is ook een taak en telt dus al mee;
+ * er is geen apart geval voor nodig.
+ */
+function fichHeeftInhoud(slot: PraktijkplannerPlanningSlot): boolean {
+  return (
+    slot.idactiviteit != null ||
+    slot.idplannerlocatie != null ||
+    slot.availability != null ||
+    slot.tasks.length > 0
+  );
+}
+
 /** Zaterdag en zondag als ISO-weekdag, zoals ook WEEKENDDAGEN in useWeekendVerbergen.ts. */
 const WEEKEND_ISO_WEEKDAGEN = new Set([6, 7]);
 
@@ -276,13 +292,29 @@ export function ActivitiesContent({
   const effectiveShowNight = showNight || (showDiensten && dienstenInAvondNacht);
   const effectiveWeekendVerborgen = weekendVerborgen && !(showDiensten && dienstenInWeekend);
   /*
-    Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: de knop is alleen grijs
-    als hij daadwerkelijk iets verbergt - dus als hij op verbergen staat (ook effectief, dus
-    zonder dat +Diensten hem alsnog toont) terwijl er wél een dienst in die periode staat. Staat
-    er niets in avond/nacht of het weekend, dan verbergt de knop niets en blijft hij wit.
+    Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: de knop is grijs zodra
+    hij daadwerkelijk iets verbergt - elk fiche met inhoud, niet alleen een dienst. +Diensten
+    zelf kijkt wel specifiek naar diensten (dienstenInAvondNacht/dienstenInWeekend hierboven),
+    want dat is wat die knop hoort te doen; deze grijze indicator is een los, breder signaal.
   */
-  const avondNachtVerbergtIets = !effectiveShowNight && dienstenInAvondNacht;
-  const weekendVerbergtIets = effectiveWeekendVerborgen && dienstenInWeekend;
+  const ietsInAvondNacht = useMemo(
+    () =>
+      slots.some(
+        (slot) =>
+          isAvondOfNacht({ volgorde: daypartVolgordeById.get(slot.iddagdeel) ?? 0 }) &&
+          fichHeeftInhoud(slot)
+      ),
+    [slots, daypartVolgordeById]
+  );
+  const ietsInWeekend = useMemo(
+    () =>
+      slots.some(
+        (slot) => WEEKEND_ISO_WEEKDAGEN.has(weekdayFromIsoDate(slot.datum)) && fichHeeftInhoud(slot)
+      ),
+    [slots]
+  );
+  const avondNachtVerbergtIets = !effectiveShowNight && ietsInAvondNacht;
+  const weekendVerbergtIets = effectiveWeekendVerborgen && ietsInWeekend;
 
   const verborgenWeekdagen = useMemo(
     () =>

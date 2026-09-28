@@ -89,7 +89,7 @@ async function futureAssignedBlockLocator(page: Page, requireNoOvername = false)
 // not a native <select>. Its content portals to document.body, outside any modal container, so
 // items must be located from the page root rather than scoped to a modal wrapper.
 async function selectTargetDoctor(page: Page) {
-  const trigger = page.getByRole('button', { name: 'Selecteer een arts…' });
+  const trigger = page.getByRole('button', { name: 'Selecteer een medewerker…' });
   await expect(trigger).toBeVisible({ timeout: 5_000 });
   await trigger.click();
 

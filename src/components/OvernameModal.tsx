@@ -201,7 +201,7 @@ export function OvernameModal({ shift, doctors, onSubmit, onClose, submitting, e
 
   function handleSubmit() {
     setValidationError(null);
-    if (!selectedDoctor) { setValidationError('Selecteer een arts'); return; }
+    if (!selectedDoctor) { setValidationError('Selecteer een medewerker'); return; }
 
     let van = shift.van;
     let tot = shift.tot;
@@ -269,7 +269,7 @@ export function OvernameModal({ shift, doctors, onSubmit, onClose, submitting, e
                 </>
               ) : null;
             })() : (
-              <span className="flex-1 text-gray-400">Selecteer een arts…</span>
+              <span className="flex-1 text-gray-400">Selecteer een medewerker…</span>
             )}
             <ChevronDownIcon className="size-4 text-gray-400 shrink-0" />
           </DropdownMenuTrigger>

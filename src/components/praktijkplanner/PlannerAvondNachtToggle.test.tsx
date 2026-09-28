@@ -37,7 +37,7 @@ describe('PlannerAvondNachtToggle', () => {
     render(<PlannerAvondNachtToggle aan={false} verbergtIets onChange={() => {}} />);
 
     const knop = screen.getByRole('button', { name: 'Avond en nacht tonen' });
-    expect(knop.className.split(' ')).toContain('bg-muted');
+    expect(knop.className.split(' ')).toContain('bg-muted-foreground');
     expect(knop.title).toMatch(/fiche/);
   });
 

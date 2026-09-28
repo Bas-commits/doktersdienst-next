@@ -28,6 +28,11 @@ import { CalendarOff } from 'lucide-react';
  * inhoud, niet alleen een dienst. `effectiefGetoond` is voor het scherm dat weet of
  * +Diensten deze knop overrulet en dus toch iets toont; zonder dat scherm valt hij terug op
  * `getoond` en gedraagt de knop zich als voorheen (twee standen).
+ *
+ * `bg-muted` (het standaard grijstintje van dit thema) is met een lightness van 0.97 vrijwel
+ * wit en daarom hier geen optie - dat viel niet meer te onderscheiden van de uit-stand.
+ * `bg-muted-foreground` is hetzelfde grijs dat elders al als tekstkleur dient (0.556): donker
+ * genoeg om in één oogopslag te zien, en al onderdeel van het kleurenpalet.
  */
 export function PlannerWeekendToggle({
   getoond,
@@ -63,7 +68,7 @@ export function PlannerWeekendToggle({
         isGetoond
           ? 'bg-primary text-primary-foreground'
           : verbergtIets
-            ? 'bg-muted text-muted-foreground'
+            ? 'bg-muted-foreground text-background'
             : 'text-muted-foreground hover:bg-muted',
       ].join(' ')}
     >

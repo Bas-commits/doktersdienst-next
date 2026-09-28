@@ -313,8 +313,14 @@ export function ActivitiesContent({
       ),
     [slots]
   );
-  const avondNachtVerbergtIets = !effectiveShowNight && ietsInAvondNacht;
-  const weekendVerbergtIets = effectiveWeekendVerborgen && ietsInWeekend;
+  /*
+    loadingSlots erbij: tijdens het laden van een nieuwe week of maand staan de fiches van de
+    vorige periode nog in slots (loadSlots wist ze pas als de nieuwe lading binnen is). Zonder
+    deze check flitst de knop even grijs op voor een fiche uit een periode die niet meer open
+    staat.
+  */
+  const avondNachtVerbergtIets = !loadingSlots && !effectiveShowNight && ietsInAvondNacht;
+  const weekendVerbergtIets = !loadingSlots && effectiveWeekendVerborgen && ietsInWeekend;
 
   const verborgenWeekdagen = useMemo(
     () =>

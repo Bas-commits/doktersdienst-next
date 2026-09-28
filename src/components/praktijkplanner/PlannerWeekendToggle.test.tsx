@@ -38,7 +38,7 @@ describe('PlannerWeekendToggle', () => {
     render(<PlannerWeekendToggle getoond={false} verbergtIets onChange={() => {}} />);
 
     const knop = screen.getByRole('button', { name: 'Weekend tonen' });
-    expect(knop.className.split(' ')).toContain('bg-muted');
+    expect(knop.className.split(' ')).toContain('bg-muted-foreground');
     expect(knop.title).toMatch(/fiche/);
   });
 

@@ -13,6 +13,7 @@ describe('PlannerAvondNachtToggle', () => {
 
     const knop = screen.getByRole('button', { name: 'Avond en nacht verbergen' });
     expect(knop.getAttribute('aria-pressed')).toBe('true');
+    expect(knop.className).toContain('bg-primary');
   });
 
   it('vraagt om tonen als avond en nacht weg zijn', () => {
@@ -23,18 +24,31 @@ describe('PlannerAvondNachtToggle', () => {
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
-  it('is grijs gevuld in de uit-stand, niet wit', () => {
+  it('is wit in de uit-stand als er niets te verbergen is', () => {
     render(<PlannerAvondNachtToggle aan={false} onChange={() => {}} />);
 
     const knop = screen.getByRole('button', { name: 'Avond en nacht tonen' });
-    expect(knop.className).toContain('bg-muted');
+    const classes = knop.className.split(' ');
+    expect(classes).not.toContain('bg-muted');
+    expect(classes).not.toContain('bg-primary');
   });
 
-  it('toont dezelfde grijze stand met een uitleg-tooltip als +Diensten avond/nacht overrulet', () => {
-    render(<PlannerAvondNachtToggle aan={false} overruled onChange={() => {}} />);
+  it('is grijs met een uitleg-tooltip als de knop een dienst verbergt', () => {
+    render(<PlannerAvondNachtToggle aan={false} verbergtIets onChange={() => {}} />);
 
     const knop = screen.getByRole('button', { name: 'Avond en nacht tonen' });
-    expect(knop.className).toContain('bg-muted');
-    expect(knop.title).toMatch(/\+Diensten/);
+    expect(knop.className.split(' ')).toContain('bg-muted');
+    expect(knop.title).toMatch(/dienst/);
+  });
+
+  it('telt als getoond wanneer +Diensten hem overrulet, ook al staat de eigen voorkeur op verbergen', () => {
+    const onChange = vi.fn();
+    render(<PlannerAvondNachtToggle aan={false} getoond onChange={onChange} />);
+
+    const knop = screen.getByRole('button', { name: 'Avond en nacht verbergen' });
+    expect(knop.className).toContain('bg-primary');
+    // Een klik stuurt de eigen voorkeur terug (aan omgekeerd), niet het overrulete resultaat.
+    fireEvent.click(knop);
+    expect(onChange).toHaveBeenCalledWith(true);
   });
 });

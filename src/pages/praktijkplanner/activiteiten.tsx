@@ -276,12 +276,13 @@ export function ActivitiesContent({
   const effectiveShowNight = showNight || (showDiensten && dienstenInAvondNacht);
   const effectiveWeekendVerborgen = weekendVerborgen && !(showDiensten && dienstenInWeekend);
   /*
-    Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: de eigen knop zegt
-    "verbergen", maar +Diensten laat het toch zien. Alleen dan is de knop overruled - staat de
-    knop zelf al op tonen, dan is er niets om overrulet te worden.
+    Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: de knop is alleen grijs
+    als hij daadwerkelijk iets verbergt - dus als hij op verbergen staat (ook effectief, dus
+    zonder dat +Diensten hem alsnog toont) terwijl er wél een dienst in die periode staat. Staat
+    er niets in avond/nacht of het weekend, dan verbergt de knop niets en blijft hij wit.
   */
-  const avondNachtOverruled = !showNight && effectiveShowNight;
-  const weekendOverruled = weekendVerborgen && !effectiveWeekendVerborgen;
+  const avondNachtVerbergtIets = !effectiveShowNight && dienstenInAvondNacht;
+  const weekendVerbergtIets = effectiveWeekendVerborgen && dienstenInWeekend;
 
   const verborgenWeekdagen = useMemo(
     () =>
@@ -1340,7 +1341,8 @@ export function ActivitiesContent({
           */}
           <PlannerAvondNachtToggle
             aan={showNight}
-            overruled={avondNachtOverruled}
+            getoond={effectiveShowNight}
+            verbergtIets={avondNachtVerbergtIets}
             onChange={updateVisibility}
           />
           {/*
@@ -1349,7 +1351,8 @@ export function ActivitiesContent({
           */}
           <PlannerWeekendToggle
             getoond={!weekendVerborgen}
-            overruled={weekendOverruled}
+            effectiefGetoond={!effectiveWeekendVerborgen}
+            verbergtIets={weekendVerbergtIets}
             onChange={(getoond) => setWeekendVerborgen(!getoond)}
           />
           {/*

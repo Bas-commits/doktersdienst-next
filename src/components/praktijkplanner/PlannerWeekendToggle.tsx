@@ -22,39 +22,48 @@ import { CalendarOff } from 'lucide-react';
  * de knop ernaast, en dat was voor de kaart dPp:Diensten tonen de reden om de twee gelijk te
  * trekken.
  *
- * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: de "uit"-stand is een
- * gevulde grijze knop, niet een kale witte - zo is in één oogopslag te zien dat de knop iets
- * verbergt, ook als het effect (bijvoorbeeld door +Diensten) niet zichtbaar is. `overruled`
- * verandert alleen de tooltip: die legt dan uit waarom er toch iets te zien is. Alleen de
- * Activiteiten planner kent +Diensten, dus overige schermen laten overruled gewoon op false
- * staan.
+ * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: standaard wit in de
+ * uit-stand (er is niets te verbergen), maar grijs zodra er wél een dienst in het weekend
+ * staat die daardoor niet te zien is - `verbergtIets` geeft dat aan. `effectiefGetoond` is
+ * voor het scherm dat weet of +Diensten deze knop overrulet en dus toch iets toont; zonder dat
+ * scherm valt hij terug op `getoond` en gedraagt de knop zich als voorheen (twee standen).
  */
 export function PlannerWeekendToggle({
   getoond,
-  overruled = false,
+  effectiefGetoond,
+  verbergtIets = false,
   onChange,
 }: {
+  /** De eigen voorkeur van de gebruiker; bepaalt wat een klik terugstuurt. */
   getoond: boolean;
-  overruled?: boolean;
+  /** Is het weekend op dit moment echt te zien, inclusief een eventuele overrule door +Diensten. Standaard gelijk aan getoond. */
+  effectiefGetoond?: boolean;
+  /** Staat de knop op verbergen terwijl er wél een dienst in het weekend staat. */
+  verbergtIets?: boolean;
   onChange: (getoond: boolean) => void;
 }) {
-  const label = getoond ? 'Weekend verbergen' : 'Weekend tonen';
+  const isGetoond = effectiefGetoond ?? getoond;
+  const label = isGetoond ? 'Weekend verbergen' : 'Weekend tonen';
   return (
     <button
       type="button"
-      aria-pressed={getoond}
+      aria-pressed={isGetoond}
       aria-label={label}
       onClick={() => onChange(!getoond)}
       title={
-        overruled
-          ? 'Het weekend staat aan omdat +Diensten een dienst laat zien, ook al staat deze knop op verbergen.'
-          : getoond
-            ? 'Zaterdag en zondag verbergen. Er wordt niets verwijderd; wat er staat komt terug zodra je ze weer toont.'
+        isGetoond
+          ? 'Zaterdag en zondag verbergen. Er wordt niets verwijderd; wat er staat komt terug zodra je ze weer toont.'
+          : verbergtIets
+            ? 'Er staat een dienst in het weekend die nu verborgen is. Klik om te tonen, of zet +Diensten aan om diensten automatisch te laten zien.'
             : 'Zaterdag en zondag weer tonen'
       }
       className={[
         'inline-flex items-center justify-center rounded-md border p-1.5 transition',
-        getoond ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70',
+        isGetoond
+          ? 'bg-primary text-primary-foreground'
+          : verbergtIets
+            ? 'bg-muted text-muted-foreground'
+            : 'text-muted-foreground hover:bg-muted',
       ].join(' ')}
     >
       <CalendarOff className="size-4" aria-hidden />

@@ -14,6 +14,7 @@ describe('PlannerWeekendToggle', () => {
 
     const knop = screen.getByRole('button', { name: 'Weekend verbergen' });
     expect(knop.getAttribute('aria-pressed')).toBe('true');
+    expect(knop.className).toContain('bg-primary');
   });
 
   it('vraagt om tonen als het weekend weg is', () => {
@@ -24,19 +25,32 @@ describe('PlannerWeekendToggle', () => {
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
-  it('is grijs gevuld in de uit-stand, niet wit', () => {
+  it('is wit in de uit-stand als er niets te verbergen is', () => {
     render(<PlannerWeekendToggle getoond={false} onChange={() => {}} />);
 
     const knop = screen.getByRole('button', { name: 'Weekend tonen' });
-    expect(knop.className).toContain('bg-muted');
+    const classes = knop.className.split(' ');
+    expect(classes).not.toContain('bg-muted');
+    expect(classes).not.toContain('bg-primary');
   });
 
-  it('toont dezelfde grijze stand met een uitleg-tooltip als +Diensten het weekend overrulet', () => {
-    render(<PlannerWeekendToggle getoond={false} overruled onChange={() => {}} />);
+  it('is grijs met een uitleg-tooltip als de knop een dienst verbergt', () => {
+    render(<PlannerWeekendToggle getoond={false} verbergtIets onChange={() => {}} />);
 
     const knop = screen.getByRole('button', { name: 'Weekend tonen' });
-    expect(knop.className).toContain('bg-muted');
-    expect(knop.title).toMatch(/\+Diensten/);
+    expect(knop.className.split(' ')).toContain('bg-muted');
+    expect(knop.title).toMatch(/dienst/);
+  });
+
+  it('telt als getoond wanneer +Diensten hem overrulet, ook al staat de eigen voorkeur op verbergen', () => {
+    const onChange = vi.fn();
+    render(<PlannerWeekendToggle getoond={false} effectiefGetoond onChange={onChange} />);
+
+    const knop = screen.getByRole('button', { name: 'Weekend verbergen' });
+    expect(knop.className).toContain('bg-primary');
+    // Een klik stuurt de eigen voorkeur terug (getoond omgekeerd), niet het overrulete resultaat.
+    fireEvent.click(knop);
+    expect(onChange).toHaveBeenCalledWith(true);
   });
 });
 

@@ -23,10 +23,12 @@ describe('PlannerDienstenToggle', () => {
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
-  it('is grijs gevuld in de uit-stand, niet wit', () => {
+  it('is wit in de uit-stand, deze knop verbergt zelf nooit iets', () => {
     render(<PlannerDienstenToggle aan={false} onChange={() => {}} />);
 
     const knop = screen.getByRole('button', { name: 'Diensten automatisch tonen' });
-    expect(knop.className).toContain('bg-muted');
+    const classes = knop.className.split(' ');
+    expect(classes).not.toContain('bg-muted');
+    expect(classes).not.toContain('bg-primary');
   });
 });

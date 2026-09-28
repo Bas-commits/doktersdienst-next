@@ -23,7 +23,14 @@ describe('PlannerAvondNachtToggle', () => {
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
-  it('toont grijs met een uitleg-tooltip als +Diensten avond/nacht overrulet', () => {
+  it('is grijs gevuld in de uit-stand, niet wit', () => {
+    render(<PlannerAvondNachtToggle aan={false} onChange={() => {}} />);
+
+    const knop = screen.getByRole('button', { name: 'Avond en nacht tonen' });
+    expect(knop.className).toContain('bg-muted');
+  });
+
+  it('toont dezelfde grijze stand met een uitleg-tooltip als +Diensten avond/nacht overrulet', () => {
     render(<PlannerAvondNachtToggle aan={false} overruled onChange={() => {}} />);
 
     const knop = screen.getByRole('button', { name: 'Avond en nacht tonen' });

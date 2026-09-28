@@ -24,7 +24,14 @@ describe('PlannerWeekendToggle', () => {
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
-  it('toont grijs met een uitleg-tooltip als +Diensten het weekend overrulet', () => {
+  it('is grijs gevuld in de uit-stand, niet wit', () => {
+    render(<PlannerWeekendToggle getoond={false} onChange={() => {}} />);
+
+    const knop = screen.getByRole('button', { name: 'Weekend tonen' });
+    expect(knop.className).toContain('bg-muted');
+  });
+
+  it('toont dezelfde grijze stand met een uitleg-tooltip als +Diensten het weekend overrulet', () => {
     render(<PlannerWeekendToggle getoond={false} overruled onChange={() => {}} />);
 
     const knop = screen.getByRole('button', { name: 'Weekend tonen' });

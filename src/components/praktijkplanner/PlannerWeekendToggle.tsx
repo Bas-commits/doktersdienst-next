@@ -22,10 +22,12 @@ import { CalendarOff } from 'lucide-react';
  * de knop ernaast, en dat was voor de kaart dPp:Diensten tonen de reden om de twee gelijk te
  * trekken.
  *
- * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: staat deze knop op
- * verbergen (getoond false) maar toont +Diensten het weekend toch omdat er een dienst in
- * staat, dan geeft overruled dat aan met een grijze vlakvulling - alleen de Activiteiten
- * planner kent +Diensten, dus overige schermen laten dit gewoon op false staan.
+ * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: de "uit"-stand is een
+ * gevulde grijze knop, niet een kale witte - zo is in één oogopslag te zien dat de knop iets
+ * verbergt, ook als het effect (bijvoorbeeld door +Diensten) niet zichtbaar is. `overruled`
+ * verandert alleen de tooltip: die legt dan uit waarom er toch iets te zien is. Alleen de
+ * Activiteiten planner kent +Diensten, dus overige schermen laten overruled gewoon op false
+ * staan.
  */
 export function PlannerWeekendToggle({
   getoond,
@@ -52,11 +54,7 @@ export function PlannerWeekendToggle({
       }
       className={[
         'inline-flex items-center justify-center rounded-md border p-1.5 transition',
-        overruled
-          ? 'bg-muted text-muted-foreground'
-          : getoond
-            ? 'bg-primary text-primary-foreground'
-            : 'text-muted-foreground hover:bg-muted',
+        getoond ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70',
       ].join(' ')}
     >
       <CalendarOff className="size-4" aria-hidden />

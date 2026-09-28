@@ -16,10 +16,10 @@ import { Moon } from 'lucide-react';
  * worden: verbergen lukt altijd. Eerder hielden avond en nacht zichzelf zichtbaar zodra er
  * iets in stond, en dan deed de knop in de ene week niets en in de andere wel.
  *
- * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: staat deze knop op
- * verbergen (aan false) maar toont +Diensten avond/nacht toch omdat er een dienst in staat,
- * dan geeft overruled dat aan met een grijze vlakvulling - anders lijkt de knop "uit" terwijl
- * er wel degelijk iets te zien is.
+ * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: de "uit"-stand is een
+ * gevulde grijze knop, niet een kale witte - zo is in één oogopslag te zien dat de knop iets
+ * verbergt, ook als het effect (bijvoorbeeld door +Diensten) niet zichtbaar is. `overruled`
+ * verandert alleen de tooltip: die legt dan uit waarom er toch iets te zien is.
  */
 export function PlannerAvondNachtToggle({
   aan,
@@ -46,11 +46,7 @@ export function PlannerAvondNachtToggle({
       }
       className={[
         'inline-flex items-center justify-center rounded-md border p-1.5 transition',
-        overruled
-          ? 'bg-muted text-muted-foreground'
-          : aan
-            ? 'bg-primary text-primary-foreground'
-            : 'text-muted-foreground hover:bg-muted',
+        aan ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70',
       ].join(' ')}
     >
       <Moon className="size-4" aria-hidden />

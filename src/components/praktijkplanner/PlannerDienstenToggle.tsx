@@ -13,6 +13,10 @@ import { Stethoscope } from 'lucide-react';
  *
  * Kaart dPp:Diensten tonen: eerder moest je daarvoor zelf Avond/Nacht en Weekend aanzetten en
  * weer terugzetten, en was dat pas te zien als je toevallig de activiteit Diensten aanklikte.
+ *
+ * Kaart dPp/dDd:verberg-knoppen grijs tonen als ze overruled worden: de "uit"-stand is een
+ * gevulde grijze knop, niet een kale witte, net als bij de twee knoppen ernaast - zo is in één
+ * oogopslag te zien welke van de drie iets doet en welke niet.
  */
 export function PlannerDienstenToggle({
   aan,
@@ -35,7 +39,7 @@ export function PlannerDienstenToggle({
       }
       className={[
         'inline-flex items-center justify-center rounded-md border p-1.5 transition',
-        aan ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+        aan ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70',
       ].join(' ')}
     >
       <Stethoscope className="size-4" aria-hidden />

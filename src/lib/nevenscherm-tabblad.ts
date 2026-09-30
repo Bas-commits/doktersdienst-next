@@ -4,8 +4,10 @@
  *
  * Eerder bleef de splitsknop op een smal scherm uit te klikken. Het nevenscherm verving dan het
  * hoofdscherm, dus plannen en kijken tegelijk kon niet. Nu opent de knop hetzelfde scherm in een
- * tabblad dat alleen het nevenscherm toont; het hoofdtabblad houdt de week of het rooster. Een
- * tabblad kan op een tweede monitor, en de twee lopen gelijk via een BroadcastChannel.
+ * tabblad dat alleen het nevenscherm toont, en gaat het hoofdtabblad eenmalig terug naar de week
+ * of het rooster. Daarna kiest elk tabblad zijn eigen scherm; alleen de week (Praktijkplanner) of
+ * de maand (Rooster maken) loopt gelijk via een BroadcastChannel. Een tabblad kan op een tweede
+ * monitor.
  * Kaart: https://trello.com/c/FHVfCvMC
  */
 
@@ -37,12 +39,8 @@ export function losTabbladParams(): URLSearchParams | null {
 /**
  * Opent het tabblad, of haalt het bestaande naar voren. Een vaste naam per scherm zorgt dat een
  * tweede klik niet steeds een nieuw tabblad bijmaakt.
- *
- * Returns:
- *     Het tabblad, of null als de browser het tegenhield (een pop-upblokkering).
  */
-export function openNevenschermTabblad(url: string, naam: string): Window | null {
+export function openNevenschermTabblad(url: string, naam: string): void {
   const tabblad = window.open(url, naam);
   tabblad?.focus();
-  return tabblad;
 }

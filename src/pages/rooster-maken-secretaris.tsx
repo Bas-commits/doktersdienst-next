@@ -22,9 +22,8 @@ import {
   useBeschikbareBreedte,
 } from '@/hooks/praktijkplanner/useBeschikbareBreedte';
 import { PlannerSplitsToggle } from '@/components/praktijkplanner/PlannerSplitsToggle';
-import { useNevenschermTabblad } from '@/hooks/praktijkplanner/useNevenschermTabblad';
 import { useRoosterMaand } from '@/hooks/useRoosterMaand';
-import { nevenschermTabbladUrl } from '@/lib/nevenscherm-tabblad';
+import { nevenschermTabbladUrl, openNevenschermTabblad } from '@/lib/nevenscherm-tabblad';
 import { UrentellingPanel } from '@/components/UrentellingPanel';
 import type { ShiftBlockView, DoctorInfo } from '@/types/diensten';
 import { shiftKeyFromBlock } from '@/types/voorkeuren';
@@ -349,18 +348,17 @@ export default function RoosterMakenSecretarisPage() {
     rooster en Urentelling wisselen in plaats van dat de knop dan niets meer doet.
   */
   /*
-    Op een te smal scherm opent de splitsknop de Urentelling in een eigen tabblad, en blijft het
-    rooster hier staan. Het losse tabblad toont alleen de Urentelling en volgt de maand van het
-    rooster via useRoosterMaand. Kaart: https://trello.com/c/FHVfCvMC
+    Op een te smal scherm opent de splitsknop de Urentelling in een eigen tabblad, en gaat dit
+    tabblad eenmalig terug naar het rooster; daarna kan de Urentelling hier gewoon weer aan. Het
+    losse tabblad toont alleen de Urentelling en volgt de maand van het rooster via
+    useRoosterMaand. Kaart: https://trello.com/c/FHVfCvMC
 
     Uit router.query en niet uit window.location: deze pagina wordt op de server voorgerenderd,
     en daar is geen adres. Tot de router klaar is staat heel even de gewone pagina.
   */
   const losTabblad = router.isReady && router.query.los === '1';
-  const urentellingTabblad = useNevenschermTabblad('doktersdienst-urentelling');
-  const urentellingElders = !losTabblad && urentellingTabblad.geopend && !magSplitsen;
-  const toontKalender = !losTabblad && (!toontUrentelling || naastElkaar || urentellingElders);
-  const toontUrentellingPaneel = losTabblad || (toontUrentelling && !urentellingElders);
+  const toontKalender = !losTabblad && (!toontUrentelling || naastElkaar);
+  const toontUrentellingPaneel = losTabblad || toontUrentelling;
 
   const panelGroupId = useMemo(() => {
     if (!activeWaarneemgroepId) return null;
@@ -756,14 +754,16 @@ export default function RoosterMakenSecretarisPage() {
       </button>
       {toontUrentelling ? (
         <PlannerSplitsToggle
-          aan={magSplitsen ? gesplitstGewenst : urentellingTabblad.geopend}
+          aan={gesplitstGewenst}
           teSmal={!magSplitsen}
           onChange={setGesplitstGewenst}
-          onNieuwTabblad={() =>
-            urentellingTabblad.openen(
-              nevenschermTabbladUrl(router.pathname, { maand: viewMonth, jaar: viewYear })
-            )
-          }
+          onNieuwTabblad={() => {
+            openNevenschermTabblad(
+              nevenschermTabbladUrl(router.pathname, { maand: viewMonth, jaar: viewYear }),
+              'doktersdienst-urentelling'
+            );
+            setToontUrentelling(false);
+          }}
           hoofdscherm="het rooster"
         />
       ) : null}

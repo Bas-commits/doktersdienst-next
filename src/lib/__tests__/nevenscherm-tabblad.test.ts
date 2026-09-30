@@ -31,10 +31,9 @@ describe('losTabbladParams', () => {
 describe('openNevenschermTabblad', () => {
   it('opent onder een vaste naam, zodat een tweede klik hetzelfde tabblad hergebruikt', () => {
     const focus = vi.fn();
-    const tabblad = { focus } as unknown as Window;
-    const open = vi.spyOn(window, 'open').mockReturnValue(tabblad);
+    const open = vi.spyOn(window, 'open').mockReturnValue({ focus } as unknown as Window);
 
-    expect(openNevenschermTabblad('/x?los=1', 'praktijkplanner-nevenscherm')).toBe(tabblad);
+    openNevenschermTabblad('/x?los=1', 'praktijkplanner-nevenscherm');
 
     expect(open).toHaveBeenCalledWith('/x?los=1', 'praktijkplanner-nevenscherm');
     expect(focus).toHaveBeenCalled();

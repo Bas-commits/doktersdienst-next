@@ -95,4 +95,20 @@ describe('usePlannerWeergave', () => {
 
     expect(links.result.current.weekStart).toBe('2026-08-24');
   });
+
+  it('deelt met een los nevenscherm-tabblad alleen de week, niet de keuze', async () => {
+    const hoofd = renderHook(() => usePlannerWeergave(10));
+    const los = renderHook(() =>
+      usePlannerWeergave(10, { weekStart: '2026-09-28', nevenscherm: 'capaciteit' }, true)
+    );
+
+    act(() => hoofd.result.current.setNevenscherm('maand'));
+    act(() => hoofd.result.current.setWeekStart('2026-10-05'));
+    await laatBerichtenAankomen();
+    expect(los.result.current).toMatchObject({ weekStart: '2026-10-05', nevenscherm: 'capaciteit' });
+
+    act(() => los.result.current.setNevenscherm('expertise'));
+    await laatBerichtenAankomen();
+    expect(hoofd.result.current.nevenscherm).toBe('maand');
+  });
 });

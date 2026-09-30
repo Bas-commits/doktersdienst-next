@@ -12,11 +12,11 @@ import { ExternalLink, PanelRight } from 'lucide-react';
  *
  * Op een te smal scherm was de knop uitgeschakeld: een duo-scherm dat niet past kan niet. Nu
  * opent hij daar het nevenscherm in een nieuw tabblad, zodat plannen en kijken toch naast elkaar
- * kan, op twee tabbladen of twee monitoren. Kaart: https://trello.com/c/FHVfCvMC
+ * kan, op twee tabbladen of twee monitoren. Dan is het een gewone actieknop zonder aan of uit:
+ * na het openen kiezen beide tabbladen hun eigen scherm. Kaart: https://trello.com/c/FHVfCvMC
  *
  * Args:
- *     aan: Op een breed scherm: het nevenscherm staat naast het hoofdscherm. Op een smal scherm:
- *         het nevenscherm is in een eigen tabblad geopend.
+ *     aan: Het nevenscherm staat naast het hoofdscherm (alleen op een breed scherm).
  *     teSmal: Het nevenscherm past niet naast het hoofdscherm.
  *     onChange: Op een breed scherm: zet naast elkaar aan of uit.
  *     onNieuwTabblad: Op een smal scherm: open het nevenscherm in een eigen tabblad.
@@ -42,14 +42,10 @@ export function PlannerSplitsToggle({
     return (
       <button
         type="button"
-        aria-pressed={aan}
         aria-label="Nevenscherm in nieuw tabblad"
         onClick={onNieuwTabblad}
-        title={`Het scherm is te smal om het nevenscherm naast ${hoofdscherm} te zetten. Open het in een nieuw tabblad; ${hoofdscherm} blijft hier staan.`}
-        className={[
-          'inline-flex items-center justify-center rounded-md border p-1.5 transition',
-          aan ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
-        ].join(' ')}
+        title={`Het scherm is te smal om het nevenscherm naast ${hoofdscherm} te zetten. Open het in een nieuw tabblad; hier komt ${hoofdscherm} terug.`}
+        className="inline-flex items-center justify-center rounded-md border p-1.5 text-muted-foreground transition hover:bg-muted"
       >
         <ExternalLink className="size-4" aria-hidden />
       </button>

@@ -39,7 +39,11 @@ export type PlannerWeergave = {
  */
 const KANAAL_NAAM = 'praktijkplanner-weergave';
 
-type WeergaveBericht = PlannerWeergave & { idwaarneemgroep: number };
+/**
+ * `los` zegt of het bericht uit een los nevenscherm-tabblad komt. Zie usePlannerWeergave voor
+ * waarom dat de keuze van het nevenscherm tegenhoudt.
+ */
+type WeergaveBericht = PlannerWeergave & { idwaarneemgroep: number; los: boolean };
 
 function huidigeWeek() {
   return startOfIsoWeek(formatIsoDate(new Date()));
@@ -67,6 +71,7 @@ function isWeergaveBericht(value: unknown): value is WeergaveBericht {
   const bericht = value as Record<string, unknown>;
   return (
     typeof bericht.idwaarneemgroep === 'number' &&
+    typeof bericht.los === 'boolean' &&
     isIsoDate(bericht.weekStart) &&
     NEVENSCHERMEN.includes(bericht.nevenscherm as PlannerNevenscherm)
   );
@@ -100,10 +105,15 @@ function isWeergaveBericht(value: unknown): value is WeergaveBericht {
  *     begin: Waar een nevenscherm-tabblad mee opent. Het kanaal bereikt een nieuw tabblad pas
  *         bij de volgende wijziging, dus zonder dit opende het op de huidige week en zonder
  *         nevenscherm in plaats van op wat het hoofdtabblad toonde.
+ *     los: Dit is een los nevenscherm-tabblad. Tussen een los tabblad en een gewoon tabblad
+ *         gaat alleen de week mee, niet de keuze van het nevenscherm: het oude tabblad moet
+ *         vrij kunnen wisselen zonder het nieuwe te verzetten, en andersom. Kaart:
+ *         https://trello.com/c/FHVfCvMC
  */
 export function usePlannerWeergave(
   idwaarneemgroep: number,
-  begin?: Partial<PlannerWeergave> | null
+  begin?: Partial<PlannerWeergave> | null,
+  los = false
 ): PlannerWeergave & {
   setWeekStart: (weekStart: string) => void;
   setNevenscherm: (nevenscherm: PlannerNevenscherm) => void;
@@ -131,18 +141,21 @@ export function usePlannerWeergave(
       if (!isWeergaveBericht(event.data) || event.data.idwaarneemgroep !== idwaarneemgroep) {
         return;
       }
-      const volgende: PlannerWeergave = {
-        weekStart: event.data.weekStart,
-        nevenscherm: event.data.nevenscherm,
-      };
-      laatsteBericht.current = JSON.stringify(volgende);
-      setWeergave(volgende);
+      const { weekStart, nevenscherm } = event.data;
+      const zelfdeSoort = event.data.los === los;
+      setWeergave((huidig) => {
+        const volgende: PlannerWeergave = zelfdeSoort
+          ? { weekStart, nevenscherm }
+          : { ...huidig, weekStart };
+        laatsteBericht.current = JSON.stringify(volgende);
+        return volgende;
+      });
     };
     return () => {
       channel.close();
       kanaal.current = null;
     };
-  }, [idwaarneemgroep]);
+  }, [idwaarneemgroep, los]);
 
   useEffect(() => {
     const inhoud = JSON.stringify(weergave);
@@ -154,8 +167,8 @@ export function usePlannerWeergave(
     }
     if (laatsteBericht.current === inhoud) return;
     laatsteBericht.current = inhoud;
-    kanaal.current?.postMessage({ idwaarneemgroep, ...weergave } satisfies WeergaveBericht);
-  }, [idwaarneemgroep, weergave]);
+    kanaal.current?.postMessage({ idwaarneemgroep, los, ...weergave } satisfies WeergaveBericht);
+  }, [idwaarneemgroep, los, weergave]);
 
   useEffect(() => {
     laatsteWeek = { idwaarneemgroep, weekStart: weergave.weekStart };

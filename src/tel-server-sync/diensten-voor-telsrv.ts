@@ -27,7 +27,17 @@ export type DienstTelSyncRow = {
   telnr3: string | null;
   telnr4: string | null;
   telnr5: string | null;
+  /** Overname rows (type 6) only. Aliased in the query so a settelnrs column cannot shadow them. */
+  dienst_status?: string | null;
+  dienst_iddeelnovern?: number | null;
+  dienst_overname_sectie?: string | null;
 };
+
+/** Phone settings of a doctor who takes a shift over; the replacement line is built from these. */
+export type OvernemerTelRow = Pick<
+  DienstTelSyncRow,
+  'eigentelwelkomwav' | 'is_voicemail_doorschakeling' | 'telnr1' | 'telnr2' | 'telnr3' | 'telnr4' | 'telnr5'
+> & { iddeelnemer: number };
 
 type SendServerComm = typeof defaultSendServerComm;
 
@@ -105,6 +115,112 @@ export function buildTelServerText(
   return `v3\n${sections.join('\n~\n')}`;
 }
 
+function isGeaccepteerdeOvername(row: DienstTelSyncRow): boolean {
+  return row.type === 6 && (row.dienst_status ?? '').trim().toLowerCase() === 'accepted';
+}
+
+/**
+ * Puts the doctor who took a shift over on the line the exchange calls.
+ *
+ * An accepted overname row keeps the original doctor in `iddeelnemer` (the one taking over is in
+ * `iddeelnovern`), and this sync used to read every row through `iddeelnemer`. The text then held
+ * the original doctor twice and the new one never, so the exchange kept calling the original doctor.
+ *
+ * Each accepted overname now cuts its period out of the original doctor's line in the same lane
+ * (dienst, or achterwacht for `overname_sectie = 'top'`) and puts the new doctor's line there, with
+ * their own numbers, greeting and voicemail setting. A partial overname leaves the original doctor
+ * before and after it. Replacement lines can be cut again, so a shift passed on twice ends up with
+ * the last doctor. Extra dokter is not part of this text at all, so its overnames change nothing.
+ *
+ * If the new doctor cannot be found the original line stays: calling the wrong doctor is bad, but
+ * a gap in which nobody is called is worse. An overname without a line underneath still gets the
+ * new doctor's line, because the overname itself says who is on call then.
+ *
+ * Lines come out ordered by start time. The exchange takes the first active line per section, and
+ * the database gave no order.
+ */
+export function pasGeaccepteerdeOvernamesToe(
+  rows: DienstTelSyncRow[],
+  overnemers: ReadonlyMap<number, OvernemerTelRow>,
+): DienstTelSyncRow[] {
+  let lines = rows.filter((row) => !isGeaccepteerdeOvername(row));
+  const overnames = rows
+    .filter(isGeaccepteerdeOvername)
+    .sort((a, b) => Number(a.van ?? 0) - Number(b.van ?? 0));
+
+  for (const overname of overnames) {
+    const sectie = (overname.dienst_overname_sectie ?? '').trim().toLowerCase();
+    if (sectie === 'bottom') continue;
+    const laneType = sectie === 'top' ? 5 : 0;
+    const inLane = (row: DienstTelSyncRow) => (laneType === 5 ? row.type === 5 : row.type !== 5);
+
+    const van = Number(overname.van ?? 0);
+    const tot = Number(overname.tot ?? 0);
+    const overnemer = overnemers.get(Number(overname.dienst_iddeelnovern ?? 0));
+    if (!overnemer || tot <= van) continue;
+
+    const next: DienstTelSyncRow[] = [];
+    for (const line of lines) {
+      const lineVan = Number(line.van ?? 0);
+      const lineTot = Number(line.tot ?? 0);
+      const covered =
+        inLane(line) && line.iddeelnemer === overname.iddeelnemer && lineVan < tot && lineTot > van;
+      if (!covered) {
+        next.push(line);
+        continue;
+      }
+      if (lineVan < van) next.push({ ...line, tot: van });
+      if (lineTot > tot) next.push({ ...line, van: tot });
+    }
+    next.push({
+      van,
+      tot,
+      type: laneType,
+      iddeelnemer: overnemer.iddeelnemer,
+      eigentelwelkomwav: overnemer.eigentelwelkomwav,
+      is_voicemail_doorschakeling: overnemer.is_voicemail_doorschakeling,
+      telnr1: overnemer.telnr1,
+      telnr2: overnemer.telnr2,
+      telnr3: overnemer.telnr3,
+      telnr4: overnemer.telnr4,
+      telnr5: overnemer.telnr5,
+    });
+    lines = next;
+  }
+
+  return lines.sort((a, b) => Number(a.van ?? 0) - Number(b.van ?? 0));
+}
+
+async function getOvernemers(
+  dbQuery: DbQuery,
+  rows: DienstTelSyncRow[],
+): Promise<Map<number, OvernemerTelRow>> {
+  const ids = [
+    ...new Set(
+      rows
+        .filter(isGeaccepteerdeOvername)
+        .map((row) => Number(row.dienst_iddeelnovern ?? 0))
+        .filter((id) => id > 0),
+    ),
+  ];
+  if (ids.length === 0) return new Map();
+
+  const result = await dbQuery<OvernemerTelRow>(
+    `
+      SELECT
+        dn.id AS iddeelnemer,
+        dn.eigentelwelkomwav,
+        dn.is_voicemail_doorschakeling,
+        s.telnr1, s.telnr2, s.telnr3, s.telnr4, s.telnr5
+      FROM deelnemers AS dn
+      LEFT JOIN settelnrs AS s ON dn.idsettelnrdienst = s.id
+      WHERE dn.id = ANY($1::int[])
+    `,
+    [ids],
+  );
+  return new Map(result.rows.map((row) => [Number(row.iddeelnemer), row]));
+}
+
 async function getInvoegendTelnr(
   dbQuery: DbQuery,
   wg: WaarneemgroepForTelSync,
@@ -134,7 +250,10 @@ async function getDienstRows(
         dn.eigentelwelkomwav,
         d.iddeelnemer,
         dn.is_voicemail_doorschakeling,
-        s.*
+        s.*,
+        d.status AS dienst_status,
+        d.iddeelnovern AS dienst_iddeelnovern,
+        d.overname_sectie AS dienst_overname_sectie
       FROM diensten AS d
       LEFT JOIN deelnemers AS dn ON d.iddeelnemer = dn.id
       LEFT JOIN settelnrs AS s ON dn.idsettelnrdienst = s.id
@@ -176,11 +295,12 @@ export async function buildTelServerRecordForWaarneemgroep(
     getInvoegendTelnr(dbQuery, wg),
     getDienstRows(dbQuery, wg.id, starttime, endtime),
   ]);
+  const overnemers = await getOvernemers(dbQuery, rows);
 
   return {
     nr: phpString(wg.telnronzecentrale2),
     normalizedNr,
-    text: buildTelServerText(wg, rows, invoegendTelnr),
+    text: buildTelServerText(wg, pasGeaccepteerdeOvernamesToe(rows, overnemers), invoegendTelnr),
     waarneemgroep: wg,
   };
 }

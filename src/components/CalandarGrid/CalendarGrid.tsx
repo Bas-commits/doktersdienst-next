@@ -13,6 +13,7 @@ import {
 } from '@/types/voorkeuren';
 import { getWeek, monthWeekCount, getDateRangeOfWeek, getWeekNumber } from '@/utils/calendarUtils';
 import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { VANDAAG_GROEN } from '@/lib/calendar-colors';
 import { ShiftBlock } from '@/components/ShiftBlock/ShiftBlock';
 import { MonthNavigation } from './MonthNavigation';
 
@@ -595,7 +596,7 @@ export function CalendarGrid({
                             isToday
                               ? {
                                   color: 'white',
-                                  backgroundColor: 'green',
+                                  backgroundColor: VANDAAG_GROEN,
                                   fontWeight: 'bold',
                                   minWidth: '30px',
                                   borderRadius: '6px',

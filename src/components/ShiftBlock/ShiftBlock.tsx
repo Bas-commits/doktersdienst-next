@@ -10,6 +10,10 @@ import { TbSwitch3 } from 'react-icons/tb';
 import type { ShiftBlockView } from '@/types/diensten';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
 import { hasShiftEnded } from '@/lib/shift-window';
+import { VANDAAG_GROEN } from '@/lib/calendar-colors';
+
+/** Pixels of the green frame around the shift that is running right now. */
+const ACTIVE_FRAME_WIDTH = 3;
 
 /** Returns whether the given date lies within the shift's start and end (inclusive). Exported for testing. */
 export function isShiftActiveAt(block: ShiftBlockView, when: Date): boolean {
@@ -725,6 +729,29 @@ export function ShiftBlock({
                 : undefined,
       }}
     >
+      {isActive && (
+        // One frame around the whole shift, achterwacht and extra dokter included, in the green of
+        // today's day header. It used to be a red border on the middle block only. Open on the
+        // sides where an overnight shift continues into the neighbouring day cell.
+        <div
+          aria-hidden
+          data-testid="shift-block-active-frame"
+          className={`absolute pointer-events-none ${middleRoundedClass}`}
+          style={{
+            top: -ACTIVE_FRAME_WIDTH,
+            bottom: -ACTIVE_FRAME_WIDTH,
+            left: continuesFromPrev ? 0 : -ACTIVE_FRAME_WIDTH,
+            right: continuesToNext ? 0 : -ACTIVE_FRAME_WIDTH,
+            borderStyle: 'solid',
+            borderColor: VANDAAG_GROEN,
+            borderTopWidth: ACTIVE_FRAME_WIDTH,
+            borderBottomWidth: ACTIVE_FRAME_WIDTH,
+            borderLeftWidth: continuesFromPrev ? 0 : ACTIVE_FRAME_WIDTH,
+            borderRightWidth: continuesToNext ? 0 : ACTIVE_FRAME_WIDTH,
+            zIndex: 5,
+          }}
+        />
+      )}
       {onDelete && (
         <button
           type="button"
@@ -820,14 +847,6 @@ export function ShiftBlock({
                 ? { cursor: 'pointer' as const }
                 : {}),
             ...(dimMiddle ? { opacity: 0.35 } : {}),
-            ...(isActive ? {
-              borderColor: '#dc2626',
-              borderTopWidth: '3px',
-              borderBottomWidth: '3px',
-              borderLeftWidth: continuesFromPrev ? '0' : '3px',
-              borderRightWidth: continuesToNext ? '0' : '3px',
-              zIndex: 1,
-            } : {}),
           }}
           onClick={
             middleHasClick && !middleUsesPointerPaint

@@ -51,6 +51,65 @@ function tooltip(): HTMLElement | null {
   return document.body.querySelector('[data-shift-block-tooltip]');
 }
 
+/** A block that runs from an hour ago until an hour from now, in local "YYYY-MM-DD HH:MM:SS". */
+function makeRunningBlock(overrides: Partial<ShiftBlockView> = {}): ShiftBlockView {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const local = (d: Date) =>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+  const start = new Date(Date.now() - 60 * 60_000);
+  const end = new Date(Date.now() + 60 * 60_000);
+  return makeBlock({
+    day: start.getDate(),
+    month: start.getMonth(),
+    year: start.getFullYear(),
+    van: Math.floor(start.getTime() / 1000),
+    tot: Math.floor(end.getTime() / 1000),
+    startTime: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
+    endTime: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
+    currentDate: local(start),
+    nextDate: local(end),
+    ...overrides,
+  });
+}
+
+describe('ShiftBlock markering actuele dienst', () => {
+  it('zet een groene rand om de hele dienst die nu loopt, achterwacht en extra dokter incluis', () => {
+    renderBlock(makeRunningBlock());
+
+    const frame = screen.getByTestId('shift-block-active-frame');
+    expect(frame.style.borderColor).toBe('green');
+    // The frame hangs off the outer container, so it encloses all three lanes.
+    const outer = screen.getByTestId('shift-block-middle').closest('[data-box-type="morning"]')!;
+    expect(frame.parentElement).toBe(outer);
+    expect(outer.contains(screen.getByTestId('shift-block-top'))).toBe(true);
+    expect(outer.contains(screen.getByTestId('shift-block-bottom'))).toBe(true);
+    // The old red border on the middle block alone is gone.
+    expect(screen.getByTestId('shift-block-middle').style.borderColor).not.toBe('rgb(220, 38, 38)');
+  });
+
+  it('laat de rand open aan de kant waar een nachtdienst doorloopt in de volgende dag', () => {
+    render(
+      <ShiftBlock
+        block={makeRunningBlock()}
+        day={1}
+        month={0}
+        year={2000}
+        continuesToNext
+      />
+    );
+
+    const frame = screen.getByTestId('shift-block-active-frame');
+    expect(frame.style.borderRightWidth).toBe('0px');
+    expect(frame.style.borderLeftWidth).toBe('3px');
+  });
+
+  it('markeert een dienst die nog moet komen niet', () => {
+    renderBlock(makeBlock());
+
+    expect(screen.queryByTestId('shift-block-active-frame')).toBeNull();
+  });
+});
+
 describe('ShiftBlock hover tooltip', () => {
   it('toont bij de achterwacht de rol, de naam en de tijden', () => {
     renderBlock(makeBlock());

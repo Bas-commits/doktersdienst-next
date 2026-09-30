@@ -50,19 +50,17 @@ export function roosterActueelVenster(dag: Date): { vanGte: number; totLte: numb
 }
 
 /**
- * Splits the viewer's groups into rows for the day (groups with at least one shift that day,
- * open slots included, because an open slot is exactly the gap this screen should show) and the
- * groups without any shift that day.
+ * One row per group with at least one shift on `dag`, open slots included, because an open slot
+ * is exactly the gap this screen should show. Groups without a shift that day get no row.
  *
- * Returns:
- *   rijen: in the order of `groepen`, each with the part of every shift that falls on `dag`.
- *   zonderDiensten: the groups that get no row.
+ * Returns the rows in the order of `groepen`, each with the part of every shift that falls on
+ * `dag`.
  */
 export function roosterActueelRijen(
   blocks: ShiftBlockView[],
   groepen: RoosterActueelGroep[],
   dag: Date,
-): { rijen: RoosterActueelRij[]; zonderDiensten: RoosterActueelGroep[] } {
+): RoosterActueelRij[] {
   const day = dag.getDate();
   const month0 = dag.getMonth();
   const year = dag.getFullYear();
@@ -79,7 +77,6 @@ export function roosterActueelRijen(
   }
 
   const rijen: RoosterActueelRij[] = [];
-  const zonderDiensten: RoosterActueelGroep[] = [];
   for (const groep of groepen) {
     const segments = getBlocksWithSegmentsForDay(perGroep.get(groep.id) ?? [], day, month0, year)
       .map(({ block, segmentStartTime, segmentEndTime }) => ({
@@ -91,9 +88,8 @@ export function roosterActueelRijen(
       }))
       .sort((a, b) => a.block.van - b.block.van);
     if (segments.length > 0) rijen.push({ ...groep, segments });
-    else zonderDiensten.push(groep);
   }
-  return { rijen, zonderDiensten };
+  return rijen;
 }
 
 /** Position of `moment` on the 00:00–24:00 axis of `dag` as a percentage, or null on another day. */

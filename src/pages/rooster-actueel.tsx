@@ -109,7 +109,7 @@ export default function RoosterActueelPage() {
     ASSIGNMENT_TYPES
   );
 
-  const { rijen, zonderDiensten } = useMemo(
+  const rijen = useMemo(
     () => roosterActueelRijen(dienstenToShiftBlocks(data ?? null), groepen, dag),
     [data, groepen, dag]
   );
@@ -229,12 +229,6 @@ export default function RoosterActueelPage() {
                   </div>
                 </div>
               </div>
-            )}
-
-            {!loading && rijen.length > 0 && zonderDiensten.length > 0 && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                Geen diensten op deze dag: {zonderDiensten.map((g) => g.naam).join(', ')}
-              </p>
             )}
           </CardContent>
         </Card>

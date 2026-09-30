@@ -40,17 +40,16 @@ describe('roosterActueelRijen', () => {
       blok(10, new Date(2026, 9, 2, 8), new Date(2026, 9, 2, 17)),
     ];
 
-    const { rijen, zonderDiensten } = roosterActueelRijen(blocks, groepen, dag);
+    const rijen = roosterActueelRijen(blocks, groepen, dag);
 
     expect(rijen.map((r) => r.id)).toEqual([10, 73]);
     expect(rijen[0].segments).toHaveLength(1);
-    expect(zonderDiensten.map((g) => g.id)).toEqual([99]);
   });
 
   it('toont een nachtdienst van de avond ervoor vanaf middernacht, doorlopend uit de vorige dag', () => {
     const nacht = blok(10, new Date(2026, 8, 29, 23), new Date(2026, 8, 30, 8));
 
-    const { rijen } = roosterActueelRijen([nacht], groepen, dag);
+    const rijen = roosterActueelRijen([nacht], groepen, dag);
 
     expect(rijen[0].segments[0]).toMatchObject({
       segmentStartTime: '00:00',
@@ -63,7 +62,7 @@ describe('roosterActueelRijen', () => {
   it('negeert diensten van groepen die de gebruiker niet heeft', () => {
     const vreemd = blok(11, new Date(2026, 8, 30, 8), new Date(2026, 8, 30, 17));
 
-    const { rijen } = roosterActueelRijen([vreemd], groepen, dag);
+    const rijen = roosterActueelRijen([vreemd], groepen, dag);
 
     expect(rijen).toEqual([]);
   });

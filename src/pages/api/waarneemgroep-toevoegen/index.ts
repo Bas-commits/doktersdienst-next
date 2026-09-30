@@ -28,7 +28,29 @@ export type WaarneemgroepToevoegenOptions = {
   instellingen: InstellingItem[];
   waarneemgroepen: WaarneemgroepListItem[];
   waarneemgroepenTable: WaarneemgroepTableItem[];
+  /**
+   * Every central number held by any group, afgemeld included. The table above shows only active
+   * groups, and the number list used to be built from it: a number of an afgemelde group then
+   * looked free and was refused on save. The save check reads this same list.
+   */
+  bezetteTelnrs: string[];
 };
+
+/**
+ * Central numbers of all groups, afgemelde ones included. An afgemelde group keeps its number, and
+ * the tel-sync reads every group, so a second group on that number would overwrite its PBX record.
+ */
+async function alleCentraleNummers(): Promise<string[]> {
+  const rows = await db
+    .select({
+      telnronzecentrale: waarneemgroepen.telnronzecentrale,
+      telnronzecentrale2: waarneemgroepen.telnronzecentrale2,
+    })
+    .from(waarneemgroepen);
+  return rows
+    .flatMap((row) => [row.telnronzecentrale, row.telnronzecentrale2])
+    .filter((nr): nr is string => typeof nr === 'string' && nr.trim() !== '');
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -49,7 +71,7 @@ export default async function handler(
 
   if (req.method === 'GET') {
     try {
-      const [specialismenRows, regiosRows, instellingenRows, wgRows] = await Promise.all([
+      const [specialismenRows, regiosRows, instellingenRows, wgRows, bezetteTelnrs] = await Promise.all([
         db
           .select({ id: specialismen.id, omschrijving: specialismen.omschrijving })
           .from(specialismen)
@@ -77,6 +99,7 @@ export default async function handler(
           .leftJoin(regios, eq(waarneemgroepen.idregio, regios.id))
           .where(eq(waarneemgroepen.afgemeld, false))
           .orderBy(asc(waarneemgroepen.naam)),
+        alleCentraleNummers(),
       ]);
 
       const activeWgList = wgRows.filter((r) => r.id != null && r.naam != null);
@@ -101,6 +124,7 @@ export default async function handler(
           telnronzecentrale2: r.telnronzecentrale2 ?? null,
           idfacturering: r.idfacturering ?? null,
         })),
+        bezetteTelnrs,
       });
     } catch (err) {
       console.error('GET /api/waarneemgroep-toevoegen error', err);
@@ -149,14 +173,7 @@ export default async function handler(
     const telnrconference = normalizePhoneField(body.telnrconference, 'Telnr conference');
 
     if (telnronzecentrale2) {
-      const existingRows = await db
-        .select({
-          telnronzecentrale: waarneemgroepen.telnronzecentrale,
-          telnronzecentrale2: waarneemgroepen.telnronzecentrale2,
-        })
-        .from(waarneemgroepen);
-      const existingNumbers = existingRows.flatMap((row) => [row.telnronzecentrale, row.telnronzecentrale2]);
-      if (isTelnrOnzeCentraleTaken(telnronzecentrale2, existingNumbers)) {
+      if (isTelnrOnzeCentraleTaken(telnronzecentrale2, await alleCentraleNummers())) {
         return res.status(400).json({
           error: `Telefoonnummer ${telnronzecentrale2} is al in gebruik door een andere waarneemgroep.`,
         });

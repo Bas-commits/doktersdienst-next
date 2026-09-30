@@ -93,12 +93,11 @@ export default function WaarneemgroepToevoegenPage() {
   const set = (key: keyof FormData, value: string | boolean) =>
     setFormData((f) => ({ ...f, [key]: value }));
 
+  // From every group, afgemeld included: the same list the save check uses. The table only has
+  // active groups, and building this from it offered numbers of afgemelde groups as free.
   const takenTelnrKeys = useMemo(
-    () =>
-      takenTelnrRingaandKeys(
-        options?.waarneemgroepenTable.flatMap((wg) => [wg.telnronzecentrale, wg.telnronzecentrale2]) ?? []
-      ),
-    [options?.waarneemgroepenTable]
+    () => takenTelnrRingaandKeys(options?.bezetteTelnrs ?? []),
+    [options?.bezetteTelnrs]
   );
 
   const availableTelnrsOnzeCentrale = useMemo(

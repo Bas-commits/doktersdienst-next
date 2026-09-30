@@ -340,4 +340,41 @@ describe('waarneemgroep centrale telefoonnummer persistence', () => {
     expect(res._status).toBe(400);
     expect(mockUpdateSet).not.toHaveBeenCalled();
   });
+
+  it('lists central numbers of afgemelde groups as taken, like the save check does', async () => {
+    // The table holds only active groups. The number list used to be built from it, so the number
+    // of an afgemelde group was offered as free and then refused on save.
+    const ordered = (rows: unknown[]) => ({ from: vi.fn(() => ({ orderBy: vi.fn(() => Promise.resolve(rows)) })) });
+    const actieveGroepen = [
+      { id: 78, naam: 'Test10', telnronzecentrale: '31887732753', telnronzecentrale2: '31887732753', idfacturering: null, specialismeOmschrijving: null, regioNaam: null },
+    ];
+    selectQueue = [
+      () => ordered([]),
+      () => ordered([]),
+      () => ordered([]),
+      () => ({
+        from: vi.fn(() => ({
+          leftJoin: vi.fn(() => ({
+            leftJoin: vi.fn(() => ({
+              where: vi.fn(() => ({ orderBy: vi.fn(() => Promise.resolve(actieveGroepen)) })),
+            })),
+          })),
+        })),
+      }),
+      () =>
+        selectRows([
+          { telnronzecentrale: '31887732753', telnronzecentrale2: '31887732753' },
+          { telnronzecentrale: '31880026433', telnronzecentrale2: null }, // afgemelde groep
+        ]),
+    ];
+
+    const { default: handler } = await import('@/pages/api/waarneemgroep-toevoegen/index');
+    const res = makeRes();
+    await handler(makeReq({ method: 'GET', body: undefined }), res);
+
+    expect(res._status).toBe(200);
+    const body = res._json as { bezetteTelnrs: string[]; waarneemgroepenTable: unknown[] };
+    expect(body.bezetteTelnrs).toContain('31880026433');
+    expect(body.waarneemgroepenTable).toHaveLength(1);
+  });
 });

@@ -97,15 +97,26 @@ function isWeergaveBericht(value: unknown): value is WeergaveBericht {
  * Args:
  *     idwaarneemgroep: Berichten van een andere waarneemgroep worden genegeerd. Twee vensters
  *         op verschillende groepen mogen elkaar niet verzetten.
+ *     begin: Waar een nevenscherm-tabblad mee opent. Het kanaal bereikt een nieuw tabblad pas
+ *         bij de volgende wijziging, dus zonder dit opende het op de huidige week en zonder
+ *         nevenscherm in plaats van op wat het hoofdtabblad toonde.
  */
-export function usePlannerWeergave(idwaarneemgroep: number): PlannerWeergave & {
+export function usePlannerWeergave(
+  idwaarneemgroep: number,
+  begin?: Partial<PlannerWeergave> | null
+): PlannerWeergave & {
   setWeekStart: (weekStart: string) => void;
   setNevenscherm: (nevenscherm: PlannerNevenscherm) => void;
 } {
   const [weergave, setWeergave] = useState<PlannerWeergave>(() => ({
     weekStart:
-      laatsteWeek?.idwaarneemgroep === idwaarneemgroep ? laatsteWeek.weekStart : huidigeWeek(),
-    nevenscherm: 'geen',
+      begin?.weekStart && isIsoDate(begin.weekStart)
+        ? startOfIsoWeek(begin.weekStart)
+        : laatsteWeek?.idwaarneemgroep === idwaarneemgroep
+          ? laatsteWeek.weekStart
+          : huidigeWeek(),
+    nevenscherm:
+      begin?.nevenscherm && NEVENSCHERMEN.includes(begin.nevenscherm) ? begin.nevenscherm : 'geen',
   }));
   const kanaal = useRef<BroadcastChannel | null>(null);
   // Wat er als laatste over het kanaal ging, in of uit. Zonder dit stuurt een scherm het

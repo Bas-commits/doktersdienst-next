@@ -47,7 +47,9 @@ import {
   useBeschikbareBreedte,
 } from '@/hooks/praktijkplanner/useBeschikbareBreedte';
 import { usePlannerHolidays } from '@/hooks/praktijkplanner/usePlannerHolidays';
-import { usePlannerWeergave } from '@/hooks/praktijkplanner/usePlannerWeergave';
+import { usePlannerWeergave, type PlannerNevenscherm } from '@/hooks/praktijkplanner/usePlannerWeergave';
+import { useNevenschermTabblad } from '@/hooks/praktijkplanner/useNevenschermTabblad';
+import { losTabbladParams, nevenschermTabbladUrl } from '@/lib/nevenscherm-tabblad';
 import {
   MAAND_CEL_MATEN,
   MAAND_CEL_STANDAARD,
@@ -143,7 +145,21 @@ export function ActivitiesContent({
 }: PraktijkplannerPageContext & { readOnly?: boolean }) {
   const router = useRouter();
   const canEdit = data.isManager && !readOnly;
-  const { weekStart, setWeekStart, nevenscherm, setNevenscherm } = usePlannerWeergave(groupId);
+  /*
+    Het tabblad met alleen het nevenscherm, dat de splitsknop op een te smal scherm opent. Eén
+    keer gelezen: het adres verandert daarna niet, en dit scherm rendert pas in de browser (na
+    het laden van de groep), dus er is geen serverrender om van af te wijken.
+  */
+  const [losTabblad] = useState(() => losTabbladParams());
+  const { weekStart, setWeekStart, nevenscherm, setNevenscherm } = usePlannerWeergave(
+    groupId,
+    losTabblad
+      ? {
+          weekStart: losTabblad.get('week') ?? undefined,
+          nevenscherm: (losTabblad.get('nevenscherm') ?? undefined) as PlannerNevenscherm | undefined,
+        }
+      : null
+  );
   // De rij waar palet, week en paneel in staan. De breedte daarvan hangt niet af van wat er
   // in komt te staan, dus de meting kan zichzelf niet achterna lopen.
   const roosterRij = useRef<HTMLDivElement>(null);
@@ -193,11 +209,6 @@ export function ActivitiesContent({
     },
     [monthAnchor, setWeekStart]
   );
-  // De maand haalt een hele maand op, ook als hij naast de week staat: het paneel toont dan
-  // dezelfde maand, alleen smaller.
-  const toontMaand = nevenscherm === 'maand';
-  const rangeStart = toontMaand && monthRange ? monthRange.start : weekStart;
-  const rangeEnd = toontMaand && monthRange ? monthRange.end : end;
 
   /*
     Links staat de week, rechts de keuze. Past dat niet naast elkaar, dan komt de keuze in de
@@ -231,9 +242,32 @@ export function ActivitiesContent({
     terug op niets, en dan blijft de week gewoon staan in plaats van dat er een lege kolom
     naast komt.
   */
-  const paneel =
+  const gekozenPaneel =
     nevenscherm === 'geen' || !keuzes.includes(nevenscherm) ? null : nevenscherm;
-  const toontWeek = paneel === null || naastElkaar;
+  /*
+    Op een te smal scherm opent de splitsknop het nevenscherm in een eigen tabblad. Dit tabblad
+    houdt dan de week, en het andere toont alleen het nevenscherm; de keuze zelf gaat over het
+    kanaal van usePlannerWeergave, dus beide tabbladen blijven op dezelfde week en hetzelfde
+    nevenscherm. Wordt het scherm alsnog breed genoeg, dan komt het paneel hier gewoon terug
+    naast de week. Kaart: https://trello.com/c/FHVfCvMC
+  */
+  const nevenschermTabblad = useNevenschermTabblad('praktijkplanner-nevenscherm');
+  const paneelElders = losTabblad === null && nevenschermTabblad.geopend && !magSplitsen;
+  const paneel = paneelElders ? null : gekozenPaneel;
+  const toontWeek = losTabblad !== null ? paneel === null : paneel === null || naastElkaar;
+  const openNevenschermTabblad = useCallback(() => {
+    if (gekozenPaneel === null) return;
+    nevenschermTabblad.openen(
+      nevenschermTabbladUrl(router.pathname, { nevenscherm: gekozenPaneel, week: weekStart })
+    );
+  }, [gekozenPaneel, nevenschermTabblad, router.pathname, weekStart]);
+
+  // De maand haalt een hele maand op, ook als hij naast de week staat: het paneel toont dan
+  // dezelfde maand, alleen smaller. Staat de maand in het andere tabblad, dan haalt dit
+  // tabblad alleen zijn week op; anders mist een week over een maandgrens de helft.
+  const toontMaand = paneel === 'maand';
+  const rangeStart = toontMaand && monthRange ? monthRange.start : weekStart;
+  const rangeEnd = toontMaand && monthRange ? monthRange.end : end;
 
   // In een cel van 34 pixels is geen fiche neer te zetten, dus de maand is altijd om te
   // kijken. Het palet hoort bij de week: staat die er niet, dan is er niets om het op te
@@ -1467,20 +1501,22 @@ export function ActivitiesContent({
             ook de knop te zijn die aan staat.
           */}
           <PlannerNevenschermKeuze
-            value={paneel ?? 'geen'}
+            value={gekozenPaneel ?? 'geen'}
             onChange={setNevenscherm}
             keuzes={keuzes}
             naastElkaar={naastElkaar}
           />
           {/*
             Alleen zinvol als er iets naast de week zou kunnen staan. Bij Week is er niets om
-            te splitsen, en de knop zou daar alleen verwarren.
+            te splitsen, en de knop zou daar alleen verwarren. In het losse tabblad ook niet:
+            daar staat alleen het nevenscherm, en de week staat in het andere tabblad.
           */}
-          {paneel !== null ? (
+          {gekozenPaneel !== null && losTabblad === null ? (
             <PlannerSplitsToggle
-              aan={gesplitstGewenst}
-              disabled={!magSplitsen}
+              aan={magSplitsen ? gesplitstGewenst : nevenschermTabblad.geopend}
+              teSmal={!magSplitsen}
               onChange={setGesplitstGewenst}
+              onNieuwTabblad={openNevenschermTabblad}
             />
           ) : null}
           {/*

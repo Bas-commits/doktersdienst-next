@@ -22,6 +22,9 @@ import {
   useBeschikbareBreedte,
 } from '@/hooks/praktijkplanner/useBeschikbareBreedte';
 import { PlannerSplitsToggle } from '@/components/praktijkplanner/PlannerSplitsToggle';
+import { useNevenschermTabblad } from '@/hooks/praktijkplanner/useNevenschermTabblad';
+import { useRoosterMaand } from '@/hooks/useRoosterMaand';
+import { nevenschermTabbladUrl } from '@/lib/nevenscherm-tabblad';
 import { UrentellingPanel } from '@/components/UrentellingPanel';
 import type { ShiftBlockView, DoctorInfo } from '@/types/diensten';
 import { shiftKeyFromBlock } from '@/types/voorkeuren';
@@ -328,9 +331,6 @@ export default function RoosterMakenSecretarisPage() {
   const { activeWaarneemgroepId, waarneemgroepen, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
 
   const now = useMemo(() => new Date(), []);
-  const [viewMonth, setViewMonth] = useState(now.getMonth());
-  const [viewYear, setViewYear] = useState(now.getFullYear());
-  const calendarVakanties = useCalendarVakanties(viewYear);
 
   // De rij met zijbalk, rooster en Urentelling-paneel. De breedte daarvan hangt niet af van wat
   // erin komt te staan, dus de meting kan zichzelf niet achterna lopen (zie activiteiten.tsx).
@@ -348,14 +348,42 @@ export default function RoosterMakenSecretarisPage() {
     Zo kun je op een klein scherm, of gewoon zonder duo-scherm te willen, nog steeds snel tussen
     rooster en Urentelling wisselen in plaats van dat de knop dan niets meer doet.
   */
-  const toontKalender = !toontUrentelling || naastElkaar;
-  const toontUrentellingPaneel = toontUrentelling;
+  /*
+    Op een te smal scherm opent de splitsknop de Urentelling in een eigen tabblad, en blijft het
+    rooster hier staan. Het losse tabblad toont alleen de Urentelling en volgt de maand van het
+    rooster via useRoosterMaand. Kaart: https://trello.com/c/FHVfCvMC
+
+    Uit router.query en niet uit window.location: deze pagina wordt op de server voorgerenderd,
+    en daar is geen adres. Tot de router klaar is staat heel even de gewone pagina.
+  */
+  const losTabblad = router.isReady && router.query.los === '1';
+  const urentellingTabblad = useNevenschermTabblad('doktersdienst-urentelling');
+  const urentellingElders = !losTabblad && urentellingTabblad.geopend && !magSplitsen;
+  const toontKalender = !losTabblad && (!toontUrentelling || naastElkaar || urentellingElders);
+  const toontUrentellingPaneel = losTabblad || (toontUrentelling && !urentellingElders);
 
   const panelGroupId = useMemo(() => {
     if (!activeWaarneemgroepId) return null;
     const parsed = Number(activeWaarneemgroepId);
     return Number.isNaN(parsed) ? null : parsed;
   }, [activeWaarneemgroepId]);
+
+  const {
+    month: viewMonth,
+    year: viewYear,
+    setMaand,
+  } = useRoosterMaand(panelGroupId, { month: now.getMonth(), year: now.getFullYear() });
+  const calendarVakanties = useCalendarVakanties(viewYear);
+  const losMaand = router.query.maand;
+  const losJaar = router.query.jaar;
+  useEffect(() => {
+    if (!losTabblad) return;
+    const month = Number(losMaand);
+    const year = Number(losJaar);
+    if (Number.isInteger(month) && month >= 0 && month <= 11 && Number.isInteger(year)) {
+      setMaand(month, year);
+    }
+  }, [losTabblad, losMaand, losJaar, setMaand]);
 
   const panelGroupName = useMemo(() => {
     if (panelGroupId == null) return 'waarneemgroep';
@@ -728,9 +756,14 @@ export default function RoosterMakenSecretarisPage() {
       </button>
       {toontUrentelling ? (
         <PlannerSplitsToggle
-          aan={gesplitstGewenst}
-          disabled={!magSplitsen}
+          aan={magSplitsen ? gesplitstGewenst : urentellingTabblad.geopend}
+          teSmal={!magSplitsen}
           onChange={setGesplitstGewenst}
+          onNieuwTabblad={() =>
+            urentellingTabblad.openen(
+              nevenschermTabbladUrl(router.pathname, { maand: viewMonth, jaar: viewYear })
+            )
+          }
           hoofdscherm="het rooster"
         />
       ) : null}
@@ -792,7 +825,8 @@ export default function RoosterMakenSecretarisPage() {
       )}
 
       <div className={`mx-auto space-y-6 px-4 py-8 ${toontUrentellingPaneel ? '' : 'max-w-[2000px]'}`}>
-        <Card className="overflow-visible">
+        {/* Het losse Urentelling-tabblad toont alleen de Urentelling; kop en dokters staan in het rooster-tabblad. */}
+        <Card className={`overflow-visible ${losTabblad ? 'hidden' : ''}`}>
           <CardHeader className="overflow-visible">
             <CardTitle>
               <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -818,7 +852,7 @@ export default function RoosterMakenSecretarisPage() {
 
         <div ref={roosterRij} className="flex flex-col gap-6 lg:flex-row lg:items-start">
           {/* Doctor sidebar */}
-          <div ref={sidebarRef} className="sticky top-2 w-full shrink-0 self-start lg:top-4 lg:h-[calc(100vh-1rem)] lg:w-56 lg:flex lg:flex-col">
+          <div ref={sidebarRef} style={losTabblad ? { display: 'none' } : undefined} className="sticky top-2 w-full shrink-0 self-start lg:top-4 lg:h-[calc(100vh-1rem)] lg:w-56 lg:flex lg:flex-col">
             <Card className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Dokters</CardTitle>
@@ -966,10 +1000,7 @@ export default function RoosterMakenSecretarisPage() {
                     initialViewYear={now.getFullYear()}
                     viewMonth={viewMonth}
                     viewYear={viewYear}
-                    onViewMonthChange={(month, year) => {
-                      setViewMonth(month);
-                      setViewYear(year);
-                    }}
+                    onViewMonthChange={setMaand}
                     voorkeuren={voorkeuren ?? undefined}
                     highlightedVoorkeurUserIds={highlightedVoorkeurUserIds}
                     onSectionShiftClick={handleSectionShiftClick}
@@ -989,7 +1020,7 @@ export default function RoosterMakenSecretarisPage() {
                   Staat het rooster er niet naast, dan zou de schakelknop anders verdwijnen
                   zodra hij het meest nodig is: terug naar het rooster op een klein scherm.
                 */}
-                {!toontKalender ? (
+                {!toontKalender && !losTabblad ? (
                   <div className="mb-4 flex justify-end">{urentellingBediening}</div>
                 ) : null}
                 <UrentellingPanel

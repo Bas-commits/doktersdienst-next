@@ -1499,10 +1499,17 @@ export function ActivitiesContent({
             De knop volgt het paneel en niet de gedeelde keuze. Komt er over het kanaal een
             keuze binnen die dit scherm niet kent, dan staat er de week, en dan hoort Week
             ook de knop te zijn die aan staat.
+
+            Staat het nevenscherm in het andere tabblad, dan toont dit tabblad de week, en dan
+            staat hier dus ook Week aan. Een andere keuze gaat naar het andere tabblad; Week
+            opnieuw aanklikken doet niets, anders zette het dat tabblad ook op de week.
           */}
           <PlannerNevenschermKeuze
-            value={gekozenPaneel ?? 'geen'}
-            onChange={setNevenscherm}
+            value={paneelElders ? 'geen' : (gekozenPaneel ?? 'geen')}
+            onChange={(keuze) => {
+              if (paneelElders && keuze === 'geen') return;
+              setNevenscherm(keuze);
+            }}
             keuzes={keuzes}
             naastElkaar={naastElkaar}
           />

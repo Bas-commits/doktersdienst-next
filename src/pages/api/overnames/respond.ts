@@ -4,7 +4,12 @@ import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { logger } from '@/lib/logger';
 import { GROEP_ADMINISTRATOR, GROEP_SECRETARIS } from '@/lib/roles';
-import { buildLegacyOvernameRowConditions } from '@/lib/overname-legacy-lookup';
+import { buildLegacyOvernameRowConditions, overnameSectieCondition } from '@/lib/overname-legacy-lookup';
+import {
+  parseOvernameSectie,
+  toOvernameSectie,
+  type OvernameSectie,
+} from '@/lib/overname-sectie';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
 
@@ -29,6 +34,9 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
  *   overnameId     number  — Optional ID of the specific overname row to mutate/delete
  *   deleteStatus   string  — Optional delete filter: "pending" | "declined" | "accepted"
  *   action         string  — "accept", "decline", or "delete"
+ *   sectie         string  — Optional lane: 'top' | 'bottom' | null (middle). Only filtered on when
+ *                             the key is present; clients that never send it (mobile) keep matching
+ *                             as before.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -45,6 +53,14 @@ export default async function handler(
 
   try {
     const { iddienstovern, overnameId, deleteStatus, action, van, tot, idwaarneemgroep, iddeelnemer, iddeelnovern } = req.body;
+    let requestedSectie: OvernameSectie | null | undefined;
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'sectie')) {
+      const parsed = parseOvernameSectie(req.body.sectie);
+      if (!parsed.ok) {
+        return res.status(400).json({ error: 'Invalid sectie' });
+      }
+      requestedSectie = parsed.sectie;
+    }
     const iddienstovernNum = Number(iddienstovern);
     const overnameIdNum =
       overnameId == null ? null : Number(overnameId);
@@ -135,7 +151,11 @@ export default async function handler(
         return eq(dienstenTable.id, overnameIdNum as number);
       }
       if (hasDienstOvernId) {
-        return eq(dienstenTable.iddienstovern, iddienstovernNum);
+        // iddienstovern is often the shared type-1 slot: add the lane so a dienst and an
+        // achterwacht overname on the same slot are not taken for each other.
+        return requestedSectie !== undefined
+          ? and(eq(dienstenTable.iddienstovern, iddienstovernNum), overnameSectieCondition(requestedSectie))!
+          : eq(dienstenTable.iddienstovern, iddienstovernNum);
       }
       return buildLegacyOvernameRowConditions({
         iddienstovern: 0,
@@ -144,6 +164,7 @@ export default async function handler(
         tot: numTot as number,
         iddeelnemer: numIdDeelnemer,
         iddeelnovern: numIdDeelnOvern,
+        overnameSectie: requestedSectie,
       });
     };
 
@@ -162,6 +183,7 @@ export default async function handler(
         status: dienstenTable.status,
         van: dienstenTable.van,
         tot: dienstenTable.tot,
+        overnameSectie: dienstenTable.overnameSectie,
       })
       .from(dienstenTable)
       .where(lookupCondition)
@@ -181,6 +203,7 @@ export default async function handler(
       tot: proposalTot,
       iddeelnemer: proposalDeelnemer,
     } = proposal[0];
+    const proposalSectie = toOvernameSectie(proposal[0].overnameSectie);
 
     const buildMutateCondition = () => {
       if (proposalId != null && proposalId > 0) {
@@ -193,6 +216,10 @@ export default async function handler(
         tot: Number(proposalTot ?? 0),
         iddeelnemer: proposalDeelnemer,
         iddeelnovern: proposalDeelnOvern,
+        // Rows without an id are mutated by their composite key. Pin the lane of the row we
+        // found, or accepting an achterwacht overname would also accept a dienst proposal with
+        // the same van/tot and doctors.
+        overnameSectie: proposalSectie,
       });
     };
 

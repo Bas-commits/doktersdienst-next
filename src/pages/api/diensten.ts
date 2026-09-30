@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, gte, lte, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema } from '@/db';
+import { toOvernameSectie } from '@/lib/overname-sectie';
 import { getAuthenticatedUser, getUserWaarneemgroepIds } from '@/lib/api-auth';
 
 const { diensten: dienstenTable, deelnemers, dienstaantekening } = schema;
@@ -120,6 +121,7 @@ export default async function handler(
         idaantekening: dienstenTable.idaantekening,
         aantekeningTekst: dienstaantekening.tekst,
         status: dienstenTable.status,
+        overnameSectie: dienstenTable.overnameSectie,
         iddienstovern: dienstenTable.iddienstovern,
         iddeelnovern: dienstenTable.iddeelnovern,
         senderId: dienstenTable.senderId,
@@ -158,6 +160,7 @@ export default async function handler(
       iddienstovern: r.iddienstovern,
       iddeelnovern: r.iddeelnovern,
       senderId: r.senderId,
+      overnameSectie: toOvernameSectie(r.overnameSectie),
       diensten_deelnemers:
         r.deelnemerId != null
           ? {

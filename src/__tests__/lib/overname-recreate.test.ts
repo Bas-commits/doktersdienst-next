@@ -52,4 +52,13 @@ describe('overname-recreate', () => {
 
     expect(overnameVerwijzingSleutel(voorstel)).not.toBe(overnameVerwijzingSleutel(ander));
   });
+
+  it('neemt de strook mee, zodat opnieuw voorstellen weer de achterwacht voorstelt', () => {
+    const achterwacht: OvernameVerwijzing = { ...voorstel, sectie: 'top' };
+    const query = Object.fromEntries(new URLSearchParams(overnameVerwijzingNaarQuery(achterwacht)));
+
+    expect(overnameVerwijzingUitQuery(query)).toEqual(achterwacht);
+    // Een dienst- en een achterwachtvoorstel op dezelfde tijd zijn twee verschillende opdrachten.
+    expect(overnameVerwijzingSleutel(achterwacht)).not.toBe(overnameVerwijzingSleutel(voorstel));
+  });
 });

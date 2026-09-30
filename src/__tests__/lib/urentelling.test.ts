@@ -279,6 +279,78 @@ describe('aggregateUrentelling', () => {
     expect(pietersen.totaalDienst).toBe(2);
   });
 
+  it('moves achterwacht hours, not dienst hours, for an accepted achterwacht overname', () => {
+    const diensten: UrentellingDienst[] = [
+      { iddeelnemer: 3, van: windowStart, tot: windowStart + 8 * HOUR, type: 0, status: null },
+      { iddeelnemer: 1, van: windowStart, tot: windowStart + 8 * HOUR, type: 5, status: null },
+      {
+        iddeelnemer: 1,
+        iddeelnovern: 2,
+        van: windowStart + 2 * HOUR,
+        tot: windowStart + 5 * HOUR,
+        type: 6,
+        status: 'accepted',
+        overnameSectie: 'top',
+      },
+    ];
+
+    const { rows } = aggregateUrentelling(diensten, members, windowStart, windowEnd, baseSlots, aantekeningen);
+    const jansen = rows.find((r) => r.iddeelnemer === 1)!;
+    const pietersen = rows.find((r) => r.iddeelnemer === 2)!;
+    const smit = rows.find((r) => r.iddeelnemer === 3)!;
+
+    expect(jansen.totaalAchterwacht).toBe(5);
+    expect(jansen.totaalDienst).toBe(0);
+    expect(pietersen.totaalAchterwacht).toBe(3);
+    expect(pietersen.totaalDienst).toBe(0);
+    // The dienst doctor keeps the dienst; before lanes this overname would have taken it from nobody.
+    expect(smit.totaalDienst).toBe(8);
+  });
+
+  it('moves no hours for an accepted extra dokter overname, as extra dokter is not counted', () => {
+    const diensten: UrentellingDienst[] = [
+      { iddeelnemer: 1, van: windowStart, tot: windowStart + 8 * HOUR, type: 0, status: null },
+      {
+        iddeelnemer: 1,
+        iddeelnovern: 2,
+        van: windowStart,
+        tot: windowStart + 4 * HOUR,
+        type: 6,
+        status: 'accepted',
+        overnameSectie: 'bottom',
+      },
+    ];
+
+    const { rows } = aggregateUrentelling(diensten, members, windowStart, windowEnd, baseSlots, aantekeningen);
+    expect(rows.find((r) => r.iddeelnemer === 1)!.totaalDienst).toBe(8);
+    expect(rows.find((r) => r.iddeelnemer === 2)!.totaalDienst).toBe(0);
+    expect(rows.find((r) => r.iddeelnemer === 2)!.totaalAchterwacht).toBe(0);
+
+    const details = collectUrentellingDetails(diensten, members, windowStart, windowEnd, baseSlots, aantekeningen);
+    expect(details.filter((d) => d.categorie.includes('overname'))).toHaveLength(0);
+  });
+
+  it('labels achterwacht overname details as achterwacht', () => {
+    const diensten: UrentellingDienst[] = [
+      {
+        iddeelnemer: 1,
+        iddeelnovern: 2,
+        van: windowStart,
+        tot: windowStart + HOUR,
+        type: 6,
+        status: 'accepted',
+        overnameSectie: 'top',
+      },
+    ];
+    const details = collectUrentellingDetails(diensten, members, windowStart, windowEnd, baseSlots, aantekeningen);
+    expect(details.map((d) => [d.iddeelnemer, d.categorie, d.uren])).toEqual(
+      expect.arrayContaining([
+        [1, 'Achterwacht (overname afgegeven)', -1],
+        [2, 'Achterwacht (overname ontvangen)', 1],
+      ]),
+    );
+  });
+
   it('attributes unmatched shifts to no-aantekening column', () => {
     const diensten: UrentellingDienst[] = [
       {

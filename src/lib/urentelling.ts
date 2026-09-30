@@ -10,6 +10,11 @@ export type UrentellingDienst = {
   tot: number;
   type: number | null;
   status: string | null;
+  /**
+   * Overname rows only: the lane taken over ('top' achterwacht, 'bottom' extra dokter, null the
+   * dienst). An accepted overname moves hours of that lane, not dienst hours.
+   */
+  overnameSectie?: 'top' | 'bottom' | null;
 };
 
 export type UrentellingBaseSlot = {
@@ -332,13 +337,16 @@ export function aggregateUrentelling(
     const idaantekening = resolveKnownAantekeningId(dienst, baseSlots, aantekeningen);
 
     if (category === 'overnameAccepted') {
+      // Extra dokter is not counted, so taking one over moves nothing either.
+      if (dienst.overnameSectie === 'bottom') continue;
+      const add = dienst.overnameSectie === 'top' ? addAchterwachtSeconds : addDienstSeconds;
       const original = dienst.iddeelnemer;
       const target = dienst.iddeelnovern;
       if (original != null && original > 0) {
-        addDienstSeconds(totals, original, idaantekening, -seconds);
+        add(totals, original, idaantekening, -seconds);
       }
       if (target != null && target > 0) {
-        addDienstSeconds(totals, target, idaantekening, seconds);
+        add(totals, target, idaantekening, seconds);
       }
       continue;
     }
@@ -399,13 +407,15 @@ export function collectUrentellingDetails(
     const aantekening = aantekeningLabelById(aantekeningen, idaantekening);
 
     if (category === 'overnameAccepted') {
+      if (dienst.overnameSectie === 'bottom') continue;
+      const lane = dienst.overnameSectie === 'top' ? 'Achterwacht' : 'Dienst';
       const original = dienst.iddeelnemer;
       const target = dienst.iddeelnovern;
       if (original != null && original > 0) {
         details.push({
           iddeelnemer: original,
           naam: memberNameById(members, original),
-          categorie: 'Dienst (overname afgegeven)',
+          categorie: `${lane} (overname afgegeven)`,
           idaantekening,
           aantekening,
           van: interval.van,
@@ -417,7 +427,7 @@ export function collectUrentellingDetails(
         details.push({
           iddeelnemer: target,
           naam: memberNameById(members, target),
-          categorie: 'Dienst (overname ontvangen)',
+          categorie: `${lane} (overname ontvangen)`,
           idaantekening,
           aantekening,
           van: interval.van,

@@ -134,6 +134,11 @@ export interface ShiftBlockProps {
    */
   middleHeight?: number;
   /**
+   * Height in px of the achterwacht (top) and extra-dokter (bottom) strips. Default 12. The
+   * overnames page makes them taller so an overname on a strip has room for its icon.
+   */
+  stripHeight?: number;
+  /**
    * When true, suppresses the red active-shift border even when the shift is currently active.
    * Use for voorkeur blocks where the time range is a preference period, not a live shift.
    */
@@ -200,6 +205,7 @@ export function ShiftBlock({
   preferenceChip,
   hideInitialsInPreferenceFill = false,
   middleHeight,
+  stripHeight = 12,
   disableActiveHighlight,
   overnameType,
   onMiddlePointerDown,
@@ -440,6 +446,13 @@ export function ShiftBlock({
   const displayName = (mainDoc?.name ?? '').trim() || (doctorId ? `Doctor ${doctorId}` : '');
 
   const mainColor = mainDoc?.color ?? (doctorId ? '#c686fd' : 'transparent');
+  /**
+   * Set on an overname block for the achterwacht ('top') or extra dokter ('bottom'). Such a block
+   * draws the overname on that strip; its middle stays empty. Null for a dienst overname and for
+   * every ordinary block.
+   */
+  const laneOvername: 'top' | 'bottom' | null = overnameType ? (block.overnameSectie ?? null) : null;
+  const stripSizeStyle: CSSProperties = { height: stripHeight, lineHeight: `${stripHeight}px` };
   const isUnassignedSlot = !mainDoc;
   const showPendingDoctor = isUnassignedSlot && pendingDoctor != null;
 
@@ -455,7 +468,7 @@ export function ShiftBlock({
       ...cssInline,
       backgroundColor: showPendingDoctor ? pendingDoctor!.color : 'transparent',
       border: showPendingDoctor ? undefined : '1px solid #dcdcdc',
-      minHeight: 42,
+      minHeight: middleHeight ?? 42,
     };
   } else {
     cssInline = { ...cssInline, backgroundColor: mainColor };
@@ -498,9 +511,11 @@ export function ShiftBlock({
 
   // When onSectionClick is set, each stripe is clickable by its show prop; otherwise use activeSection + onClick.
   const useSectionClick = onSectionClick != null;
-  const topStripClickable = useSectionClick ? !!showEmptyTopStripBorder : activeSection === 'top';
+  // A filled strip is clickable in section mode even without the empty-strip outline: the overnames
+  // page turns the outline off (nobody to take over from on an empty strip) but still needs the click.
+  const topStripClickable = useSectionClick ? !!showEmptyTopStripBorder || achterw !== 0 : activeSection === 'top';
   const middleStripClickable = useSectionClick ? true : (activeSection === undefined || activeSection === 'middle');
-  const bottomStripClickable = useSectionClick ? !!showEmptyBottomStripBorder : activeSection === 'bottom';
+  const bottomStripClickable = useSectionClick ? !!showEmptyBottomStripBorder || extra !== 0 : activeSection === 'bottom';
   // isEnded gates here rather than at each call site so no strip, and no paint-drag
   // entry, can reach a handler on a shift that is already over.
   const topHasClick = !isEnded && topStripClickable && (useSectionClick ? onSectionClick : onClick);
@@ -577,7 +592,11 @@ export function ShiftBlock({
     return null;
   }, [bottomPending, pendingDoctorBottom, extraDoc]);
   const showPreferenceBadge = preferenceChip != null && !showPreferenceFill;
-  const overnameTypeLabel = block.isPartial ? 'Overname gedeelte dienst' : 'Overname volledige dienst';
+  const overnameLaneNoun =
+    laneOvername === 'top' ? 'achterwacht' : laneOvername === 'bottom' ? 'extra dokter' : 'dienst';
+  const overnameTypeLabel = block.isPartial
+    ? `Overname gedeelte ${overnameLaneNoun}`
+    : `Overname volledige ${overnameLaneNoun}`;
   const overnameStatusLabel =
     overnameType === 'voorstelOvername' ? 'In afwachting' :
     overnameType === 'overname' ? 'Goedgekeurd' :
@@ -604,13 +623,129 @@ export function ShiftBlock({
     ? (block.label ?? '')
     : (doctorId ? displayName : block.label);
   const tooltipAantekeningLabel = rawAantekeningLabel;
+  // On a lane overname block the strip shows the overname's doctor, not an assignment.
+  const effectiveTopDoc = laneOvername === 'top' ? mainDoc : achterwDoc;
+  const effectiveBottomDoc = laneOvername === 'bottom' ? mainDoc : extraDoc;
   const stripTooltipDoc =
-    shiftTooltipSection === 'top' ? achterwDoc : shiftTooltipSection === 'bottom' ? extraDoc : null;
-  const stripTooltipRole = shiftTooltipSection === 'top' ? 'Achterwacht' : 'Extra dokter';
+    shiftTooltipSection === 'top'
+      ? effectiveTopDoc
+      : shiftTooltipSection === 'bottom'
+        ? effectiveBottomDoc
+        : null;
+  const laneOvernameStatus =
+    overnameType === 'voorstelOvername'
+      ? 'voorstel overname'
+      : overnameType === 'overname'
+        ? 'overgenomen'
+        : overnameType === 'vraagtekenOvername'
+          ? 'overname geweigerd'
+          : '';
+  const stripTooltipRole =
+    (shiftTooltipSection === 'top' ? 'Achterwacht' : 'Extra dokter') +
+    (laneOvername && laneOvernameStatus ? ` · ${laneOvernameStatus}` : '');
   const tooltipColor = stripTooltipDoc ? (stripTooltipDoc.color ?? '#c686fd') : mainColor;
   const closeShiftTooltip = () => {
     setShiftTooltipSection(null);
     setShiftTooltipCoords(null);
+  };
+
+  /** The overname icon, scaled to the space it gets (the middle block or a strip). */
+  const overnameIcon = (sizePx: number) => {
+    const style = { width: sizePx, height: sizePx };
+    if (overnameType === 'overname') return <TbSwitch3 className="text-white" style={style} />;
+    if (overnameType === 'voorstelOvername') {
+      return (
+        <img
+          src="request.svg"
+          alt="Voorstel overname"
+          style={{
+            ...style,
+            filter:
+              'invert(47%) sepia(97%) saturate(2098%) hue-rotate(2deg) brightness(106%) contrast(101%)',
+          }}
+        />
+      );
+    }
+    return <FaQuestion className="text-white" style={style} />;
+  };
+
+  /**
+   * An overname block keeps the layout of the block underneath but must not paint over (or catch
+   * the mouse on) the strips it is not about. Before, its empty strips drew a grey outline over the
+   * original achterwacht and extra-dokter colours.
+   */
+  const renderHiddenStrip = (section: 'top' | 'bottom') => (
+    <div
+      aria-hidden
+      className={section === 'top' ? 'mb-1.5' : 'mt-1.5'}
+      style={{ ...stripSizeStyle, visibility: 'hidden' }}
+    />
+  );
+
+  /** The strip of an achterwacht / extra-dokter overname: doctor colour, initials and the icon. */
+  const renderLaneOvernameStrip = (section: 'top' | 'bottom') => {
+    const clickable = !isEnded && (onSectionClick != null || onClick != null);
+    const badgeSize = Math.max(10, stripHeight - 2);
+    const badgeTestId =
+      overnameType === 'overname'
+        ? 'overname-badge'
+        : overnameType === 'voorstelOvername'
+          ? 'voorstel-overname-badge'
+          : 'vraagteken-overname-badge';
+    return (
+      <div
+        ref={section === 'top' ? topStripRef : bottomStripRef}
+        onMouseEnter={() => setShiftTooltipSection(section)}
+        onMouseLeave={closeShiftTooltip}
+        className={`relative ${stripRoundedClass} text-[10px] text-center font-bold tracking-[0.5px] ${section === 'top' ? 'mb-1.5' : 'mt-1.5'}`}
+        data-doctor={doctorId}
+        data-testid={section === 'top' ? 'shift-block-top' : 'shift-block-bottom'}
+        data-overname-sectie={section}
+        style={{
+          ...stripSizeStyle,
+          background: mainColor,
+          color: mainColor && mainColor !== 'transparent' ? getContrastTextColor(mainColor) : '#ffffff',
+          pointerEvents: 'auto',
+          cursor: isEnded ? 'not-allowed' : clickable ? 'pointer' : undefined,
+        }}
+        onClick={
+          clickable
+            ? (e) => (onSectionClick ? onSectionClick(section, e) : onClick!(e))
+            : undefined
+        }
+      >
+        {showSpanLabels ? (
+          <span style={spanLabelPositionStyle} className="whitespace-nowrap">
+            {displayShortName}
+          </span>
+        ) : null}
+        {/* Same rule as the middle block: the icon sits on the last segment of a multi-day shift. */}
+        {!continuesToNext && (
+          <span
+            ref={overnameType === 'vraagtekenOvername' ? undefined : overnameBadgeRef}
+            className={`absolute right-0.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded bg-black/40${overnameType === 'vraagtekenOvername' ? ' pointer-events-none' : ''}`}
+            style={{ width: badgeSize, height: badgeSize, zIndex: 3 }}
+            title={
+              overnameType === 'overname'
+                ? 'Overname'
+                : overnameType === 'voorstelOvername'
+                  ? 'Voorstel overname'
+                  : 'Overname geweigerd — geen arts toegewezen'
+            }
+            aria-hidden
+            data-testid={badgeTestId}
+            onMouseEnter={
+              overnameType === 'vraagtekenOvername' ? undefined : () => setOvernameHoverDetailOpen(true)
+            }
+            onMouseLeave={
+              overnameType === 'vraagtekenOvername' ? undefined : () => setOvernameHoverDetailOpen(false)
+            }
+          >
+            {overnameIcon(Math.max(8, badgeSize - 6))}
+          </span>
+        )}
+      </div>
+    );
   };
   const overnamePopoverTestId =
     overnameType === 'voorstelOvername'
@@ -766,13 +901,16 @@ export function ShiftBlock({
           <Trash2 className="h-3 w-3" aria-hidden />
         </button>
       )}
-      {!hideTopStrip &&
+      {!hideTopStrip && overnameType ? (
+        laneOvername === 'top' ? renderLaneOvernameStrip('top') : renderHiddenStrip('top')
+      ) : !hideTopStrip &&
         (achterw === 0 ? (
           <div
-            className={`relative h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
+            className={`relative ${stripRoundedClass} text-[10px] text-center font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor="111"
             data-testid="shift-block-top"
             style={{
+              ...stripSizeStyle,
               background: topPending ? pendingDoctorTop!.color : 'transparent',
               border: achterwDoc ? undefined : 'solid 1px #dcdcdc',
               cursor: isEnded ? 'not-allowed' : topHasClick ? 'pointer' : undefined,
@@ -790,10 +928,11 @@ export function ShiftBlock({
             ref={topStripRef}
             onMouseEnter={achterwDoc ? () => setShiftTooltipSection('top') : undefined}
             onMouseLeave={achterwDoc ? closeShiftTooltip : undefined}
-            className={`relative h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
+            className={`relative ${stripRoundedClass} text-[10px] text-center font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={achterw}
             data-testid="shift-block-top"
             style={{
+              ...stripSizeStyle,
               background: achterwDoc?.color ?? 'transparent',
               cursor: isEnded ? 'not-allowed' : topHasClick ? 'pointer' : undefined,
               opacity: dimTop ? 0.35 : undefined,
@@ -829,6 +968,9 @@ export function ShiftBlock({
           style={{
             height: middleHeight ?? 42,
             ...(overnameType ? { pointerEvents: 'auto' as const } : {}),
+            // A lane overname lives on its strip. Its middle keeps its size so the strips line up
+            // with the original block underneath, but it draws nothing and takes no mouse.
+            ...(laneOvername ? { visibility: 'hidden' as const, pointerEvents: 'none' as const } : {}),
             ...cssInline,
             ...(showPreferenceFill
               ? {
@@ -1107,13 +1249,16 @@ export function ShiftBlock({
             document.body,
           )}
       </>
-      {!hideBottomStrip &&
+      {!hideBottomStrip && overnameType ? (
+        laneOvername === 'bottom' ? renderLaneOvernameStrip('bottom') : renderHiddenStrip('bottom')
+      ) : !hideBottomStrip &&
         (extra === 0 ? (
           <div
-            className={`relative h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
+            className={`relative ${stripRoundedClass} text-[10px] text-center font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor="111"
             data-testid="shift-block-bottom"
             style={{
+              ...stripSizeStyle,
               background: bottomPending ? pendingDoctorBottom!.color : 'transparent',
               border: extraDoc ? undefined : 'solid 1px #dcdcdc',
               cursor: isEnded ? 'not-allowed' : bottomHasClick ? 'pointer' : undefined,
@@ -1131,10 +1276,11 @@ export function ShiftBlock({
             ref={bottomStripRef}
             onMouseEnter={extraDoc ? () => setShiftTooltipSection('bottom') : undefined}
             onMouseLeave={extraDoc ? closeShiftTooltip : undefined}
-            className={`relative h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
+            className={`relative ${stripRoundedClass} text-[10px] text-center font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={extra}
             data-testid="shift-block-bottom"
             style={{
+              ...stripSizeStyle,
               background: extraDoc?.color ?? 'transparent',
               cursor: isEnded ? 'not-allowed' : bottomHasClick ? 'pointer' : undefined,
               opacity: dimBottom ? 0.35 : undefined,

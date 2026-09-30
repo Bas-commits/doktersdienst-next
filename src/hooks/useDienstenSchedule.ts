@@ -346,6 +346,9 @@ export function dienstenToShiftBlocks(response: DienstenResponse | null | undefi
       senderId: dienst.senderId,
       isPartial,
       originalDoctor,
+      ...(dienst.overnameSectie === 'top' || dienst.overnameSectie === 'bottom'
+        ? { overnameSectie: dienst.overnameSectie }
+        : {}),
     });
   }
 

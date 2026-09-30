@@ -50,6 +50,19 @@ export interface CalendarGridProps {
   hideTopStrip?: boolean;
   /** Optional: when true, the bottom (Extra Dokter) strip is not rendered on any shift block. */
   hideBottomStrip?: boolean;
+  /**
+   * Optional: strip and middle heights (px) of the shift blocks. The overnames page makes the
+   * strips taller so the overname icon fits on an achterwacht / extra-dokter strip, and the middle
+   * lower so the day keeps its height (12 + 42 + 12 by default).
+   */
+  shiftStripHeight?: number;
+  shiftMiddleHeight?: number;
+  /**
+   * Optional: outline empty achterwacht / extra-dokter strips. Defaults to on whenever
+   * `onSectionShiftClick` is set (rooster maken, where an empty strip is a place to assign). The
+   * overnames page turns it off: an empty strip there has nobody to take over from.
+   */
+  showEmptyStripBorders?: boolean;
   /** Optional: when set, each shift block shows a delete button that calls this with the block. */
   onShiftDelete?: (block: ShiftBlockView) => void;
   /** Optional: vacation names per day (rooster shape and/or GET /api/vakanties rows). */
@@ -432,6 +445,9 @@ export function CalendarGrid({
   plannerDoctorPreferenceMap,
   hideTopStrip,
   hideBottomStrip,
+  shiftStripHeight,
+  shiftMiddleHeight,
+  showEmptyStripBorders,
   onShiftDelete,
   vakanties,
   onViewMonthChange,
@@ -673,8 +689,10 @@ export function CalendarGrid({
                                     continuesToNext={continuesToNext}
                                     hideTopStrip={hideTopStrip}
                                     hideBottomStrip={hideBottomStrip}
-                                    showEmptyTopStripBorder={onSectionShiftClick != null}
-                                    showEmptyBottomStripBorder={onSectionShiftClick != null}
+                                    stripHeight={shiftStripHeight}
+                                    middleHeight={shiftMiddleHeight}
+                                    showEmptyTopStripBorder={showEmptyStripBorders ?? onSectionShiftClick != null}
+                                    showEmptyBottomStripBorder={showEmptyStripBorders ?? onSectionShiftClick != null}
                                     onDelete={
                                       onShiftDelete
                                         ? () => onShiftDelete(block)

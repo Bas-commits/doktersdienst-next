@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { cachedGetJson, clearCacheByPrefix } from '@/lib/cached-fetch';
 export { clearCacheByPrefix } from '@/lib/cached-fetch';
 import type { DienstenResponse, Dienst } from '@/types/diensten';
+import { toOvernameSectie } from '@/lib/overname-sectie';
 
 export type UseDienstenSubscriptionResult = {
   data: DienstenResponse | null;
@@ -45,6 +46,8 @@ export function toDienstenResponse(diensten: Array<{
     iddeelnovern: (d as { iddeelnovern?: number }).iddeelnovern ?? undefined,
        senderId: (d as { senderId?: number }).senderId ?? undefined,
     isPartial: (d as { isPartial?: boolean }).isPartial ?? undefined,
+    // Without this an achterwacht overname arrives as a dienst overname and is drawn in the middle.
+    overnameSectie: toOvernameSectie((d as { overnameSectie?: string | null }).overnameSectie),
     idaantekening: (d as { idaantekening?: number | null }).idaantekening ?? undefined,
     aantekeningTekst: (d as { aantekeningTekst?: string | null }).aantekeningTekst ?? undefined,
     diensten_deelnemers: d.diensten_deelnemers

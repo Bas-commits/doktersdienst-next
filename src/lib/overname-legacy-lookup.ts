@@ -1,7 +1,15 @@
-import { and, eq, type SQL } from 'drizzle-orm';
+import { and, eq, isNull, type SQL } from 'drizzle-orm';
 import { schema } from '@/db';
+import type { OvernameSectie } from '@/lib/overname-sectie';
 
 const { diensten: dienstenTable } = schema;
+
+/** SQL condition matching overname rows of exactly this lane (NULL for the middle lane). */
+export function overnameSectieCondition(sectie: OvernameSectie | null): SQL {
+  return sectie === null
+    ? isNull(dienstenTable.overnameSectie)
+    : eq(dienstenTable.overnameSectie, sectie);
+}
 
 export type LegacyOvernameLookupFields = {
   idwaarneemgroep: number;
@@ -11,6 +19,13 @@ export type LegacyOvernameLookupFields = {
   iddienstovern?: number;
   iddeelnemer?: number | null;
   iddeelnovern?: number | null;
+  /**
+   * When present (including `null` = middle lane), only matches overnames of that lane. The same
+   * doctor can hold the dienst and the achterwacht of one slot, so without this an achterwacht
+   * proposal and a dienst proposal on the same van/tot would be taken for each other. Leave it
+   * `undefined` for callers that do not know about lanes (mobile), which keeps the old behaviour.
+   */
+  overnameSectie?: OvernameSectie | null;
 };
 
 /**
@@ -37,6 +52,9 @@ export function buildLegacyOvernameRowConditions(
   }
   if (fields.iddeelnovern != null && fields.iddeelnovern > 0) {
     conditions.push(eq(dienstenTable.iddeelnovern, fields.iddeelnovern));
+  }
+  if (fields.overnameSectie !== undefined) {
+    conditions.push(overnameSectieCondition(fields.overnameSectie));
   }
 
   return and(...conditions)!;

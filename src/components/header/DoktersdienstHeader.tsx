@@ -7,6 +7,7 @@ import { authClient } from '@/lib/auth-client';
 import { Trash2 } from 'lucide-react';
 import { FaRedo } from "react-icons/fa";
 import { overnameVerwijzingNaarQuery } from "@/lib/overname-recreate";
+import { overnameSectieLabel, type OvernameSectie } from "@/lib/overname-sectie";
 import { toast } from 'sonner';
 
 import { BEHEERDER_EMAIL, BEHEERDER_TELEFOON } from '@/lib/beheerder-contact';
@@ -101,6 +102,8 @@ export function DoktersdienstHeader({
     datumVan?: string;
     datumTot?: string;
     isPartial?: boolean;
+    /** Lane taken over: 'top' achterwacht, 'bottom' extra dokter, null the dienst. */
+    sectie?: OvernameSectie | null;
     van: string;
     tot: string;
     week: number;
@@ -133,6 +136,8 @@ export function DoktersdienstHeader({
           : {}),
         ...(v.iddeelnemer != null && v.iddeelnemer > 0 ? { iddeelnemer: v.iddeelnemer } : {}),
         ...(v.iddeelnovern != null && v.iddeelnovern > 0 ? { iddeelnovern: v.iddeelnovern } : {}),
+        // Pins the lookup to this lane; see buildOvernameRespondPayload on the overnames page.
+        sectie: v.sectie ?? null,
       };
     },
     []
@@ -256,6 +261,7 @@ export function DoktersdienstHeader({
           tot: Number(v.overnameTotUnix ?? 0),
           ...(Number(v.iddeelnemer ?? 0) > 0 ? { iddeelnemer: Number(v.iddeelnemer) } : {}),
           ...(Number(v.iddeelnovern ?? 0) > 0 ? { iddeelnovern: Number(v.iddeelnovern) } : {}),
+          ...(v.sectie ? { sectie: v.sectie } : {}),
         });
         router.push(`/overnames?${query}`);
         return;
@@ -452,7 +458,10 @@ export function DoktersdienstHeader({
                 if (!v) return null;
                 const vanDatum = v.datumVan ?? v.datum;
                 const totDatum = v.datumTot ?? v.datumVan ?? v.datum;
-                const overnameTypeLabel = v.isPartial ? 'Overname gedeelte dienst' : 'Overname volledige dienst';
+                const laneNoun = v.sectie ? overnameSectieLabel(v.sectie).toLowerCase() : 'dienst';
+                const overnameTypeLabel = v.isPartial
+                  ? `Overname gedeelte ${laneNoun}`
+                  : `Overname volledige ${laneNoun}`;
                 const isDeclined = v.status === 'declined';
                 const redoTitle = isDeclined
                   ? 'Opnieuw voorstellen'

@@ -190,4 +190,36 @@ describe('POST /api/overnames/respond', () => {
     expect(res._status).toBe(200);
     expect(deleteCalled).toBe(true);
   });
+
+  it('rejects an unknown sectie instead of answering an overname on another lane', async () => {
+    const res = makeRes();
+    await handler(makeReq({ ...mobileRespondBody('accept'), sectie: 'achterwacht' }), res);
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({ error: 'Invalid sectie' });
+    expect(lastUpdateSet).toBeNull();
+  });
+
+  it('accepts an achterwacht proposal when the web sends its sectie', async () => {
+    selectResults = [
+      [{ id: TARGET_ID, idgroep: 1 }],
+      [{
+        id: null,
+        iddienstovern: 0,
+        iddeelnovern: TARGET_ID,
+        iddeelnemer: 1305,
+        senderId: SENDER_ID,
+        idwaarneemgroep: WG,
+        status: 'pending',
+        van: VAN,
+        tot: TOT,
+        overnameSectie: 'top',
+      }],
+      [],
+    ];
+
+    const res = makeRes();
+    await handler(makeReq({ ...mobileRespondBody('accept'), sectie: 'top' }), res);
+    expect(res._status).toBe(200);
+    expect(lastUpdateSet).toEqual({ type: 6, status: 'accepted' });
+  });
 });

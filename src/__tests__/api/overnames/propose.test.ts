@@ -71,7 +71,7 @@ vi.mock('@/db', () => ({
       idaantekening: 'idaantekening', idshift: 'idshift', idtarief: 'idtarief',
       idkamer: 'idkamer', idtelnr: 'idtelnr', idlocatie: 'idlocatie',
       iddeelnemer2: 'iddeelnemer2', idtaaktype: 'idtaaktype',
-      deleteRequest: 'deleteRequest',
+      deleteRequest: 'deleteRequest', overnameSectie: 'overnameSectie',
     },
     deelnemers: { id: 'id', login: 'login' },
     waarneemgroepdeelnemers: { idwaarneemgroep: 'idwaarneemgroep', iddeelnemer: 'iddeelnemer' },
@@ -395,5 +395,75 @@ describe('POST /api/overnames/propose', () => {
     await handler(makeReq(), res);
     expect(res._status).toBe(400);
     expect(res._json).toEqual({ error: 'Proposing doctor not found' });
+  });
+
+  // -- Achterwacht / extra dokter lanes --
+
+  it('returns 400 for an unknown sectie instead of treating it as the dienst', async () => {
+    const res = makeRes();
+    await handler(makeReq({ sectie: 'midden' }), res);
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({ error: 'Invalid sectie' });
+    expect(lastInsertValues).toBeNull();
+  });
+
+  it('stores an achterwacht proposal with the achterwacht doctor as original', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [{ id: 500, type: 1, van: VAN, tot: TOT, iddeelnemer: 0, idwaarneemgroep: WG }],   // slot
+      [{ id: null, type: 5, van: VAN, tot: TOT, iddeelnemer: 77, idwaarneemgroep: WG }],  // achterwacht
+      [{ iddeelnemer: TARGET_ID }],
+      [],
+    ];
+    const res = makeRes();
+    await handler(makeReq({ sectie: 'top' }), res);
+    expect(res._status).toBe(201);
+    expect(lastInsertValues).toMatchObject({
+      type: 4,
+      status: 'pending',
+      iddienstovern: 500,
+      iddeelnemer: 77,
+      iddeelnovern: TARGET_ID,
+      overnameSectie: 'top',
+    });
+  });
+
+  it('stores a dienst proposal with a NULL sectie, as before lanes existed', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [{ id: 500, type: 0, van: VAN, tot: TOT, iddeelnemer: 99, idwaarneemgroep: WG }],
+      [{ iddeelnemer: TARGET_ID }],
+      [],
+    ];
+    const res = makeRes();
+    await handler(makeReq(), res);
+    expect(res._status).toBe(201);
+    expect(lastInsertValues).toMatchObject({ overnameSectie: null });
+  });
+
+  it('rejects an achterwacht proposal that points straight at a dienst row', async () => {
+    // The type=0 row is the dienst doctor; taking it as the achterwacht would hand the wrong
+    // person's shift to the target.
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [{ id: 500, type: 0, van: VAN, tot: TOT, iddeelnemer: 99, idwaarneemgroep: WG }],
+    ];
+    const res = makeRes();
+    await handler(makeReq({ sectie: 'top' }), res);
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({ error: 'No achterwacht (type=5) assigned on this shift' });
+    expect(lastInsertValues).toBeNull();
+  });
+
+  it('returns 400 when the slot has no extra dokter', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [{ id: 500, type: 1, van: VAN, tot: TOT, iddeelnemer: 0, idwaarneemgroep: WG }],
+      [],
+    ];
+    const res = makeRes();
+    await handler(makeReq({ sectie: 'bottom' }), res);
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({ error: 'No extra dokter (type=11) assigned on this shift' });
   });
 });

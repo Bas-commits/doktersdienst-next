@@ -194,3 +194,85 @@ describe('ShiftBlock hover tooltip', () => {
     expect(tip!.textContent).not.toContain('Extra dokter');
   });
 });
+
+describe('ShiftBlock overname van achterwacht / extra dokter', () => {
+  const laneBlock = (sectie: 'top' | 'bottom') =>
+    makeBlock({
+      overnameType: 'voorstelOvername',
+      overnameSectie: sectie,
+      middle: doctor(40, 'Dirk Doel', '#aa33cc'),
+      originalDoctor: doctor(20, 'Bert Achter', '#ff6633'),
+      top: null,
+      bottom: null,
+    });
+
+  it('tekent het voorstel op de achterwacht-strook en laat het middelste vak leeg', () => {
+    renderBlock(laneBlock('top'));
+
+    const strook = screen.getByTestId('shift-block-top');
+    expect(strook.dataset.overnameSectie).toBe('top');
+    // Zolang het een voorstel is staat de oorspronkelijke achterwacht er nog, net als bij een dienst.
+    expect(strook.dataset.doctor).toBe('20');
+    expect(strook.querySelector('[data-testid="voorstel-overname-badge"]')).not.toBeNull();
+    expect(screen.getByTestId('shift-block-middle').style.visibility).toBe('hidden');
+    // De extra-dokter-strook van de dienst eronder moet zichtbaar blijven.
+    expect(screen.queryByTestId('shift-block-bottom')).toBeNull();
+  });
+
+  it('tekent een extra-dokter-voorstel op de onderste strook', () => {
+    renderBlock(laneBlock('bottom'));
+
+    expect(screen.getByTestId('shift-block-bottom').dataset.overnameSectie).toBe('bottom');
+    expect(screen.queryByTestId('shift-block-top')).toBeNull();
+  });
+
+  it('opent bij een klik op de strook het voorstel van die strook', () => {
+    const block = laneBlock('top');
+    const clicks: string[] = [];
+    render(
+      <ShiftBlock
+        block={block}
+        day={block.day}
+        month={block.month}
+        year={block.year}
+        overnameType={block.overnameType}
+        onSectionClick={(section) => clicks.push(section)}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('shift-block-top'));
+    expect(clicks).toEqual(['top']);
+  });
+
+  it('noemt in de tooltip de rol en dat het een voorstel is', () => {
+    renderBlock(laneBlock('top'));
+
+    act(() => {
+      fireEvent.mouseEnter(screen.getByTestId('shift-block-top'));
+    });
+
+    const tip = tooltip();
+    expect(tip!.textContent).toContain('Achterwacht · voorstel overname');
+    expect(tip!.textContent).toContain('Bert Achter');
+  });
+
+  it('zet na acceptatie de nieuwe achterwacht op de strook', () => {
+    renderBlock({ ...laneBlock('top'), overnameType: 'overname' });
+
+    const strook = screen.getByTestId('shift-block-top');
+    expect(strook.dataset.doctor).toBe('40');
+    expect(strook.querySelector('[data-testid="overname-badge"]')).not.toBeNull();
+
+    act(() => {
+      fireEvent.mouseEnter(strook);
+    });
+    expect(tooltip()!.textContent).toContain('Dirk Doel');
+  });
+
+  it('houdt een gewoon dienstvoorstel in het middelste vak', () => {
+    renderBlock(makeBlock({ overnameType: 'voorstelOvername', top: null, bottom: null }));
+
+    expect(screen.getByTestId('shift-block-middle').style.visibility).not.toBe('hidden');
+    expect(screen.queryByTestId('shift-block-top')).toBeNull();
+  });
+});

@@ -8,6 +8,7 @@ import {
   formatAmsterdamDateLabelFromUnixSeconds,
   formatAmsterdamTimeFromUnixSeconds,
 } from '@/lib/amsterdamWallTime';
+import { toOvernameSectie } from '@/lib/overname-sectie';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers, waarneemgroepen } = schema;
 const GROEP_SECRETARIS = 2;
@@ -109,6 +110,7 @@ export default async function handler(
       overnameId: dienstenTable.id,
       iddienstovern: dienstenTable.iddienstovern,
       status: dienstenTable.status,
+      overnameSectie: dienstenTable.overnameSectie,
       van: dienstenTable.van,
       tot: dienstenTable.tot,
       originalVan: originalDienst.van,
@@ -214,6 +216,8 @@ export default async function handler(
       iddeelnemer: r.iddeelnemer == null ? null : Number(r.iddeelnemer),
       senderId: r.senderId == null ? null : Number(r.senderId),
       status: r.status,
+      /** Lane: 'top' achterwacht, 'bottom' extra dokter, null the ordinary dienst. */
+      sectie: toOvernameSectie(r.overnameSectie),
       overnameVanUnix: Number(r.van ?? 0),
       overnameTotUnix: Number(r.tot ?? 0),
       originalVanUnix: r.originalVan == null ? null : Number(r.originalVan),

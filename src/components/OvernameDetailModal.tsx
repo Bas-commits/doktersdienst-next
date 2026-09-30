@@ -4,6 +4,7 @@ import { FaRedo } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { OVERNAME_ACTION_FORBIDDEN_TOAST } from '@/lib/overname-ui-access';
 import type { ShiftBlockView, DoctorInfo } from '@/types/diensten';
+import { overnameSectieLabel } from '@/lib/overname-sectie';
 
 export interface OvernameDetailModalProps {
   block: ShiftBlockView;
@@ -128,7 +129,13 @@ export function OvernameDetailModal({
     block.overnameType === 'vraagtekenOvername' ? 'bg-red-100 text-red-800' :
     block.overnameType === 'overname' ? 'bg-green-100 text-green-800' : '';
 
-  const overnameTypeLabel = block.isPartial ? 'Overname gedeelte dienst' : 'Overname volledige dienst';
+  // Names the lane, so an achterwacht overname is not read as a take-over of the dienst itself.
+  const laneNoun = block.overnameSectie
+    ? overnameSectieLabel(block.overnameSectie).toLowerCase()
+    : 'dienst';
+  const overnameTypeLabel = block.isPartial
+    ? `Overname gedeelte ${laneNoun}`
+    : `Overname volledige ${laneNoun}`;
 
   const redoEnabled = Boolean(isDeclined && onRecreate);
 

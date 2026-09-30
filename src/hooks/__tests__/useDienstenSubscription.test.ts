@@ -87,4 +87,26 @@ describe('toDienstenResponse', () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0].middle?.shortName).toBe('B.V.');
   });
+
+  it('keeps the lane of an overname through to the shift block', () => {
+    // The field was dropped here once, so an achterwacht overname landed on the dienst row.
+    const response = toDienstenResponse([
+      {
+        id: null,
+        iddeelnemer: 42,
+        van: SHIFT_VAN,
+        tot: SHIFT_TOT,
+        type: 4,
+        idwaarneemgroep: WG_ID,
+        status: 'pending',
+        iddeelnovern: 43,
+        overnameSectie: 'top',
+        diensten_deelnemers: { id: 42, voornaam: 'Bas', achternaam: 'Veltenaar', initialen: 'BV', color: '#336699' },
+      } as Parameters<typeof toDienstenResponse>[0][number],
+    ]);
+
+    expect(response.data.diensten[0].overnameSectie).toBe('top');
+    const overlay = dienstenToShiftBlocks(response).find((b) => b.overnameType);
+    expect(overlay?.overnameSectie).toBe('top');
+  });
 });

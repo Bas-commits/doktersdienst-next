@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { toOvernameSectie } from '@/lib/overname-sectie';
 import { and, asc, eq, gt, isNull, lt, or } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, isUserInWaarneemgroep } from '@/lib/api-auth';
@@ -171,6 +172,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         tot: dienstenTable.tot,
         type: dienstenTable.type,
         status: dienstenTable.status,
+        overnameSectie: dienstenTable.overnameSectie,
       })
       .from(dienstenTable)
       .where(
@@ -191,6 +193,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         row.status != null && String(row.status).trim() !== ''
           ? String(row.status).trim().toLowerCase()
           : null,
+      overnameSectie: toOvernameSectie(row.overnameSectie),
     }));
 
     const { columns, rows } = aggregateUrentelling(

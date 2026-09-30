@@ -26,6 +26,10 @@ export interface CalendarGridWithNavStateProps {
   hideTopStrip?: boolean;
   /** When true, the bottom (Extra Dokter) strip is not rendered. */
   hideBottomStrip?: boolean;
+  /** See CalendarGridProps.shiftStripHeight / shiftMiddleHeight / showEmptyStripBorders. */
+  shiftStripHeight?: number;
+  shiftMiddleHeight?: number;
+  showEmptyStripBorders?: boolean;
   /** Optional: when set, shift blocks are clickable (e.g. for voorkeuren). */
   onShiftClick?: (block: ShiftBlockView, position: { top: number; left: number }) => void;
   /** Optional: shiftKey -> chip code for pending preference inserts. */
@@ -84,6 +88,9 @@ export function CalendarGridWithNavState({
   onViewMonthChange,
   hideTopStrip,
   hideBottomStrip,
+  shiftStripHeight,
+  shiftMiddleHeight,
+  showEmptyStripBorders,
   onShiftClick,
   pendingInsert,
   pendingDelete,
@@ -133,6 +140,9 @@ export function CalendarGridWithNavState({
       onViewMonthChange={handleViewMonthChange}
       hideTopStrip={hideTopStrip}
       hideBottomStrip={hideBottomStrip}
+      shiftStripHeight={shiftStripHeight}
+      shiftMiddleHeight={shiftMiddleHeight}
+      showEmptyStripBorders={showEmptyStripBorders}
       onShiftClick={onShiftClick}
       pendingInsert={pendingInsert}
       pendingDelete={pendingDelete}

@@ -25,6 +25,8 @@ export interface Dienst {
   iddeelnovern?: number;
   /** ID of the doctor who created the overname proposal. */
   senderId?: number;
+  /** Overname records only: lane taken over. 'top' achterwacht, 'bottom' extra dokter, null/absent the dienst. */
+  overnameSectie?: 'top' | 'bottom' | null;
   /** Whether this overname row is a partial takeover compared to the original dienst. */
   isPartial?: boolean;
   /** FK to dienstaantekening (usually set on type=1 slot rows). */
@@ -98,6 +100,11 @@ export interface ShiftBlockView {
   senderId?: number;
   /** Whether this overname block is partial compared to the original dienst. */
   isPartial?: boolean;
+  /**
+   * Overname blocks only: the lane taken over. 'top' achterwacht, 'bottom' extra dokter; absent for
+   * the ordinary dienst. ShiftBlock then draws the overname on that strip instead of the middle.
+   */
+  overnameSectie?: 'top' | 'bottom';
   /** Original doctor info (for overname overlay blocks where middle shows the target doctor). */
   originalDoctor?: DoctorInfo | null;
 }

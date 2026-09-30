@@ -3,7 +3,11 @@ import { and, eq, gt, gte, lt, lte } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { logger } from '@/lib/logger';
-import { buildLegacyOvernameRowConditions } from '@/lib/overname-legacy-lookup';
+import { buildLegacyOvernameRowConditions, overnameSectieCondition } from '@/lib/overname-legacy-lookup';
+import {
+  assignmentTypeForSectie,
+  parseOvernameSectie,
+} from '@/lib/overname-sectie';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
 
@@ -102,6 +106,8 @@ async function resolveType1SlotId(
  *   van              number  — Start time (Unix seconds)
  *   tot              number  — End time (Unix seconds)
  *   idwaarneemgroep  number  — Waarneemgroep ID
+ *   sectie           string  — Optional: 'top' (achterwacht) or 'bottom' (extra dokter).
+ *                              Absent/null = the middle dienst, as before.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -119,7 +125,17 @@ export default async function handler(
   }
 
   try {
-    const { iddienstovern, iddeelnovern, van, tot, idwaarneemgroep } = req.body;
+    const { iddienstovern, iddeelnovern, van, tot, idwaarneemgroep, sectie: rawSectie } = req.body;
+
+    const parsedSectie = parseOvernameSectie(rawSectie);
+    if (!parsedSectie.ok) {
+      logger.warn({ msg: 'overname-propose:validation', reason: 'invalid-sectie', sectie: rawSectie });
+      return res.status(400).json({ error: 'Invalid sectie' });
+    }
+    const sectie = parsedSectie.sectie;
+    // The lane decides which assignment row is being taken over: type 0 (dienst), 5 (achterwacht)
+    // or 11 (extra dokter). Everything below that said "type 0" now means "this lane's type".
+    const assignmentType = assignmentTypeForSectie(sectie);
 
     const numVan = Number(van);
     const numTot = Number(tot);
@@ -160,6 +176,7 @@ export default async function handler(
       van: numVan,
       tot: numTot,
       idwaarneemgroep: numIdWaarneemgroep,
+      sectie,
     });
 
     // Get the proposing doctor's deelnemer ID from session
@@ -215,7 +232,7 @@ export default async function handler(
         .from(dienstenTable)
         .where(
           and(
-            eq(dienstenTable.type, 0),
+            eq(dienstenTable.type, assignmentType),
             eq(dienstenTable.idwaarneemgroep, numIdWaarneemgroep),
             lt(dienstenTable.van, numTot),
             gt(dienstenTable.tot, numVan),
@@ -264,13 +281,13 @@ export default async function handler(
     // For type=1 slots, we keep the slot id since legacy type=0 rows often have NULL id.
     let resolvedOriginalId = original.id;
     let assignedDeelnemerId = original.iddeelnemer;
-    let foundAssignment = original.type === 0;
+    let foundAssignment = original.type === assignmentType;
     let assignmentVan = Number(original.van ?? 0);
     let assignmentTot = Number(original.tot ?? 0);
 
     if (original.type === 1) {
-      // Find type=0 assignment that overlaps this slot's time range.
-      // Legacy PHP creates type=0 rows with NULL id, so we cannot filter on id.
+      // Find this lane's assignment (type 0/5/11) that overlaps the slot's time range.
+      // Legacy PHP creates assignment rows with NULL id, so we cannot filter on id.
       const mappedAssignedCandidates = await db
         .select({
           id: dienstenTable.id,
@@ -283,7 +300,7 @@ export default async function handler(
         .from(dienstenTable)
         .where(
           and(
-            eq(dienstenTable.type, 0),
+            eq(dienstenTable.type, assignmentType),
             eq(dienstenTable.idwaarneemgroep, original.idwaarneemgroep ?? 0),
             lt(dienstenTable.van, numTot),
             gt(dienstenTable.tot, numVan),
@@ -330,12 +347,19 @@ export default async function handler(
     if (!foundAssignment) {
       logger.warn({
         msg: 'overname-propose:validation',
-        reason: 'no-type0-assignment',
+        reason: 'no-assignment-for-sectie',
         originalType: original.type,
+        assignmentType,
+        sectie,
         iddienstovern: numIdDienstOvern,
         senderId,
       });
-      return res.status(400).json({ error: 'Only assigned shifts (type=0) can be taken over' });
+      return res.status(400).json({
+        error:
+          sectie === null
+            ? 'Only assigned shifts (type=0) can be taken over'
+            : `No ${sectie === 'top' ? 'achterwacht (type=5)' : 'extra dokter (type=11)'} assigned on this shift`,
+      });
     }
 
     if ((!resolvedOriginalId || resolvedOriginalId <= 0) && foundAssignment) {
@@ -425,6 +449,7 @@ export default async function handler(
         van: clampedVan,
         tot: clampedTot,
         iddeelnemer: assignedDeelnemerId,
+        overnameSectie: sectie,
       }),
     ];
 
@@ -437,6 +462,9 @@ export default async function handler(
               eq(dienstenTable.type, 4),
               eq(dienstenTable.status, 'pending'),
               eq(dienstenTable.iddienstovern, resolvedOriginalId),
+              // iddienstovern is often the shared type-1 slot, so without the lane a dienst
+              // proposal would block an achterwacht proposal on the same slot and vice versa.
+              overnameSectieCondition(sectie),
             )
           : and(...legacyProposalConditions),
       )
@@ -467,6 +495,7 @@ export default async function handler(
         van: clampedVan,
         tot: clampedTot,
         idwaarneemgroep: numIdWaarneemgroep,
+        overnameSectie: sectie,
         idpraktijk: 0,
         rol: 0,
         iddienstherhalen: 0,
@@ -491,6 +520,7 @@ export default async function handler(
       clampedTot,
       idwaarneemgroep: numIdWaarneemgroep,
       assignedDeelnemerId,
+      sectie,
     });
 
     return res.status(201).json({ success: true });

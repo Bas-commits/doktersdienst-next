@@ -3,6 +3,7 @@ import { ChevronDownIcon, Clock, CalendarIcon } from 'lucide-react';
 import { format, isBefore, isAfter, startOfDay } from 'date-fns';
 import { nl } from 'date-fns/locale';
 import type { ShiftBlockView } from '@/types/diensten';
+import { overnameSectieLabel, type OvernameSectie } from '@/lib/overname-sectie';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -46,6 +47,11 @@ export interface OvernameModalProps {
   onClose: () => void;
   submitting?: boolean;
   error?: string | null;
+  /**
+   * The lane being taken over: 'top' achterwacht, 'bottom' extra dokter, absent/null the dienst.
+   * Decides whose name is under "Van:" and who is left out of the list.
+   */
+  sectie?: OvernameSectie | null;
 }
 
 function dateToUnix(d: Date): number {
@@ -136,7 +142,8 @@ function TimeRow({
   );
 }
 
-export function OvernameModal({ shift, doctors, onSubmit, onClose, submitting, error }: OvernameModalProps) {
+export function OvernameModal({ shift, doctors, onSubmit, onClose, submitting, error, sectie = null }: OvernameModalProps) {
+  const vanArts = sectie === 'top' ? shift.top : sectie === 'bottom' ? shift.bottom : shift.middle;
   const [selectedDoctor, setSelectedDoctor] = useState<number | ''>('');
   const [isPartial, setIsPartial] = useState(false);
 
@@ -230,7 +237,9 @@ export function OvernameModal({ shift, doctors, onSubmit, onClose, submitting, e
         className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold mb-4">Overname voorstel</h2>
+        <h2 className="text-lg font-semibold mb-4" data-testid="overname-modal-title">
+          {sectie ? `Overname voorstel ${overnameSectieLabel(sectie).toLowerCase()}` : 'Overname voorstel'}
+        </h2>
 
         <div className="bg-gray-50 rounded-md p-3 mb-4 text-sm">
           <p className="font-medium">
@@ -238,20 +247,21 @@ export function OvernameModal({ shift, doctors, onSubmit, onClose, submitting, e
             <br />
             Tot: {endDateStr} <strong>{shift.endTime}</strong>
           </p>
-          {shift.middle && (
+          {vanArts && (
             <div className="text-gray-600 mt-2 flex flex-col  gap-2">
               <span>Van:</span>
               <div className="flex gap-2">
               <DoctorBadge
                 doctor={{
-                  id: shift.middle.id,
-                  voornaam: shift.middle.name.split(' ')[0] ?? '',
-                  achternaam: shift.middle.name.split(' ').slice(1).join(' '),
-                  initialen: shift.middle.shortName,
-                  color: shift.middle.color,
+                  id: vanArts.id,
+                  voornaam: vanArts.name.split(' ')[0] ?? '',
+                  achternaam: vanArts.name.split(' ').slice(1).join(' '),
+                  initialen: vanArts.shortName,
+                  color: vanArts.color,
                 }}
               />
-              <span>{shift.middle.name}</span>
+              <span>{vanArts.name}</span>
+              {sectie ? <span className="text-gray-500">({overnameSectieLabel(sectie)})</span> : null}
               </div>
             </div>
           )}
@@ -274,7 +284,7 @@ export function OvernameModal({ shift, doctors, onSubmit, onClose, submitting, e
             <ChevronDownIcon className="size-4 text-gray-400 shrink-0" />
           </DropdownMenuTrigger>
           <DropdownMenuContent className="z-[2010]" positionerClassName="z-[2010]">
-            {doctors.filter((doc) => doc.id !== shift.middle?.id).map((doc) => (
+            {doctors.filter((doc) => doc.id !== vanArts?.id).map((doc) => (
               <DropdownMenuItem
                 key={doc.id}
                 className="flex items-center gap-2 cursor-pointer"

@@ -12,6 +12,7 @@ import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
 import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
+import type { OvernameSectie } from '@/lib/overname-sectie';
 import { computeOvernameCaps, canCurrentUserProposeOvername, OVERNAME_ACTION_FORBIDDEN_TOAST } from '@/lib/overname-ui-access';
 import { deriveEffectiveRoleTier, GROEP_DEELNEMER } from '@/lib/roles';
 import { OvernameModal } from '@/components/OvernameModal';
@@ -45,8 +46,18 @@ function totLteForMonth(viewMonth: number, viewYear: number): number {
   return Math.floor(new Date(viewYear, viewMonth + 1, 0, 23, 59, 59, 999).getTime() / 1000) + TWO_WEEKS_SECONDS;
 }
 
-/** Type 0 = standard assigned, 1 = unassigned slot, 4 = overname voorstel, 6 = confirmed overname. */
-const OVERNAME_TYPES = [0, 1, 4, 6];
+/**
+ * Type 0 = dienst, 1 = unassigned slot, 4 = overname voorstel, 6 = confirmed overname,
+ * 5 = achterwacht and 11 = extra dokter (their strips can be taken over too).
+ */
+const OVERNAME_TYPES = [0, 1, 4, 5, 6, 11];
+
+/** Doctor on the lane that is being taken over. */
+function laneDoctor(block: ShiftBlockView, sectie: OvernameSectie | null) {
+  if (sectie === 'top') return block.top;
+  if (sectie === 'bottom') return block.bottom;
+  return block.middle;
+}
 
 function timeFromUnix(unixSeconds: number): string {
   const d = new Date(unixSeconds * 1000);
@@ -71,6 +82,9 @@ function buildOvernameRespondPayload(
     ...(block.idwaarneemgroep != null ? { idwaarneemgroep: block.idwaarneemgroep } : {}),
     ...(Number.isFinite(iddeelnemer) && iddeelnemer > 0 ? { iddeelnemer } : {}),
     ...(Number.isFinite(iddeelnovern) && iddeelnovern > 0 ? { iddeelnovern } : {}),
+    // Always sent from the web, null included: it pins the lookup to this lane, so answering a
+    // dienst overname cannot hit an achterwacht overname with the same van/tot.
+    sectie: block.overnameSectie ?? null,
   };
 }
 
@@ -136,6 +150,8 @@ export default function OvernamesPage() {
 
   // Propose modal state
   const [selectedShift, setSelectedShift] = useState<ShiftBlockView | null>(null);
+  /** Lane of the proposal being made: null the dienst, 'top' achterwacht, 'bottom' extra dokter. */
+  const [selectedSectie, setSelectedSectie] = useState<OvernameSectie | null>(null);
   const [allDoctors, setAllDoctors] = useState<(OvernameDoctor & { waarneemgroepIds: number[] })[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -257,15 +273,17 @@ export default function OvernamesPage() {
     return allDoctors.filter((d) => d.waarneemgroepIds.includes(wgId));
   }, [allDoctors, activeWaarneemgroepId]);
 
-  const handleShiftClick = useCallback((block: ShiftBlockView) => {
+  const handleSectionShiftClick = useCallback((block: ShiftBlockView, section: 'top' | 'middle' | 'bottom') => {
     // Overname overlay blocks → open detail/management modal
     if (block.overnameType) {
       setSelectedOvernameBlock(block);
       setDetailError(null);
       return;
     }
-    // Assigned shifts (has a middle doctor) → open propose modal
-    if (!block.middle) return;
+    // Clicked lane with a doctor on it → open propose modal for that lane
+    const sectie: OvernameSectie | null = section === 'middle' ? null : section;
+    const vanArts = laneDoctor(block, sectie);
+    if (!vanArts) return;
     // Block overnames for shifts in the past
     const nowSeconds = Math.floor(Date.now() / 1000);
     if (block.van < nowSeconds) {
@@ -277,7 +295,7 @@ export default function OvernamesPage() {
         currentDeelnemerId,
         globalIdgroep,
         roleTier,
-        assignedMiddleId: block.middle.id,
+        assignedMiddleId: vanArts.id,
       })
     ) {
       toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
@@ -285,11 +303,13 @@ export default function OvernamesPage() {
     }
     setPendingRecreateDelete(null);
     setSelectedShift(block);
+    setSelectedSectie(sectie);
     setSubmitError(null);
   }, [currentDeelnemerId, globalIdgroep, roleTier]);
 
   const handleModalClose = useCallback(() => {
     setSelectedShift(null);
+    setSelectedSectie(null);
     setSubmitError(null);
     setPendingRecreateDelete(null);
   }, []);
@@ -302,16 +322,20 @@ export default function OvernamesPage() {
           currentDeelnemerId,
           globalIdgroep,
           roleTier,
-          assignedMiddleId: selectedShift.middle?.id,
+          assignedMiddleId: laneDoctor(selectedShift, selectedSectie)?.id,
         })
       ) {
         toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
         return;
       }
       // Match mobile: prefer assigned type=0 id, else type=1 slot id, else 0 and let the API
-      // resolve via van/tot/idwaarneemgroep (legacy rows may have NULL ids).
+      // resolve via van/tot/idwaarneemgroep (legacy rows may have NULL ids). For the achterwacht
+      // or extra dokter the type=0 id would point at the wrong lane; the slot id lets the API find
+      // the type 5/11 row itself.
       const resolvedDienstOvernId =
-        (selectedShift.assignedDienstId != null && selectedShift.assignedDienstId > 0)
+        selectedSectie === null &&
+        selectedShift.assignedDienstId != null &&
+        selectedShift.assignedDienstId > 0
           ? selectedShift.assignedDienstId
           : (selectedShift.id > 0 ? selectedShift.id : 0);
 
@@ -329,6 +353,7 @@ export default function OvernamesPage() {
             van: data.van,
             tot: data.tot,
             idwaarneemgroep: Number(activeWaarneemgroepId),
+            ...(selectedSectie ? { sectie: selectedSectie } : {}),
           }),
         });
 
@@ -357,6 +382,7 @@ export default function OvernamesPage() {
 
         setPendingRecreateDelete(null);
         setSelectedShift(null);
+        setSelectedSectie(null);
         // Notify all listeners (header + this page's calendar) to refresh
         window.dispatchEvent(new Event('overname-updated'));
       } catch {
@@ -365,7 +391,7 @@ export default function OvernamesPage() {
         setSubmitting(false);
       }
     },
-    [selectedShift, activeWaarneemgroepId, pendingRecreateDelete, currentDeelnemerId, globalIdgroep, roleTier]
+    [selectedShift, selectedSectie, activeWaarneemgroepId, pendingRecreateDelete, currentDeelnemerId, globalIdgroep, roleTier]
   );
 
   const handleOvernameRespond = useCallback(
@@ -495,6 +521,14 @@ export default function OvernamesPage() {
               : Number(fallback.overnameTotUnix ?? 0);
           if (startUnix > 0 && endUnix > startUnix) {
             const startDate = new Date(startUnix * 1000);
+            const fallbackArts = fallback.vanArts
+              ? {
+                  id: verwijzing.iddeelnemer ?? 0,
+                  name: fallback.vanArts.naam ?? 'Onbekend',
+                  shortName: fallback.vanArts.initialen ?? '??',
+                  color: fallback.vanArts.color ?? '#7b2d8e',
+                }
+              : null;
             originalBlock = {
               id: verwijzing.iddienstovern,
               assignedDienstId: verwijzing.iddienstovern,
@@ -507,16 +541,9 @@ export default function OvernamesPage() {
               endTime: timeFromUnix(endUnix),
               currentDate: startDate.toISOString().slice(0, 19).replace('T', ' '),
               nextDate: new Date(endUnix * 1000).toISOString().slice(0, 19).replace('T', ' '),
-              middle: fallback.vanArts
-                ? {
-                    id: verwijzing.iddeelnemer ?? 0,
-                    name: fallback.vanArts.naam ?? 'Onbekend',
-                    shortName: fallback.vanArts.initialen ?? '??',
-                    color: fallback.vanArts.color ?? '#7b2d8e',
-                  }
-                : null,
-              top: null,
-              bottom: null,
+              middle: verwijzing.sectie ? null : fallbackArts,
+              top: verwijzing.sectie === 'top' ? fallbackArts : null,
+              bottom: verwijzing.sectie === 'bottom' ? fallbackArts : null,
               idwaarneemgroep: verwijzing.idwaarneemgroep,
             };
           }
@@ -542,6 +569,7 @@ export default function OvernamesPage() {
 
     setSelectedOvernameBlock(null);
     setSelectedShift(originalBlock);
+    setSelectedSectie(verwijzing.sectie ?? null);
     setSubmitError(null);
     setPendingRecreateDelete(verwijzing);
   }, [rows]);
@@ -561,6 +589,7 @@ export default function OvernamesPage() {
       ...(Number(block.iddeelnovern ?? block.middle?.id ?? 0) > 0
         ? { iddeelnovern: Number(block.iddeelnovern ?? block.middle?.id) }
         : {}),
+      ...(block.overnameSectie ? { sectie: block.overnameSectie } : {}),
     });
   }, [selectedOvernameBlock, activeWaarneemgroepId, startOvernameOpnieuw]);
 
@@ -638,10 +667,13 @@ export default function OvernamesPage() {
                 setViewMonth(month);
                 setViewYear(year);
               }}
-              hideTopStrip
-              hideBottomStrip
               showPreferences={false}
-              onShiftClick={handleShiftClick}
+              onSectionShiftClick={handleSectionShiftClick}
+              // Taller strips so the overname icon fits on an achterwacht or extra dokter, and a
+              // lower middle so a day keeps its height (18+30+18 against the default 12+42+12).
+              shiftStripHeight={18}
+              shiftMiddleHeight={30}
+              showEmptyStripBorders={false}
               vakanties={calendarVakanties}
             />
           </CardContent>
@@ -651,6 +683,7 @@ export default function OvernamesPage() {
       {selectedShift && (
         <OvernameModal
           shift={selectedShift}
+          sectie={selectedSectie}
           doctors={doctors}
           onSubmit={handleModalSubmit}
           onClose={handleModalClose}

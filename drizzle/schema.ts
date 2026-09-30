@@ -144,6 +144,8 @@ export const diensten = pgTable("diensten", {
 	senderId: integer("sender_id"),
 	deleteRequest: integer("delete_request"),
 	status: varchar({ length: 20 }),
+	/** Overname records only: 'top' (achterwacht) or 'bottom' (extra dokter). NULL = the middle dienst. */
+	overnameSectie: varchar("overname_sectie", { length: 10 }),
 }, (table) => [
 	index("diensten_list_idx").using("btree", table.idwaarneemgroep.asc().nullsLast().op("int4_ops"), table.van.asc().nullsLast().op("int4_ops"), table.tot.asc().nullsLast().op("int4_ops")),
 ]);

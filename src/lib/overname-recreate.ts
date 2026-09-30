@@ -23,6 +23,11 @@ export type OvernameVerwijzing = {
   /** De arts van wie de dienst is, en de arts aan wie hij is aangeboden. */
   iddeelnemer?: number;
   iddeelnovern?: number;
+  /**
+   * Op welk vak het voorstel sloeg: 'top' achterwacht, 'bottom' extra dokter, null de dienst.
+   * Ontbreekt bij verwijzingen van vóór de achterwacht-overnames; die gingen altijd over de dienst.
+   */
+  sectie?: 'top' | 'bottom' | null;
 };
 
 /** Voldoende om de rij terug te vinden, ook zonder nummers. */
@@ -55,8 +60,13 @@ export function overnameVerwijzingNaarQuery(verwijzing: OvernameVerwijzing): str
       query.set(naam, String(waarde));
     }
   }
+  if (verwijzing.sectie === 'top' || verwijzing.sectie === 'bottom') {
+    query.set(SECTIE_VELD, verwijzing.sectie);
+  }
   return query.toString();
 }
+
+const SECTIE_VELD = 'recreateSectie';
 
 function getal(waarde: string | string[] | undefined): number {
   const enkel = Array.isArray(waarde) ? waarde[0] : waarde;
@@ -83,6 +93,10 @@ export function overnameVerwijzingUitQuery(
   if (iddeelnemer > 0) verwijzing.iddeelnemer = iddeelnemer;
   const iddeelnovern = getal(query[VELDEN.iddeelnovern]);
   if (iddeelnovern > 0) verwijzing.iddeelnovern = iddeelnovern;
+  const sectie = Array.isArray(query[SECTIE_VELD]) ? query[SECTIE_VELD]?.[0] : query[SECTIE_VELD];
+  // Alleen gezet voor achterwacht of extra dokter. Zonder vak ging het om de dienst, zo zijn ook
+  // alle oudere links bedoeld, en dan zoekt respond zoals het altijd deed.
+  if (sectie === 'top' || sectie === 'bottom') verwijzing.sectie = sectie;
 
   return isVolledigeVerwijzing(verwijzing) ? verwijzing : null;
 }
@@ -98,5 +112,6 @@ export function overnameVerwijzingSleutel(verwijzing: OvernameVerwijzing): strin
     verwijzing.tot,
     verwijzing.iddeelnemer ?? 0,
     verwijzing.iddeelnovern ?? 0,
+    verwijzing.sectie ?? '',
   ].join(':');
 }

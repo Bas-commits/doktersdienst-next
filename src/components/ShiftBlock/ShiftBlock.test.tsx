@@ -276,3 +276,50 @@ describe('ShiftBlock overname van achterwacht / extra dokter', () => {
     expect(screen.queryByTestId('shift-block-top')).toBeNull();
   });
 });
+
+describe('ShiftBlock na afloop', () => {
+  const voorbij = () =>
+    makeBlock({ day: 1, month: 0, year: 2020, van: 1577869200, tot: 1577901600, currentDate: '2020-01-01 08:00:00', nextDate: '2020-01-01 17:00:00' });
+
+  it('zegt bij een klik op een afgelopen dienst waarom er niets gebeurt', () => {
+    const block = voorbij();
+    const clicks: string[] = [];
+    const endedClicks: number[] = [];
+    render(
+      <ShiftBlock
+        block={block}
+        day={block.day}
+        month={block.month}
+        year={block.year}
+        disableWhenEnded
+        onClick={() => clicks.push('click')}
+        onEndedClick={() => endedClicks.push(1)}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('shift-block-middle'));
+
+    // De gewone klik blijft geblokkeerd; alleen de uitleg komt.
+    expect(clicks).toEqual([]);
+    expect(endedClicks).toEqual([1]);
+  });
+
+  it('roept de uitleg niet aan bij een dienst die nog moet komen', () => {
+    const block = makeBlock();
+    const endedClicks: number[] = [];
+    render(
+      <ShiftBlock
+        block={block}
+        day={block.day}
+        month={block.month}
+        year={block.year}
+        disableWhenEnded
+        onClick={() => undefined}
+        onEndedClick={() => endedClicks.push(1)}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('shift-block-middle'));
+    expect(endedClicks).toEqual([]);
+  });
+});

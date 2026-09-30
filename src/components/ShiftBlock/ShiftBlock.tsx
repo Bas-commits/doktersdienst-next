@@ -178,6 +178,12 @@ export interface ShiftBlockProps {
    * turns inert within a minute of its shift ending without a page reload.
    */
   disableWhenEnded?: boolean;
+  /**
+   * Called when a block made inert by `disableWhenEnded` is clicked. The block used to swallow the
+   * click in silence, so a doctor clicking a past shift on /voorkeuren saw nothing happen and could
+   * not tell why; this lets the page say it.
+   */
+  onEndedClick?: () => void;
 }
 
 export function ShiftBlock({
@@ -213,6 +219,7 @@ export function ShiftBlock({
   hideOwnerNameInTooltip = false,
   hideUnassignedAantekening = false,
   disableWhenEnded = false,
+  onEndedClick,
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
   const [isHovered, setIsHovered] = useState(false);
@@ -824,6 +831,7 @@ export function ShiftBlock({
       data-box-type="morning"
       data-active-shift={isActive ? 'true' : undefined}
       data-shift-ended={isEnded ? 'true' : undefined}
+      onClick={isEnded && onEndedClick ? () => onEndedClick() : undefined}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{

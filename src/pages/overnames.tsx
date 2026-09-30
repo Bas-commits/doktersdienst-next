@@ -13,6 +13,7 @@ import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgro
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
 import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
 import type { OvernameSectie } from '@/lib/overname-sectie';
+import { OVERNAME_IN_VERLEDEN_MESSAGE } from '@/lib/shift-window';
 import { computeOvernameCaps, canCurrentUserProposeOvername, OVERNAME_ACTION_FORBIDDEN_TOAST } from '@/lib/overname-ui-access';
 import { deriveEffectiveRoleTier, GROEP_DEELNEMER } from '@/lib/roles';
 import { OvernameModal } from '@/components/OvernameModal';
@@ -287,7 +288,7 @@ export default function OvernamesPage() {
     // Block overnames for shifts in the past
     const nowSeconds = Math.floor(Date.now() / 1000);
     if (block.van < nowSeconds) {
-      toast.error('Het is niet mogelijk om een overname aan te maken voor een dienst in het verleden.');
+      toast.error(OVERNAME_IN_VERLEDEN_MESSAGE);
       return;
     }
     if (
@@ -563,7 +564,7 @@ export default function OvernamesPage() {
     // Dezelfde grens als bij het aanklikken van een dienst. Een overname voor een dienst die
     // al geweest is kan daar niet, dus hier ook niet; anders is de knop een sluiproute.
     if (originalBlock.van < Math.floor(Date.now() / 1000)) {
-      meld('Het is niet mogelijk om een overname aan te maken voor een dienst in het verleden.');
+      meld(OVERNAME_IN_VERLEDEN_MESSAGE);
       return;
     }
 

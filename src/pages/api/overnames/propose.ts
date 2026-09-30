@@ -3,6 +3,7 @@ import { and, eq, gt, gte, lt, lte } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { logger } from '@/lib/logger';
+import { hasShiftStarted, OVERNAME_IN_VERLEDEN_MESSAGE } from '@/lib/shift-window';
 import { buildLegacyOvernameRowConditions, overnameSectieCondition } from '@/lib/overname-legacy-lookup';
 import {
   assignmentTypeForSectie,
@@ -167,6 +168,19 @@ export default async function handler(
         iddienstovern: numIdDienstOvern,
       });
       return res.status(400).json({ error: 'Invalid time range' });
+    }
+
+    // Only /overnames refused this, in the browser; the mobile app has no such check, so a past
+    // overname from the app was accepted. The rule belongs here, and the message is written for the
+    // doctor because the app shows it as is.
+    if (hasShiftStarted(numVan)) {
+      logger.warn({
+        msg: 'overname-propose:validation',
+        reason: 'shift-started',
+        van: numVan,
+        iddienstovern: numIdDienstOvern,
+      });
+      return res.status(400).json({ error: OVERNAME_IN_VERLEDEN_MESSAGE });
     }
 
     logger.info({

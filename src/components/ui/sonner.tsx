@@ -34,9 +34,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast: "cn-toast",
+          // The description keeps sonner's own grey unless it is set here too, which is
+          // unreadable on these backgrounds.
           warning:
-            "!bg-orange-500 !text-white !border-orange-600 [&_[data-icon]]:text-white",
-          error: "!bg-red-600 !text-white !border-red-700 [&_[data-icon]]:text-white",
+            "!bg-orange-500 !text-white !border-orange-600 [&_[data-icon]]:text-white [&_[data-description]]:!text-white",
+          error:
+            "!bg-red-600 !text-white !border-red-700 [&_[data-icon]]:text-white [&_[data-description]]:!text-white",
         },
       }}
       {...props}

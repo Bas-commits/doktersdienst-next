@@ -30,6 +30,8 @@ export interface CalendarGridWithNavStateProps {
   shiftStripHeight?: number;
   shiftMiddleHeight?: number;
   showEmptyStripBorders?: boolean;
+  /** See CalendarGridProps.onEndedShiftClick. */
+  onEndedShiftClick?: (block: ShiftBlockView) => void;
   /** Optional: when set, shift blocks are clickable (e.g. for voorkeuren). */
   onShiftClick?: (block: ShiftBlockView, position: { top: number; left: number }) => void;
   /** Optional: shiftKey -> chip code for pending preference inserts. */
@@ -91,6 +93,7 @@ export function CalendarGridWithNavState({
   shiftStripHeight,
   shiftMiddleHeight,
   showEmptyStripBorders,
+  onEndedShiftClick,
   onShiftClick,
   pendingInsert,
   pendingDelete,
@@ -143,6 +146,7 @@ export function CalendarGridWithNavState({
       shiftStripHeight={shiftStripHeight}
       shiftMiddleHeight={shiftMiddleHeight}
       showEmptyStripBorders={showEmptyStripBorders}
+      onEndedShiftClick={onEndedShiftClick}
       onShiftClick={onShiftClick}
       pendingInsert={pendingInsert}
       pendingDelete={pendingDelete}

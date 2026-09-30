@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasShiftEnded } from '@/lib/shift-window';
+import { hasShiftEnded, hasShiftStarted } from '@/lib/shift-window';
 
 describe('hasShiftEnded', () => {
   const nowMs = Date.UTC(2026, 7, 5, 12, 0, 0);
@@ -26,5 +26,18 @@ describe('hasShiftEnded', () => {
   it('defaults to the current clock', () => {
     expect(hasShiftEnded(Math.floor(Date.now() / 1000) - 60)).toBe(true);
     expect(hasShiftEnded(Math.floor(Date.now() / 1000) + 3600)).toBe(false);
+  });
+});
+
+describe('hasShiftStarted', () => {
+  const nowMs = Date.UTC(2026, 7, 5, 12, 0, 0);
+  const nowSeconds = nowMs / 1000;
+
+  it('is true once the shift has begun, even while it is still running', () => {
+    expect(hasShiftStarted(nowSeconds - 60, nowMs)).toBe(true);
+  });
+
+  it('is false for a shift that starts later', () => {
+    expect(hasShiftStarted(nowSeconds + 60, nowMs)).toBe(false);
   });
 });

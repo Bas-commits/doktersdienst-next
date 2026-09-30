@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 // ---- Mocks ----
@@ -124,13 +124,22 @@ function makeRes(): NextApiResponse & { _status: number; _json: unknown } {
 describe('POST /api/overnames/propose', () => {
   let handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>;
 
+  // The fixtures are April 2024 shifts, and propose now refuses shifts that have started.
+  // Pin the clock before them so these tests keep testing what they were written for.
+  let nowSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(async () => {
     selectResults = [];
     selectCallIndex = 0;
     lastInsertValues = null;
     insertReturning = [];
     vi.clearAllMocks();
+    nowSpy = vi.spyOn(Date, 'now').mockReturnValue((VAN - 24 * 3600) * 1000);
     handler = (await import('@/pages/api/overnames/propose')).default;
+  });
+
+  afterEach(() => {
+    nowSpy.mockRestore();
   });
 
   // -- Validation --
@@ -465,5 +474,22 @@ describe('POST /api/overnames/propose', () => {
     await handler(makeReq({ sectie: 'bottom' }), res);
     expect(res._status).toBe(400);
     expect(res._json).toEqual({ error: 'No extra dokter (type=11) assigned on this shift' });
+  });
+
+  // -- Shifts that have already started --
+
+  it('refuses an overname for a shift that has started, with a message for the doctor', async () => {
+    // The mobile app shows this error as is; before, it had no check and the server none either,
+    // so a past overname from the app was simply created.
+    nowSpy.mockReturnValue((VAN + 60) * 1000);
+
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({
+      error: 'Het is niet mogelijk om een overname aan te maken voor een dienst in het verleden.',
+    });
+    expect(lastInsertValues).toBeNull();
   });
 });

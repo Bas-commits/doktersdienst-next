@@ -267,6 +267,15 @@ export default function VoorkeurenPage() {
     tryFlushPaintStroke(id);
   }, [tryFlushPaintStroke]);
 
+  // One toast id, so clicking a past shift again (or dragging across several) replaces the
+  // message instead of stacking copies of it.
+  const showShiftEndedToast = useCallback((block: ShiftBlockView) => {
+    toast.error('Voorkeur niet opgeslagen', {
+      id: 'voorkeur-dienst-voorbij',
+      description: `${shiftBlockToastDescription(block)}\n${SHIFT_ENDED_MESSAGE}`,
+    });
+  }, []);
+
   const handleShiftClick = useCallback(
     async (block: ShiftBlockView) => {
       if (selectedChipCode === null) return;
@@ -275,9 +284,7 @@ export default function VoorkeurenPage() {
       // minute. Catching the gap here keeps the request from being sent at all, so the
       // user gets the reason instead of a failed round-trip.
       if (hasShiftEnded(block.tot)) {
-        toast.error('Voorkeur niet opgeslagen', {
-          description: `${shiftBlockToastDescription(block)}\n${SHIFT_ENDED_MESSAGE}`,
-        });
+        showShiftEndedToast(block);
         return;
       }
       const key = shiftKeyFromBlock(block);
@@ -408,7 +415,7 @@ export default function VoorkeurenPage() {
         }
       }
     },
-    [selectedChipCode, tryFlushPaintStroke]
+    [selectedChipCode, tryFlushPaintStroke, showShiftEndedToast]
   );
 
   const calendarGridRef = useRef<HTMLDivElement | null>(null);
@@ -572,6 +579,9 @@ export default function VoorkeurenPage() {
                     onPreferencePaintSessionStart={onPreferencePaintSessionStart}
                     onPreferencePaintSessionEnd={onPreferencePaintSessionEnd}
                     disableEndedShiftBlocks
+                    // A past shift is inert; without this the click did nothing and the doctor
+                    // could not tell why the preference was not taken.
+                    onEndedShiftClick={showShiftEndedToast}
                     vakanties={calendarVakanties}
                   />
                 </div>

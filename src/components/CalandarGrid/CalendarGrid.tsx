@@ -57,6 +57,8 @@ export interface CalendarGridProps {
    */
   shiftStripHeight?: number;
   shiftMiddleHeight?: number;
+  /** Optional: called when a shift made inert by `disableEndedShiftBlocks` is clicked. */
+  onEndedShiftClick?: (block: ShiftBlockView) => void;
   /**
    * Optional: outline empty achterwacht / extra-dokter strips. Defaults to on whenever
    * `onSectionShiftClick` is set (rooster maken, where an empty strip is a place to assign). The
@@ -448,6 +450,7 @@ export function CalendarGrid({
   shiftStripHeight,
   shiftMiddleHeight,
   showEmptyStripBorders,
+  onEndedShiftClick,
   onShiftDelete,
   vakanties,
   onViewMonthChange,
@@ -751,6 +754,7 @@ export function CalendarGrid({
                                     hideOwnerNameInTooltip={hideOwnerNameInTooltip}
                                     hideUnassignedAantekening={hideUnassignedAantekening}
                                     disableWhenEnded={disableEndedShiftBlocks}
+                                    onEndedClick={onEndedShiftClick ? () => onEndedShiftClick(block) : undefined}
                                   />
                                 );
                               })}

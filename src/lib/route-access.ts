@@ -9,6 +9,7 @@ import {
 
 export const MAIN_ROUTES = [
   '/rooster-inzien',
+  '/rooster-actueel',
   '/voorkeuren',
   '/rooster-maken-secretaris',
   '/overnames',

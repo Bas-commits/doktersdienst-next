@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import {
   Calendar,
+  CalendarClock,
   ArrowLeftRight,
   PlusSquare,
   Check,
@@ -43,6 +44,12 @@ type NavItem = {
 
 const MAIN_NAV_ITEMS: NavItem[] = [
   { id: 'rooster_inzien', label: 'Rooster', href: '/rooster-inzien', icon: <Calendar className="size-4 shrink-0" /> },
+  {
+    id: 'rooster_actueel',
+    label: 'Rooster Actueel',
+    href: '/rooster-actueel',
+    icon: <CalendarClock className="size-4 shrink-0" />,
+  },
   { id: 'voorkeuren', label: 'Voorkeuren', href: '/voorkeuren', icon: <Check className="size-4 shrink-0" /> },
   { id: 'overnames', label: 'Overnames', href: '/overnames', icon: <ArrowLeftRight className="size-4 shrink-0" /> },
   {

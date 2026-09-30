@@ -206,7 +206,11 @@ export function ShiftBlock({
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
   const [isHovered, setIsHovered] = useState(false);
-  const [shiftTooltipOpen, setShiftTooltipOpen] = useState(false);
+  /**
+   * Which lane the pointer is on. The achterwacht (top) and extra-dokter (bottom) strips get the
+   * same name + time tooltip as the main block, with their role on top, anchored to their own strip.
+   */
+  const [shiftTooltipSection, setShiftTooltipSection] = useState<'top' | 'middle' | 'bottom' | null>(null);
   const [shiftTooltipCoords, setShiftTooltipCoords] = useState<{ left: number; top: number } | null>(
     null,
   );
@@ -218,8 +222,10 @@ export function ShiftBlock({
     placement: 'above' | 'below';
   } | null>(null);
   const shiftTooltipAnchorRef = useRef<HTMLDivElement>(null);
+  const topStripRef = useRef<HTMLDivElement>(null);
+  const bottomStripRef = useRef<HTMLDivElement>(null);
   const overnameBadgeRef = useRef<HTMLSpanElement>(null);
-  const showShiftTooltipPortal = shiftTooltipOpen && !overnameHoverDetailOpen;
+  const showShiftTooltipPortal = shiftTooltipSection != null && !overnameHoverDetailOpen;
 
   const totalMinutesInDay = 24 * 60;
   const parseTimeToMinutes = (time: string): number => {
@@ -288,7 +294,12 @@ export function ShiftBlock({
 
   useLayoutEffect(() => {
     if (!showShiftTooltipPortal) return;
-    const el = shiftTooltipAnchorRef.current;
+    const el =
+      shiftTooltipSection === 'top'
+        ? topStripRef.current
+        : shiftTooltipSection === 'bottom'
+          ? bottomStripRef.current
+          : shiftTooltipAnchorRef.current;
     if (!el) return;
     const update = () => {
       const r = el.getBoundingClientRect();
@@ -304,7 +315,7 @@ export function ShiftBlock({
       window.removeEventListener('scroll', update, true);
       window.removeEventListener('resize', update);
     };
-  }, [showShiftTooltipPortal, tooltipAnchorRatio]);
+  }, [showShiftTooltipPortal, shiftTooltipSection, tooltipAnchorRatio]);
 
   // Portal overname detail above calendar clipping ancestors (same pattern as shift tooltip).
   // Flip above the badge when there isn't enough viewport space below.
@@ -589,6 +600,14 @@ export function ShiftBlock({
     ? (block.label ?? '')
     : (doctorId ? displayName : block.label);
   const tooltipAantekeningLabel = rawAantekeningLabel;
+  const stripTooltipDoc =
+    shiftTooltipSection === 'top' ? achterwDoc : shiftTooltipSection === 'bottom' ? extraDoc : null;
+  const stripTooltipRole = shiftTooltipSection === 'top' ? 'Achterwacht' : 'Extra dokter';
+  const tooltipColor = stripTooltipDoc ? (stripTooltipDoc.color ?? '#c686fd') : mainColor;
+  const closeShiftTooltip = () => {
+    setShiftTooltipSection(null);
+    setShiftTooltipCoords(null);
+  };
   const overnamePopoverTestId =
     overnameType === 'voorstelOvername'
       ? 'voorstel-overname-hover-popover'
@@ -670,6 +689,11 @@ export function ShiftBlock({
       onMouseLeave={() => setIsHovered(false)}
       style={{
         top: '50%',
+        // An overname overlay is drawn as a second block on top of the original shift, with empty
+        // strips of its own. Without this its box swallowed the hover over the original's
+        // achterwacht and extra-dokter strips underneath, so their tooltip only worked on shifts
+        // without an overname. Only the overlay's middle block (re-enabled below) takes the mouse.
+        pointerEvents: overnameType ? 'none' : undefined,
         // Dimmed rather than hidden: a past preference is still worth reading.
         opacity: isEnded ? 0.45 : undefined,
         // Extend 1px on connecting sides to visually cover the 1px day-column divider border
@@ -736,6 +760,9 @@ export function ShiftBlock({
           </div>
         ) : (
           <div
+            ref={topStripRef}
+            onMouseEnter={achterwDoc ? () => setShiftTooltipSection('top') : undefined}
+            onMouseLeave={achterwDoc ? closeShiftTooltip : undefined}
             className={`relative h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={achterw}
             data-testid="shift-block-top"
@@ -759,11 +786,8 @@ export function ShiftBlock({
       <>
         <div
           ref={shiftTooltipAnchorRef}
-          onMouseEnter={() => setShiftTooltipOpen(true)}
-          onMouseLeave={() => {
-            setShiftTooltipOpen(false);
-            setShiftTooltipCoords(null);
-          }}
+          onMouseEnter={() => setShiftTooltipSection('middle')}
+          onMouseLeave={closeShiftTooltip}
           className={`@container flex mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] ${middleRoundedClass} ${doctorId ? 'active-day' : ''} ${showPreferenceFill ? 'justify-center' : ''}`}
           data-testid="shift-block-middle"
           aria-disabled={isEnded || undefined}
@@ -777,6 +801,7 @@ export function ShiftBlock({
           data-morning={doctorId}
           style={{
             height: middleHeight ?? 42,
+            ...(overnameType ? { pointerEvents: 'auto' as const } : {}),
             ...cssInline,
             ...(showPreferenceFill
               ? {
@@ -1008,14 +1033,22 @@ export function ShiftBlock({
                 top: shiftTooltipCoords.top,
                 transform: 'translate(-50%, 0)',
                 zIndex: 60,
-                ['--afterBorder' as string]: mainColor,
-                borderColor: mainColor,
+                ['--afterBorder' as string]: tooltipColor,
+                borderColor: tooltipColor,
               }}
             >
               <div className="flex items-center justify-between w-full gap-2">
                 <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>
                   {block.startTime}
                 </p>
+                {stripTooltipDoc ? (
+                  <p className="mb-0 font-bold leading-[17px] text-center" data-testid="shift-block-strip-tooltip">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                      {stripTooltipRole}
+                    </span>
+                    {stripTooltipDoc.name}
+                  </p>
+                ) : (
                 <p className="mb-0 font-bold leading-[17px] text-center">
                   {tooltipMainLabel}
                   {doctorId !== 0 && block.label && overnameType !== 'voorstelOvername' && overnameType !== 'overname' && overnameType !== 'vraagtekenOvername' ? (
@@ -1046,6 +1079,7 @@ export function ShiftBlock({
                     <span className="block text-[17px] font-normal opacity-90">naar: ?</span>
                   ) : null}
                 </p>
+                )}
                 <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>
                   {block.endTime}
                 </p>
@@ -1075,6 +1109,9 @@ export function ShiftBlock({
           </div>
         ) : (
           <div
+            ref={bottomStripRef}
+            onMouseEnter={extraDoc ? () => setShiftTooltipSection('bottom') : undefined}
+            onMouseLeave={extraDoc ? closeShiftTooltip : undefined}
             className={`relative h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={extra}
             data-testid="shift-block-bottom"

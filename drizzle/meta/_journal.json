@@ -225,6 +225,13 @@
       "when": 1790757000000,
       "tag": "0031_diensten_overname_sectie",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790900000000,
+      "tag": "0032_sms_dienst_begin",
+      "breakpoints": true
     }
   ]
 }

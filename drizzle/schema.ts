@@ -70,6 +70,17 @@ export const sms = pgTable("sms", {
 	newid: integer(),
 });
 
+/**
+ * Records that a "dienst begint" SMS was accepted by Bird for this duty start.
+ * `iddienst` is the type 0/5/11 shift, or a later partial accepted overname (type 6).
+ */
+export const smsDienstBegin = pgTable("sms_dienst_begin", {
+	iddienst: integer().primaryKey().notNull(),
+	iddeelnemer: integer().notNull(),
+	nummer: varchar({ length: 20 }).notNull(),
+	verstuurdOp: timestamp("verstuurd_op", { mode: "string" }).notNull().defaultNow(),
+});
+
 export const locaties = pgTable("locaties", {
 	id: integer(),
 	idinstellingtype: integer(),

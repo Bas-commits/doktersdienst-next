@@ -66,6 +66,11 @@ vi.mock('@/lib/auth', () => ({
   },
 }));
 
+vi.mock('@/tel-server-sync/refresh-scheduler', () => ({
+  scheduleTelRecordRefresh: vi.fn(),
+  shouldRefreshAfterOvernameRespond: vi.fn(() => false),
+}));
+
 const VAN = 1711918800;
 const TOT = 1711951200;
 const WG = 9;

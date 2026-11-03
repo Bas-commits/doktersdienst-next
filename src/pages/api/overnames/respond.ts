@@ -10,6 +10,10 @@ import {
   toOvernameSectie,
   type OvernameSectie,
 } from '@/lib/overname-sectie';
+import {
+  scheduleTelRecordRefresh,
+  shouldRefreshAfterOvernameRespond,
+} from '@/tel-server-sync/refresh-scheduler';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
 
@@ -238,6 +242,8 @@ export default async function handler(
 
     const canManageViaRole = isSecretaris || isGlobalAdmin;
 
+    const proposalStatus = proposal[0].status;
+
     if (action === 'delete') {
       // Sender, secretaris, or administrator can delete/cancel a proposal
       if (senderId !== doctorId && !canManageViaRole) {
@@ -291,6 +297,18 @@ export default async function handler(
           isGlobalAdmin,
         });
       }
+    }
+
+    if (
+      shouldRefreshAfterOvernameRespond({
+        action,
+        status: proposalStatus,
+        overnameSectie: proposalSectie,
+        van: Number(proposalVan ?? 0),
+        tot: Number(proposalTot ?? 0),
+      })
+    ) {
+      scheduleTelRecordRefresh();
     }
 
     return res.status(200).json({ success: true });

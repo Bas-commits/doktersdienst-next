@@ -2,6 +2,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, gt, inArray, lt } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
+import {
+  scheduleTelRecordRefresh,
+  shouldRefreshAfterAssign,
+} from '@/tel-server-sync/refresh-scheduler';
 
 const { diensten: dienstenTable } = schema;
 
@@ -140,6 +144,10 @@ export default async function handler(
         nextDate: base?.nextDate ?? null,
       });
     });
+
+    if (shouldRefreshAfterAssign(section as string, van, tot)) {
+      scheduleTelRecordRefresh();
+    }
 
     return res.status(200).json({ success: true });
   } catch (err) {

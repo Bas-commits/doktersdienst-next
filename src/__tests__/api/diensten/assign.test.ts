@@ -125,6 +125,11 @@ vi.mock('@/lib/api-auth', () => ({
   GROEP_SECRETARIS: 2,
 }));
 
+vi.mock('@/tel-server-sync/refresh-scheduler', () => ({
+  scheduleTelRecordRefresh: vi.fn(),
+  shouldRefreshAfterAssign: vi.fn(() => false),
+}));
+
 // ---- Test helpers ----
 
 function makeReq(overrides: Partial<NextApiRequest> = {}): NextApiRequest {

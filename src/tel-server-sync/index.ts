@@ -4,5 +4,12 @@ export { buildTelServerRecordForWaarneemgroep, buildTelServerText, zetDienstenVo
 export type { DienstTelSyncRow, TelServerRecord, WaarneemgroepForTelSync, ZetDienstenVoorTelSrvKlaarOptions } from './diensten-voor-telsrv';
 export { generateTelRecords, getTelRecordsDir } from './generate-telrecords';
 export type { GeneratedTelRecord, GenerateTelRecordsOptions } from './generate-telrecords';
+export {
+  overlapsAmsterdamToday,
+  runTelRecordRefreshNow,
+  scheduleTelRecordRefresh,
+  shouldRefreshAfterAssign,
+  shouldRefreshAfterOvernameRespond,
+} from './refresh-scheduler';
 export { encodeFormData, parseServerCommResponse, requestForm, sendServerComm, sendSms } from './http';
 export { getTelnr } from './phone';

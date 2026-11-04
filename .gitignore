@@ -51,5 +51,6 @@ mcp.json
 .cursor/commands/
 .cursor/mcp.json
 /packages/web-app/node_modules
+/data
 
 

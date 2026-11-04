@@ -1,10 +1,20 @@
-import { useState, useEffect, useCallback, useRef, useContext } from 'react';
+import { useState, useEffect, useCallback, useRef, useContext, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { TbSwitch3 } from 'react-icons/tb';
 import { authClient } from '@/lib/auth-client';
 import { Trash2 } from 'lucide-react';
+import { FaRedo } from "react-icons/fa";
+import { overnameVerwijzingNaarQuery } from "@/lib/overname-recreate";
+import { overnameSectieLabel, type OvernameSectie } from "@/lib/overname-sectie";
+import { toast } from 'sonner';
+
+import { BEHEERDER_EMAIL, BEHEERDER_TELEFOON } from '@/lib/beheerder-contact';
+import { computeOvernameCaps, OVERNAME_ACTION_FORBIDDEN_TOAST } from '@/lib/overname-ui-access';
+import { deriveEffectiveRoleTier, GROEP_DEELNEMER } from '@/lib/roles';
+import type { AppSection } from '@/lib/route-access';
+
 import {
   WaarneemgroepContext,
   type WaarneemgroepContextValue,
@@ -16,6 +26,12 @@ export interface WaarneemgroepItem {
   ID: number;
   naam: string;
   idgroep?: number | null;
+  /** Telefoonnummer ingaand (DB: `telnringaand`) */
+  telnringaand?: string | null;
+  /** Onze-centrale nummer (DB: `telnronzecentrale`) */
+  telnronzecentrale?: string | null;
+  /** Merkt deze groep taaktypen aan als dienst? Bepaalt hoe het dokterscherm heet. */
+  plantDiensten?: boolean;
 }
 
 export interface HeaderUser {
@@ -36,6 +52,8 @@ export interface DoktersdienstHeaderProps {
   routes: Record<string, string>;
   routeName?: string | null;
   assetUrls: AssetUrls;
+  section?: AppSection;
+  showSectionSwitch?: boolean;
 }
 
 function getStoredGroupId(): string | null {
@@ -44,12 +62,22 @@ function getStoredGroupId(): string | null {
   return id && id.trim() !== '' ? id : null;
 }
 
+function waarneemgroepSelectOptionLabel(wg: WaarneemgroepItem): string {
+  const ring = wg.telnringaand?.trim() ?? '';
+  const centrale = wg.telnronzecentrale?.trim() ?? '';
+  const suffix =
+    ring && centrale ? `${ring} — ${centrale}` : ring || centrale;
+  return suffix ? `${wg.naam} — ${suffix}` : wg.naam;
+}
+
 export function DoktersdienstHeader({
   waarneemgroepen: propsWaarneemgroepen,
   headerUser,
   routes,
   routeName = null,
   assetUrls,
+  section = 'doktersdienst',
+  showSectionSwitch = true,
 }: DoktersdienstHeaderProps) {
   const router = useRouter();
   const ctx = useContext(WaarneemgroepContext) as WaarneemgroepContextValue | null;
@@ -61,11 +89,21 @@ export function DoktersdienstHeader({
 
   // Overname verzoeken state
   interface OvernameVerzoek {
+    overnameId?: number;
     iddienstovern: number;
+    status?: 'pending' | 'declined' | string | null;
+    idwaarneemgroep?: number | null;
+    iddeelnovern?: number | null;
+    iddeelnemer?: number | null;
+    senderId?: number | null;
+    overnameVanUnix?: number;
+    overnameTotUnix?: number;
     datum: string;
     datumVan?: string;
     datumTot?: string;
     isPartial?: boolean;
+    /** Lane taken over: 'top' achterwacht, 'bottom' extra dokter, null the dienst. */
+    sectie?: OvernameSectie | null;
     van: string;
     tot: string;
     week: number;
@@ -77,6 +115,96 @@ export function DoktersdienstHeader({
   const [verzoekPopoverOpen, setVerzoekPopoverOpen] = useState(false);
   const [verzoekIndex, setVerzoekIndex] = useState(0);
   const verzoekRef = useRef<HTMLLIElement>(null);
+
+  const buildRespondPayload = useCallback(
+    (v: OvernameVerzoek, action: 'accept' | 'decline' | 'delete') => {
+      const iddienstovern = Number(v.iddienstovern ?? 0);
+      const overnameId = Number(v.overnameId ?? 0);
+
+      return {
+        action,
+        iddienstovern: Number.isFinite(iddienstovern) ? iddienstovern : 0,
+        ...(Number.isFinite(overnameId) && overnameId > 0 ? { overnameId } : {}),
+        ...(Number.isFinite(Number(v.overnameVanUnix)) && Number(v.overnameVanUnix) > 0
+          ? { van: Number(v.overnameVanUnix) }
+          : {}),
+        ...(Number.isFinite(Number(v.overnameTotUnix)) && Number(v.overnameTotUnix) > 0
+          ? { tot: Number(v.overnameTotUnix) }
+          : {}),
+        ...(v.idwaarneemgroep != null && v.idwaarneemgroep > 0
+          ? { idwaarneemgroep: v.idwaarneemgroep }
+          : {}),
+        ...(v.iddeelnemer != null && v.iddeelnemer > 0 ? { iddeelnemer: v.iddeelnemer } : {}),
+        ...(v.iddeelnovern != null && v.iddeelnovern > 0 ? { iddeelnovern: v.iddeelnovern } : {}),
+        // Pins the lookup to this lane; see buildOvernameRespondPayload on the overnames page.
+        sectie: v.sectie ?? null,
+      };
+    },
+    []
+  );
+
+  const { data: session } = authClient.useSession();
+  const [globalIdgroep, setGlobalIdgroep] = useState<number | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const abortController = new AbortController();
+    fetch('/api/deelnemers/role', {
+      credentials: 'include',
+      signal: abortController.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Kon rol niet ophalen');
+        }
+        return response.json() as Promise<{ idgroep?: number | null }>;
+      })
+      .then((data) => {
+        setGlobalIdgroep(data.idgroep ?? null);
+      })
+      .catch(() => {
+        if (!abortController.signal.aborted) {
+          setGlobalIdgroep(GROEP_DEELNEMER);
+        }
+      });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [session?.user]);
+
+  const activeWaarneemgroep = ctx?.activeWaarneemgroep ?? null;
+  const headerActiveWaarneemgroep = useMemo(() => {
+    if (ctx) {
+      return activeWaarneemgroep;
+    }
+    if (!selectedGroupId) return null;
+    return waarneemgroepen.find((w) => String(w.ID) === selectedGroupId) ?? null;
+  }, [ctx, activeWaarneemgroep, selectedGroupId, waarneemgroepen]);
+
+  const roleTier = useMemo(
+    () =>
+      deriveEffectiveRoleTier({
+        globalIdgroep: globalIdgroep ?? null,
+        selectedWaarneemgroepIdgroep: headerActiveWaarneemgroep?.idgroep ?? null,
+      }),
+    [globalIdgroep, headerActiveWaarneemgroep?.idgroep]
+  );
+  const isPraktijkplanner = section === 'praktijkplanner';
+  /** Index route role-redirects to the right home page. */
+  const praktijkplannerHome =
+    routes.praktijkplanner_home ?? routes.spreekuren ?? '/praktijkplanner';
+  const primaryHref = isPraktijkplanner
+    ? praktijkplannerHome
+    : routes.rooster_inzien ?? '/rooster-inzien';
+  const switchHref = isPraktijkplanner
+    ? routes.rooster_inzien ?? '/rooster-inzien'
+    : praktijkplannerHome;
+  const primaryLogo = isPraktijkplanner ? assetUrls.ppLogo : assetUrls.logo;
+  const switchLogo = isPraktijkplanner ? assetUrls.logo : assetUrls.ppLogo;
+  const primaryLabel = isPraktijkplanner ? 'Praktijkplanner' : 'DoktersDienst';
+  const switchLabel = isPraktijkplanner ? 'Naar Doktersdienst' : 'Naar Praktijkplanner';
 
   const fetchVerzoeken = useCallback(() => {
     fetch('/api/overnames/pending', { credentials: 'include' })
@@ -96,20 +224,78 @@ export function DoktersdienstHeader({
   }, [fetchVerzoeken]);
 
   const handleVerzoekRespond = useCallback(
-    async (action: 'accept' | 'decline') => {
+    async (action: 'accept' | 'decline' | 'delete' | 'redo') => {
       const v = verzoeken[verzoekIndex];
       if (!v) return;
-      await fetch('/api/overnames/respond', {
+
+      const uid =
+        session?.user?.id != null && session.user.id !== '' ? Number(session.user.id) : NaN;
+      const caps = Number.isFinite(uid)
+        ? computeOvernameCaps({
+            currentDeelnemerId: uid,
+            globalIdgroep,
+            roleTier,
+            middleId: v.iddeelnovern ?? undefined,
+            senderId: v.senderId ?? undefined,
+          })
+        : { canRespondPending: false, canManageProposalLifecycle: false };
+
+      if (action === 'redo') {
+        if (!caps.canManageProposalLifecycle) {
+          toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+          return;
+        }
+        setVerzoekPopoverOpen(false);
+        /*
+          Het voorstel gaat mee als hele verwijzing en niet als het nummer van de dienst.
+          Dat nummer is 0 op negen van de eenentwintig overnamerijen, en daar liep de knop
+          op stuk: de pagina hiernaast zag geen geldig nummer en deed niets, zonder melding.
+        */
+        const query = overnameVerwijzingNaarQuery({
+          iddienstovern: Number(v.iddienstovern ?? 0),
+          ...(typeof v.overnameId === 'number' && v.overnameId > 0
+            ? { overnameId: v.overnameId }
+            : {}),
+          idwaarneemgroep: Number(v.idwaarneemgroep ?? 0),
+          van: Number(v.overnameVanUnix ?? 0),
+          tot: Number(v.overnameTotUnix ?? 0),
+          ...(Number(v.iddeelnemer ?? 0) > 0 ? { iddeelnemer: Number(v.iddeelnemer) } : {}),
+          ...(Number(v.iddeelnovern ?? 0) > 0 ? { iddeelnovern: Number(v.iddeelnovern) } : {}),
+          ...(v.sectie ? { sectie: v.sectie } : {}),
+        });
+        router.push(`/overnames?${query}`);
+        return;
+      }
+
+      if (action === 'delete' && !caps.canManageProposalLifecycle) {
+        toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+        return;
+      }
+
+      if (
+        (action === 'accept' || action === 'decline') &&
+        !caps.canRespondPending
+      ) {
+        toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+        return;
+      }
+
+      const res = await fetch('/api/overnames/respond', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ iddienstovern: v.iddienstovern, action }),
+        body: JSON.stringify(buildRespondPayload(v, action)),
       });
       fetchVerzoeken();
       setVerzoekIndex(0);
       window.dispatchEvent(new Event('overname-updated'));
+      if (action === 'delete') {
+        setVerzoekPopoverOpen(false);
+        if (res.ok) toast.success('Overname verwijderd');
+        else toast.error('Verwijderen mislukt');
+      }
     },
-    [verzoeken, verzoekIndex, fetchVerzoeken]
+    [verzoeken, verzoekIndex, fetchVerzoeken, router, session?.user?.id, globalIdgroep, roleTier, buildRespondPayload]
   );
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -168,7 +354,6 @@ export function DoktersdienstHeader({
     [ctx, setSelectedGroupId, syncWindowDoktersdienst, router]
   );
 
-  const showAdminTools = headerUser.TypeOfUser !== 'Doctor';
   const handleLogout = useCallback(async () => {
     try {
       await authClient.signOut();
@@ -178,37 +363,45 @@ export function DoktersdienstHeader({
   }, [router]);
 
   return (
-    <header className="relative" data-testid="doktersdienst-header">
-      <div className="sticky top-0 left-0 right-0 z-3 min-w-[1024px] bg-white border-b border-[rgba(151,151,151,0.5)]">
+    <header className="relative z-[1500] shrink-0" data-testid="doktersdienst-header">
+      <div className="w-full bg-white border-b border-[rgba(151,151,151,0.5)]">
         <nav className="flex flex-nowrap items-center justify-start">
-          <a
-            className="inline-block py-1.5 mr-4 text-[1.09375rem] leading-inherit whitespace-nowrap no-underline hover:no-underline focus:no-underline [&_img]:max-h-[46px]"
-            href="#"
+          <Link
+            className="inline-block cursor-pointer py-1.5 mr-4 text-[1.09375rem] leading-inherit whitespace-nowrap no-underline hover:no-underline focus:no-underline"
+            href={primaryHref}
             data-testid="header-logo"
           >
-            <img src={assetUrls.logo} alt="DoktersDienst" className="ml-[10px]" />
-          </a>
+            <img
+              src={primaryLogo}
+              alt={primaryLabel}
+              className="ml-[10px] h-auto w-[175px] object-contain"
+            />
+          </Link>
 
-          {false && (
-            <a
-              className="flex items-center bg-[#f0f0f0] border border-[#a5a5a5] rounded-md ml-5 text-xl text-[#a5a5a5] py-2 px-5 no-underline [&_img]:w-[110px] [&_img]:mr-4"
-              href={routes.spreekuren ?? '#'}
-              data-testid="header-spreekuren"
-              aria-label="Naar spreekuren"
+          {showSectionSwitch ? (
+            <Link
+              className="flex items-center bg-[#f0f0f0] border border-[#a5a5a5] rounded-md ml-5 text-xl text-[#a5a5a5] py-2 px-5 no-underline hover:bg-[#e7e7e7]"
+              href={switchHref}
+              data-testid="header-section-switch"
+              aria-label={switchLabel}
             >
-              <img src={assetUrls.ppLogo} alt="Logo" />
-              <i className="fa fa-long-arrow-right" aria-hidden="true" />
-            </a>
-          )}
+              <img
+                src={switchLogo}
+                alt=""
+                className="mr-4 h-[32px] w-auto max-w-[130px] object-contain"
+              />
+              <span aria-hidden="true">→</span>
+            </Link>
+          ) : null}
 
           <div
-            className="relative ml-auto mr-auto w-[30%]"
+            className="relative ml-auto mr-auto w-[650]"
             style={router.pathname === '/mijn-gegevens' ? { visibility: 'hidden' } : undefined}
             aria-hidden={router.pathname === '/mijn-gegevens'}
           >
             <select
               name="role"
-              className="w-full h-[50px] pl-4 pr-10 rounded-[30px] text-l font-semibold appearance-none text-[#333333] bg-white border-0"
+              className="w-full h-[50px] cursor-pointer pl-4 pr-10 rounded-[30px] text-l font-semibold appearance-none text-[#333333] bg-white border-0"
               id="groupname"
               value={selectedGroupId ?? ''}
               onChange={handleGroupChange}
@@ -218,7 +411,7 @@ export function DoktersdienstHeader({
             >
               {waarneemgroepen.map((wg: WaarneemgroepItem) => (
                 <option key={wg.ID} value={String(wg.ID)}>
-                  {wg.naam}
+                  {waarneemgroepSelectOptionLabel(wg)}
                 </option>
               ))}
             </select>
@@ -228,70 +421,23 @@ export function DoktersdienstHeader({
             />
           </div>
 
-          <ul className="flex flex-row items-center list-none p-0 mb-0">
-            {showAdminTools && (
-              <li className="relative font-normal mr-6 group" data-testid="header-admin-tools">
-                <div className="cursor-pointer">
-                  <span className="text-[17px] text-black cursor-pointer inline-flex items-center gap-2" aria-hidden="true">
-                    Admin Tools <span aria-hidden="true"><ChevronDown className="w-4 h-4" /></span>
-                  </span>
-                  <ul className="hidden group-hover:block absolute w-[400px] right-0 bg-white border border-[#dcdcdc] py-2.5 px-5 list-none rounded-md z-1000 shadow-lg">
-                    <li>
-                      <a href={routes.waarneemgroep_gegevens} className="text-black text-base my-2 block">
-                        waarneemgroepen
-                      </a>
-                    </li>
-                    
-                    <li>
-                      <a href={routes.regio_toevoegen} data-inertia-link className="text-black text-base my-2 block">
-                        Regio toevoegen
-                      </a>
-                    </li>
-                    <li>
-                      <Link href="/waarneemgroep-toevoegen" className="text-black text-base my-2 block">
-                        Waarneemgroep toevoegen
-                      </Link>
-                    </li>
-                    <li>
-                      <a href={routes.waarneemgroep_wijzigen} data-inertia-link className="text-black text-base my-2 block">
-                        Waarneemgroep wijzigen
-                      </a>
-                    </li>
-                    <li>
-                      <Link href="/vakanties" className="text-black text-base my-2 block">
-                        Vakanties
-                      </Link>
-                    </li>
-                    <li>
-                      <span className="text-black text-base my-2 block">deelnemers</span>
-                      <ul className="list-none pl-0">
-                        <li>
-                          <a href={routes.deelnemer_toevoegen} className="text-[13px] my-1 block">
-                            Deelnemer toevoegen
-                          </a>
-                        </li>
-                        <li>
-                          <a href={routes.bestaande_toevoegen} className="text-[13px] my-1 block">
-                            Bestaande toevoegen (van een andere groep)
-                          </a>
-                        </li>
-                        <li>
-                          <a href={routes.lijst_deelnemers} className="text-[13px] my-1 block">
-                            Lijst deelnemers
-                          </a>
-                        </li>
-                        <li>
-                          <a href={routes.rollen_afmelden} className="text-[13px] my-1 block">
-                            Rollen & Afmelden
-                          </a>
-                        </li>
-                      </ul>
-                    </li>
-                  </ul>
-                </div>
-              </li>
-            )}
+          <div
+            className="mr-3 hidden flex-col items-end whitespace-nowrap text-[13px] leading-4 md:flex"
+            data-testid="header-beheerder-contact"
+          >
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#a5a5a5]">
+              Beheerder
+            </span>
+            <a
+              href={`mailto:${BEHEERDER_EMAIL}`}
+              className="text-[#23303F] no-underline hover:underline"
+            >
+              {BEHEERDER_EMAIL}
+            </a>
+            <span className="text-[#23303F]">{BEHEERDER_TELEFOON}</span>
+          </div>
 
+          <ul className="flex flex-row items-center list-none p-0 mb-0">
             <li className="relative" ref={verzoekRef}>
               <button
                 type="button"
@@ -312,7 +458,35 @@ export function DoktersdienstHeader({
                 if (!v) return null;
                 const vanDatum = v.datumVan ?? v.datum;
                 const totDatum = v.datumTot ?? v.datumVan ?? v.datum;
-                const overnameTypeLabel = v.isPartial ? 'Gedeeltelijke overname' : 'Volledige overname';
+                const laneNoun = v.sectie ? overnameSectieLabel(v.sectie).toLowerCase() : 'dienst';
+                const overnameTypeLabel = v.isPartial
+                  ? `Overname gedeelte ${laneNoun}`
+                  : `Overname volledige ${laneNoun}`;
+                const isDeclined = v.status === 'declined';
+                const redoTitle = isDeclined
+                  ? 'Opnieuw voorstellen'
+                  : 'Een overname moet eerst worden afgewezen voordat je opnieuw kunt voorstellen';
+
+                const uid =
+                  session?.user?.id != null && session.user.id !== ''
+                    ? Number(session.user.id)
+                    : NaN;
+                const caps = Number.isFinite(uid)
+                  ? computeOvernameCaps({
+                      currentDeelnemerId: uid,
+                      globalIdgroep,
+                      roleTier,
+                      middleId: v.iddeelnovern ?? undefined,
+                      senderId: v.senderId ?? undefined,
+                    })
+                  : { canRespondPending: false, canManageProposalLifecycle: false };
+                const inactiveLifecycle = !caps.canManageProposalLifecycle
+                  ? 'opacity-40 cursor-not-allowed'
+                  : '';
+                const inactiveRespond = !caps.canRespondPending
+                  ? 'opacity-40 cursor-not-allowed'
+                  : '';
+
                 return (
                   <div
                     className="absolute top-full right-0 z-1000 w-[320px] bg-white border border-gray-300 rounded-lg shadow-lg p-4 mt-1"
@@ -343,23 +517,68 @@ export function DoktersdienstHeader({
                     </div>
                     <div className="bg-gray-200 rounded-md p-5 ">
                     <div className="w-full flex justify-around mb-3">
-                      <Trash2 className="w-8 h-8 text-red-500" />
+                      {/* <div className="flex flex-1"></div> */}
+                      <button
+                        type="button"
+                        className={`flex flex-1 justify-center bg-transparent border-0 p-0 cursor-pointer ${inactiveLifecycle}`}
+                        onClick={() => {
+                          if (!caps.canManageProposalLifecycle) {
+                            toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                            return;
+                          }
+                          handleVerzoekRespond('delete');
+                        }}
+                        aria-label="Verwijderen"
+                      >
+                        <Trash2 className="w-8 h-8 text-red-500 pointer-events-none" aria-hidden />
+                      </button>
+                      <div className="flex flex-1 justify-center items-center">
+                        <button
+                          type="button"
+                          className={`bg-transparent border-0 p-0 flex items-center justify-center ${isDeclined ? 'cursor-pointer' : 'cursor-not-allowed'} ${inactiveLifecycle}`}
+                          onClick={() => {
+                            if (!caps.canManageProposalLifecycle) {
+                              toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                              return;
+                            }
+                            if (isDeclined) {
+                              handleVerzoekRespond('redo');
+                              return;
+                            }
+                            toast.info('Opnieuw toewijzen kan alleen nadat een voorstel is afgewezen');
+                          }}
+                          aria-label="Opnieuw voorstellen"
+                          aria-disabled={!isDeclined}
+                          title={redoTitle}
+                        >
+                          <FaRedo className={`w-7 h-7 ${isDeclined ? 'text-red-500' : 'text-gray-400'}`} />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="mb-3">
+                    <p className="mb-2 text-center text-sm font-medium text-gray-700">
+                      {v.waarneemgroep}
+                    </p>
+
+                    <div className="mb-3 flex items-center justify-between gap-2">
                       <p className="text-s font-bold ">{overnameTypeLabel}</p>
+                      {/* {isDeclined && (
+                        // <span className="text-xs font-medium px-2 py-1 rounded-full bg-red-100 text-red-800">
+                        //   Afgewezen
+                        // </span>
+                      )} */}
                     </div>
                
                     <div className="flex text-sm mb-3">
                       
-                      <p className="mb-1">Van: <br /> Tot:</p>
+                      <p className="mb-1 ">Van: <br /> Tot:</p>
                       <p className="mb-1 ml-2">{vanDatum} <strong>{v.van}</strong> <br /> {totDatum} <strong>{v.tot}</strong></p>
 
                     </div>
 
                     <div className="flex items-center justify-between mb-3 text-sm">
                       <div className="flex items-center gap-2">
-                      <p className="text-s font-bold ">Van:</p>
+                      <p className="text-s font-bold w-[35px]">Van:</p>
                         <span
                           className="inline-flex h-8 w-8 items-center justify-center rounded text-white text-xs font-bold"
                           style={{ backgroundColor: v.vanArts.color }}
@@ -376,7 +595,7 @@ export function DoktersdienstHeader({
 
                     <div className="flex items-center justify-between mb-4 text-sm">
                       <div className="flex items-center gap-2">
-                      <p className="text-s font-bold ">Naar:</p>
+                      <p className="text-s font-bold w-[35px]">Naar:</p>
                         <span
                           className="inline-flex h-8 w-8 items-center justify-center rounded text-white text-xs font-bold"
                           style={{ backgroundColor: v.naarArts.color }}
@@ -391,26 +610,46 @@ export function DoktersdienstHeader({
                       </div>
                     </div>
 
-                    <div className="flex justify-center gap-4">
-                      <button
-                        type="button"
-                        className="flex items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-green-500"
-                        onClick={() => handleVerzoekRespond('accept')}
-                        aria-label="Verzoek accepteren"
-                        data-testid="overname-accept"
-                      >
-                        <Check className="w-6 h-6 text-[#333]" />
-                      </button>
-                      <button
-                        type="button"
-                        className="flex items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-red-500"
-                        onClick={() => handleVerzoekRespond('decline')}
-                        aria-label="Verzoek afwijzen"
-                        data-testid="overname-decline"
-                      >
-                        <X className="w-6 h-6 text-[#333]" />
-                      </button>
-                    </div>
+                    {/*
+                      Bij een afgewezen voorstel staat hier niets meer. Er stond een vraagteken:
+                      dat was wat overbleef toen de knop Verwijderen uit commentaar werd gezet.
+                      Het icoontje deed niets, was niet aanklikbaar en verwees nergens naar.
+                      Een afgewezen voorstel opruimen kan met het prullenbakje bovenin.
+                    */}
+                    {isDeclined ? null : (
+                      <div className="flex justify-center gap-4">
+                        <button
+                          type="button"
+                          className={`flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-green-300 ${inactiveRespond}`}
+                          onClick={() => {
+                            if (!caps.canRespondPending) {
+                              toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                              return;
+                            }
+                            handleVerzoekRespond('accept');
+                          }}
+                          aria-label="Verzoek accepteren"
+                          data-testid="overname-accept"
+                        >
+                          <Check className="w-6 h-6 text-[#333]" />
+                        </button>
+                        <button
+                          type="button"
+                          className={`flex cursor-pointer items-center justify-center h-10 px-10 rounded-md border border-gray-300 bg-white hover:bg-red-300 ${inactiveRespond}`}
+                          onClick={() => {
+                            if (!caps.canRespondPending) {
+                              toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+                              return;
+                            }
+                            handleVerzoekRespond('decline');
+                          }}
+                          aria-label="Verzoek afwijzen"
+                          data-testid="overname-decline"
+                        >
+                          <X className="w-6 h-6 text-[#333]" />
+                        </button>
+                      </div>
+                    )}
                     </div>
                   </div>
                 );
@@ -450,7 +689,7 @@ export function DoktersdienstHeader({
                   aria-labelledby="navbarDropdown"
                 >
                   <Link
-                    className="block w-full py-1 px-6 font-normal text-[#222222] no-underline whitespace-nowrap bg-transparent border-0 hover:bg-gray-100 hover:text-[#151515] focus:bg-gray-100"
+                    className="block w-full cursor-pointer py-1 px-6 font-normal text-[#222222] no-underline whitespace-nowrap bg-transparent border-0 hover:bg-gray-100 hover:text-[#151515] focus:bg-gray-100"
                     href={routes.mijn_gegevens_deelnemer}
                     id="mijnGegevensLink"
                     data-testid="header-link-mijn-gegevens"
@@ -459,7 +698,7 @@ export function DoktersdienstHeader({
                   </Link>
                   <button
                     type="button"
-                    className="block w-full py-1 px-6 font-normal text-[#222222] no-underline whitespace-nowrap bg-transparent border-0 hover:bg-gray-100 hover:text-[#151515] focus:bg-gray-100"
+                    className="block w-full cursor-pointer py-1 px-6 font-normal text-[#222222] no-underline whitespace-nowrap bg-transparent border-0 hover:bg-gray-100 hover:text-[#151515] focus:bg-gray-100"
                     id="logoutDokter"
                     data-testid="header-link-logout"
                     onClick={handleLogout}

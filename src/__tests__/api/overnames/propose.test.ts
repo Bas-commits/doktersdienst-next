@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 // ---- Mocks ----
@@ -71,7 +71,7 @@ vi.mock('@/db', () => ({
       idaantekening: 'idaantekening', idshift: 'idshift', idtarief: 'idtarief',
       idkamer: 'idkamer', idtelnr: 'idtelnr', idlocatie: 'idlocatie',
       iddeelnemer2: 'iddeelnemer2', idtaaktype: 'idtaaktype',
-      deleteRequest: 'deleteRequest',
+      deleteRequest: 'deleteRequest', overnameSectie: 'overnameSectie',
     },
     deelnemers: { id: 'id', login: 'login' },
     waarneemgroepdeelnemers: { idwaarneemgroep: 'idwaarneemgroep', iddeelnemer: 'iddeelnemer' },
@@ -124,13 +124,22 @@ function makeRes(): NextApiResponse & { _status: number; _json: unknown } {
 describe('POST /api/overnames/propose', () => {
   let handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>;
 
+  // The fixtures are April 2024 shifts, and propose now refuses shifts that have started.
+  // Pin the clock before them so these tests keep testing what they were written for.
+  let nowSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(async () => {
     selectResults = [];
     selectCallIndex = 0;
     lastInsertValues = null;
     insertReturning = [];
     vi.clearAllMocks();
+    nowSpy = vi.spyOn(Date, 'now').mockReturnValue((VAN - 24 * 3600) * 1000);
     handler = (await import('@/pages/api/overnames/propose')).default;
+  });
+
+  afterEach(() => {
+    nowSpy.mockRestore();
   });
 
   // -- Validation --
@@ -154,6 +163,25 @@ describe('POST /api/overnames/propose', () => {
     await handler(makeReq({ iddeelnovern: undefined }), res);
     expect(res._status).toBe(400);
     expect(res._json).toEqual({ error: 'Missing required fields' });
+  });
+
+  it('creates proposal when iddienstovern is 0 but van/tot/idwaarneemgroep match a type=1 slot', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [{ id: 500, type: 1, van: VAN, tot: TOT, iddeelnemer: 0, idwaarneemgroep: WG }],
+      [{ id: null, type: 0, van: VAN, tot: TOT, iddeelnemer: 1305, idwaarneemgroep: WG }],
+      [{ iddeelnemer: TARGET_ID }],
+      [],
+    ];
+    const res = makeRes();
+    await handler(makeReq({ iddienstovern: 0 }), res);
+    expect(res._status).toBe(201);
+    expect(res._json).toEqual({ success: true });
+    expect(lastInsertValues).toMatchObject({
+      iddienstovern: 500,
+      iddeelnemer: 1305,
+      iddeelnovern: TARGET_ID,
+    });
   });
 
   it('returns 400 when van >= tot', async () => {
@@ -327,6 +355,46 @@ describe('POST /api/overnames/propose', () => {
     expect(res._json).toEqual({ error: 'Active proposal already exists for this shift' });
   });
 
+  it('returns 409 on legacy null-id path when composite key matches (mobile iddienstovern=0)', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [],
+      [],
+      [{ id: null, type: 0, van: VAN, tot: TOT, iddeelnemer: 1305, idwaarneemgroep: WG }],
+      [],
+      [],
+      [{ iddeelnemer: TARGET_ID }],
+      [{ id: 333 }],
+    ];
+
+    const res = makeRes();
+    await handler(makeReq({ iddienstovern: 0 }), res);
+    expect(res._status).toBe(409);
+    expect(res._json).toEqual({ error: 'Active proposal already exists for this shift' });
+  });
+
+  it('creates proposal on legacy null-id path (mobile iddienstovern=0)', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [],
+      [],
+      [{ id: null, type: 0, van: VAN, tot: TOT, iddeelnemer: 1305, idwaarneemgroep: WG }],
+      [],
+      [],
+      [{ iddeelnemer: TARGET_ID }],
+      [],
+    ];
+
+    const res = makeRes();
+    await handler(makeReq({ iddienstovern: 0 }), res);
+    expect(res._status).toBe(201);
+    expect(lastInsertValues).toMatchObject({
+      iddienstovern: 0,
+      iddeelnemer: 1305,
+      iddeelnovern: TARGET_ID,
+    });
+  });
+
   it('returns 400 when proposing doctor is not found', async () => {
     selectResults = [
       [],  // proposingDoctor not found
@@ -336,5 +404,92 @@ describe('POST /api/overnames/propose', () => {
     await handler(makeReq(), res);
     expect(res._status).toBe(400);
     expect(res._json).toEqual({ error: 'Proposing doctor not found' });
+  });
+
+  // -- Achterwacht / extra dokter lanes --
+
+  it('returns 400 for an unknown sectie instead of treating it as the dienst', async () => {
+    const res = makeRes();
+    await handler(makeReq({ sectie: 'midden' }), res);
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({ error: 'Invalid sectie' });
+    expect(lastInsertValues).toBeNull();
+  });
+
+  it('stores an achterwacht proposal with the achterwacht doctor as original', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [{ id: 500, type: 1, van: VAN, tot: TOT, iddeelnemer: 0, idwaarneemgroep: WG }],   // slot
+      [{ id: null, type: 5, van: VAN, tot: TOT, iddeelnemer: 77, idwaarneemgroep: WG }],  // achterwacht
+      [{ iddeelnemer: TARGET_ID }],
+      [],
+    ];
+    const res = makeRes();
+    await handler(makeReq({ sectie: 'top' }), res);
+    expect(res._status).toBe(201);
+    expect(lastInsertValues).toMatchObject({
+      type: 4,
+      status: 'pending',
+      iddienstovern: 500,
+      iddeelnemer: 77,
+      iddeelnovern: TARGET_ID,
+      overnameSectie: 'top',
+    });
+  });
+
+  it('stores a dienst proposal with a NULL sectie, as before lanes existed', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [{ id: 500, type: 0, van: VAN, tot: TOT, iddeelnemer: 99, idwaarneemgroep: WG }],
+      [{ iddeelnemer: TARGET_ID }],
+      [],
+    ];
+    const res = makeRes();
+    await handler(makeReq(), res);
+    expect(res._status).toBe(201);
+    expect(lastInsertValues).toMatchObject({ overnameSectie: null });
+  });
+
+  it('rejects an achterwacht proposal that points straight at a dienst row', async () => {
+    // The type=0 row is the dienst doctor; taking it as the achterwacht would hand the wrong
+    // person's shift to the target.
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [{ id: 500, type: 0, van: VAN, tot: TOT, iddeelnemer: 99, idwaarneemgroep: WG }],
+    ];
+    const res = makeRes();
+    await handler(makeReq({ sectie: 'top' }), res);
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({ error: 'No achterwacht (type=5) assigned on this shift' });
+    expect(lastInsertValues).toBeNull();
+  });
+
+  it('returns 400 when the slot has no extra dokter', async () => {
+    selectResults = [
+      [{ id: SENDER_ID }],
+      [{ id: 500, type: 1, van: VAN, tot: TOT, iddeelnemer: 0, idwaarneemgroep: WG }],
+      [],
+    ];
+    const res = makeRes();
+    await handler(makeReq({ sectie: 'bottom' }), res);
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({ error: 'No extra dokter (type=11) assigned on this shift' });
+  });
+
+  // -- Shifts that have already started --
+
+  it('refuses an overname for a shift that has started, with a message for the doctor', async () => {
+    // The mobile app shows this error as is; before, it had no check and the server none either,
+    // so a past overname from the app was simply created.
+    nowSpy.mockReturnValue((VAN + 60) * 1000);
+
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    expect(res._status).toBe(400);
+    expect(res._json).toEqual({
+      error: 'Het is niet mogelijk om een overname aan te maken voor een dienst in het verleden.',
+    });
+    expect(lastInsertValues).toBeNull();
   });
 });

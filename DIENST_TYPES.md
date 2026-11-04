@@ -8,8 +8,7 @@ This file documents the `diensten.type` values used in this codebase.
 |---|---|---|---|
 | `1` | Base Slot | Anchor row (no stripe) | Defines the slot boundaries (`van`/`tot`). |
 | `0` | Standaard | Middle stripe | Regular assigned doctor. |
-| `4` | Standaard (legacy) | Middle stripe | Legacy assignment variant (when `status` is `NULL`). |
-| `6` | Standaard (legacy) | Middle stripe | Legacy assignment variant (when `status` is `NULL`). |
+
 | `5` | Achterwacht | Top stripe | Backup/on-call doctor. |
 | `11` | Extra Dokter | Bottom stripe | **Authoritative Extra Dokter assignment type.** |
 

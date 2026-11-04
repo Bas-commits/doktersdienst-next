@@ -19,6 +19,9 @@
 /.next/
 /out/
 
+# react-email preview/build artifacts
+.react-email/
+
 # production
 /build
 
@@ -34,6 +37,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -42,5 +46,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.mcp.json
+mcp.json
+.cursor/mcp.json
+.cursor/commands/
+.cursor/mcp.json
+/packages/web-app/node_modules
+/data
+
 

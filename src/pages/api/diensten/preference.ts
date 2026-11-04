@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { logger } from '@/lib/logger';
+import { hasShiftEnded, SHIFT_ENDED_MESSAGE } from '@/lib/shift-window';
 
 const { diensten: dienstenTable } = schema;
 
@@ -71,6 +72,12 @@ export default async function handler(
     if (Number.isNaN(type) || !PREFERENCE_TYPES.includes(type as (typeof PREFERENCE_TYPES)[number])) {
       return res.status(400).json({ error: 'Missing or invalid type for add (use 2, 3, 9, 10, or 5001)' });
     }
+  }
+  // Also blocks 'remove': a past preference is a record of what was planned, and the
+  // roster was built from it. The greyed-out block in /voorkeuren is guidance; this is
+  // the rule, because the endpoint accepts any epoch it is handed.
+  if (hasShiftEnded(tot)) {
+    return res.status(400).json({ error: SHIFT_ENDED_MESSAGE });
   }
 
   try {

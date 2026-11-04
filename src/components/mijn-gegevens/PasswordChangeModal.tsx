@@ -4,36 +4,68 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { getStrongPasswordFailures, strongPasswordRules } from '@/lib/password-policy';
 
 interface PasswordChangeModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  /**
+   * Waar bij je eigen account. Onwaar voor de beheerder die een ander helpt:
+   * die kent het huidige wachtwoord niet, en dat is juist waarom hij gebeld is.
+   */
+  vraagHuidigWachtwoord?: boolean;
+  /** Gezet als de beheerder het wachtwoord van een andere deelnemer zet. */
+  deelnemerId?: number | null;
 }
 
-export function PasswordChangeModal({ open, onClose, onSuccess }: PasswordChangeModalProps) {
+export function PasswordChangeModal({
+  open,
+  onClose,
+  onSuccess,
+  vraagHuidigWachtwoord = true,
+  deelnemerId = null,
+}: PasswordChangeModalProps) {
+  const [huidig, setHuidig] = useState('');
   const [passa, setPassa] = useState('');
   const [passb, setPassb] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const openstaandeRegels = getStrongPasswordFailures(passa);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (vraagHuidigWachtwoord && !huidig) {
+      setError('Vul uw huidige wachtwoord in');
+      return;
+    }
+    if (!passa) {
+      setError('Vul een nieuw wachtwoord in');
+      return;
+    }
+    if (openstaandeRegels.length > 0) {
+      setError(`Kies een sterker wachtwoord. Vereist: ${openstaandeRegels
+        .map((r) => r.label)
+        .join('; ')}.`);
+      return;
+    }
     if (passa !== passb) {
       setError('Nieuw password en herhaling komen niet overeen');
       return;
     }
-    if (!passa.trim()) {
-      setError('Vul een nieuw wachtwoord in');
-      return;
-    }
     setIsSubmitting(true);
-    const res = await fetch('/api/mijn-gegevens', {
+    const url = deelnemerId != null ? `/api/mijn-gegevens?deelnemerId=${deelnemerId}` : '/api/mijn-gegevens';
+    const res = await fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ passa: passa.trim(), passb: passb.trim() }),
+      body: JSON.stringify({
+        passa,
+        passb,
+        ...(vraagHuidigWachtwoord ? { huidigWachtwoord: huidig } : {}),
+      }),
     });
     const data = await res.json();
     setIsSubmitting(false);
@@ -41,15 +73,19 @@ export function PasswordChangeModal({ open, onClose, onSuccess }: PasswordChange
       setError(data.error ?? 'Wachtwoord wijzigen mislukt');
       return;
     }
-    setPassa('');
-    setPassb('');
+    leegmaken();
     onSuccess?.();
     onClose();
   }
 
-  function handleClose() {
+  function leegmaken() {
+    setHuidig('');
     setPassa('');
     setPassb('');
+  }
+
+  function handleClose() {
+    leegmaken();
     setError(null);
     onClose();
   }
@@ -77,6 +113,19 @@ export function PasswordChangeModal({ open, onClose, onSuccess }: PasswordChange
               {error}
             </p>
           )}
+          {vraagHuidigWachtwoord && (
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="modal-huidig">Huidig wachtwoord</Label>
+              <Input
+                id="modal-huidig"
+                type="password"
+                value={huidig}
+                onChange={(e) => setHuidig(e.target.value)}
+                autoComplete="current-password"
+                disabled={isSubmitting}
+              />
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <Label htmlFor="modal-passa">Nieuw wachtwoord</Label>
             <Input
@@ -86,8 +135,28 @@ export function PasswordChangeModal({ open, onClose, onSuccess }: PasswordChange
               onChange={(e) => setPassa(e.target.value)}
               autoComplete="new-password"
               disabled={isSubmitting}
+              aria-describedby="modal-wachtwoordregels"
             />
           </div>
+          {/* De regels staan er altijd, ook voor een leeg veld. Ze pas tonen als
+              het misgaat maakt van een bekende eis een verrassing achteraf. */}
+          <ul id="modal-wachtwoordregels" className="flex flex-col gap-0.5 text-xs">
+            {strongPasswordRules.map((regel) => {
+              const gehaald = regel.ok(passa);
+              return (
+                <li
+                  key={regel.id}
+                  className={
+                    gehaald
+                      ? 'text-emerald-700 dark:text-emerald-400'
+                      : 'text-muted-foreground'
+                  }
+                >
+                  {gehaald ? '✓' : '•'} {regel.label}
+                </li>
+              );
+            })}
+          </ul>
           <div className="flex flex-col gap-1">
             <Label htmlFor="modal-passb">Nieuw wachtwoord herhalen</Label>
             <Input

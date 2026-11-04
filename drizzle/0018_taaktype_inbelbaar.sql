@@ -1,0 +1,11 @@
+-- Sommige taken zijn er juist om gebeld te worden. Een extern consult algemeen of een extern
+-- consult oncologie is een dokter die op dat moment de vragen van collega's aanneemt. In het
+-- rooster was daar niets van te zien, dus wie wilde bellen moest eerst uitzoeken wie er zat.
+--
+-- Het vinkje staat op het taaktype en niet op de losse planning, net als niet_locatie_gebonden.
+-- Anders zou dezelfde taak op maandag wel en op dinsdag niet inbelbaar kunnen zijn, en dat is
+-- een eigenschap van het soort werk, niet van de dag.
+--
+-- Er komt geen telefoonnummer bij. Het nummer hangt aan de dokter, die heeft er al een via
+-- idsettelnrdienst en followmetelnr. Het vinkje zegt alleen of deze taak zo bereikbaar is.
+ALTER TABLE "taaktypen" ADD COLUMN IF NOT EXISTS "inbelbaar" boolean;

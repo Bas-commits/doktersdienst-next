@@ -2,6 +2,9 @@ export interface DienstDeelnemer {
   id: number;
   voornaam: string;
   achternaam: string;
+  /** Nodig voor de naam met achternaam eerst, zoals de lijst deelnemers hem schrijft. */
+  voorletterstussenvoegsel?: string | null;
+  initialen?: string | null;
   color: string;
 }
 
@@ -22,6 +25,8 @@ export interface Dienst {
   iddeelnovern?: number;
   /** ID of the doctor who created the overname proposal. */
   senderId?: number;
+  /** Overname records only: lane taken over. 'top' achterwacht, 'bottom' extra dokter, null/absent the dienst. */
+  overnameSectie?: 'top' | 'bottom' | null;
   /** Whether this overname row is a partial takeover compared to the original dienst. */
   isPartial?: boolean;
   /** FK to dienstaantekening (usually set on type=1 slot rows). */
@@ -42,6 +47,8 @@ export interface DienstenResponse {
 export interface DoctorInfo {
   id: number;
   name: string;
+  /** Achternaam eerst, zoals de popup met overnameverzoeken de naam schrijft. */
+  listName?: string;
   shortName: string;
   color: string;
 }
@@ -85,10 +92,19 @@ export interface ShiftBlockView {
   overnameType?: 'overname' | 'voorstelOvername' | 'vraagtekenOvername';
   /** ID of the original dienst being taken over (overname records only). */
   iddienstovern?: number;
+  /** ID of the doctor whose shift is being taken over (overname records only). */
+  iddeelnemer?: number;
+  /** ID of the target doctor for the overname (overname records only). */
+  iddeelnovern?: number;
   /** ID of the doctor who created the overname proposal. */
   senderId?: number;
   /** Whether this overname block is partial compared to the original dienst. */
   isPartial?: boolean;
+  /**
+   * Overname blocks only: the lane taken over. 'top' achterwacht, 'bottom' extra dokter; absent for
+   * the ordinary dienst. ShiftBlock then draws the overname on that strip instead of the middle.
+   */
+  overnameSectie?: 'top' | 'bottom';
   /** Original doctor info (for overname overlay blocks where middle shows the target doctor). */
   originalDoctor?: DoctorInfo | null;
 }

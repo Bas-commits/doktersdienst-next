@@ -45,7 +45,18 @@ export interface MijnGegevensProfile {
     callRecording: boolean | null;
   };
   waarneemgroep: { id: number; naam: string | null } | null;
-  waarneemgroepen: { id: number; naam: string | null; idgroep: number | null }[];
+  waarneemgroepen: {
+    id: number;
+    naam: string | null;
+    idgroep: number | null;
+    fte: number | null;
+    idfunctie: number | null;
+    /** Functies van deze groep: de actieve, plus de gearchiveerde die deze deelnemer nog heeft */
+    functies: { id: number; naam: string }[];
+    /** Active expertises for this group, plus any inactive ones the user already has */
+    expertises: { id: number; naam: string; afkorting: string | null }[];
+    selectedExpertiseIds: number[];
+  }[];
   groep: { id: number } | null;
   locatie: { id: number; idinstellingtype: number | null; idregio: number | null } | null;
   /** 'binnen' | 'buiten' for location dropdown */
@@ -65,11 +76,27 @@ export interface MijnGegevensLookup {
 export interface MijnGegevensPageData {
   profile: MijnGegevensProfile;
   lookup: MijnGegevensLookup;
+  isDelegatedEdit?: boolean;
+  canEditEchtedeelnemer?: boolean;
+  /** Je eigen e-mailadres mag je zelf wijzigen; dat van een ander alleen de beheerder. */
+  canEditEmail?: boolean;
+  /** Zelfde verdeling als canEditEmail, maar voor het wachtwoord. */
+  canEditPassword?: boolean;
+  /**
+   * Vraagt het venster om het huidige wachtwoord? Waar bij het eigen account,
+   * onwaar voor de beheerder die een ander helpt: die kent het niet.
+   */
+  requiresCurrentPassword?: boolean;
+  emailVerified?: boolean | null;
+  targetDeelnemerId?: number;
+  actingDeelnemerId?: number;
 }
 
 export interface MijnGegevensUpdateBody {
   passa?: string;
   passb?: string;
+  /** Verplicht bij een wachtwoordwijziging op het eigen account. */
+  huidigWachtwoord?: string;
   color?: string;
   achternaam?: string;
   voorletterstussenvoegsel?: string;
@@ -87,4 +114,8 @@ export interface MijnGegevensUpdateBody {
   smsdienstbegin?: boolean;
   callRecording?: boolean;
   telnrSlots?: TelnrSlotRaw[];
+  /** Per waarneemgroep FTE (0–2); only rows where the user is aangemeld are updated */
+  waarneemgroepFte?: { idwaarneemgroep: number; fte: number; idfunctie?: number | null }[];
+  /** Per waarneemgroep selected expertise IDs; replace-set for aangemelde memberships */
+  waarneemgroepExpertises?: { idwaarneemgroep: number; expertiseIds: number[] }[];
 }

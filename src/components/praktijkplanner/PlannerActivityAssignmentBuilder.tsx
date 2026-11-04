@@ -1,0 +1,556 @@
+'use client';
+
+import { Check, ChevronDown, ChevronUp, Paperclip, Trash2, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { activiteitenIconPath } from '@/lib/praktijkplanner/activiteiten-iconen';
+import type {
+  PraktijkplannerActivity,
+  PraktijkplannerActivitySpecification,
+  PraktijkplannerExpertise,
+  PraktijkplannerLocation,
+  PraktijkplannerTaskType,
+} from '@/types/praktijkplanner';
+import {
+  PlannerCombinedDaypartChip,
+  type PlannerDaypartChipItem,
+} from './PlannerCombinedDaypartChip';
+
+type BuilderSectionId = 'activities' | 'tasks' | 'locations';
+
+type Selection = {
+  activityId: number | null;
+  specificationId: number | null;
+  taskIds: number[];
+  locationId: number | null;
+};
+
+type BuilderSectionProps = {
+  id: BuilderSectionId;
+  title: string;
+  selectedCount: number;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClear?: () => void;
+  children: React.ReactNode;
+};
+
+function sectionCheckboxClass(selected: boolean) {
+  return [
+    'flex size-4 shrink-0 items-center justify-center rounded border',
+    selected
+      ? 'border-[#c91b23] bg-[#c91b23] text-white'
+      : 'border-input bg-background text-transparent',
+  ].join(' ');
+}
+
+function SelectionIndicator({
+  selected,
+  type,
+}: {
+  selected: boolean;
+  type: 'checkbox' | 'radio';
+}) {
+  return (
+    <span
+      className={[
+        'flex size-4 shrink-0 items-center justify-center border transition-colors',
+        type === 'radio' ? 'rounded-full' : 'rounded',
+        selected
+          ? 'border-[#c91b23] bg-[#c91b23] text-white'
+          : 'border-input bg-background text-transparent',
+      ].join(' ')}
+      aria-hidden
+    >
+      {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+    </span>
+  );
+}
+
+function BuilderSection({
+  id,
+  title,
+  selectedCount,
+  isOpen,
+  onToggle,
+  onClear,
+  children,
+}: BuilderSectionProps) {
+  const contentId = `activity-assignment-${id}`;
+
+  return (
+    <section className="border-t pt-2 first:border-t-0 first:pt-0">
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1 text-left text-sm font-semibold hover:bg-muted"
+          aria-expanded={isOpen}
+          aria-controls={contentId}
+          onClick={onToggle}
+        >
+          <span className={sectionCheckboxClass(selectedCount > 0)} aria-hidden>
+            {selectedCount > 0 ? <Check className="size-3" strokeWidth={3} /> : null}
+          </span>
+          <span className="truncate">{title}</span>
+          {selectedCount > 0 ? (
+            <span className="ml-auto rounded-full bg-[#c91b23] px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {selectedCount}
+            </span>
+          ) : null}
+          {isOpen ? <ChevronUp className="size-4 shrink-0" aria-hidden /> : <ChevronDown className="size-4 shrink-0" aria-hidden />}
+        </button>
+        {selectedCount > 0 && onClear ? (
+          <button
+            type="button"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={onClear}
+            aria-label={`${title} wissen`}
+            title={`${title} wissen`}
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        ) : null}
+      </div>
+      {isOpen ? (
+        <div id={contentId} className="mt-1 space-y-1.5 px-1 pb-1">
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function OptionPreview({
+  color,
+  label,
+  icon,
+  inbelbaar,
+  slot = 'middle',
+}: {
+  color: string | null;
+  label: string;
+  icon?: string | null;
+  inbelbaar?: boolean;
+  slot?: 'top' | 'middle' | 'bottom';
+}) {
+  const item: PlannerDaypartChipItem = { color, label, icon, inbelbaar };
+
+  return (
+    <PlannerCombinedDaypartChip
+      tasks={slot === 'top' ? [item] : []}
+      activity={slot === 'middle' ? item : null}
+      location={slot === 'bottom' ? item : null}
+      className="w-18 shrink-0 shadow-none"
+    />
+  );
+}
+
+function ChipPreview({
+  color,
+  children,
+}: {
+  color: string | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className="inline-flex max-w-full items-center truncate rounded px-1.5 py-0.5 text-[10px] font-semibold text-white"
+      style={{ backgroundColor: color || '#64748b' }}
+    >
+      {children}
+    </span>
+  );
+}
+
+export function PlannerActivityAssignmentBuilder({
+  activities,
+  specifications,
+  tasks,
+  locations,
+  expertises,
+  selection,
+  clearMode,
+  opmerkingMode,
+  onActivityChange,
+  onSpecificationChange,
+  onTaskChange,
+  onLocationChange,
+  onClearSelection,
+  onClearModeChange,
+  onOpmerkingModeChange,
+}: {
+  activities: PraktijkplannerActivity[];
+  specifications: PraktijkplannerActivitySpecification[];
+  tasks: PraktijkplannerTaskType[];
+  locations: PraktijkplannerLocation[];
+  /** Om bij een activiteit de vereiste expertise voluit te tonen, niet alleen het id. */
+  expertises: PraktijkplannerExpertise[];
+  selection: Selection;
+  clearMode: boolean;
+  /** Aan betekent: de volgende klik op een fiche opent de opmerking in plaats van te plannen. */
+  opmerkingMode: boolean;
+  onActivityChange: (id: number | null) => void;
+  onSpecificationChange: (id: number | null) => void;
+  onTaskChange: (ids: number[]) => void;
+  onLocationChange: (id: number | null) => void;
+  onClearSelection: () => void;
+  onClearModeChange: (enabled: boolean) => void;
+  onOpmerkingModeChange: (enabled: boolean) => void;
+}) {
+  const [openSections, setOpenSections] = useState<Record<BuilderSectionId, boolean>>({
+    activities: true,
+    tasks: true,
+    locations: true,
+  });
+  const selectedActivity = useMemo(
+    () => activities.find((activity) => activity.id === selection.activityId) ?? null,
+    [activities, selection.activityId]
+  );
+  const selectedSpecification = useMemo(
+    () => specifications.find((specification) => specification.id === selection.specificationId) ?? null,
+    [selection.specificationId, specifications]
+  );
+  const selectedTasks = useMemo(
+    () => selection.taskIds.flatMap((id) => tasks.find((task) => task.id === id) ?? []),
+    [selection.taskIds, tasks]
+  );
+  const selectedLocation = useMemo(
+    () => locations.find((location) => location.id === selection.locationId) ?? null,
+    [locations, selection.locationId]
+  );
+  const selectedSpecifications = useMemo(
+    () => specifications.filter((specification) => specification.idactiviteit === selection.activityId),
+    [selection.activityId, specifications]
+  );
+  const expertiseById = useMemo(
+    () => new Map(expertises.map((expertise) => [expertise.id, expertise])),
+    [expertises]
+  );
+  const hasSelection =
+    selection.activityId != null ||
+    selection.taskIds.length > 0 ||
+    selection.locationId != null;
+
+  const toggleSection = (id: BuilderSectionId) => {
+    setOpenSections((current) => ({ ...current, [id]: !current[id] }));
+  };
+
+  const selectActivity = (id: number) => {
+    onClearModeChange(false);
+    onActivityChange(selection.activityId === id ? null : id);
+  };
+
+  const selectSpecification = (id: number) => {
+    onClearModeChange(false);
+    onSpecificationChange(selection.specificationId === id ? null : id);
+  };
+
+  const toggleTask = (id: number) => {
+    onClearModeChange(false);
+    if (selection.taskIds.includes(id)) {
+      onTaskChange(selection.taskIds.filter((taskId) => taskId !== id));
+      return;
+    }
+    if (selection.taskIds.length < 3) {
+      onTaskChange([...selection.taskIds, id]);
+    }
+  };
+
+  const selectLocation = (id: number) => {
+    onClearModeChange(false);
+    onLocationChange(selection.locationId === id ? null : id);
+  };
+
+  return (
+    <aside
+      // Hoogte van de kolom waar hij in staat, niet van het venster. Met een venstermaat
+      // stak het palet onder de pagina uit en scrollde de pagina alsnog, terwijl juist het
+      // rooster zelf hoort te scrollen.
+      className="max-h-full w-60 overflow-y-auto rounded-xl border bg-card p-3 shadow-sm"
+      aria-label="Dagdeel samenstellen"
+    >
+      <div className="mb-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Dagdeel samenstellen</h2>
+          {hasSelection ? (
+            <button
+              type="button"
+              onClick={onClearSelection}
+              className="text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              Wis selectie
+            </button>
+          ) : null}
+        </div>
+        <div className="mt-2 min-h-12 rounded-lg bg-muted/60 p-2">
+          {hasSelection ? (
+            <div className="flex flex-wrap gap-1">
+              {selectedActivity ? (
+                <ChipPreview color={selectedActivity.kleur}>
+                  {selectedActivity.afkorting || selectedActivity.naam}
+                  {selectedSpecification ? ` · ${selectedSpecification.afkorting || selectedSpecification.naam}` : ''}
+                </ChipPreview>
+              ) : null}
+              {selectedTasks.map((task) => (
+                <ChipPreview key={task.id} color={task.kleur}>
+                  {task.afkorting || task.omschrijving || `Taak ${task.id}`}
+                </ChipPreview>
+              ))}
+              {selectedLocation ? (
+                <ChipPreview color={selectedLocation.kleur}>
+                  {selectedLocation.afkorting || selectedLocation.naam}
+                </ChipPreview>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-xs leading-snug text-muted-foreground">
+              Kies een activiteit, taak of locatie en klik daarna op een dagdeel.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        aria-pressed={clearMode}
+        onClick={() => onClearModeChange(!clearMode)}
+        className={[
+          'mb-2 flex w-full items-center gap-2 rounded-lg border px-2 py-2 text-left text-xs font-semibold transition',
+          clearMode
+            ? 'border-[#c91b23] bg-[#c91b23] text-white'
+            : 'border-border hover:bg-muted',
+        ].join(' ')}
+      >
+        <span className={clearMode ? 'text-white' : 'text-[#c91b23]'}>
+          <Trash2 className="size-4" aria-hidden />
+        </span>
+        <span>{clearMode ? 'Leegmaken actief' : 'Dagdeel leegmaken'}</span>
+      </button>
+
+      {/*
+        Onder leegmaken, want het is dezelfde soort knop: geen keuze die je op een dagdeel
+        neerzet, maar een stand waarin de volgende klik iets anders doet. De twee sluiten
+        elkaar uit; het scherm zet de ander uit als deze aangaat.
+      */}
+      <button
+        type="button"
+        aria-pressed={opmerkingMode}
+        onClick={() => onOpmerkingModeChange(!opmerkingMode)}
+        className={[
+          'mb-2 flex w-full items-center gap-2 rounded-lg border px-2 py-2 text-left text-xs font-semibold transition',
+          opmerkingMode ? 'border-foreground bg-foreground text-background' : 'border-border hover:bg-muted',
+        ].join(' ')}
+      >
+        <span className={opmerkingMode ? 'text-background' : 'text-muted-foreground'}>
+          <Paperclip className="size-4" aria-hidden />
+        </span>
+        <span>{opmerkingMode ? 'Opmerking actief' : 'Opmerking bij fiche'}</span>
+      </button>
+
+      <div className="space-y-2">
+        <BuilderSection
+          id="activities"
+          title="Activiteiten"
+          selectedCount={selection.activityId == null ? 0 : 1}
+          isOpen={openSections.activities}
+          onToggle={() => toggleSection('activities')}
+          onClear={() => {
+            onActivityChange(null);
+            onSpecificationChange(null);
+          }}
+        >
+          {activities.length > 0 ? (
+            <div className="space-y-1" role="radiogroup" aria-label="Activiteiten">
+              {activities.map((activity) => {
+                const selected = selection.activityId === activity.id;
+                const label = activity.afkorting
+                  ? `${activity.afkorting} ${activity.naam}`
+                  : activity.naam;
+                const expertise =
+                  activity.idexpertise != null ? expertiseById.get(activity.idexpertise) : undefined;
+                return (
+                  <button
+                    key={activity.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    aria-label={label}
+                    onClick={() => selectActivity(activity.id)}
+                    className={[
+                      'flex w-full items-center gap-2 rounded-md p-1 text-left text-xs transition hover:bg-muted',
+                      selected ? 'bg-muted' : '',
+                    ].join(' ')}
+                  >
+                    <SelectionIndicator selected={selected} type="radio" />
+                    <OptionPreview
+                      color={activity.kleur}
+                      label={activity.afkorting || activity.naam}
+                      icon={activiteitenIconPath(activity.icon)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{activity.afkorting || activity.naam}</span>
+                      {activity.afkorting ? <span className="block truncate text-muted-foreground">{activity.naam}</span> : null}
+                      {expertise ? (
+                        <span className="block truncate text-[11px] text-muted-foreground/80">
+                          {expertise.naam}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Geen activiteiten beschikbaar.</p>
+          )}
+
+          {selectedActivity && selectedSpecifications.length > 0 ? (
+            <div className="ml-6 border-l pl-2">
+              <p className="mb-1 text-[11px] font-medium text-muted-foreground">Specificatie</p>
+              <div className="space-y-1" role="radiogroup" aria-label="Specificaties">
+                {selectedSpecifications.map((specification) => {
+                  const selected = selection.specificationId === specification.id;
+                  const label = specification.afkorting
+                    ? `${specification.afkorting} ${specification.naam}`
+                    : specification.naam;
+                  return (
+                    <button
+                      key={specification.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      aria-label={label}
+                      onClick={() => selectSpecification(specification.id)}
+                      className={[
+                        'flex w-full items-center gap-2 rounded-md p-1 text-left text-xs transition hover:bg-muted',
+                        selected ? 'bg-muted' : '',
+                      ].join(' ')}
+                    >
+                      <SelectionIndicator selected={selected} type="radio" />
+                      <OptionPreview
+                        color={specification.kleur || selectedActivity.kleur}
+                        label={specification.afkorting || specification.naam}
+                      />
+                      <span className="min-w-0 truncate font-medium">
+                        {specification.afkorting || specification.naam}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </BuilderSection>
+
+        
+
+        <BuilderSection
+          id="locations"
+          title="Locaties"
+          selectedCount={selection.locationId == null ? 0 : 1}
+          isOpen={openSections.locations}
+          onToggle={() => toggleSection('locations')}
+          onClear={() => onLocationChange(null)}
+        >
+          {locations.length > 0 ? (
+            <div className="space-y-1" role="radiogroup" aria-label="Locaties">
+              {locations.map((location) => {
+                const selected = selection.locationId === location.id;
+                const label = location.afkorting
+                  ? `${location.afkorting} ${location.naam}`
+                  : location.naam;
+                return (
+                  <button
+                    key={location.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    aria-label={label}
+                    onClick={() => selectLocation(location.id)}
+                    className={[
+                      'flex w-full items-center gap-2 rounded-md p-1 text-left text-xs transition hover:bg-muted',
+                      selected ? 'bg-muted' : '',
+                    ].join(' ')}
+                  >
+                    <SelectionIndicator selected={selected} type="radio" />
+                    <OptionPreview
+                      color={location.kleur}
+                      label={location.afkorting || location.naam}
+                      slot="bottom"
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{location.afkorting || location.naam}</span>
+                      {location.afkorting ? <span className="block truncate text-muted-foreground">{location.naam}</span> : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Geen locaties beschikbaar.</p>
+          )}
+        </BuilderSection>
+
+        <BuilderSection
+          id="tasks"
+          title="Taken"
+          selectedCount={selection.taskIds.length}
+          isOpen={openSections.tasks}
+          onToggle={() => toggleSection('tasks')}
+          onClear={() => onTaskChange([])}
+        >
+          <p className="text-[11px] text-muted-foreground">Kies maximaal drie taken.</p>
+          {tasks.length > 0 ? (
+            <div className="space-y-1">
+              {tasks.map((task) => {
+                const selected = selection.taskIds.includes(task.id);
+                const maxSelected = !selected && selection.taskIds.length >= 3;
+                const label =
+                  task.afkorting && task.omschrijving
+                    ? `${task.afkorting} ${task.omschrijving}`
+                    : task.afkorting || task.omschrijving || `Taak ${task.id}`;
+                return (
+                  <button
+                    key={task.id}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={selected}
+                    aria-label={label}
+                    disabled={maxSelected}
+                    onClick={() => toggleTask(task.id)}
+                    className={[
+                      'flex w-full items-center gap-2 rounded-md p-1 text-left text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45',
+                      selected ? 'bg-muted' : '',
+                    ].join(' ')}
+                  >
+                    <SelectionIndicator selected={selected} type="checkbox" />
+                    <OptionPreview
+                      color={task.kleur}
+                      label={task.afkorting || task.omschrijving || `Taak ${task.id}`}
+                      inbelbaar={task.inbelbaar}
+                      slot="top"
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{task.afkorting || task.omschrijving || `Taak ${task.id}`}</span>
+                      {task.afkorting && task.omschrijving ? (
+                        <span className="block truncate text-muted-foreground">{task.omschrijving}</span>
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Geen taken beschikbaar.</p>
+          )}
+        </BuilderSection>
+        {/*
+          Kaart dPp:Kopje FTE weghalen: er is hier bewust geen keuzemogelijkheid meer voor het
+          beschikbaarheidstype (FTE). Een dagdeel dat al een beschikbaarheidstype heeft blijft
+          dat gewoon houden - buildActivityAssignmentSlot valt terug op de bestaande waarde
+          zolang activiteiten.tsx zelf nooit meer een availabilityId meestuurt - maar er is
+          nergens meer een knop om er zelf een te kiezen.
+        */}
+      </div>
+    </aside>
+  );
+}

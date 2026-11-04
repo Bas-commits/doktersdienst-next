@@ -26,6 +26,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
+# PBX TXT output; bind-mount host dir here: `-v /host/telrecords:/data/telrecords`
+ENV TEL_RECORDS_DIR=/data/telrecords
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./

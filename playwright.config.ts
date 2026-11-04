@@ -1,4 +1,9 @@
 import { defineConfig } from '@playwright/test';
+import dotenv from 'dotenv';
+
+// .env.local overrides .env, same precedence as the Next.js app itself.
+dotenv.config({ path: '.env' });
+dotenv.config({ path: '.env.local', override: true });
 
 export default defineConfig({
   testDir: './e2e',

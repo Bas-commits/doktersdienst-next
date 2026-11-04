@@ -1,0 +1,223 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm';
+import { db, schema } from '@/db';
+import {
+  getAuthenticatedUser,
+  hasGroupManagementAccess,
+  isUserInWaarneemgroep,
+  type AuthenticatedUser,
+} from '@/lib/api-auth';
+import type { PraktijkplannerParticipantExpertise } from '@/types/praktijkplanner';
+
+export type PraktijkplannerCapability =
+  | 'activiteiten:read'
+  | 'activiteiten:manage'
+  | 'afwezigheid:self'
+  | 'afwezigheid:manage'
+  | 'dokter-activiteiten:read'
+  | 'dokter-afwezigheid:read'
+  | 'dokter-afwezigheid:manage'
+  | 'capaciteit:read'
+  | 'capaciteit:manage'
+  | 'beheer:manage';
+
+export type PraktijkplannerAccess = {
+  user: AuthenticatedUser;
+  idwaarneemgroep: number;
+  isMember: boolean;
+  isManager: boolean;
+};
+
+export type PraktijkplannerAccessError = {
+  status: 400 | 401 | 403;
+  error: string;
+};
+
+export type PraktijkplannerAccessResult =
+  | { ok: true; access: PraktijkplannerAccess }
+  | { ok: false; error: PraktijkplannerAccessError };
+
+const MANAGER_CAPABILITIES = new Set<PraktijkplannerCapability>([
+  'activiteiten:manage',
+  'afwezigheid:manage',
+  'dokter-afwezigheid:manage',
+  'capaciteit:read',
+  'capaciteit:manage',
+  'beheer:manage',
+]);
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+/**
+ * Resolves the selected group and the caller's authority for Praktijkplanner.
+ *
+ * The product switch is intentionally available to every authenticated user. The
+ * authorization boundary remains the active group: non-admins must be active
+ * members, while global administrators may manage every group.
+ */
+export async function resolvePraktijkplannerAccess(
+  req: NextApiRequest,
+  idwaarneemgroep: unknown,
+  capability: PraktijkplannerCapability
+): Promise<PraktijkplannerAccessResult> {
+  const groupId = Number(idwaarneemgroep);
+  if (!isPositiveInteger(groupId)) {
+    return {
+      ok: false,
+      error: { status: 400, error: 'Een geldige waarneemgroep is verplicht.' },
+    };
+  }
+
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
+    return { ok: false, error: { status: 401, error: 'Niet ingelogd.' } };
+  }
+
+  const isMember = user.isAdmin || (await isUserInWaarneemgroep(user.id, groupId));
+  if (!isMember) {
+    return {
+      ok: false,
+      error: { status: 403, error: 'Geen toegang tot deze waarneemgroep.' },
+    };
+  }
+
+  const isManager = user.isAdmin || (await hasGroupManagementAccess(user, groupId));
+  if (MANAGER_CAPABILITIES.has(capability) && !isManager) {
+    return {
+      ok: false,
+      error: { status: 403, error: 'Deze actie is alleen beschikbaar voor secretarissen en beheerders.' },
+    };
+  }
+
+  return {
+    ok: true,
+    access: {
+      user,
+      idwaarneemgroep: groupId,
+      isMember,
+      isManager,
+    },
+  };
+}
+
+export function sendPraktijkplannerAccessError(
+  res: NextApiResponse,
+  result: Extract<PraktijkplannerAccessResult, { ok: false }>
+) {
+  return res.status(result.error.status).json({ error: result.error.error });
+}
+
+/**
+ * A participant is addressable only when they are an active member of the
+ * selected group. Participants may target themselves; a manager may target any
+ * active participant in that group.
+ */
+export async function canAccessPraktijkplannerParticipant(
+  access: PraktijkplannerAccess,
+  targetDeelnemerId: unknown,
+  options: { allowSelf?: boolean; requireManager?: boolean } = {}
+): Promise<boolean> {
+  const targetId = Number(targetDeelnemerId);
+  if (!isPositiveInteger(targetId)) return false;
+
+  const allowSelf = options.allowSelf ?? true;
+  const requireManager = options.requireManager ?? false;
+  const isSelf = targetId === access.user.id;
+
+  if (requireManager && !access.isManager) return false;
+  if (!isSelf && !access.isManager) return false;
+  if (isSelf && !allowSelf) return false;
+
+  return isUserInWaarneemgroep(targetId, access.idwaarneemgroep);
+}
+
+export async function getPraktijkplannerParticipants(
+  access: PraktijkplannerAccess
+): Promise<
+  Array<{
+    id: number;
+    voornaam: string | null;
+    voorletterstussenvoegsel: string | null;
+    achternaam: string | null;
+    initialen: string | null;
+    color: string | null;
+    name: string | null;
+    expertises: PraktijkplannerParticipantExpertise[];
+  }>
+> {
+  const { deelnemers, waarneemgroepdeelnemers, deelnemerexpertises, expertises } = schema;
+  const rows = await db
+    .select({
+      id: deelnemers.id,
+      voornaam: deelnemers.voornaam,
+      voorletterstussenvoegsel: deelnemers.voorletterstussenvoegsel,
+      achternaam: deelnemers.achternaam,
+      initialen: deelnemers.initialen,
+      color: deelnemers.color,
+      name: deelnemers.name,
+    })
+    .from(waarneemgroepdeelnemers)
+    .innerJoin(deelnemers, eq(waarneemgroepdeelnemers.iddeelnemer, deelnemers.id))
+    .where(
+      and(
+        eq(waarneemgroepdeelnemers.idwaarneemgroep, access.idwaarneemgroep),
+        eq(waarneemgroepdeelnemers.aangemeld, true),
+        or(eq(deelnemers.afgemeld, false), isNull(deelnemers.afgemeld))
+      )
+    );
+
+  const visible = (access.isManager ? rows : rows.filter((row) => row.id === access.user.id))
+    .filter((row): row is typeof row & { id: number } => row.id != null)
+    .sort((a, b) => {
+      const aName = [a.achternaam, a.voornaam, a.voorletterstussenvoegsel, a.name]
+        .filter(Boolean)
+        .join(' ');
+      const bName = [b.achternaam, b.voornaam, b.voorletterstussenvoegsel, b.name]
+        .filter(Boolean)
+        .join(' ');
+      return aName.localeCompare(bName, 'nl');
+    });
+
+  const participantIds = visible.map((row) => row.id);
+  const expertiseByParticipant = new Map<number, PraktijkplannerParticipantExpertise[]>();
+  if (participantIds.length > 0) {
+    const expertiseRows = await db
+      .select({
+        iddeelnemer: deelnemerexpertises.iddeelnemer,
+        id: expertises.id,
+        naam: expertises.naam,
+        afkorting: expertises.afkorting,
+      })
+      .from(deelnemerexpertises)
+      .innerJoin(expertises, eq(deelnemerexpertises.idexpertise, expertises.id))
+      .where(
+        and(
+          inArray(deelnemerexpertises.iddeelnemer, participantIds),
+          eq(expertises.idwaarneemgroep, access.idwaarneemgroep)
+        )
+      )
+      .orderBy(asc(expertises.naam));
+
+    for (const row of expertiseRows) {
+      if (row.iddeelnemer == null || row.id == null) continue;
+      const list = expertiseByParticipant.get(row.iddeelnemer) ?? [];
+      list.push({
+        id: row.id,
+        naam: row.naam,
+        afkorting: row.afkorting ?? null,
+      });
+      expertiseByParticipant.set(row.iddeelnemer, list);
+    }
+  }
+
+  return visible.map((row) => ({
+    ...row,
+    expertises: expertiseByParticipant.get(row.id) ?? [],
+  }));
+}
+
+export function isManagerOnlyCapability(capability: PraktijkplannerCapability): boolean {
+  return MANAGER_CAPABILITIES.has(capability);
+}

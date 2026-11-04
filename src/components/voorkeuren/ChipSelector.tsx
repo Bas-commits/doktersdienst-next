@@ -26,7 +26,9 @@ export interface ChipSelectorProps {
 
 export function ChipSelector({ selectedChipCode, onSelectChip }: ChipSelectorProps) {
   function handleClick(chip: ChipDefinition) {
-    onSelectChip(selectedChipCode === chip.code ? null : chip.code);
+    // Always select the clicked chip; do not toggle off here — /voorkeuren clears the
+    // cursor mode only on Escape or pointerdown outside the calendar grid.
+    onSelectChip(chip.code);
   }
 
   return (
@@ -36,21 +38,27 @@ export function ChipSelector({ selectedChipCode, onSelectChip }: ChipSelectorPro
         const style = CHIP_STYLE[chip.code];
         const IconComponent = style?.Icon;
         return (
-          <div key={chip.code} className="flex items-center gap-3">
-            <button
-              type="button"
-              aria-label={chip.label}
-              aria-pressed={isSelected}
-              data-testid={`chip-${chip.code}`}
-              onClick={() => handleClick(chip)}
+          <button
+            key={chip.code}
+            type="button"
+            aria-label={chip.label}
+            aria-pressed={isSelected}
+            data-testid={`chip-${chip.code}`}
+            onClick={() => handleClick(chip)}
+            className={`
+              group flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors
+              focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+              ${isSelected ? 'bg-muted/60' : 'hover:bg-muted/60'}
+            `}
+          >
+            <span
               className={`
                 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border-2 transition-colors
-                focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
                 ${style
                   ? ''
                   : isSelected
                     ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
-                    : 'border-muted-foreground/30 bg-muted/50 hover:border-muted-foreground/60 hover:bg-muted'
+                    : 'border-muted-foreground/30 bg-muted/50 group-hover:border-muted-foreground/60 group-hover:bg-muted'
                 }
               `}
               style={
@@ -70,9 +78,9 @@ export function ChipSelector({ selectedChipCode, onSelectChip }: ChipSelectorPro
                   aria-hidden
                 />
               ) : null}
-            </button>
-            <span className="text-sm font-medium text-foreground">{chip.label}</span>
-          </div>
+            </span>
+            <span className="text-sm font-medium text-foreground group-hover:underline">{chip.label}</span>
+          </button>
         );
       })}
     </div>

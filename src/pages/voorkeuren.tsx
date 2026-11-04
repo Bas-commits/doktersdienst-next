@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
+import { useDeelnemerDisplayName } from '@/contexts/DeelnemerProfileContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { CalendarGridWithNavState } from '@/components/CalandarGrid/CalendarGridWithNavState';
@@ -16,6 +17,7 @@ import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { shiftKeyFromBlock, getChipByCode } from '@/types/voorkeuren';
 import type { ShiftBlockView } from '@/types/diensten';
 import { shiftBlockToastDescription } from '@/utils/shiftToastContext';
+import { hasShiftEnded, SHIFT_ENDED_MESSAGE } from '@/lib/shift-window';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -70,7 +72,7 @@ function InfoPopover() {
           <h2 className="mb-2 text-base font-semibold">Procedure:</h2>
           <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
             <li>Klik op een van de fiches, links in het scherm</li>
-            <li>De fiche kleeft aan de cursor.</li>
+            <li>Het fiche kleeft aan de cursor.</li>
             <li>Klik op de shifts/diensten waarvoor u een voorkeur wilt aangeven.</li>
             <li>Herhaal dit voor andere voorkeuren voor shifts/diensten.</li>
           </ul>
@@ -87,7 +89,7 @@ function InfoPopover() {
 
 export default function VoorkeurenPage() {
   const { data: session } = authClient.useSession();
-  const name = session?.user?.name ?? session?.user?.email ?? 'daar';
+  const name = useDeelnemerDisplayName();
 
   const { activeWaarneemgroepId, activeWaarneemgroep, loading: waarneemgroepContextLoading, error: waarneemgroepContextError } = useWaarneemgroep();
 
@@ -122,6 +124,8 @@ export default function VoorkeurenPage() {
   const paintStrokeSeqRef = useRef(0);
   /** Cursor position for chip preview (only used when selectedChipCode is set). */
   const [cursorPreview, setCursorPreview] = useState<{ x: number; y: number } | null>(null);
+
+  const pointerDownStartedInCalendarRef = useRef(false);
 
   /** Only the selected waarneemgroep in the header (one at a time). */
   const waarneemgroepIds = useMemo(() => {
@@ -263,10 +267,26 @@ export default function VoorkeurenPage() {
     tryFlushPaintStroke(id);
   }, [tryFlushPaintStroke]);
 
+  // One toast id, so clicking a past shift again (or dragging across several) replaces the
+  // message instead of stacking copies of it.
+  const showShiftEndedToast = useCallback((block: ShiftBlockView) => {
+    toast.error('Voorkeur niet opgeslagen', {
+      id: 'voorkeur-dienst-voorbij',
+      description: `${shiftBlockToastDescription(block)}\n${SHIFT_ENDED_MESSAGE}`,
+    });
+  }, []);
+
   const handleShiftClick = useCallback(
     async (block: ShiftBlockView) => {
       if (selectedChipCode === null) return;
       if (block.idwaarneemgroep == null) return;
+      // The grid renders ended blocks inert, but it re-checks the clock only once a
+      // minute. Catching the gap here keeps the request from being sent at all, so the
+      // user gets the reason instead of a failed round-trip.
+      if (hasShiftEnded(block.tot)) {
+        showShiftEndedToast(block);
+        return;
+      }
       const key = shiftKeyFromBlock(block);
       if (inFlightKeysRef.current.has(key)) return;
       inFlightKeysRef.current.add(key);
@@ -395,7 +415,7 @@ export default function VoorkeurenPage() {
         }
       }
     },
-    [selectedChipCode, tryFlushPaintStroke]
+    [selectedChipCode, tryFlushPaintStroke, showShiftEndedToast]
   );
 
   const calendarGridRef = useRef<HTMLDivElement | null>(null);
@@ -406,25 +426,39 @@ export default function VoorkeurenPage() {
       return;
     }
     function onMove(e: MouseEvent) {
+      const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
+      const hidePreview = hoveredEl instanceof Element && Boolean(
+        hoveredEl.closest('[data-voorkeuren-chip-panel], [data-voorkeuren-header-panel], header, aside')
+      );
+      if (hidePreview) {
+        setCursorPreview(null);
+        return;
+      }
       setCursorPreview({ x: e.clientX, y: e.clientY });
-    }
-    function onLeave() {
-      setCursorPreview(null);
     }
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') setSelectedChipCode(null);
     }
-    function onPointerDown(e: MouseEvent) {
-      const el = calendarGridRef.current;
-      if (!el || !el.contains(e.target as Node)) setSelectedChipCode(null);
+    /**
+     * End “chip on cursor” only when clicking outside the calendar grid.
+     * Clicks on the chip sidebar must not clear first (that briefly nulled selectedChipCode,
+     * ran the effect cleanup, and dropped cursor preview until the chip click re-selected).
+     */
+    function onPointerDown(e: PointerEvent) {
+      const t = e.target;
+      const el = t instanceof Element ? t : t instanceof Text ? t.parentElement : null;
+      const startedInCalendarCapture = pointerDownStartedInCalendarRef.current;
+      pointerDownStartedInCalendarRef.current = false;
+      const insideCal = startedInCalendarCapture || Boolean(el?.closest('[data-voorkeuren-calendar]'));
+      const insideChips = Boolean(el?.closest('[data-voorkeuren-chip-panel]'));
+      if (startedInCalendarCapture || insideCal || insideChips) return;
+      setSelectedChipCode(null);
     }
     window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseleave', onLeave);
     window.addEventListener('keydown', onKeyDown);
     document.addEventListener('pointerdown', onPointerDown);
     return () => {
       window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseleave', onLeave);
       window.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('pointerdown', onPointerDown);
     };
@@ -438,8 +472,10 @@ export default function VoorkeurenPage() {
       {cursorPreview && chipStyle && CursorChipIcon && (
         <div
           aria-hidden
-          className="pointer-events-none fixed z-9999 flex h-9 w-9 items-center justify-center rounded-md border-2 border-primary shadow-lg"
+          className="pointer-events-none fixed flex h-9 w-9 items-center justify-center rounded-md border-2 border-primary shadow-lg"
           style={{
+            // Above ShiftBlock hover (9999) and overname overlays (10k–10k1); below portaled shift tooltips (100k).
+            zIndex: 10200,
             left: cursorPreview.x + 12,
             top: cursorPreview.y + 12,
             backgroundColor: chipStyle.backgroundColor,
@@ -453,7 +489,7 @@ export default function VoorkeurenPage() {
         <title>Voorkeuren | Doktersdienst</title>
       </Head>
       <div className="mx-auto max-w-[2000px] space-y-6 px-4 py-8">
-        <Card className="overflow-visible">
+        <Card className="overflow-visible" data-voorkeuren-header-panel>
           <CardHeader className="overflow-visible">
             <CardTitle>
               <h1 id="voorkeuren-heading" className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -467,7 +503,7 @@ export default function VoorkeurenPage() {
           </CardContent>
         </Card>
         <div className="flex flex-col gap-6 lg:flex-row">
-          <Card className="shrink-0 lg:w-[220px]">
+          <Card className="shrink-0 lg:w-[220px]" data-voorkeuren-chip-panel>
             <CardHeader>
               <CardTitle className="text-base">Voorkeur kiezen</CardTitle>
             </CardHeader>
@@ -501,14 +537,18 @@ export default function VoorkeurenPage() {
               {loading && !type1Response && waarneemgroepIds.length > 0 && (
                 <p className="mb-4 text-muted-foreground">Voorkeuren laden…</p>
               )}
-              {selectedChipCode && (
+              {/* {selectedChipCode && (
                 <p className="mb-4 text-sm text-muted-foreground">
                   Geselecteerd: klik op een dienst in de kalender om deze voorkeur toe te wijzen.
                 </p>
-              )}
+              )} */}
               {waarneemgroepIds.length > 0 && (
                 <div
                   ref={calendarGridRef}
+                  data-voorkeuren-calendar
+                  onPointerDownCapture={() => {
+                    pointerDownStartedInCalendarRef.current = true;
+                  }}
                   className={selectedChipCode ? 'select-none' : undefined}
                 >
                   <CalendarGridWithNavState
@@ -533,9 +573,15 @@ export default function VoorkeurenPage() {
                     getChipByCode={getChipByCode}
                     showPreferences={false}
                     hidePreferenceFillInitialsOnShiftBlocks
+                    hideOwnerNameInTooltip
+                    hideUnassignedAantekening
                     enablePreferencePaintAssign={Boolean(selectedChipCode)}
                     onPreferencePaintSessionStart={onPreferencePaintSessionStart}
                     onPreferencePaintSessionEnd={onPreferencePaintSessionEnd}
+                    disableEndedShiftBlocks
+                    // A past shift is inert; without this the click did nothing and the doctor
+                    // could not tell why the preference was not taken.
+                    onEndedShiftClick={showShiftEndedToast}
                     vakanties={calendarVakanties}
                   />
                 </div>

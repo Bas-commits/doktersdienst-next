@@ -3,6 +3,12 @@ import { and, eq, gt, gte, lt, lte } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { logger } from '@/lib/logger';
+import { hasShiftStarted, OVERNAME_IN_VERLEDEN_MESSAGE } from '@/lib/shift-window';
+import { buildLegacyOvernameRowConditions, overnameSectieCondition } from '@/lib/overname-legacy-lookup';
+import {
+  assignmentTypeForSectie,
+  parseOvernameSectie,
+} from '@/lib/overname-sectie';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
 
@@ -17,6 +23,79 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
   return h;
 }
 
+type DienstRow = {
+  id: number | null;
+  type: number | null;
+  van: number | null;
+  tot: number | null;
+  iddeelnemer: number | null;
+  idwaarneemgroep: number | null;
+};
+
+const dienstSelect = {
+  id: dienstenTable.id,
+  type: dienstenTable.type,
+  van: dienstenTable.van,
+  tot: dienstenTable.tot,
+  iddeelnemer: dienstenTable.iddeelnemer,
+  idwaarneemgroep: dienstenTable.idwaarneemgroep,
+};
+
+async function findType1SlotRows(
+  idwaarneemgroep: number,
+  rangeVan: number,
+  rangeTot: number,
+  exact: boolean,
+): Promise<DienstRow[]> {
+  if (exact) {
+    return db
+      .select(dienstSelect)
+      .from(dienstenTable)
+      .where(
+        and(
+          eq(dienstenTable.type, 1),
+          eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+          eq(dienstenTable.van, rangeVan),
+          eq(dienstenTable.tot, rangeTot),
+        ),
+      )
+      .limit(1);
+  }
+
+  return db
+    .select(dienstSelect)
+    .from(dienstenTable)
+    .where(
+      and(
+        eq(dienstenTable.type, 1),
+        eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+        lt(dienstenTable.van, rangeTot),
+        gt(dienstenTable.tot, rangeVan),
+      ),
+    )
+    .limit(20);
+}
+
+function pickPositiveId(rows: Array<{ id: number | null }>): number | null {
+  const match = rows.find(row => row.id != null && row.id > 0);
+  return match?.id ?? null;
+}
+
+async function resolveType1SlotId(
+  idwaarneemgroep: number,
+  rangeVan: number,
+  rangeTot: number,
+): Promise<number | null> {
+  const exactRows = await findType1SlotRows(idwaarneemgroep, rangeVan, rangeTot, true);
+  const exactId = pickPositiveId(exactRows);
+  if (exactId != null) {
+    return exactId;
+  }
+
+  const overlapRows = await findType1SlotRows(idwaarneemgroep, rangeVan, rangeTot, false);
+  return pickPositiveId(overlapRows);
+}
+
 /**
  * POST /api/overnames/propose
  *
@@ -28,6 +107,8 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
  *   van              number  — Start time (Unix seconds)
  *   tot              number  — End time (Unix seconds)
  *   idwaarneemgroep  number  — Waarneemgroep ID
+ *   sectie           string  — Optional: 'top' (achterwacht) or 'bottom' (extra dokter).
+ *                              Absent/null = the middle dienst, as before.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -45,41 +126,71 @@ export default async function handler(
   }
 
   try {
-    const { iddienstovern, iddeelnovern, van, tot, idwaarneemgroep } = req.body;
+    const { iddienstovern, iddeelnovern, van, tot, idwaarneemgroep, sectie: rawSectie } = req.body;
 
-    if (!iddienstovern || !iddeelnovern || !van || !tot || !idwaarneemgroep) {
+    const parsedSectie = parseOvernameSectie(rawSectie);
+    if (!parsedSectie.ok) {
+      logger.warn({ msg: 'overname-propose:validation', reason: 'invalid-sectie', sectie: rawSectie });
+      return res.status(400).json({ error: 'Invalid sectie' });
+    }
+    const sectie = parsedSectie.sectie;
+    // The lane decides which assignment row is being taken over: type 0 (dienst), 5 (achterwacht)
+    // or 11 (extra dokter). Everything below that said "type 0" now means "this lane's type".
+    const assignmentType = assignmentTypeForSectie(sectie);
+
+    const numVan = Number(van);
+    const numTot = Number(tot);
+    const numIdWaarneemgroep = Number(idwaarneemgroep);
+    const numIdDienstOvern = Number(iddienstovern) || 0;
+    const numIdDeelnOvern = Number(iddeelnovern);
+
+    if (!numIdDeelnOvern || !numVan || !numTot || !numIdWaarneemgroep) {
       logger.warn({
         msg: 'overname-propose:validation',
         reason: 'missing-required-fields',
         has: {
-          iddienstovern: !!iddienstovern,
-          iddeelnovern: !!iddeelnovern,
-          van: van != null,
-          tot: tot != null,
-          idwaarneemgroep: !!idwaarneemgroep,
+          iddienstovern: numIdDienstOvern > 0,
+          iddeelnovern: !!numIdDeelnOvern,
+          van: !!numVan,
+          tot: !!numTot,
+          idwaarneemgroep: !!numIdWaarneemgroep,
         },
       });
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    if (van >= tot) {
+    if (numVan >= numTot) {
       logger.warn({
         msg: 'overname-propose:validation',
         reason: 'invalid-time-range',
-        van,
-        tot,
-        iddienstovern,
+        van: numVan,
+        tot: numTot,
+        iddienstovern: numIdDienstOvern,
       });
       return res.status(400).json({ error: 'Invalid time range' });
     }
 
+    // Only /overnames refused this, in the browser; the mobile app has no such check, so a past
+    // overname from the app was accepted. The rule belongs here, and the message is written for the
+    // doctor because the app shows it as is.
+    if (hasShiftStarted(numVan)) {
+      logger.warn({
+        msg: 'overname-propose:validation',
+        reason: 'shift-started',
+        van: numVan,
+        iddienstovern: numIdDienstOvern,
+      });
+      return res.status(400).json({ error: OVERNAME_IN_VERLEDEN_MESSAGE });
+    }
+
     logger.info({
       msg: 'overname-propose:request',
-      iddienstovern,
-      iddeelnovern,
-      van,
-      tot,
-      idwaarneemgroep,
+      iddienstovern: numIdDienstOvern,
+      iddeelnovern: numIdDeelnOvern,
+      van: numVan,
+      tot: numTot,
+      idwaarneemgroep: numIdWaarneemgroep,
+      sectie,
     });
 
     // Get the proposing doctor's deelnemer ID from session
@@ -93,7 +204,7 @@ export default async function handler(
       logger.warn({
         msg: 'overname-propose:validation',
         reason: 'proposing-doctor-not-found',
-        iddienstovern,
+        iddienstovern: numIdDienstOvern,
         authUserId: session.user.id,
       });
       return res.status(400).json({ error: 'Proposing doctor not found' });
@@ -101,31 +212,75 @@ export default async function handler(
 
     const senderId = proposingDoctor[0].id;
 
-    // Verify original dienst exists and is type=0 (assigned shift)
-    const originalDienst = await db
-      .select({
-        id: dienstenTable.id,
-        type: dienstenTable.type,
-        van: dienstenTable.van,
-        tot: dienstenTable.tot,
-        iddeelnemer: dienstenTable.iddeelnemer,
-        idwaarneemgroep: dienstenTable.idwaarneemgroep,
-      })
-      .from(dienstenTable)
-      .where(eq(dienstenTable.id, iddienstovern))
-      .limit(1);
+    let originalDienstRows: DienstRow[] = [];
 
-    if (!originalDienst.length) {
+    if (numIdDienstOvern > 0) {
+      originalDienstRows = await db
+        .select(dienstSelect)
+        .from(dienstenTable)
+        .where(eq(dienstenTable.id, numIdDienstOvern))
+        .limit(1);
+    }
+
+    if (!originalDienstRows.length) {
+      originalDienstRows = await findType1SlotRows(
+        numIdWaarneemgroep,
+        numVan,
+        numTot,
+        true,
+      );
+    }
+
+    if (!originalDienstRows.length) {
+      originalDienstRows = await findType1SlotRows(
+        numIdWaarneemgroep,
+        numVan,
+        numTot,
+        false,
+      );
+    }
+
+    if (!originalDienstRows.length) {
+      const overlapCandidates = await db
+        .select(dienstSelect)
+        .from(dienstenTable)
+        .where(
+          and(
+            eq(dienstenTable.type, assignmentType),
+            eq(dienstenTable.idwaarneemgroep, numIdWaarneemgroep),
+            lt(dienstenTable.van, numTot),
+            gt(dienstenTable.tot, numVan),
+          ),
+        )
+        .limit(20);
+
+      const mappedAssigned = overlapCandidates
+        .slice()
+        .sort((a, b) => {
+          const aSpan = Number(a.tot ?? 0) - Number(a.van ?? 0);
+          const bSpan = Number(b.tot ?? 0) - Number(b.van ?? 0);
+          return aSpan - bSpan;
+        })[0];
+
+      if (mappedAssigned) {
+        originalDienstRows = [mappedAssigned];
+      }
+    }
+
+    if (!originalDienstRows.length) {
       logger.warn({
         msg: 'overname-propose:not-found',
         reason: 'dienst-missing',
-        iddienstovern,
+        iddienstovern: numIdDienstOvern,
+        van: numVan,
+        tot: numTot,
+        idwaarneemgroep: numIdWaarneemgroep,
         senderId,
       });
       return res.status(404).json({ error: 'Dienst not found' });
     }
 
-    const original = originalDienst[0];
+    const original = originalDienstRows[0];
     logger.info({
       msg: 'overname-propose:original-dienst',
       id: original.id,
@@ -140,13 +295,13 @@ export default async function handler(
     // For type=1 slots, we keep the slot id since legacy type=0 rows often have NULL id.
     let resolvedOriginalId = original.id;
     let assignedDeelnemerId = original.iddeelnemer;
-    let foundAssignment = original.type === 0;
+    let foundAssignment = original.type === assignmentType;
     let assignmentVan = Number(original.van ?? 0);
     let assignmentTot = Number(original.tot ?? 0);
 
     if (original.type === 1) {
-      // Find type=0 assignment that overlaps this slot's time range.
-      // Legacy PHP creates type=0 rows with NULL id, so we cannot filter on id.
+      // Find this lane's assignment (type 0/5/11) that overlaps the slot's time range.
+      // Legacy PHP creates assignment rows with NULL id, so we cannot filter on id.
       const mappedAssignedCandidates = await db
         .select({
           id: dienstenTable.id,
@@ -159,11 +314,11 @@ export default async function handler(
         .from(dienstenTable)
         .where(
           and(
-            eq(dienstenTable.type, 0),
+            eq(dienstenTable.type, assignmentType),
             eq(dienstenTable.idwaarneemgroep, original.idwaarneemgroep ?? 0),
-            lt(dienstenTable.van, tot),
-            gt(dienstenTable.tot, van)
-          )
+            lt(dienstenTable.van, numTot),
+            gt(dienstenTable.tot, numVan),
+          ),
         )
         .limit(20);
 
@@ -206,28 +361,33 @@ export default async function handler(
     if (!foundAssignment) {
       logger.warn({
         msg: 'overname-propose:validation',
-        reason: 'no-type0-assignment',
+        reason: 'no-assignment-for-sectie',
         originalType: original.type,
-        iddienstovern,
+        assignmentType,
+        sectie,
+        iddienstovern: numIdDienstOvern,
         senderId,
       });
-      return res.status(400).json({ error: 'Only assigned shifts (type=0) can be taken over' });
+      return res.status(400).json({
+        error:
+          sectie === null
+            ? 'Only assigned shifts (type=0) can be taken over'
+            : `No ${sectie === 'top' ? 'achterwacht (type=5)' : 'extra dokter (type=11)'} assigned on this shift`,
+      });
     }
 
-    if (!resolvedOriginalId || resolvedOriginalId <= 0) {
-      logger.warn({
-        msg: 'overname-propose:validation',
-        reason: 'unresolved-dienst-ref',
-        originalType: original.type,
-        iddienstovern,
-        senderId,
-      });
-      return res.status(400).json({ error: 'Could not resolve dienst reference' });
+    if ((!resolvedOriginalId || resolvedOriginalId <= 0) && foundAssignment) {
+      const slotId = await resolveType1SlotId(
+        original.idwaarneemgroep ?? numIdWaarneemgroep,
+        assignmentVan,
+        assignmentTot,
+      );
+      if (slotId != null) {
+        resolvedOriginalId = slotId;
+      }
     }
 
     // Clamp van/tot to the resolved type=0 bounds (the type=1 slot may have wider times)
-    const numVan = Number(van);
-    const numTot = Number(tot);
     const clampedVan = Math.max(numVan, assignmentVan);
     const clampedTot = Math.min(numTot, assignmentTot);
     if (clampedVan >= clampedTot) {
@@ -244,6 +404,19 @@ export default async function handler(
         senderId,
       });
       return res.status(400).json({ error: 'Invalid time range' });
+    }
+
+    if (!resolvedOriginalId || resolvedOriginalId <= 0) {
+      // Legacy PHP rows may have NULL ids on both type=1 slots and type=0 assignments.
+      resolvedOriginalId = 0;
+      logger.info({
+        msg: 'overname-propose:legacy-null-id-fallback',
+        assignmentVan,
+        assignmentTot,
+        assignedDeelnemerId,
+        idwaarneemgroep: numIdWaarneemgroep,
+        senderId,
+      });
     }
 
     logger.info({
@@ -264,8 +437,8 @@ export default async function handler(
       .from(waarneemgroepdeelnemers)
       .where(
         and(
-          eq(waarneemgroepdeelnemers.idwaarneemgroep, idwaarneemgroep),
-          eq(waarneemgroepdeelnemers.iddeelnemer, iddeelnovern)
+          eq(waarneemgroepdeelnemers.idwaarneemgroep, numIdWaarneemgroep),
+          eq(waarneemgroepdeelnemers.iddeelnemer, numIdDeelnOvern),
         )
       )
       .limit(1);
@@ -282,15 +455,32 @@ export default async function handler(
     }
 
     // Check no existing pending proposal for the same original dienst
+    const legacyProposalConditions = [
+      eq(dienstenTable.type, 4),
+      eq(dienstenTable.status, 'pending'),
+      buildLegacyOvernameRowConditions({
+        idwaarneemgroep: numIdWaarneemgroep,
+        van: clampedVan,
+        tot: clampedTot,
+        iddeelnemer: assignedDeelnemerId,
+        overnameSectie: sectie,
+      }),
+    ];
+
     const existingProposal = await db
       .select({ iddienstovern: dienstenTable.iddienstovern })
       .from(dienstenTable)
       .where(
-        and(
-          eq(dienstenTable.type, 4),
-          eq(dienstenTable.status, 'pending'),
-          eq(dienstenTable.iddienstovern, resolvedOriginalId)
-        )
+        resolvedOriginalId > 0
+          ? and(
+              eq(dienstenTable.type, 4),
+              eq(dienstenTable.status, 'pending'),
+              eq(dienstenTable.iddienstovern, resolvedOriginalId),
+              // iddienstovern is often the shared type-1 slot, so without the lane a dienst
+              // proposal would block an achterwacht proposal on the same slot and vice versa.
+              overnameSectieCondition(sectie),
+            )
+          : and(...legacyProposalConditions),
       )
       .limit(1);
 
@@ -312,13 +502,14 @@ export default async function handler(
       .values({
         type: 4,
         status: 'pending',
-        iddeelnovern,
+        iddeelnovern: numIdDeelnOvern,
         iddienstovern: resolvedOriginalId,
         iddeelnemer: assignedDeelnemerId,
         senderId,
         van: clampedVan,
         tot: clampedTot,
-        idwaarneemgroep,
+        idwaarneemgroep: numIdWaarneemgroep,
+        overnameSectie: sectie,
         idpraktijk: 0,
         rol: 0,
         iddienstherhalen: 0,
@@ -336,13 +527,14 @@ export default async function handler(
     logger.info({
       msg: 'overname-propose:created',
       resolvedOriginalId,
-      iddienstovernRequested: iddienstovern,
+      iddienstovernRequested: numIdDienstOvern,
       senderId,
-      iddeelnovern,
+      iddeelnovern: numIdDeelnOvern,
       clampedVan,
       clampedTot,
-      idwaarneemgroep,
+      idwaarneemgroep: numIdWaarneemgroep,
       assignedDeelnemerId,
+      sectie,
     });
 
     return res.status(201).json({ success: true });

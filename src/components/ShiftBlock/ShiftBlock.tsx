@@ -9,6 +9,11 @@ import { BsFillQuestionSquareFill } from "react-icons/bs";
 import { TbSwitch3 } from 'react-icons/tb';
 import type { ShiftBlockView } from '@/types/diensten';
 import { getContrastTextColor } from '@/utils/contrastTextColor';
+import { hasShiftEnded } from '@/lib/shift-window';
+import { VANDAAG_GROEN } from '@/lib/calendar-colors';
+
+/** Pixels of the green frame around the shift that is running right now. */
+const ACTIVE_FRAME_WIDTH = 3;
 
 /** Returns whether the given date lies within the shift's start and end (inclusive). Exported for testing. */
 export function isShiftActiveAt(block: ShiftBlockView, when: Date): boolean {
@@ -129,6 +134,11 @@ export interface ShiftBlockProps {
    */
   middleHeight?: number;
   /**
+   * Height in px of the achterwacht (top) and extra-dokter (bottom) strips. Default 12. The
+   * overnames page makes them taller so an overname on a strip has room for its icon.
+   */
+  stripHeight?: number;
+  /**
    * When true, suppresses the red active-shift border even when the shift is currently active.
    * Use for voorkeur blocks where the time range is a preference period, not a live shift.
    */
@@ -146,6 +156,34 @@ export interface ShiftBlockProps {
    */
   onMiddlePointerDown?: PointerEventHandler<HTMLDivElement>;
   onMiddlePointerEnter?: PointerEventHandler<HTMLDivElement>;
+  /**
+   * When true, the hover tooltip center line never shows the doctor's full name.
+   * It uses only the shift label (if present). Intended for /voorkeuren where shifts
+   * always belong to the logged-in user.
+   */
+  hideOwnerNameInTooltip?: boolean;
+  /**
+   * When true, aantekening text is hidden for unassigned blocks (type=1 slots):
+   * - middle strip fallback text
+   * - native title
+   * - hover tooltip
+   */
+  hideUnassignedAantekening?: boolean;
+  /**
+   * When true, a block whose end moment has passed renders dimmed and inert: every
+   * strip drops its click and paint handlers and shows a not-allowed cursor. The block
+   * stays on screen so past preferences remain readable.
+   *
+   * Evaluated against the same clock that drives the active-shift border, so a block
+   * turns inert within a minute of its shift ending without a page reload.
+   */
+  disableWhenEnded?: boolean;
+  /**
+   * Called when a block made inert by `disableWhenEnded` is clicked. The block used to swallow the
+   * click in silence, so a doctor clicking a past shift on /voorkeuren saw nothing happen and could
+   * not tell why; this lets the page say it.
+   */
+  onEndedClick?: () => void;
 }
 
 export function ShiftBlock({
@@ -173,58 +211,38 @@ export function ShiftBlock({
   preferenceChip,
   hideInitialsInPreferenceFill = false,
   middleHeight,
+  stripHeight = 12,
   disableActiveHighlight,
   overnameType,
   onMiddlePointerDown,
   onMiddlePointerEnter,
+  hideOwnerNameInTooltip = false,
+  hideUnassignedAantekening = false,
+  disableWhenEnded = false,
+  onEndedClick,
 }: ShiftBlockProps) {
   const [now, setNow] = useState(() => new Date());
   const [isHovered, setIsHovered] = useState(false);
-  const [shiftTooltipOpen, setShiftTooltipOpen] = useState(false);
+  /**
+   * Which lane the pointer is on. The achterwacht (top) and extra-dokter (bottom) strips get the
+   * same name + time tooltip as the main block, with their role on top, anchored to their own strip.
+   */
+  const [shiftTooltipSection, setShiftTooltipSection] = useState<'top' | 'middle' | 'bottom' | null>(null);
   const [shiftTooltipCoords, setShiftTooltipCoords] = useState<{ left: number; top: number } | null>(
     null,
   );
   /** True while pointer is on the overname/voorstel badge or its hover panel (hides the shift tooltip to avoid overlap). */
   const [overnameHoverDetailOpen, setOvernameHoverDetailOpen] = useState(false);
+  const [overnamePopoverCoords, setOvernamePopoverCoords] = useState<{
+    left: number;
+    top: number;
+    placement: 'above' | 'below';
+  } | null>(null);
   const shiftTooltipAnchorRef = useRef<HTMLDivElement>(null);
-  const showShiftTooltipPortal = shiftTooltipOpen && !overnameHoverDetailOpen;
-
-  useLayoutEffect(() => {
-    if (!showShiftTooltipPortal) return;
-    const el = shiftTooltipAnchorRef.current;
-    if (!el) return;
-    const update = () => {
-      const r = el.getBoundingClientRect();
-      setShiftTooltipCoords({ left: r.left + r.width / 2, top: r.bottom + 4 });
-    };
-    update();
-    window.addEventListener('scroll', update, true);
-    window.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('scroll', update, true);
-      window.removeEventListener('resize', update);
-    };
-  }, [showShiftTooltipPortal]);
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(id);
-  }, []);
-  const isActive = useMemo(
-    () => !disableActiveHighlight && isShiftActiveAt(block, now),
-    [block, now, disableActiveHighlight],
-  );
-
-  const doctorId = block.middle?.id ?? 0;
-  const achterw = block.top?.id ?? 0;
-  const extra = block.bottom?.id ?? 0;
-
-  const startDate = new Date(block.currentDate);
-  const endDate = new Date(block.nextDate);
-  const startIsWeekend = startDate.getDay() === 0 || startDate.getDay() === 6;
-  const endIsWeekend = endDate.getDay() === 0 || endDate.getDay() === 6;
-  const cellDate = new Date(year, month, day);
-  const isMonday = cellDate.getDay() === 1;
+  const topStripRef = useRef<HTMLDivElement>(null);
+  const bottomStripRef = useRef<HTMLDivElement>(null);
+  const overnameBadgeRef = useRef<HTMLSpanElement>(null);
+  const showShiftTooltipPortal = shiftTooltipSection != null && !overnameHoverDetailOpen;
 
   const totalMinutesInDay = 24 * 60;
   const parseTimeToMinutes = (time: string): number => {
@@ -248,6 +266,133 @@ export function ShiftBlock({
   const durationMinutes = sameDay
     ? endMinutes - startMinutes
     : (totalMinutesInDay - startMinutes) + endMinutes;
+
+  // Overnight / multi-day segments: show doctor initials once, at the full-shift midpoint.
+  // tooltipAnchorRatio may fall outside [0,1] so the hover popover can sit over the true center
+  // even when hovering a non-midpoint day segment.
+  let showSpanLabels = true;
+  let labelOffsetPercent: number | null = null;
+  let tooltipAnchorRatio = 0.5;
+  if (useSegment) {
+    const shiftStartMs = new Date(String(block.currentDate).replace(' ', 'T')).getTime();
+    const shiftEndMs = new Date(String(block.nextDate).replace(' ', 'T')).getTime();
+    if (!Number.isNaN(shiftStartMs) && !Number.isNaN(shiftEndMs) && shiftEndMs > shiftStartMs) {
+      const midpointMs = shiftStartMs + (shiftEndMs - shiftStartMs) / 2;
+      const dayStartMs = new Date(year, month, day, 0, 0, 0, 0).getTime();
+      const segmentStartMs = dayStartMs + startMinutes * 60_000;
+      const segmentEndMs = dayStartMs + endMinutes * 60_000;
+      const segmentDurationMs = segmentEndMs - segmentStartMs;
+      if (segmentDurationMs > 0) {
+        tooltipAnchorRatio = (midpointMs - segmentStartMs) / segmentDurationMs;
+      }
+      showSpanLabels = midpointMs >= segmentStartMs && midpointMs < segmentEndMs;
+      if (showSpanLabels) {
+        const raw = tooltipAnchorRatio * 100;
+        labelOffsetPercent = Math.min(92, Math.max(8, raw));
+      }
+    }
+  }
+  const spanLabelPositionStyle: CSSProperties =
+    labelOffsetPercent != null
+      ? {
+          position: 'absolute',
+          left: `${labelOffsetPercent}%`,
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          maxWidth: '100%',
+          zIndex: 2,
+          pointerEvents: 'none',
+        }
+      : {
+          position: 'relative',
+          zIndex: 2,
+          pointerEvents: 'none',
+        };
+
+  useLayoutEffect(() => {
+    if (!showShiftTooltipPortal) return;
+    const el =
+      shiftTooltipSection === 'top'
+        ? topStripRef.current
+        : shiftTooltipSection === 'bottom'
+          ? bottomStripRef.current
+          : shiftTooltipAnchorRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setShiftTooltipCoords({
+        left: r.left + r.width * tooltipAnchorRatio,
+        top: r.bottom + 4,
+      });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [showShiftTooltipPortal, shiftTooltipSection, tooltipAnchorRatio]);
+
+  // Portal overname detail above calendar clipping ancestors (same pattern as shift tooltip).
+  // Flip above the badge when there isn't enough viewport space below.
+  useLayoutEffect(() => {
+    if (!overnameHoverDetailOpen) {
+      setOvernamePopoverCoords(null);
+      return;
+    }
+    const el = overnameBadgeRef.current;
+    if (!el) return;
+    const GAP = 8;
+    // Approximate popover height (w-260 content + padding); used to decide flip before measure.
+    const ESTIMATED_HEIGHT = 190;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - r.bottom - GAP;
+      const placement: 'above' | 'below' =
+        spaceBelow < ESTIMATED_HEIGHT && r.top > spaceBelow ? 'above' : 'below';
+      setOvernamePopoverCoords({
+        left: r.right,
+        top: placement === 'above' ? r.top - GAP : r.bottom + GAP,
+        placement,
+      });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [overnameHoverDetailOpen]);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const isActive = useMemo(
+    () => !disableActiveHighlight && isShiftActiveAt(block, now),
+    [block, now, disableActiveHighlight],
+  );
+  const isEnded = useMemo(
+    () => disableWhenEnded && hasShiftEnded(block.tot, now.getTime()),
+    [disableWhenEnded, block.tot, now],
+  );
+
+  const primaryDoctorForBlock =
+    overnameType === 'voorstelOvername' || overnameType === 'vraagtekenOvername'
+      ? (block.originalDoctor ?? block.middle)
+      : block.middle;
+  const doctorId = primaryDoctorForBlock?.id ?? 0;
+  const achterw = block.top?.id ?? 0;
+  const extra = block.bottom?.id ?? 0;
+
+  const startDate = new Date(block.currentDate);
+  const endDate = new Date(block.nextDate);
+  const startIsWeekend = startDate.getDay() === 0 || startDate.getDay() === 6;
+  const endIsWeekend = endDate.getDay() === 0 || endDate.getDay() === 6;
+  const cellDate = new Date(year, month, day);
+  const isMonday = cellDate.getDay() === 1;
 
   const usePixelLayout =
     containerWidth != null && Number.isFinite(containerWidth) && containerWidth > 0;
@@ -300,7 +445,7 @@ export function ShiftBlock({
 
   const achterwDoc = block.top ?? null;
   const extraDoc = block.bottom ?? null;
-  const mainDoc = block.middle ?? null;
+  const mainDoc = primaryDoctorForBlock ?? null;
   const displayShortName =
     (mainDoc?.shortName ?? '').trim() ||
     (mainDoc?.name ?? '').slice(0, 3).toUpperCase() ||
@@ -308,10 +453,19 @@ export function ShiftBlock({
   const displayName = (mainDoc?.name ?? '').trim() || (doctorId ? `Doctor ${doctorId}` : '');
 
   const mainColor = mainDoc?.color ?? (doctorId ? '#c686fd' : 'transparent');
-  const isUnassignedSlot = !block.middle;
+  /**
+   * Set on an overname block for the achterwacht ('top') or extra dokter ('bottom'). Such a block
+   * draws the overname on that strip; its middle stays empty. Null for a dienst overname and for
+   * every ordinary block.
+   */
+  const laneOvername: 'top' | 'bottom' | null = overnameType ? (block.overnameSectie ?? null) : null;
+  const stripSizeStyle: CSSProperties = { height: stripHeight, lineHeight: `${stripHeight}px` };
+  const isUnassignedSlot = !mainDoc;
   const showPendingDoctor = isUnassignedSlot && pendingDoctor != null;
 
-  const aantekeningLabel = (block.aantekeningTekst ?? '').trim();
+  const rawAantekeningLabel = (block.aantekeningTekst ?? '').trim();
+  const showAantekening = !(hideUnassignedAantekening && isUnassignedSlot);
+  const aantekeningLabel = showAantekening ? rawAantekeningLabel : '';
   const aantekeningTextClass =
     doctorId || showPendingDoctor ? '' : 'text-[#4b5563]';
 
@@ -321,7 +475,7 @@ export function ShiftBlock({
       ...cssInline,
       backgroundColor: showPendingDoctor ? pendingDoctor!.color : 'transparent',
       border: showPendingDoctor ? undefined : '1px solid #dcdcdc',
-      minHeight: 42,
+      minHeight: middleHeight ?? 42,
     };
   } else {
     cssInline = { ...cssInline, backgroundColor: mainColor };
@@ -364,15 +518,20 @@ export function ShiftBlock({
 
   // When onSectionClick is set, each stripe is clickable by its show prop; otherwise use activeSection + onClick.
   const useSectionClick = onSectionClick != null;
-  const topStripClickable = useSectionClick ? !!showEmptyTopStripBorder : activeSection === 'top';
+  // A filled strip is clickable in section mode even without the empty-strip outline: the overnames
+  // page turns the outline off (nobody to take over from on an empty strip) but still needs the click.
+  const topStripClickable = useSectionClick ? !!showEmptyTopStripBorder || achterw !== 0 : activeSection === 'top';
   const middleStripClickable = useSectionClick ? true : (activeSection === undefined || activeSection === 'middle');
-  const bottomStripClickable = useSectionClick ? !!showEmptyBottomStripBorder : activeSection === 'bottom';
-  const topHasClick = topStripClickable && (useSectionClick ? onSectionClick : onClick);
-  const middleUsesPointerPaint = !useSectionClick && onMiddlePointerDown != null;
+  const bottomStripClickable = useSectionClick ? !!showEmptyBottomStripBorder || extra !== 0 : activeSection === 'bottom';
+  // isEnded gates here rather than at each call site so no strip, and no paint-drag
+  // entry, can reach a handler on a shift that is already over.
+  const topHasClick = !isEnded && topStripClickable && (useSectionClick ? onSectionClick : onClick);
+  const middleUsesPointerPaint = !isEnded && !useSectionClick && onMiddlePointerDown != null;
   const middleHasClick =
+    !isEnded &&
     middleStripClickable &&
     (useSectionClick ? onSectionClick : onClick || onMiddlePointerDown);
-  const bottomHasClick = bottomStripClickable && (useSectionClick ? onSectionClick : onClick);
+  const bottomHasClick = !isEnded && bottomStripClickable && (useSectionClick ? onSectionClick : onClick);
 
   const topPending = achterw === 0 && pendingDoctorTop;
   const bottomPending = extra === 0 && pendingDoctorBottom;
@@ -440,7 +599,11 @@ export function ShiftBlock({
     return null;
   }, [bottomPending, pendingDoctorBottom, extraDoc]);
   const showPreferenceBadge = preferenceChip != null && !showPreferenceFill;
-  const overnameTypeLabel = block.isPartial ? 'Gedeeltelijke overname' : 'Volledige overname';
+  const overnameLaneNoun =
+    laneOvername === 'top' ? 'achterwacht' : laneOvername === 'bottom' ? 'extra dokter' : 'dienst';
+  const overnameTypeLabel = block.isPartial
+    ? `Overname gedeelte ${overnameLaneNoun}`
+    : `Overname volledige ${overnameLaneNoun}`;
   const overnameStatusLabel =
     overnameType === 'voorstelOvername' ? 'In afwachting' :
     overnameType === 'overname' ? 'Goedgekeurd' :
@@ -463,16 +626,223 @@ export function ShiftBlock({
   });
   const vanArts = block.originalDoctor;
   const naarArts = block.middle;
+  const tooltipMainLabel = hideOwnerNameInTooltip
+    ? (block.label ?? '')
+    : (doctorId ? displayName : block.label);
+  const tooltipAantekeningLabel = rawAantekeningLabel;
+  // On a lane overname block the strip shows the overname's doctor, not an assignment.
+  const effectiveTopDoc = laneOvername === 'top' ? mainDoc : achterwDoc;
+  const effectiveBottomDoc = laneOvername === 'bottom' ? mainDoc : extraDoc;
+  const stripTooltipDoc =
+    shiftTooltipSection === 'top'
+      ? effectiveTopDoc
+      : shiftTooltipSection === 'bottom'
+        ? effectiveBottomDoc
+        : null;
+  const laneOvernameStatus =
+    overnameType === 'voorstelOvername'
+      ? 'voorstel overname'
+      : overnameType === 'overname'
+        ? 'overgenomen'
+        : overnameType === 'vraagtekenOvername'
+          ? 'overname geweigerd'
+          : '';
+  const stripTooltipRole =
+    (shiftTooltipSection === 'top' ? 'Achterwacht' : 'Extra dokter') +
+    (laneOvername && laneOvernameStatus ? ` · ${laneOvernameStatus}` : '');
+  const tooltipColor = stripTooltipDoc ? (stripTooltipDoc.color ?? '#c686fd') : mainColor;
+  const closeShiftTooltip = () => {
+    setShiftTooltipSection(null);
+    setShiftTooltipCoords(null);
+  };
+
+  /** The overname icon, scaled to the space it gets (the middle block or a strip). */
+  const overnameIcon = (sizePx: number) => {
+    const style = { width: sizePx, height: sizePx };
+    if (overnameType === 'overname') return <TbSwitch3 className="text-white" style={style} />;
+    if (overnameType === 'voorstelOvername') {
+      return (
+        <img
+          src="request.svg"
+          alt="Voorstel overname"
+          style={{
+            ...style,
+            filter:
+              'invert(47%) sepia(97%) saturate(2098%) hue-rotate(2deg) brightness(106%) contrast(101%)',
+          }}
+        />
+      );
+    }
+    return <FaQuestion className="text-white" style={style} />;
+  };
+
+  /**
+   * An overname block keeps the layout of the block underneath but must not paint over (or catch
+   * the mouse on) the strips it is not about. Before, its empty strips drew a grey outline over the
+   * original achterwacht and extra-dokter colours.
+   */
+  const renderHiddenStrip = (section: 'top' | 'bottom') => (
+    <div
+      aria-hidden
+      className={section === 'top' ? 'mb-1.5' : 'mt-1.5'}
+      style={{ ...stripSizeStyle, visibility: 'hidden' }}
+    />
+  );
+
+  /** The strip of an achterwacht / extra-dokter overname: doctor colour, initials and the icon. */
+  const renderLaneOvernameStrip = (section: 'top' | 'bottom') => {
+    const clickable = !isEnded && (onSectionClick != null || onClick != null);
+    const badgeSize = Math.max(10, stripHeight - 2);
+    const badgeTestId =
+      overnameType === 'overname'
+        ? 'overname-badge'
+        : overnameType === 'voorstelOvername'
+          ? 'voorstel-overname-badge'
+          : 'vraagteken-overname-badge';
+    return (
+      <div
+        ref={section === 'top' ? topStripRef : bottomStripRef}
+        onMouseEnter={() => setShiftTooltipSection(section)}
+        onMouseLeave={closeShiftTooltip}
+        className={`relative ${stripRoundedClass} text-[10px] text-center font-bold tracking-[0.5px] ${section === 'top' ? 'mb-1.5' : 'mt-1.5'}`}
+        data-doctor={doctorId}
+        data-testid={section === 'top' ? 'shift-block-top' : 'shift-block-bottom'}
+        data-overname-sectie={section}
+        style={{
+          ...stripSizeStyle,
+          background: mainColor,
+          color: mainColor && mainColor !== 'transparent' ? getContrastTextColor(mainColor) : '#ffffff',
+          pointerEvents: 'auto',
+          cursor: isEnded ? 'not-allowed' : clickable ? 'pointer' : undefined,
+        }}
+        onClick={
+          clickable
+            ? (e) => (onSectionClick ? onSectionClick(section, e) : onClick!(e))
+            : undefined
+        }
+      >
+        {showSpanLabels ? (
+          <span style={spanLabelPositionStyle} className="whitespace-nowrap">
+            {displayShortName}
+          </span>
+        ) : null}
+        {/* Same rule as the middle block: the icon sits on the last segment of a multi-day shift. */}
+        {!continuesToNext && (
+          <span
+            ref={overnameType === 'vraagtekenOvername' ? undefined : overnameBadgeRef}
+            className={`absolute right-0.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded bg-black/40${overnameType === 'vraagtekenOvername' ? ' pointer-events-none' : ''}`}
+            style={{ width: badgeSize, height: badgeSize, zIndex: 3 }}
+            title={
+              overnameType === 'overname'
+                ? 'Overname'
+                : overnameType === 'voorstelOvername'
+                  ? 'Voorstel overname'
+                  : 'Overname geweigerd — geen arts toegewezen'
+            }
+            aria-hidden
+            data-testid={badgeTestId}
+            onMouseEnter={
+              overnameType === 'vraagtekenOvername' ? undefined : () => setOvernameHoverDetailOpen(true)
+            }
+            onMouseLeave={
+              overnameType === 'vraagtekenOvername' ? undefined : () => setOvernameHoverDetailOpen(false)
+            }
+          >
+            {overnameIcon(Math.max(8, badgeSize - 6))}
+          </span>
+        )}
+      </div>
+    );
+  };
+  const overnamePopoverTestId =
+    overnameType === 'voorstelOvername'
+      ? 'voorstel-overname-hover-popover'
+      : 'overname-hover-popover';
+  const overnameHoverPopover =
+    overnameHoverDetailOpen &&
+    overnamePopoverCoords &&
+    (overnameType === 'overname' || overnameType === 'voorstelOvername') &&
+    typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="pointer-events-none w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
+            data-testid={overnamePopoverTestId}
+            style={{
+              position: 'fixed',
+              left: overnamePopoverCoords.left,
+              top: overnamePopoverCoords.top,
+              transform:
+                overnamePopoverCoords.placement === 'above'
+                  ? 'translate(-100%, -100%)'
+                  : 'translateX(-100%)',
+              zIndex: 70,
+            }}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-sm font-bold">{overnameTypeLabel}</p>
+              {overnameStatusLabel && (
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${overnameStatusClass}`}>
+                  {overnameStatusLabel}
+                </span>
+              )}
+            </div>
+            <div className="mb-2 flex text-sm">
+              <p className="mb-0">Van: <br /> Tot:</p>
+              <p className="mb-0 ml-2">
+                {vanDateLabel} <strong>{block.startTime}</strong>
+                <br />
+                {totDateLabel} <strong>{block.endTime}</strong>
+              </p>
+            </div>
+            <div className="mb-2 flex items-center gap-2 text-sm">
+              <p className="font-bold">Van:</p>
+              <span
+                className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
+                style={{
+                  backgroundColor: vanArts?.color ?? '#7b2d8e',
+                  color: getContrastTextColor(vanArts?.color ?? '#7b2d8e'),
+                }}
+              >
+                {vanArts?.shortName ?? '??'}
+              </span>
+              <p className="font-medium leading-tight">{vanArts?.name ?? 'Onbekend'}</p>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <p className="font-bold">Naar:</p>
+              <span
+                className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
+                style={{
+                  backgroundColor: naarArts?.color ?? '#7b2d8e',
+                  color: getContrastTextColor(naarArts?.color ?? '#7b2d8e'),
+                }}
+              >
+                {naarArts?.shortName ?? '??'}
+              </span>
+              <p className="font-medium leading-tight">{naarArts?.name ?? 'Onbekend'}</p>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
 
   return (
     <div
       className="absolute"
       data-box-type="morning"
       data-active-shift={isActive ? 'true' : undefined}
+      data-shift-ended={isEnded ? 'true' : undefined}
+      onClick={isEnded && onEndedClick ? () => onEndedClick() : undefined}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
         top: '50%',
+        // An overname overlay is drawn as a second block on top of the original shift, with empty
+        // strips of its own. Without this its box swallowed the hover over the original's
+        // achterwacht and extra-dokter strips underneath, so their tooltip only worked on shifts
+        // without an overname. Only the overlay's middle block (re-enabled below) takes the mouse.
+        pointerEvents: overnameType ? 'none' : undefined,
+        // Dimmed rather than hidden: a past preference is still worth reading.
+        opacity: isEnded ? 0.45 : undefined,
         // Extend 1px on connecting sides to visually cover the 1px day-column divider border
         width: usePixelLayout
           ? `${widthPx + (continuesFromPrev ? 1 : 0) + (continuesToNext ? 1 : 0)}px`
@@ -485,9 +855,46 @@ export function ShiftBlock({
             ? `calc(${leftPercent}% - 1px)`
             : `${leftPercent}%`,
         transform: 'translateY(-50%)',
-        zIndex: isHovered ? 9999 : (continuesFromPrev || continuesToNext) ? 1 : undefined,
+        // Layering on the calendar lane:
+        // 1) normal / unlabeled overnight segments
+        // 2) hovered blocks
+        // 3) segments that carry the span initials (always above unlabeled overnight siblings)
+        // 4) overname blocks (+hover)
+        // while global modals live much higher in their own layer.
+        zIndex: overnameType
+          ? isHovered ? 40 : 30
+          : showSpanLabels && useSegment
+            ? isHovered ? 25 : 22
+            : isHovered
+              ? 20
+              : continuesFromPrev || continuesToNext
+                ? 1
+                : undefined,
       }}
     >
+      {isActive && (
+        // One frame around the whole shift, achterwacht and extra dokter included, in the green of
+        // today's day header. It used to be a red border on the middle block only. Open on the
+        // sides where an overnight shift continues into the neighbouring day cell.
+        <div
+          aria-hidden
+          data-testid="shift-block-active-frame"
+          className={`absolute pointer-events-none ${middleRoundedClass}`}
+          style={{
+            top: -ACTIVE_FRAME_WIDTH,
+            bottom: -ACTIVE_FRAME_WIDTH,
+            left: continuesFromPrev ? 0 : -ACTIVE_FRAME_WIDTH,
+            right: continuesToNext ? 0 : -ACTIVE_FRAME_WIDTH,
+            borderStyle: 'solid',
+            borderColor: VANDAAG_GROEN,
+            borderTopWidth: ACTIVE_FRAME_WIDTH,
+            borderBottomWidth: ACTIVE_FRAME_WIDTH,
+            borderLeftWidth: continuesFromPrev ? 0 : ACTIVE_FRAME_WIDTH,
+            borderRightWidth: continuesToNext ? 0 : ACTIVE_FRAME_WIDTH,
+            zIndex: 5,
+          }}
+        />
+      )}
       {onDelete && (
         <button
           type="button"
@@ -502,51 +909,63 @@ export function ShiftBlock({
           <Trash2 className="h-3 w-3" aria-hidden />
         </button>
       )}
-      {!hideTopStrip &&
+      {!hideTopStrip && overnameType ? (
+        laneOvername === 'top' ? renderLaneOvernameStrip('top') : renderHiddenStrip('top')
+      ) : !hideTopStrip &&
         (achterw === 0 ? (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
+            className={`relative ${stripRoundedClass} text-[10px] text-center font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor="111"
             data-testid="shift-block-top"
             style={{
+              ...stripSizeStyle,
               background: topPending ? pendingDoctorTop!.color : 'transparent',
               border: achterwDoc ? undefined : 'solid 1px #dcdcdc',
-              cursor: topHasClick ? 'pointer' : undefined,
+              cursor: isEnded ? 'not-allowed' : topHasClick ? 'pointer' : undefined,
               opacity: dimTop ? 0.35 : undefined,
               color: topStripTextColor ?? '#ffffff',
             }}
             onClick={topHasClick ? (e) => useSectionClick ? onSectionClick!('top', e) : onClick!(e) : undefined}
           >
-            {topPending ? (pendingDoctorTop!.shortName) : null}
+            {showSpanLabels && topPending ? (
+              <span style={spanLabelPositionStyle}>{pendingDoctorTop!.shortName}</span>
+            ) : null}
           </div>
         ) : (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
+            ref={topStripRef}
+            onMouseEnter={achterwDoc ? () => setShiftTooltipSection('top') : undefined}
+            onMouseLeave={achterwDoc ? closeShiftTooltip : undefined}
+            className={`relative ${stripRoundedClass} text-[10px] text-center font-bold tracking-[0.5px] mb-1.5${topStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={achterw}
             data-testid="shift-block-top"
             style={{
+              ...stripSizeStyle,
               background: achterwDoc?.color ?? 'transparent',
-              cursor: topHasClick ? 'pointer' : undefined,
+              cursor: isEnded ? 'not-allowed' : topHasClick ? 'pointer' : undefined,
               opacity: dimTop ? 0.35 : undefined,
               color: topStripTextColor ?? '#ffffff',
             }}
             onClick={topHasClick ? (e) => useSectionClick ? onSectionClick!('top', e) : onClick!(e) : undefined}
           >
-            {(achterwDoc?.shortName ?? '').trim() ||
-              (achterwDoc?.name ?? '').slice(0, 3).toUpperCase() ||
-              `#${achterw}`}
+            {showSpanLabels ? (
+              <span style={spanLabelPositionStyle} className="whitespace-nowrap">
+                {(achterwDoc?.shortName ?? '').trim() ||
+                  (achterwDoc?.name ?? '').slice(0, 3).toUpperCase() ||
+                  `#${achterw}`}
+              </span>
+            ) : null}
           </div>
         ))}
       <>
         <div
           ref={shiftTooltipAnchorRef}
-          onMouseEnter={() => setShiftTooltipOpen(true)}
-          onMouseLeave={() => {
-            setShiftTooltipOpen(false);
-            setShiftTooltipCoords(null);
-          }}
+          onMouseEnter={() => setShiftTooltipSection('middle')}
+          onMouseLeave={closeShiftTooltip}
           className={`@container flex mt-1 mb-1 items-center justify-between relative border border-[#a0a0a0] ${middleRoundedClass} ${doctorId ? 'active-day' : ''} ${showPreferenceFill ? 'justify-center' : ''}`}
           data-testid="shift-block-middle"
+          aria-disabled={isEnded || undefined}
+          data-shift-ended={isEnded ? 'true' : undefined}
           data-doctor={doctorId}
           data-current-date={block.currentDate}
           data-next-date={block.nextDate}
@@ -556,6 +975,10 @@ export function ShiftBlock({
           data-morning={doctorId}
           style={{
             height: middleHeight ?? 42,
+            ...(overnameType ? { pointerEvents: 'auto' as const } : {}),
+            // A lane overname lives on its strip. Its middle keeps its size so the strips line up
+            // with the original block underneath, but it draws nothing and takes no mouse.
+            ...(laneOvername ? { visibility: 'hidden' as const, pointerEvents: 'none' as const } : {}),
             ...cssInline,
             ...(showPreferenceFill
               ? {
@@ -568,16 +991,12 @@ export function ShiftBlock({
             // so we must restore 'none' afterwards for multi-day blocks to connect seamlessly.
             ...(continuesFromPrev ? { borderLeftStyle: 'none' as const } : {}),
             ...(continuesToNext ? { borderRightStyle: 'none' as const } : {}),
-            ...(middleHasClick ? { cursor: 'pointer' as const } : {}),
+            ...(isEnded
+              ? { cursor: 'not-allowed' as const }
+              : middleHasClick
+                ? { cursor: 'pointer' as const }
+                : {}),
             ...(dimMiddle ? { opacity: 0.35 } : {}),
-            ...(isActive ? {
-              borderColor: '#dc2626',
-              borderTopWidth: '3px',
-              borderBottomWidth: '3px',
-              borderLeftWidth: continuesFromPrev ? '0' : '3px',
-              borderRightWidth: continuesToNext ? '0' : '3px',
-              zIndex: 1,
-            } : {}),
           }}
           onClick={
             middleHasClick && !middleUsesPointerPaint
@@ -591,11 +1010,23 @@ export function ShiftBlock({
           }
         >
           {showPreferenceFill ? (() => {
+            // A shift crossing midnight is drawn as one segment per day. Draw the chip
+            // once, on the segment holding the shift's midpoint, exactly as the initials
+            // path below already does -- otherwise the icon appears on both days.
+            if (!showSpanLabels) return null;
             const { Icon } = preferenceFill!;
             const showInitialsWithPreferenceFill =
               !hideInitialsInPreferenceFill && Boolean(displayShortName);
+            // Position against the whole shift, never the day-segment. A shift crossing
+            // midnight draws as two touching blocks of one colour, so centring within the
+            // visible segment puts the chip off to one side of what the eye reads as a
+            // single block. spanLabelPositionStyle uses the shift's own midpoint, and falls
+            // back to plain centring when the block was never split.
             return (
-              <div className="flex flex-col items-center justify-center min-w-0 max-w-full gap-0.5">
+              <div
+                className="flex flex-col items-center justify-center min-w-0 max-w-full gap-0.5"
+                style={spanLabelPositionStyle}
+              >
                 {showInitialsWithPreferenceFill ? (
                   <span className="flex items-center">
                     <span
@@ -604,8 +1035,11 @@ export function ShiftBlock({
                     >
                       {displayShortName}
                     </span>
+                    {/* One icon, sized to the block: the 12px version only exists because
+                        a narrow block has to fit initials beside it. Container queries, not
+                        viewport ones, because the block width comes from the shift's duration. */}
                     <Icon
-                      className="h-3 w-3 shrink-0 pr-0.5"
+                      className="h-3 w-3 @[40px]:h-4 @[40px]:w-4 shrink-0 pr-0.5"
                       style={{ color: preferenceTextColor! }}
                       aria-hidden
                     />
@@ -613,14 +1047,6 @@ export function ShiftBlock({
                 ) : (
                   <Icon className="h-5 w-5 shrink-0" style={{ color: preferenceTextColor! }} aria-hidden />
                 )}
-                {aantekeningLabel ? (
-                  <span
-                    className="hidden @[36px]:inline text-[7px] font-semibold text-center leading-tight truncate max-w-full px-0.5"
-                    style={{ color: preferenceTextColor!, opacity: 0.95 }}
-                  >
-                    {aantekeningLabel}
-                  </span>
-                ) : null}
               </div>
             );
           })() : (
@@ -632,33 +1058,72 @@ export function ShiftBlock({
                   ...(middleStripTextColor ? { color: middleStripTextColor } : {}),
                 }}
               />
-              <div className="hidden @[36px]:flex flex-col items-center justify-center min-w-0 max-w-full gap-0 px-0.5">
-                {(() => {
-                  const primaryLabel = showPendingDoctor ? pendingDoctor!.shortName : displayShortName;
-                  return primaryLabel ? (
-                    <span
-                      className={`text-[10px] font-semibold tracking-[0.5px] wrap-break-word leading-[12px] text-center truncate max-w-full ${
-                        middleStripTextColor ? '' : 'text-[#a0a0a0]'
-                      }`}
-                      style={middleStripTextColor ? { color: middleStripTextColor } : undefined}
-                    >
-                      {primaryLabel}
-                    </span>
-                  ) : null;
-                })()}
-                {aantekeningLabel ? (
-                  <span
-                    className={`text-[8px] font-medium leading-tight text-center truncate max-w-full ${aantekeningTextClass}`}
-                    style={
-                      middleStripTextColor
-                        ? { color: middleStripTextColor, opacity: 0.9 }
-                        : undefined
-                    }
+              {showSpanLabels ? (() => {
+                const primaryLabel = showPendingDoctor ? pendingDoctor!.shortName : displayShortName;
+                // An approved partial takeover is drawn as an overlay sitting exactly on
+                // top of the original doctor's block, which centres its own initials in
+                // the same spot -- so the giver is in the DOM but never visible. This is
+                // the only place both names appear without hovering.
+                //
+                // Measured, not guessed: the longest initials in use render at 22px at
+                // 8px, and a "van " prefix costs another 14px, more than the name itself.
+                // So the prefix is dropped and the line carries the initials alone.
+                //
+                // The 24px gate is the container width at which those 22px still fit
+                // inside the 2px padding either side. It is deliberately low: the first
+                // attempt gated at 28px and missed the reported block, an 04:00 handover
+                // whose overlay is exactly 27px, by a single pixel. Below 24px even the
+                // shortest initials would render as an ellipsis, which is worse than
+                // leaving the line out.
+                const handoverLabel =
+                  overnameType === 'overname' && block.isPartial
+                    ? vanArts?.shortName?.trim() || null
+                    : null;
+                return (
+                  <div
+                    className="hidden @[1px]:flex flex-col items-center justify-center min-w-0 max-w-full gap-0 px-0.5"
+                    style={spanLabelPositionStyle}
                   >
-                    {aantekeningLabel}
-                  </span>
-                ) : null}
-              </div>
+                    {primaryLabel ? (
+                      <span
+                        className={`text-[10px] font-semibold tracking-[0.5px] wrap-break-word leading-[12px] text-center truncate max-w-full ${
+                          middleStripTextColor ? '' : 'text-[#a0a0a0]'
+                        }`}
+                        style={middleStripTextColor ? { color: middleStripTextColor } : undefined}
+                      >
+                        {primaryLabel}
+                      </span>
+                    ) : null}
+                    {handoverLabel && primaryLabel ? (
+                      <span
+                        className={`hidden @[24px]:inline text-[8px] font-medium leading-tight text-center truncate max-w-full ${
+                          middleStripTextColor ? '' : 'text-[#a0a0a0]'
+                        }`}
+                        style={
+                          middleStripTextColor
+                            ? { color: middleStripTextColor, opacity: 0.85 }
+                            : { opacity: 0.85 }
+                        }
+                        title={`Overgenomen van ${vanArts?.name ?? handoverLabel}`}
+                      >
+                        {handoverLabel}
+                      </span>
+                    ) : null}
+                    {!primaryLabel && aantekeningLabel ? (
+                      <span
+                        className={`text-[8px] font-medium leading-tight text-center truncate max-w-full ${aantekeningTextClass}`}
+                        style={
+                          middleStripTextColor
+                            ? { color: middleStripTextColor, opacity: 0.9 }
+                            : undefined
+                        }
+                      >
+                        {aantekeningLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })() : null}
               <span
                 className={`rotate-180 whitespace-nowrap text-sm font-mono ${middleStripTextColor ? '' : 'text-[#a0a0a0]'}`}
                 style={{
@@ -685,9 +1150,11 @@ export function ShiftBlock({
               )}
             </span>
           )}
-          {overnameType === 'overname' && (
+          {/* Multi-day segments: show overname badge only on the rightmost (last) segment. */}
+          {overnameType === 'overname' && !continuesToNext && (
             <span
-              className="group/overname absolute top-0.5 right-0.5 hidden @[36px]:flex h-5 w-5 items-center justify-center rounded bg-black/40"
+              ref={overnameBadgeRef}
+              className="absolute top-0.5 right-0.5 hidden @[36px]:flex h-5 w-5 items-center justify-center rounded bg-black/40"
               title="Overname"
               aria-hidden
               data-testid="overname-badge"
@@ -695,58 +1162,12 @@ export function ShiftBlock({
               onMouseLeave={() => setOvernameHoverDetailOpen(false)}
             >
               <TbSwitch3 className="h-3.5 w-3.5 text-white" />
-              <div
-                className="hidden group-hover/overname:block absolute top-full right-0 z-101 mt-2 w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
-                data-testid="overname-hover-popover"
-              >
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-sm font-bold">{overnameTypeLabel}</p>
-                  {overnameStatusLabel && (
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${overnameStatusClass}`}>
-                      {overnameStatusLabel}
-                    </span>
-                  )}
-                </div>
-                <div className="mb-2 flex text-sm">
-                  <p className="mb-0">Van: <br /> Tot:</p>
-                  <p className="mb-0 ml-2">
-                    {vanDateLabel} <strong>{block.startTime}</strong>
-                    <br />
-                    {totDateLabel} <strong>{block.endTime}</strong>
-                  </p>
-                </div>
-                <div className="mb-2 flex items-center gap-2 text-sm">
-                  <p className="font-bold">Van:</p>
-                  <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
-                    style={{
-                      backgroundColor: vanArts?.color ?? '#7b2d8e',
-                      color: getContrastTextColor(vanArts?.color ?? '#7b2d8e'),
-                    }}
-                  >
-                    {vanArts?.shortName ?? '??'}
-                  </span>
-                  <p className="font-medium leading-tight">{vanArts?.name ?? 'Onbekend'}</p>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <p className="font-bold">Naar:</p>
-                  <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
-                    style={{
-                      backgroundColor: naarArts?.color ?? '#7b2d8e',
-                      color: getContrastTextColor(naarArts?.color ?? '#7b2d8e'),
-                    }}
-                  >
-                    {naarArts?.shortName ?? '??'}
-                  </span>
-                  <p className="font-medium leading-tight">{naarArts?.name ?? 'Onbekend'}</p>
-                </div>
-              </div>
             </span>
           )}
-          {overnameType === 'voorstelOvername' && (
+          {overnameType === 'voorstelOvername' && !continuesToNext && (
             <span
-              className="group/voorstel-overname absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40"
+              ref={overnameBadgeRef}
+              className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40"
               title="Voorstel overname"
               aria-hidden
               data-testid="voorstel-overname-badge"
@@ -754,56 +1175,9 @@ export function ShiftBlock({
               onMouseLeave={() => setOvernameHoverDetailOpen(false)}
             >
               <img src="request.svg" alt="Voorstel overname" className="h-3.5 w-3.5" style={{ filter: 'invert(47%) sepia(97%) saturate(2098%) hue-rotate(2deg) brightness(106%) contrast(101%)' }} />
-              <div
-                className="hidden group-hover/voorstel-overname:block absolute top-full right-0 z-101 mt-2 w-[260px] rounded-lg border border-gray-300 bg-white p-3 text-[#333] shadow-lg"
-                data-testid="voorstel-overname-hover-popover"
-              >
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-sm font-bold">{overnameTypeLabel}</p>
-                  {overnameStatusLabel && (
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${overnameStatusClass}`}>
-                      {overnameStatusLabel}
-                    </span>
-                  )}
-                </div>
-                <div className="mb-2 flex text-sm">
-                  <p className="mb-0">Van: <br /> Tot:</p>
-                  <p className="mb-0 ml-2">
-                    {vanDateLabel} <strong>{block.startTime}</strong>
-                    <br />
-                    {totDateLabel} <strong>{block.endTime}</strong>
-                  </p>
-                </div>
-                <div className="mb-2 flex items-center gap-2 text-sm">
-                  <p className="font-bold">Van:</p>
-                  <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
-                    style={{
-                      backgroundColor: vanArts?.color ?? '#7b2d8e',
-                      color: getContrastTextColor(vanArts?.color ?? '#7b2d8e'),
-                    }}
-                  >
-                    {vanArts?.shortName ?? '??'}
-                  </span>
-                  <p className="font-medium leading-tight">{vanArts?.name ?? 'Onbekend'}</p>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <p className="font-bold">Naar:</p>
-                  <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold"
-                    style={{
-                      backgroundColor: naarArts?.color ?? '#7b2d8e',
-                      color: getContrastTextColor(naarArts?.color ?? '#7b2d8e'),
-                    }}
-                  >
-                    {naarArts?.shortName ?? '??'}
-                  </span>
-                  <p className="font-medium leading-tight">{naarArts?.name ?? 'Onbekend'}</p>
-                </div>
-              </div>
             </span>
           )}
-          {overnameType === 'vraagtekenOvername' && (
+          {overnameType === 'vraagtekenOvername' && !continuesToNext && (
             <span
               className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-black/40 pointer-events-none"
               title="Overname geweigerd — geen arts toegewezen"
@@ -814,36 +1188,67 @@ export function ShiftBlock({
             </span>
           )}
         </div>
+        {overnameHoverPopover}
         {showShiftTooltipPortal &&
           shiftTooltipCoords &&
           typeof document !== 'undefined' &&
           createPortal(
             <div
               data-shift-block-tooltip
-              className="relative flex min-w-[90px] w-max h-[45px] border-2 rounded-md list-none items-center pointer-events-none after:content-[''] after:absolute after:left-1/2 after:top-[-8px] after:-translate-x-1/2 after:rotate-45 after:w-3 after:h-3 after:border-t-2 after:border-l-2 after:[border-top-color:var(--afterBorder)] after:[border-left-color:var(--afterBorder)]"
+              className="relative flex min-w-[90px] w-max min-h-[45px] border-2 rounded-md list-none items-center pointer-events-none px-2 py-1 after:content-[''] after:absolute after:left-1/2 after:top-[-8px] after:-translate-x-1/2 after:rotate-45 after:w-3 after:h-3 after:border-t-2 after:border-l-2 after:[border-top-color:var(--afterBorder)] after:[border-left-color:var(--afterBorder)]"
               style={{
                 position: 'fixed',
                 left: shiftTooltipCoords.left,
                 top: shiftTooltipCoords.top,
                 transform: 'translate(-50%, 0)',
-                zIndex: 100000,
-                ['--afterBorder' as string]: mainColor,
-                borderColor: mainColor,
+                zIndex: 60,
+                ['--afterBorder' as string]: tooltipColor,
+                borderColor: tooltipColor,
               }}
             >
-              <div className="flex items-center justify-between w-full px-2">
+              <div className="flex items-center justify-between w-full gap-2">
                 <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>
                   {block.startTime}
                 </p>
+                {stripTooltipDoc ? (
+                  <p className="mb-0 font-bold leading-[17px] text-center" data-testid="shift-block-strip-tooltip">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                      {stripTooltipRole}
+                    </span>
+                    {stripTooltipDoc.name}
+                  </p>
+                ) : (
                 <p className="mb-0 font-bold leading-[17px] text-center">
-                  {doctorId ? displayName : block.label}
-                  {doctorId !== 0 && block.label ? (
+                  {tooltipMainLabel}
+                  {doctorId !== 0 && block.label && overnameType !== 'voorstelOvername' && overnameType !== 'overname' && overnameType !== 'vraagtekenOvername' ? (
                     <span className="block text-[10px]">{block.label}</span>
                   ) : null}
-                  {aantekeningLabel ? (
-                    <span className="block text-[10px] font-normal opacity-90">{aantekeningLabel}</span>
+                  {tooltipAantekeningLabel && overnameType !== 'voorstelOvername' && overnameType !== 'overname' && overnameType !== 'vraagtekenOvername' ? (
+                    <span className="block text-[10px] font-normal opacity-90">{tooltipAantekeningLabel}</span>
+                  ) : null}
+                  {overnameType === 'overname' ? (
+                    <>
+                      <span className="block text-[12px] font-normal opacity-90">
+                        van: {vanArts?.name ?? '??'}
+                      </span>
+                      <span className="block text-[12px] font-normal opacity-90">
+                        naar: {naarArts?.name ?? '??'}
+                      </span>
+                    </>
+                  ) : overnameType === 'voorstelOvername' ? (
+                    <>
+                      <span className="block text-[12px] font-normal opacity-90">
+                        van: {vanArts?.name ?? '??'}
+                      </span>
+                      <span className="block text-[15px] font-normal opacity-90">
+                        naar: {naarArts?.name ?? '??'} ?
+                      </span>
+                    </>
+                  ) : overnameType === 'vraagtekenOvername' ? (
+                    <span className="block text-[17px] font-normal opacity-90">naar: ?</span>
                   ) : null}
                 </p>
+                )}
                 <p className="font-bold m-0 rotate-180 whitespace-nowrap" style={{ writingMode: 'vertical-rl' }}>
                   {block.endTime}
                 </p>
@@ -852,39 +1257,52 @@ export function ShiftBlock({
             document.body,
           )}
       </>
-      {!hideBottomStrip &&
+      {!hideBottomStrip && overnameType ? (
+        laneOvername === 'bottom' ? renderLaneOvernameStrip('bottom') : renderHiddenStrip('bottom')
+      ) : !hideBottomStrip &&
         (extra === 0 ? (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
+            className={`relative ${stripRoundedClass} text-[10px] text-center font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor="111"
             data-testid="shift-block-bottom"
             style={{
+              ...stripSizeStyle,
               background: bottomPending ? pendingDoctorBottom!.color : 'transparent',
               border: extraDoc ? undefined : 'solid 1px #dcdcdc',
-              cursor: bottomHasClick ? 'pointer' : undefined,
+              cursor: isEnded ? 'not-allowed' : bottomHasClick ? 'pointer' : undefined,
               opacity: dimBottom ? 0.35 : undefined,
               color: bottomStripTextColor ?? '#ffffff',
             }}
             onClick={bottomHasClick ? (e) => useSectionClick ? onSectionClick!('bottom', e) : onClick!(e) : undefined}
           >
-            {bottomPending ? (pendingDoctorBottom!.shortName) : null}
+            {showSpanLabels && bottomPending ? (
+              <span style={spanLabelPositionStyle}>{pendingDoctorBottom!.shortName}</span>
+            ) : null}
           </div>
         ) : (
           <div
-            className={`h-3 ${stripRoundedClass} text-[10px] text-center leading-3 font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
+            ref={bottomStripRef}
+            onMouseEnter={extraDoc ? () => setShiftTooltipSection('bottom') : undefined}
+            onMouseLeave={extraDoc ? closeShiftTooltip : undefined}
+            className={`relative ${stripRoundedClass} text-[10px] text-center font-bold tracking-[0.5px] mt-1.5${bottomStripClickable ? ' cursor-pointer' : ''}`}
             data-doctor={extra}
             data-testid="shift-block-bottom"
             style={{
+              ...stripSizeStyle,
               background: extraDoc?.color ?? 'transparent',
-              cursor: bottomHasClick ? 'pointer' : undefined,
+              cursor: isEnded ? 'not-allowed' : bottomHasClick ? 'pointer' : undefined,
               opacity: dimBottom ? 0.35 : undefined,
               color: bottomStripTextColor ?? '#ffffff',
             }}
             onClick={bottomHasClick ? (e) => useSectionClick ? onSectionClick!('bottom', e) : onClick!(e) : undefined}
           >
-            {(extraDoc?.shortName ?? '').trim() ||
-              (extraDoc?.name ?? '').slice(0, 3).toUpperCase() ||
-              `#${extra}`}
+            {showSpanLabels ? (
+              <span style={spanLabelPositionStyle} className="whitespace-nowrap">
+                {(extraDoc?.shortName ?? '').trim() ||
+                  (extraDoc?.name ?? '').slice(0, 3).toUpperCase() ||
+                  `#${extra}`}
+              </span>
+            ) : null}
           </div>
         ))}
     </div>

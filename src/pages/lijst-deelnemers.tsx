@@ -1,26 +1,21 @@
 'use client';
 
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { DeelnemerWithGroepen } from './api/deelnemers/index';
-
-const ROL_LABELS: Record<number, string> = {
-  1: 'Deelnemer',
-  2: 'Secretaris',
-  3: 'Receptionist',
-  4: 'Kijker',
-};
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { ROL_LABELS } from '@/lib/rol-labels';
 
 function formatNaam(d: DeelnemerWithGroepen): string {
-  return [d.voornaam, d.voorletterstussenvoegsel, d.achternaam]
-    .filter(Boolean)
-    .join(' ');
+  return [d.achternaam, d.voornaam, d.voorletterstussenvoegsel].filter(Boolean).join(', ');
 }
 
 export default function LijstDeelnemersPage() {
+  const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
 
   const [deelnemers, setDeelnemers] = useState<DeelnemerWithGroepen[]>([]);
@@ -63,19 +58,42 @@ export default function LijstDeelnemersPage() {
   }
 
   async function handleColorChange(deelnemerId: number, color: string) {
-    setDeelnemers((prev) => prev.map((d) => (d.id === deelnemerId ? { ...d, color } : d)));
+    let prevColor = '';
+    setDeelnemers((prev) =>
+      prev.map((d) => {
+        if (d.id !== deelnemerId) return d;
+        prevColor = d.color ?? '';
+        return { ...d, color };
+      })
+    );
+
+    const body: { uid: number; color: string; idwaarneemgroep?: number } = { uid: deelnemerId, color };
+    if (filterWgId !== '') body.idwaarneemgroep = filterWgId;
+
     try {
       const res = await fetch('/api/deelnemers/color', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ uid: deelnemerId, color }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (data.error) toast.error(`Kleur opslaan mislukt: ${data.error}`);
-    } catch {
-      toast.error('Kleur opslaan mislukt');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Kleur opslaan mislukt');
+      }
+      toast.success('Kleur opgeslagen.');
+    } catch (error) {
+      setDeelnemers((prev) =>
+        prev.map((d) => (d.id === deelnemerId ? { ...d, color: prevColor } : d))
+      );
+      toast.error(
+        error instanceof Error ? `Kleur opslaan mislukt: ${error.message}` : 'Kleur opslaan mislukt'
+      );
     }
+  }
+
+  function openDeelnemerGegevens(deelnemerId: number) {
+    void router.push(`/mijn-gegevens?deelnemerId=${deelnemerId}`);
   }
 
   // Client-side search: name, login, or waarneemgroep name
@@ -155,24 +173,62 @@ export default function LijstDeelnemersPage() {
                     <thead>
                       <tr className="border-b text-left text-muted-foreground">
                         <th className="pb-2 pr-4 font-medium">Naam</th>
-                        <th className="pb-2 pr-4 font-medium">Login</th>
-                        <th className="pb-2 pr-4 font-medium">Kleur</th>
+                        <th className="pb-2 pr-4 font-medium">Email</th>
+                        <th className="pb-2 pr-4 font-medium">E-mail verificatie</th>
+                        <th className="w-[6rem] pb-2 pr-4 font-medium">Kleur</th>
                         {showWaarneemgroepColumn && <th className="pb-2 pr-4 font-medium">Waarneemgroepen</th>}
                         {showWaarneemgroepColumn && <th className="pb-2 font-medium">Rol</th>}
                       </tr>
                     </thead>
                     <tbody>
                       {filtered.map((d) => (
-                        <tr key={d.id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-2.5 pr-4 font-medium">{formatNaam(d)}</td>
+                        <tr
+                          key={d.id}
+                          className="cursor-pointer border-b last:border-0 even:bg-muted/80 hover:bg-muted/50"
+                          onClick={() => openDeelnemerGegevens(d.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              openDeelnemerGegevens(d.id);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          title="Open gegevens van deze deelnemer"
+                        >
+                          <td className="py-2.5 pr-4 font-medium">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="inline-flex h-8 min-w-10 items-center justify-center rounded-md px-2 text-xs font-semibold text-white"
+                                style={{ backgroundColor: d.color || '#cccccc' }}
+                              >
+                                {deelnemerChipInitials(d, { maxFallbackLength: 3, fallback: '—' })}
+                              </span>
+                              <span>{formatNaam(d)}</span>
+                            </div>
+                          </td>
                           <td className="py-2.5 pr-4 text-muted-foreground">{d.login ?? '—'}</td>
                           <td className="py-2.5 pr-4">
+                            <span
+                              className={`w-fit rounded px-2 py-0.5 text-xs font-medium ${
+                                d.emailVerified === true
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-amber-100 text-amber-900'
+                              }`}
+                            >
+                              {d.emailVerified === true ? 'Geverifieerd' : 'Niet geverifieerd'}
+                            </span>
+                          </td>
+                          <td className="w-[6rem] py-2.5 pr-4">
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
                                 title="Wijzig kleur"
-                                onClick={() => colorInputRefs.current.get(d.id)?.click()}
-                                className="h-6 w-10 rounded border border-input shadow-sm hover:scale-105 transition-transform"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  colorInputRefs.current.get(d.id)?.click();
+                                }}
+                                className="h-6 w-[3.75rem] rounded border border-input shadow-sm transition-transform hover:scale-105"
                                 style={{ backgroundColor: d.color || '#cccccc' }}
                               />
                               <input
@@ -183,15 +239,9 @@ export default function LijstDeelnemersPage() {
                                 type="color"
                                 className="sr-only"
                                 value={d.color || '#cccccc'}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => handleColorChange(d.id, e.target.value)}
                               />
-                              <button
-                                type="button"
-                                onClick={() => colorInputRefs.current.get(d.id)?.click()}
-                                className="text-xs text-muted-foreground hover:text-foreground underline"
-                              >
-                                Wijzig
-                              </button>
                             </div>
                           </td>
                           {showWaarneemgroepColumn && (

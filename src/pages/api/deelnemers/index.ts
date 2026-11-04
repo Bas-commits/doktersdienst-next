@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, inArray, ne, isNotNull } from 'drizzle-orm';
+import { findDeelnemerBySessionEmail } from '@/lib/api-auth';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 
@@ -12,10 +13,21 @@ export type DeelnemerWithGroepen = {
   voornaam: string | null;
   voorletterstussenvoegsel: string | null;
   achternaam: string | null;
+  initialen: string | null;
   login: string | null;
   color: string | null;
   idgroep: number | null;
-  waarneemgroepen: { id: number; naam: string | null; aangemeld: boolean; idgroep: number | null }[];
+  emailVerified: boolean | null;
+  echtedeelnemer: boolean | null;
+  waarneemgroepen: {
+    id: number;
+    naam: string | null;
+    aangemeld: boolean;
+    idgroep: number | null;
+    idfunctie: number | null;
+  }[];
+  /** Total waarneemgroepdeelnemers rows (beheer mode only). */
+  membershipCount?: number;
 };
 
 type Data =
@@ -36,7 +48,10 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
  *
  * Returns participants with their waarneemgroep memberships.
  * Admins (idgroep = 5) see all participants; non-admins see only participants in their own groups.
- * Optional query param: ?idwaarneemgroep=N (admin-only filter)
+ * Optional query params:
+ *   ?idwaarneemgroep=N — admins filter vrij; niet-admins alleen eigen lidmaatschappen.
+ *   ?beheer=1 — deelnemersbeheer: alle leden tonen (incl. echtedeelnemer=false, zonder kleur).
+ *               Standaard (rooster/overnames): alleen inroosterbare deelnemers.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -57,13 +72,9 @@ export default async function handler(
       return res.status(403).json({ error: 'No email on session' });
     }
 
-    const [currentDeelnemer] = await db
-      .select({ id: deelnemers.id, idgroep: deelnemers.idgroep })
-      .from(deelnemers)
-      .where(eq(deelnemers.email, email))
-      .limit(1);
+    const currentDeelnemer = await findDeelnemerBySessionEmail(email);
 
-    if (!currentDeelnemer || currentDeelnemer.id === null) {
+    if (!currentDeelnemer) {
       return res.status(403).json({ error: 'Deelnemer not found' });
     }
 
@@ -71,6 +82,7 @@ export default async function handler(
     const filterWgId = req.query.idwaarneemgroep
       ? Number(req.query.idwaarneemgroep)
       : undefined;
+    const beheerMode = req.query.beheer === '1' || req.query.beheer === 'true';
 
     let targetDeelnemerIds: number[];
 
@@ -110,15 +122,22 @@ export default async function handler(
         return res.status(200).json({ deelnemers: [], isAdmin });
       }
 
+      let wgIdsScope = myWgIds;
+      if (filterWgId !== undefined && !Number.isNaN(filterWgId)) {
+        if (!myWgIds.includes(filterWgId)) {
+          return res.status(403).json({ error: 'Geen toegang tot deze waarneemgroep.' });
+        }
+        wgIdsScope = [filterWgId];
+      }
+
+      const colleagueFilters = [inArray(waarneemgroepdeelnemers.idwaarneemgroep, wgIdsScope)];
+      if (!beheerMode) {
+        colleagueFilters.push(eq(waarneemgroepdeelnemers.aangemeld, true));
+      }
       const colleagues = await db
         .select({ iddeelnemer: waarneemgroepdeelnemers.iddeelnemer })
         .from(waarneemgroepdeelnemers)
-        .where(
-          and(
-            inArray(waarneemgroepdeelnemers.idwaarneemgroep, myWgIds),
-            eq(waarneemgroepdeelnemers.aangemeld, true)
-          )
-        );
+        .where(and(...colleagueFilters));
       targetDeelnemerIds = [
         ...new Set(
           colleagues.map((c) => c.iddeelnemer).filter((id): id is number => id !== null)
@@ -141,52 +160,85 @@ export default async function handler(
       return res.status(200).json(response);
     }
 
-    // Fetch deelnemers — match legacy getDoctorDataForGroup filters:
-    // echtedeelnemer=1, afgemeld=0, abonnementdd=1, non-empty color
+    // Rooster: legacy getDoctorDataForGroup filters (echtedeelnemer, kleur).
+    // Beheer: alle actieve abonnees in de groep, zodat echtedeelnemer/kleur te wijzigen zijn.
+    const deelnemerFilters = [
+      inArray(deelnemers.id, targetDeelnemerIds),
+      eq(deelnemers.abonnementdd, true),
+      eq(deelnemers.afgemeld, false),
+    ];
+    if (!beheerMode) {
+      deelnemerFilters.push(
+        eq(deelnemers.echtedeelnemer, true),
+        isNotNull(deelnemers.color),
+        ne(deelnemers.color, ''),
+        ne(deelnemers.color, ' '),
+      );
+    }
+
     const deelnemerRows = await db
       .select({
         id: deelnemers.id,
         voornaam: deelnemers.voornaam,
         voorletterstussenvoegsel: deelnemers.voorletterstussenvoegsel,
         achternaam: deelnemers.achternaam,
+        initialen: deelnemers.initialen,
         login: deelnemers.login,
         color: deelnemers.color,
         idgroep: deelnemers.idgroep,
+        emailVerified: deelnemers.emailVerified,
+        echtedeelnemer: deelnemers.echtedeelnemer,
       })
       .from(deelnemers)
-      .where(
-        and(
-          inArray(deelnemers.id, targetDeelnemerIds),
-          eq(deelnemers.abonnementdd, true),
-          eq(deelnemers.echtedeelnemer, true),
-          eq(deelnemers.afgemeld, false),
-          isNotNull(deelnemers.color),
-          ne(deelnemers.color, ''),
-          ne(deelnemers.color, ' '),
-        )
-      )
+      .where(and(...deelnemerFilters))
       .orderBy(deelnemers.achternaam, deelnemers.voornaam);
 
-    // Fetch all waarneemgroep memberships for these deelnemers
+    const deelnemerIdsForQuery = deelnemerRows
+      .map((d) => d.id)
+      .filter((id): id is number => id !== null);
+
+    const membershipFilters = [inArray(waarneemgroepdeelnemers.iddeelnemer, deelnemerIdsForQuery)];
+    if (!beheerMode) {
+      membershipFilters.push(eq(waarneemgroepdeelnemers.aangemeld, true));
+    }
+
+    // Fetch waarneemgroep memberships for these deelnemers
     const memberships = await db
       .select({
         iddeelnemer: waarneemgroepdeelnemers.iddeelnemer,
         idwaarneemgroep: waarneemgroepdeelnemers.idwaarneemgroep,
         aangemeld: waarneemgroepdeelnemers.aangemeld,
         idgroep: waarneemgroepdeelnemers.idgroep,
+        idfunctie: waarneemgroepdeelnemers.idfunctie,
         naam: waarneemgroepen.naam,
       })
       .from(waarneemgroepdeelnemers)
       .leftJoin(waarneemgroepen, eq(waarneemgroepdeelnemers.idwaarneemgroep, waarneemgroepen.id))
-      .where(
-        and(
-          inArray(waarneemgroepdeelnemers.iddeelnemer, targetDeelnemerIds),
-          eq(waarneemgroepdeelnemers.aangemeld, true)
-        )
-      );
+      .where(and(...membershipFilters));
+
+    const membershipCountMap = new Map<number, number>();
+    if (beheerMode && deelnemerIdsForQuery.length > 0) {
+      const countRows = await db
+        .select({ iddeelnemer: waarneemgroepdeelnemers.iddeelnemer })
+        .from(waarneemgroepdeelnemers)
+        .where(inArray(waarneemgroepdeelnemers.iddeelnemer, deelnemerIdsForQuery));
+      for (const row of countRows) {
+        if (row.iddeelnemer === null) continue;
+        membershipCountMap.set(row.iddeelnemer, (membershipCountMap.get(row.iddeelnemer) ?? 0) + 1);
+      }
+    }
 
     // Group memberships by deelnemer
-    const membershipMap = new Map<number, { id: number; naam: string | null; aangemeld: boolean; idgroep: number | null }[]>();
+    const membershipMap = new Map<
+      number,
+      {
+        id: number;
+        naam: string | null;
+        aangemeld: boolean;
+        idgroep: number | null;
+        idfunctie: number | null;
+      }[]
+    >();
     for (const m of memberships) {
       if (m.iddeelnemer === null || m.idwaarneemgroep === null) continue;
       if (!membershipMap.has(m.iddeelnemer)) membershipMap.set(m.iddeelnemer, []);
@@ -195,19 +247,30 @@ export default async function handler(
         naam: m.naam,
         aangemeld: m.aangemeld ?? false,
         idgroep: m.idgroep ?? null,
+        idfunctie: m.idfunctie ?? null,
       });
     }
 
-    const result: DeelnemerWithGroepen[] = deelnemerRows.map((d) => ({
-      id: d.id ?? 0,
-      voornaam: d.voornaam,
-      voorletterstussenvoegsel: d.voorletterstussenvoegsel,
-      achternaam: d.achternaam,
-      login: d.login,
-      color: d.color,
-      idgroep: d.idgroep,
-      waarneemgroepen: membershipMap.get(d.id ?? 0) ?? [],
-    }));
+    const result: DeelnemerWithGroepen[] = deelnemerRows.map((d) => {
+      const id = d.id ?? 0;
+      const entry: DeelnemerWithGroepen = {
+        id,
+        voornaam: d.voornaam,
+        voorletterstussenvoegsel: d.voorletterstussenvoegsel,
+        achternaam: d.achternaam,
+        initialen: d.initialen,
+        login: d.login,
+        color: d.color,
+        idgroep: d.idgroep,
+        emailVerified: d.emailVerified,
+        echtedeelnemer: d.echtedeelnemer,
+        waarneemgroepen: membershipMap.get(id) ?? [],
+      };
+      if (beheerMode) {
+        entry.membershipCount = membershipCountMap.get(id) ?? 0;
+      }
+      return entry;
+    });
 
     const response: Data = { deelnemers: result, isAdmin };
 

@@ -1,14 +1,28 @@
 import type { WaarneemgroepItem, HeaderUser, AssetUrls } from '@/components/header/DoktersdienstHeader';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
 
 /** Root-relative paths (`/…`) so assets resolve from the site origin on every route. */
 export const DEFAULT_ASSET_URLS: AssetUrls = {
   logo: '/logo.png',
-  ppLogo: '/logo.png',
+  ppLogo: '/praktijkplanner-logo.png',
   requestIcon: '/request.svg',
 };
 
 export const DEFAULT_ROUTES: Record<string, string> = {
-  spreekuren: '/spreekuren',
+  rooster_inzien: '/rooster-inzien',
+  spreekuren: '/praktijkplanner',
+  praktijkplanner_home: '/praktijkplanner',
+  praktijkplanner_rooster_inzien: '/praktijkplanner/rooster-inzien',
+  praktijkplanner_activiteiten: '/praktijkplanner/activiteiten',
+  praktijkplanner_afwezigheidsplanner_dokter: '/praktijkplanner/afwezigheidsplanner-dokter',
+  praktijkplanner_dokter_activiteiten: '/praktijkplanner/dokter-activiteiten',
+  praktijkplanner_dokter_afwezigheid: '/praktijkplanner/dokter-afwezigheid',
+  praktijkplanner_afwezigheidsplanner: '/praktijkplanner/afwezigheidsplanner',
+  praktijkplanner_capaciteitsplanner: '/praktijkplanner/capaciteitsplanner',
+  praktijkplanner_capaciteitsoverzicht: '/praktijkplanner/capaciteitsoverzicht',
+  praktijkplanner_beheer: '/praktijkplanner/beheer',
+  praktijkplanner_waarneemgroep_wijzigen: '/praktijkplanner/waarneemgroep-wijzigen',
+  praktijkplanner_lijst_deelnemers: '/praktijkplanner/lijst-deelnemers',
   waarneemgroep_gegevens: '/waarneemgroep-gegevens',
   waarneemgroep_wissel: '/waarneemgroep-wissel',
   regio_toevoegen: '/regio-toevoegen',
@@ -18,6 +32,7 @@ export const DEFAULT_ROUTES: Record<string, string> = {
   deelnemer_toevoegen: '/deelnemer-toevoegen',
   bestaande_toevoegen: '/bestaande-toevoegen',
   lijst_deelnemers: '/lijst-deelnemers',
+  deelnemers_verwijderen: '/deelnemers-verwijderen',
   rollen_afmelden: '/rollen-afmelden',
   shift_toevoegen: '/shift-toevoegen',
   shift_toevoegen_jsx: '/shift-toevoegen',
@@ -37,7 +52,10 @@ export const DEFAULT_ROUTES: Record<string, string> = {
   logout: '/api/auth/signout',
 };
 
-export function headerUserFromSession(user: { name?: string | null; email?: string | null; role?: string } | null): HeaderUser {
+export function headerUserFromSession(
+  user: { name?: string | null; email?: string | null; role?: string } | null,
+  options?: { displayName?: string | null; initialen?: string | null }
+): HeaderUser {
   if (!user) {
     return {
       UserName: 'Gast',
@@ -45,14 +63,28 @@ export function headerUserFromSession(user: { name?: string | null; email?: stri
       TypeOfUser: 'user',
     };
   }
-  const name = user.name?.trim() || user.email?.trim() || 'Gebruiker';
-  const shortName =
-    user.name
-      ?.split(/\s+/)
-      .map((s) => s[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2) || user.email?.slice(0, 2).toUpperCase() || '?';
+  const name =
+    options?.displayName?.trim() ||
+    user.name?.trim() ||
+    user.email?.trim() ||
+    'Gebruiker';
+  const shortName = deelnemerChipInitials(
+    {
+      initialen: options?.initialen,
+      name: options?.displayName || user.name || user.email,
+    },
+    {
+      fallback:
+        user.name
+          ?.split(/\s+/)
+          .map((s) => s[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2) ||
+        user.email?.slice(0, 2).toUpperCase() ||
+        '?',
+    }
+  );
   return {
     UserName: name,
     ShortName: shortName,

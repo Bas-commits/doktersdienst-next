@@ -32,6 +32,42 @@ function formatValue(year: number, month: number, day: number, hours: number, mi
   return `${year}-${pad(month + 1)}-${pad(day)}T${pad(hours)}:${pad(minutes)}`;
 }
 
+/**
+ * Parse while typing: colon (H:MM) or exactly four digits (HHMM).
+ * Three-digit (HMM) is not parsed here — "100" would wrongly become 1:00 before "1000" is typed.
+ */
+function parseTimeInputLive(raw: string): { h: number; m: number } | null {
+  const trimmed = raw.trim();
+  const colon = /^(\d{1,2}):(\d{2})$/.exec(trimmed);
+  if (colon) {
+    const h = parseInt(colon[1], 10);
+    const m = parseInt(colon[2], 10);
+    if (h > 23 || m > 59) return null;
+    return { h, m };
+  }
+  if (/^\d{4}$/.test(trimmed)) {
+    const h = parseInt(trimmed.slice(0, 2), 10);
+    const m = parseInt(trimmed.slice(2, 4), 10);
+    if (h > 23 || m > 59) return null;
+    return { h, m };
+  }
+  return null;
+}
+
+/** On blur / panel close: also accept HMM (e.g. 830 → 8:30). */
+function parseTimeInputCommit(raw: string): { h: number; m: number } | null {
+  const live = parseTimeInputLive(raw);
+  if (live) return live;
+  const trimmed = raw.trim();
+  if (/^\d{3}$/.test(trimmed)) {
+    const h = parseInt(trimmed.slice(0, 1), 10);
+    const m = parseInt(trimmed.slice(1, 3), 10);
+    if (h > 23 || m > 59) return null;
+    return { h, m };
+  }
+  return null;
+}
+
 /** Build calendar grid rows (each row = 7 days, Mon–Sun). Includes overflow days from prev/next month. */
 function buildGrid(year: number, month: number): { day: number; month: number; year: number }[][] {
   const firstDow = new Date(year, month, 1).getDay(); // 0=Sun
@@ -129,6 +165,29 @@ export function DateTimePicker({ value, onChange, disabled, id }: DateTimePicker
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [open]);
 
+  const flushTimeInput = useCallback(
+    (raw: string) => {
+      const parsedTime = parseTimeInputCommit(raw);
+      if (!parsedTime) {
+        setRawTime(null);
+        return;
+      }
+      const p = parseValue(value);
+      const year = p?.year ?? new Date().getFullYear();
+      const month = p?.month ?? new Date().getMonth();
+      const day = p?.day ?? new Date().getDate();
+      onChange(formatValue(year, month, day, parsedTime.h, parsedTime.m));
+      setRawTime(null);
+    },
+    [value, onChange]
+  );
+
+  // Apply pending HMM (3 digits) when the popover closes; blur usually fires first.
+  useEffect(() => {
+    if (open || rawTime == null) return;
+    flushTimeInput(rawTime);
+  }, [open, rawTime, flushTimeInput]);
+
   const handleDayClick = useCallback(
     (day: number, month: number, year: number) => {
       const p = parseValue(value);
@@ -144,25 +203,37 @@ export function DateTimePicker({ value, onChange, disabled, id }: DateTimePicker
   const handleTimeChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value;
-      // Update the display immediately; only commit to onChange when we have a valid HH:MM
-      const match = /^(\d{1,2}):(\d{2})$/.exec(raw);
-      if (!match) {
-        // Keep raw text in a local state until valid — we do this via the controlled value
-        // For now store the raw string so the user can keep typing
+      const parsedTime = parseTimeInputLive(raw);
+      if (!parsedTime) {
         setRawTime(raw);
         return;
       }
-      const h = parseInt(match[1], 10);
-      const m = parseInt(match[2], 10);
-      if (h > 23 || m > 59) { setRawTime(raw); return; }
       setRawTime(null);
       const p = parseValue(value);
       const year = p?.year ?? new Date().getFullYear();
       const month = p?.month ?? new Date().getMonth();
       const day = p?.day ?? new Date().getDate();
-      onChange(formatValue(year, month, day, h, m));
+      onChange(formatValue(year, month, day, parsedTime.h, parsedTime.m));
     },
     [value, onChange]
+  );
+
+  const handleTimeBlur = useCallback(
+    (e: React.FocusEvent<HTMLInputElement>) => {
+      flushTimeInput(e.target.value);
+    },
+    [flushTimeInput]
+  );
+
+  const handleTimeKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        flushTimeInput(e.currentTarget.value);
+        setOpen(false);
+      }
+    },
+    [flushTimeInput]
   );
 
   const prevMonth = useCallback(() => {
@@ -256,11 +327,13 @@ export function DateTimePicker({ value, onChange, disabled, id }: DateTimePicker
 
       {/* Time input */}
       <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-        <span className="shrink-0 text-xs text-muted-foreground">Tijd (UU:MM)</span>
+        <span className="shrink-0 text-xs text-muted-foreground">Tijd (UU:MM of 830)</span>
         <input
           type="text"
           value={timeValue}
           onChange={handleTimeChange}
+          onBlur={handleTimeBlur}
+          onKeyDown={handleTimeKeyDown}
           placeholder="08:00"
           maxLength={5}
           className={cn(

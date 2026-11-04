@@ -12,8 +12,11 @@ import {
   shouldApplyPreferencePaintEnter,
 } from '@/types/voorkeuren';
 import { getWeek, monthWeekCount, getDateRangeOfWeek, getWeekNumber } from '@/utils/calendarUtils';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { VANDAAG_GROEN } from '@/lib/calendar-colors';
 import { ShiftBlock } from '@/components/ShiftBlock/ShiftBlock';
 import { MonthNavigation } from './MonthNavigation';
+import { blockOverlapsDay, getBlocksWithSegmentsForDay, getNextDate, getPrevDate } from '@/lib/day-segments';
 
 /** One row of shift blocks (e.g. per waarneemgroep). */
 export interface CalendarGridRow {
@@ -48,6 +51,21 @@ export interface CalendarGridProps {
   hideTopStrip?: boolean;
   /** Optional: when true, the bottom (Extra Dokter) strip is not rendered on any shift block. */
   hideBottomStrip?: boolean;
+  /**
+   * Optional: strip and middle heights (px) of the shift blocks. The overnames page makes the
+   * strips taller so the overname icon fits on an achterwacht / extra-dokter strip, and the middle
+   * lower so the day keeps its height (12 + 42 + 12 by default).
+   */
+  shiftStripHeight?: number;
+  shiftMiddleHeight?: number;
+  /** Optional: called when a shift made inert by `disableEndedShiftBlocks` is clicked. */
+  onEndedShiftClick?: (block: ShiftBlockView) => void;
+  /**
+   * Optional: outline empty achterwacht / extra-dokter strips. Defaults to on whenever
+   * `onSectionShiftClick` is set (rooster maken, where an empty strip is a place to assign). The
+   * overnames page turns it off: an empty strip there has nobody to take over from.
+   */
+  showEmptyStripBorders?: boolean;
   /** Optional: when set, each shift block shows a delete button that calls this with the block. */
   onShiftDelete?: (block: ShiftBlockView) => void;
   /** Optional: vacation names per day (rooster shape and/or GET /api/vakanties rows). */
@@ -64,6 +82,8 @@ export interface CalendarGridProps {
   showPreferences?: boolean;
   /** When set, renders voorkeur blocks per user below the shift lane (secretaris view). */
   voorkeuren?: VoorkeurItem[];
+  /** When set, matching user voorkeur row bands get a highlight background (secretaris roster view). */
+  highlightedVoorkeurUserIds?: ReadonlySet<number> | null;
   /**
    * When true, main shift blocks hide doctor initials inside filled preference styling
    * (icon-only middle). Does not affect the secretaris voorkeuren band below the grid.
@@ -77,6 +97,21 @@ export interface CalendarGridProps {
   /** Called when a paint stroke ends (pointerup / cancel / blur). */
   onPreferencePaintSessionStart?: () => void;
   onPreferencePaintSessionEnd?: () => void;
+  /** When true, shift tooltips omit doctor names and show only shift labels. */
+  hideOwnerNameInTooltip?: boolean;
+  /** When true, aantekening text is hidden for unassigned blocks (type=1 slots). */
+  hideUnassignedAantekening?: boolean;
+  /**
+   * When true, shift blocks whose end moment has passed render dimmed and inert.
+   * Set on /voorkeuren; roster views leave it off so history stays clickable there.
+   */
+  disableEndedShiftBlocks?: boolean;
+  /**
+   * Extra knoppen naast de maandnavigatie (bijv. de Urentelling-schakelaar in
+   * rooster-maken-secretaris.tsx). Alleen zichtbaar samen met de maandnavigatie zelf
+   * (onViewMonthChange), anders zou een knop over een lege plek zweven.
+   */
+  monthNavAside?: React.ReactNode;
 }
 
 /** Width of the right-hand column that shows waarneemgroep names per row (when multiple rows). */
@@ -98,82 +133,6 @@ function addVakantieDateRangeToMap(map: Map<string, string[]>, naam: string, sta
     d.setDate(d.getDate() + i);
     pushVakantieNaamForCalendarDay(map, naam, d);
   }
-}
-
-/** Pad number to two digits for HH:MM. */
-function pad2(n: number): string {
-  return n.toString().padStart(2, '0');
-}
-
-/**
- * Returns blocks that overlap the given calendar day, with the segment of each shift
- * that falls within that day (start/end as "HH:MM" in that day).
- * Used for overnight and multi-day shifts so they render in every day they span.
- */
-function getBlocksWithSegmentsForDay(
-  blocks: ShiftBlockView[],
-  day: number,
-  month0: number,
-  year: number
-): { block: ShiftBlockView; segmentStartTime: string; segmentEndTime: string }[] {
-  const dayStart = new Date(year, month0, day, 0, 0, 0, 0).getTime();
-  const dayEnd = new Date(year, month0, day, 23, 59, 59, 999).getTime();
-  const result: { block: ShiftBlockView; segmentStartTime: string; segmentEndTime: string }[] = [];
-
-  for (const block of blocks) {
-    const startStr = String(block.currentDate).replace(' ', 'T');
-    const endStr = String(block.nextDate).replace(' ', 'T');
-    const shiftStart = new Date(startStr).getTime();
-    const shiftEnd = new Date(endStr).getTime();
-    if (Number.isNaN(shiftStart) || Number.isNaN(shiftEnd)) continue;
-    if (shiftEnd <= dayStart || shiftStart > dayEnd) continue;
-
-    const segmentStartMs = Math.max(shiftStart, dayStart);
-    const segmentEndMs = Math.min(shiftEnd, dayEnd);
-
-    const segStart = new Date(segmentStartMs);
-    const segEnd = new Date(segmentEndMs);
-    const segmentStartTime = `${pad2(segStart.getHours())}:${pad2(segStart.getMinutes())}`;
-    const segmentEndTime =
-      segEnd.getHours() === 23 && segEnd.getMinutes() === 59
-        ? '24:00'
-        : `${pad2(segEnd.getHours())}:${pad2(segEnd.getMinutes())}`;
-
-    result.push({ block, segmentStartTime, segmentEndTime });
-  }
-
-  return result;
-}
-
-/** Returns true if the block's shift interval overlaps the given calendar day. */
-function blockOverlapsDay(
-  block: ShiftBlockView,
-  day: number,
-  month0: number,
-  year: number
-): boolean {
-  const dayStart = new Date(year, month0, day, 0, 0, 0, 0).getTime();
-  const dayEnd = new Date(year, month0, day, 23, 59, 59, 999).getTime();
-  const startStr = String(block.currentDate).replace(' ', 'T');
-  const endStr = String(block.nextDate).replace(' ', 'T');
-  const shiftStart = new Date(startStr).getTime();
-  const shiftEnd = new Date(endStr).getTime();
-  if (Number.isNaN(shiftStart) || Number.isNaN(shiftEnd)) return false;
-  return shiftEnd > dayStart && shiftStart <= dayEnd;
-}
-
-/** Previous calendar date (day - 1, handling month/year boundaries). */
-function getPrevDate(day: number, month0: number, year: number): { day: number; month0: number; year: number } {
-  const d = new Date(year, month0, day);
-  d.setDate(d.getDate() - 1);
-  return { day: d.getDate(), month0: d.getMonth(), year: d.getFullYear() };
-}
-
-/** Next calendar date (day + 1, handling month/year boundaries). */
-function getNextDate(day: number, month0: number, year: number): { day: number; month0: number; year: number } {
-  const d = new Date(year, month0, day);
-  d.setDate(d.getDate() + 1);
-  return { day: d.getDate(), month0: d.getMonth(), year: d.getFullYear() };
 }
 
 // ─── Voorkeur lane computation ────────────────────────────────────────────────
@@ -244,6 +203,7 @@ function computeWeekVoorkeurLayout(
   // Global lane assignment per user: each voorkeur gets a fixed lane index that
   // is consistent across ALL days it spans (no per-day re-assignment).
   const userInitials = new Map<number, string>();
+  const userNames = new Map<number, { achternaam: string; voornaam: string }>();
   const userMaxLanes = new Map<number, number>();
   const vkToLane = new Map<VoorkeurItem, number>();
 
@@ -251,8 +211,17 @@ function computeWeekVoorkeurLayout(
     const d = vks[0].deelnemer;
     userInitials.set(
       userId,
-      ((d?.voornaam?.[0] ?? '') + (d?.achternaam?.[0] ?? '')).toUpperCase(),
+      deelnemerChipInitials({
+        initialen: d?.initialen,
+        voornaam: d?.voornaam,
+        achternaam: d?.achternaam,
+      }),
     );
+    // Chips show initials, so the surname is kept separately purely to order the rows.
+    userNames.set(userId, {
+      achternaam: d?.achternaam ?? '',
+      voornaam: d?.voornaam ?? '',
+    });
 
     const sorted = [...vks].sort((a, b) => a.van - b.van);
     // laneContents tracks which vks are assigned to each lane, for conflict checking.
@@ -326,9 +295,19 @@ function computeWeekVoorkeurLayout(
     byDayRaw.set(dateKey, dayMap);
   }
 
-  // Build stable user slot order (sorted by userId for consistency across re-renders).
+  // Rows read top-to-bottom by surname A-Z, matching the Dokters panel beside the
+  // grid. Same collation as sortMembers() in lib/urentelling.ts. userId breaks ties
+  // so two doctors sharing a name cannot swap places between re-renders.
   const users: WeekUserSlot[] = Array.from(userInitials.keys())
-    .sort((a, b) => a - b)
+    .sort((a, b) => {
+      const na = userNames.get(a);
+      const nb = userNames.get(b);
+      const achternaamCmp = (na?.achternaam ?? '').localeCompare(nb?.achternaam ?? '', 'nl');
+      if (achternaamCmp !== 0) return achternaamCmp;
+      const voornaamCmp = (na?.voornaam ?? '').localeCompare(nb?.voornaam ?? '', 'nl');
+      if (voornaamCmp !== 0) return voornaamCmp;
+      return a - b;
+    })
     .map((userId) => ({
       userId,
       initials: userInitials.get(userId)!,
@@ -354,7 +333,11 @@ function voorkeurToShiftBlockView(vk: VoorkeurItem): ShiftBlockView {
   const p2 = (n: number) => n.toString().padStart(2, '0');
   const fmtDate = (dt: Date) =>
     `${dt.getFullYear()}-${p2(dt.getMonth() + 1)}-${p2(dt.getDate())} ${p2(dt.getHours())}:${p2(dt.getMinutes())}:00`;
-  const initials = ((d?.voornaam?.[0] ?? '') + (d?.achternaam?.[0] ?? '')).toUpperCase();
+  const initials = deelnemerChipInitials({
+    initialen: d?.initialen,
+    voornaam: d?.voornaam,
+    achternaam: d?.achternaam,
+  });
   const fullName = [d?.voornaam, d?.achternaam].filter(Boolean).join(' ');
   return {
     id: vk.id ?? 0,
@@ -389,6 +372,10 @@ export function CalendarGrid({
   plannerDoctorPreferenceMap,
   hideTopStrip,
   hideBottomStrip,
+  shiftStripHeight,
+  shiftMiddleHeight,
+  showEmptyStripBorders,
+  onEndedShiftClick,
   onShiftDelete,
   vakanties,
   onViewMonthChange,
@@ -397,10 +384,15 @@ export function CalendarGrid({
   getChipByCode = getChipByCodeFromTypes,
   showPreferences = true,
   voorkeuren,
+  highlightedVoorkeurUserIds,
   hidePreferenceFillInitialsOnShiftBlocks = false,
   enablePreferencePaintAssign = false,
   onPreferencePaintSessionStart,
   onPreferencePaintSessionEnd,
+  hideOwnerNameInTooltip = false,
+  hideUnassignedAantekening = false,
+  disableEndedShiftBlocks = false,
+  monthNavAside,
 }: CalendarGridProps) {
   const paintSessionRef = useRef<{ active: boolean; keysTouched: Set<string> }>({
     active: false,
@@ -548,7 +540,7 @@ export function CalendarGrid({
                             isToday
                               ? {
                                   color: 'white',
-                                  backgroundColor: 'green',
+                                  backgroundColor: VANDAAG_GROEN,
                                   fontWeight: 'bold',
                                   minWidth: '30px',
                                   borderRadius: '6px',
@@ -625,8 +617,10 @@ export function CalendarGrid({
                                     continuesToNext={continuesToNext}
                                     hideTopStrip={hideTopStrip}
                                     hideBottomStrip={hideBottomStrip}
-                                    showEmptyTopStripBorder={onSectionShiftClick != null}
-                                    showEmptyBottomStripBorder={onSectionShiftClick != null}
+                                    stripHeight={shiftStripHeight}
+                                    middleHeight={shiftMiddleHeight}
+                                    showEmptyTopStripBorder={showEmptyStripBorders ?? onSectionShiftClick != null}
+                                    showEmptyBottomStripBorder={showEmptyStripBorders ?? onSectionShiftClick != null}
                                     onDelete={
                                       onShiftDelete
                                         ? () => onShiftDelete(block)
@@ -682,6 +676,10 @@ export function CalendarGrid({
                                     preferenceChip={preferenceChip ?? null}
                                     hideInitialsInPreferenceFill={hidePreferenceFillInitialsOnShiftBlocks}
                                     overnameType={block.overnameType}
+                                    hideOwnerNameInTooltip={hideOwnerNameInTooltip}
+                                    hideUnassignedAantekening={hideUnassignedAantekening}
+                                    disableWhenEnded={disableEndedShiftBlocks}
+                                    onEndedClick={onEndedShiftClick ? () => onEndedShiftClick(block) : undefined}
                                   />
                                 );
                               })}
@@ -698,8 +696,14 @@ export function CalendarGrid({
                             // Per-user band: same structure for every day in the week.
                             weekVoorkeurLayout.users.map((slot, slotIdx) => {
                               const dayLanes = weekVoorkeurLayout.byDay.get(dateKey)?.[slotIdx] ?? [];
+                              const isHighlighted =
+                                highlightedVoorkeurUserIds != null &&
+                                highlightedVoorkeurUserIds.has(slot.userId);
                               return (
-                                <div key={slot.userId} className="mb-px">
+                                <div
+                                  key={slot.userId}
+                                  className={`mb-px rounded-sm ${isHighlighted ? 'bg-gray-200' : ''}`}
+                                >
                                   {/* Render slot.numLanes lanes; empty lanes keep the height stable. */}
                                   {Array.from({ length: slot.numLanes }).map((_, laneIdx) => {
                                     const lane = dayLanes[laneIdx] ?? [];
@@ -723,6 +727,8 @@ export function CalendarGrid({
                                             preferenceChip={
                                               CHIP_DEFINITIONS.find((c) => c.code === String(voorkeur.type ?? '')) ?? null
                                             }
+                                            hideOwnerNameInTooltip={hideOwnerNameInTooltip}
+                                            hideUnassignedAantekening={hideUnassignedAantekening}
                                           />
                                         ))}
                                       </div>
@@ -774,13 +780,23 @@ export function CalendarGrid({
     <div>
       {onViewMonthChange && (
         <div
-          className={`mb-4 ml-[60px]${gridRows.length > 2 ? ' mr-[140px]' : ''}`}
+          className={`relative mb-4 ml-[60px]${gridRows.length > 2 ? ' mr-[140px]' : ''}`}
         >
-          <MonthNavigation
-            month={viewMonth}
-            year={viewYear}
-            onSelectMonth={onViewMonthChange}
-          />
+          {/*
+            De maandnavigatie blijft gecentreerd zoals altijd; de extra knoppen komen er
+            absoluut naast te hangen in plaats van in dezelfde flexrij, anders duwt hun breedte
+            de navigatie uit het midden.
+          */}
+          <div className="flex justify-center">
+            <MonthNavigation
+              month={viewMonth}
+              year={viewYear}
+              onSelectMonth={onViewMonthChange}
+            />
+          </div>
+          {monthNavAside && (
+            <div className="absolute top-1/2 right-0 -translate-y-1/2">{monthNavAside}</div>
+          )}
         </div>
       )}
       {content}

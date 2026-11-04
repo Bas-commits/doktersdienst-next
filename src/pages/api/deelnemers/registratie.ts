@@ -4,8 +4,27 @@ import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 
 const { waarneemgroepdeelnemers } = schema;
+/**
+ * Of deze functie bij deze waarneemgroep hoort.
+ *
+ * Stond hier eerder als de vaste verzameling 1 tot en met 4. Elke groep bepaalt nu zelf zijn
+ * functies, dus geldigheid hangt af van de groep.
+ */
+async function functieHoortBijGroep(idfunctie: number, idwaarneemgroep: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.praktijkplannerfuncties.id })
+    .from(schema.praktijkplannerfuncties)
+    .where(
+      and(
+        eq(schema.praktijkplannerfuncties.id, idfunctie),
+        eq(schema.praktijkplannerfuncties.idwaarneemgroep, idwaarneemgroep)
+      )
+    )
+    .limit(1);
+  return row != null;
+}
 
-type Actie = 'aanmelden' | 'afmelden' | 'groep';
+type Actie = 'aanmelden' | 'afmelden' | 'groep' | 'functie';
 
 type Data = { ok: true } | { error: string };
 
@@ -16,8 +35,9 @@ type Data = { ok: true } | { error: string };
  * - aanmelden: register participant in a waarneemgroep (upsert aangemeld = true)
  * - afmelden: unregister participant from a waarneemgroep (set aangemeld = false)
  * - groep: change participant's role in a waarneemgroep
+ * - functie: change participant's functie in a waarneemgroep
  *
- * Body: { actie, IDdeelnemer, IDwaarneemgroep, IDgroep? }
+ * Body: { actie, IDdeelnemer, IDwaarneemgroep, IDgroep?, IDfunctie? }
  */
 export default async function handler(
   req: NextApiRequest,
@@ -33,16 +53,17 @@ export default async function handler(
   }
 
   try {
-    const { actie, IDdeelnemer, IDwaarneemgroep, IDgroep } = req.body as {
+    const { actie, IDdeelnemer, IDwaarneemgroep, IDgroep, IDfunctie } = req.body as {
       actie: unknown;
       IDdeelnemer: unknown;
       IDwaarneemgroep: unknown;
       IDgroep?: unknown;
+      IDfunctie?: unknown;
     };
 
     if (
       typeof actie !== 'string' ||
-      !['aanmelden', 'afmelden', 'groep'].includes(actie) ||
+      !['aanmelden', 'afmelden', 'groep', 'functie'].includes(actie) ||
       typeof IDdeelnemer !== 'number' ||
       typeof IDwaarneemgroep !== 'number'
     ) {
@@ -103,6 +124,26 @@ export default async function handler(
       await db
         .update(waarneemgroepdeelnemers)
         .set({ idgroep: IDgroep })
+        .where(
+          and(
+            eq(waarneemgroepdeelnemers.iddeelnemer, IDdeelnemer),
+            eq(waarneemgroepdeelnemers.idwaarneemgroep, IDwaarneemgroep)
+          )
+        );
+    } else if (typedActie === 'functie') {
+      const functie = IDfunctie === null ? null : IDfunctie;
+      if (functie !== null && typeof functie !== 'number') {
+        return res.status(400).json({ error: 'IDfunctie must be a number or null for functie action' });
+      }
+      if (functie !== null && !Number.isInteger(functie)) {
+        return res.status(400).json({ error: 'IDfunctie heeft een ongeldige waarde' });
+      }
+      if (functie !== null && !(await functieHoortBijGroep(functie, IDwaarneemgroep))) {
+        return res.status(400).json({ error: 'Deze functie hoort niet bij deze waarneemgroep' });
+      }
+      await db
+        .update(waarneemgroepdeelnemers)
+        .set({ idfunctie: functie })
         .where(
           and(
             eq(waarneemgroepdeelnemers.iddeelnemer, IDdeelnemer),

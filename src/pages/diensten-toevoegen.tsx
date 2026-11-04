@@ -32,7 +32,7 @@ function toDateTimeLocal(d: Date): string {
 }
 
 function dateTimeLocalToLocalString(s: string): string {
-  // "2024-03-15T08:00" → "2024-03-15 08:00:00"
+  // "2024-03-15T08:00" → "2024-03-15 08:00:00" (Europe/Amsterdam wall clock; API converts to Unix)
   if (!s || s.length < 16) return '';
   return s.slice(0, 10) + ' ' + s.slice(11, 16) + ':00';
 }
@@ -65,7 +65,7 @@ const selectClassName =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
 export default function DienstenToevoegenPage() {
-  authClient.useSession();
+  const { data: session } = authClient.useSession();
   const { activeWaarneemgroepId, activeWaarneemgroep, loading: groepLoading } = useWaarneemgroep();
 
   const now = useMemo(() => new Date(), []);
@@ -136,6 +136,23 @@ export default function DienstenToevoegenPage() {
   const [recurrenceLoading, setRecurrenceLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [telGenLoading, setTelGenLoading] = useState(false);
+
+  useEffect(() => {
+    if (!session?.user) {
+      setIsAdmin(false);
+      return;
+    }
+    fetch('/api/deelnemers/role', { credentials: 'include' })
+      .then((r) => {
+        if (!r.ok) throw new Error('role');
+        return r.json();
+      })
+      .then((data: { isAdmin?: boolean }) => setIsAdmin(data.isAdmin === true))
+      .catch(() => setIsAdmin(false));
+  }, [session?.user]);
+
   useEffect(() => {
     if (!deleteBlock) {
       setRecurrenceInfo(null);
@@ -148,7 +165,11 @@ export default function DienstenToevoegenPage() {
       idwaarneemgroep: String(deleteBlock.idwaarneemgroep ?? ''),
     });
     fetch(`/api/diensten/recurrence-info?${params}`, { credentials: 'include' })
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error ?? 'Herhalingsgegevens ophalen mislukt.');
+        return data;
+      })
       .then((data) => {
         setRecurrenceInfo(data);
         setRecurrenceLoading(false);
@@ -291,12 +312,36 @@ export default function DienstenToevoegenPage() {
     }
   }, [deleteBlock, recurrenceInfo, deleteChoice]);
 
+  const handleGenerateTelrecords = useCallback(async () => {
+    setTelGenLoading(true);
+    try {
+      const res = await fetch('/api/tel-sync/generate-telrecords', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(typeof data.error === 'string' ? data.error : 'PBX-telrecords genereren mislukt.');
+        return;
+      }
+
+      if (data.ok === true && typeof data.count === 'number') {
+        toast.success(`PBX-telrecords gegenereerd (${data.count} bestand${data.count === 1 ? '' : 'en'}).`);
+      }
+    } catch {
+      toast.error('Netwerkfout bij PBX-telrecords.');
+    } finally {
+      setTelGenLoading(false);
+    }
+  }, []);
+
   const hasRecurrence = recurrenceInfo?.has_recurrence === true;
 
   return (
     <>
       <Head>
-        <title>Diensten toevoegen | Doktersdienst</title>
+        <title>Shifts toevoegen | Doktersdienst</title>
       </Head>
 
       {/* Herhalen dialog */}
@@ -463,10 +508,22 @@ export default function DienstenToevoegenPage() {
 
       <div className="mx-auto max-w-[2000px] space-y-6 px-4 py-8">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <CardTitle>
-              <h1 className="text-2xl font-semibold tracking-tight">Diensten toevoegen</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Shifts toevoegen</h1>
             </CardTitle>
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 sm:mt-1"
+                disabled={telGenLoading}
+                onClick={handleGenerateTelrecords}
+              >
+                {telGenLoading ? 'Genereren…' : 'PBX-telrecords genereren'}
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">

@@ -1,0 +1,15 @@
+-- Bij het vinkje inbelbaar hoort een nummer.
+--
+-- Migratie 0018 besloot het tegenovergestelde: geen nummer op het taaktype, want het nummer
+-- hangt aan de dokter en die heeft er al een via idsettelnrdienst en followmetelnr. Die
+-- redenering ging ervan uit dat je de dienstdoende dokter belt. In de praktijk is het andersom
+-- beschreven: er is een centraal nummer per taak, en wie dat nummer belt komt uit bij wie er
+-- op dat moment zit. Dan hoort het nummer bij de taak en niet bij de persoon.
+--
+-- Varchar en geen getal. Een doorkiesnummer, een 06 en een intern toestelnummer van vier
+-- cijfers zien er alle drie anders uit, en spaties en streepjes horen bij hoe iemand het
+-- opschrijft. Er valt hier niets mee te rekenen.
+--
+-- Mag leeg blijven terwijl het vinkje aanstaat. Elke bestaande inbelbare taak is nu precies
+-- dat, en het vinkje zegt op zichzelf al iets: er is hier iemand bereikbaar.
+ALTER TABLE "taaktypen" ADD COLUMN IF NOT EXISTS "inbelnummer" varchar(30);

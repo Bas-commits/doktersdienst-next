@@ -1,11 +1,10 @@
 'use client';
 
 import Head from 'next/head';
-import { authClient } from '@/lib/auth-client';
+import { useDeelnemerDisplayName } from '@/contexts/DeelnemerProfileContext';
 
 export default function DashboardPage() {
-  const { data: session } = authClient.useSession();
-  const name = session?.user?.name ?? session?.user?.email ?? 'daar';
+  const name = useDeelnemerDisplayName();
 
   return (
     <>

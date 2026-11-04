@@ -2,10 +2,25 @@ import { useRef, useState, useEffect } from 'react';
 import { MONTH_SHORT } from '@/utils/calendarUtils';
 import { MonthPicker } from '@/components/ui/monthpicker';
 
-function formatMonthYear(m: number, y: number): string {
+import { PLANNER_MONTH_NAV_HEIGHT_PX } from '@/components/praktijkplanner/planner-grid-layout';
+
+function monthName(m: number): string {
   const label = MONTH_SHORT[m];
-  const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
-  return `${capitalized} ${y}`;
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function formatMonthYear(m: number, y: number): string {
+  return `${monthName(m)} ${y}`;
+}
+
+/**
+ * De negen maanden met jaartal erachter passen op een normaal scherm niet op een regel, en
+ * de rij wikkelde naar een tweede. Het jaartal blijft staan bij de gekozen maand en bij
+ * maanden in een ander jaar; daar zegt het iets. Bij de rest herhaalt het alleen wat de
+ * gekozen maand er al bij zet.
+ */
+function formatMonthLabel(m: number, y: number, activeYear: number): string {
+  return y === activeYear ? monthName(m) : formatMonthYear(m, y);
 }
 
 const ArrowLeft = () => (
@@ -66,7 +81,14 @@ export function MonthNavigation({ month, year, onSelectMonth }: MonthNavigationP
   ];
 
   return (
-    <div className="flex justify-center min-w-0">
+    <div
+      className="flex min-w-0 items-center justify-center"
+      // Een minimale hoogte, geen vaste. De maanden staan in een flex-wrap lijst en gaan op
+      // een smaller scherm over twee regels. In een vast vakje puilt die tweede regel er aan
+      // beide kanten uit, wat opviel zodra de navigatie bovenaan werd vastgezet: de eerste
+      // regel viel dan buiten het scherm.
+      style={{ minHeight: `${PLANNER_MONTH_NAV_HEIGHT_PX}px` }}
+    >
       <nav className="flex items-center min-w-0" aria-label="Maandnavigatie">
         <ul className="list-none flex flex-wrap items-center justify-center gap-y-2 gap-x-4 p-0 m-0">
           {navItems.map(({ month: m, year: y }) => (
@@ -77,7 +99,7 @@ export function MonthNavigation({ month, year, onSelectMonth }: MonthNavigationP
                 onClick={() => onSelectMonth(m, y)}
                 aria-label={`Ga naar ${formatMonthYear(m, y)}`}
               >
-                {formatMonthYear(m, y)}
+                {formatMonthLabel(m, y, year)}
               </button>
             </li>
           ))}
@@ -146,7 +168,7 @@ export function MonthNavigation({ month, year, onSelectMonth }: MonthNavigationP
                 onClick={() => onSelectMonth(m, y)}
                 aria-label={`Ga naar ${formatMonthYear(m, y)}`}
               >
-                {formatMonthYear(m, y)}
+                {formatMonthLabel(m, y, year)}
               </button>
             </li>
           ))}

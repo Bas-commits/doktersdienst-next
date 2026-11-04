@@ -1,12 +1,11 @@
 import type { NextApiRequest } from 'next';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
+import { GROEP_ADMINISTRATOR, GROEP_SECRETARIS } from '@/lib/roles';
 
 const { deelnemers, waarneemgroepdeelnemers } = schema;
-
-export const GROEP_ADMINISTRATOR = 5;
-export const GROEP_SECRETARIS = 2;
+export { GROEP_ADMINISTRATOR, GROEP_DEELNEMER, GROEP_SECRETARIS } from '@/lib/roles';
 
 /** Convert Next.js request headers to Headers for Better Auth */
 export function toHeaders(incoming: NextApiRequest['headers']): Headers {
@@ -25,6 +24,26 @@ export type AuthenticatedUser = {
   isAdmin: boolean;
 };
 
+type DeelnemerIdentity = {
+  id: number;
+  idgroep: number | null;
+};
+
+/**
+ * Resolves a deelnemer from Better Auth session.user.email.
+ * Better Auth maps that value to deelnemers.login; also match email for legacy rows.
+ */
+export async function findDeelnemerBySessionEmail(email: string): Promise<DeelnemerIdentity | null> {
+  const [row] = await db
+    .select({ id: deelnemers.id, idgroep: deelnemers.idgroep })
+    .from(deelnemers)
+    .where(or(eq(deelnemers.login, email), eq(deelnemers.email, email)))
+    .limit(1);
+
+  if (!row || row.id === null) return null;
+  return { id: row.id, idgroep: row.idgroep };
+}
+
 /**
  * Resolves the current session and looks up the deelnemer record.
  * Returns null if unauthenticated or deelnemer not found.
@@ -36,13 +55,8 @@ export async function getAuthenticatedUser(req: NextApiRequest): Promise<Authent
   const email = session.user.email;
   if (!email) return null;
 
-  const [row] = await db
-    .select({ id: deelnemers.id, idgroep: deelnemers.idgroep })
-    .from(deelnemers)
-    .where(eq(deelnemers.email, email))
-    .limit(1);
-
-  if (!row || row.id === null) return null;
+  const row = await findDeelnemerBySessionEmail(email);
+  if (!row) return null;
 
   return {
     id: row.id,
@@ -122,4 +136,29 @@ export async function hasGroupManagementAccess(
 ): Promise<boolean> {
   if (user.isAdmin) return true;
   return isSecretarisInWaarneemgroep(user.id, idwaarneemgroep);
+}
+
+/**
+ * Checks if a user may change a participant's color.
+ * Allowed for self, admin, or secretaris in a shared waarneemgroep.
+ */
+export async function canChangeDeelnemerColor(
+  user: AuthenticatedUser,
+  targetDeelnemerId: number,
+  idwaarneemgroep?: number
+): Promise<boolean> {
+  if (targetDeelnemerId === user.id) return true;
+  if (user.isAdmin) return true;
+
+  if (idwaarneemgroep !== undefined) {
+    if (!(await hasGroupManagementAccess(user, idwaarneemgroep))) return false;
+    return isUserInWaarneemgroep(targetDeelnemerId, idwaarneemgroep);
+  }
+
+  const userWgIds = await getUserWaarneemgroepIds(user.id);
+  for (const wgId of userWgIds) {
+    if (!(await hasGroupManagementAccess(user, wgId))) continue;
+    if (await isUserInWaarneemgroep(targetDeelnemerId, wgId)) return true;
+  }
+  return false;
 }

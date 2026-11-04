@@ -2,6 +2,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { asc, eq, max } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser } from '@/lib/api-auth';
+import { isTelnrOnzeCentraleTaken } from '@/lib/waarneemgroep-telnringaand';
+import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
 
 const { waarneemgroepen, specialismen, regios, instellingen } = schema;
 
@@ -15,7 +17,8 @@ export type WaarneemgroepTableItem = {
   naam: string;
   specialisme: string | null;
   regio: string | null;
-  telnringaand: string | null;
+  telnronzecentrale: string | null;
+  telnronzecentrale2: string | null;
   idfacturering: number | null;
 };
 
@@ -25,10 +28,29 @@ export type WaarneemgroepToevoegenOptions = {
   instellingen: InstellingItem[];
   waarneemgroepen: WaarneemgroepListItem[];
   waarneemgroepenTable: WaarneemgroepTableItem[];
+  /**
+   * Every central number held by any group, afgemeld included. The table above shows only active
+   * groups, and the number list used to be built from it: a number of an afgemelde group then
+   * looked free and was refused on save. The save check reads this same list.
+   */
+  bezetteTelnrs: string[];
 };
 
-/** Telefoonnummer: 08800264XX of 318800264XX (laatste twee cijfers variabel) */
-export const TELNR_REGEX = /^(08800264[0-9]{2}|318800264[0-9]{2})$/;
+/**
+ * Central numbers of all groups, afgemelde ones included. An afgemelde group keeps its number, and
+ * the tel-sync reads every group, so a second group on that number would overwrite its PBX record.
+ */
+async function alleCentraleNummers(): Promise<string[]> {
+  const rows = await db
+    .select({
+      telnronzecentrale: waarneemgroepen.telnronzecentrale,
+      telnronzecentrale2: waarneemgroepen.telnronzecentrale2,
+    })
+    .from(waarneemgroepen);
+  return rows
+    .flatMap((row) => [row.telnronzecentrale, row.telnronzecentrale2])
+    .filter((nr): nr is string => typeof nr === 'string' && nr.trim() !== '');
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -49,7 +71,7 @@ export default async function handler(
 
   if (req.method === 'GET') {
     try {
-      const [specialismenRows, regiosRows, instellingenRows, wgRows] = await Promise.all([
+      const [specialismenRows, regiosRows, instellingenRows, wgRows, bezetteTelnrs] = await Promise.all([
         db
           .select({ id: specialismen.id, omschrijving: specialismen.omschrijving })
           .from(specialismen)
@@ -66,7 +88,8 @@ export default async function handler(
           .select({
             id: waarneemgroepen.id,
             naam: waarneemgroepen.naam,
-            telnringaand: waarneemgroepen.telnringaand,
+            telnronzecentrale: waarneemgroepen.telnronzecentrale,
+            telnronzecentrale2: waarneemgroepen.telnronzecentrale2,
             idfacturering: waarneemgroepen.idfacturering,
             specialismeOmschrijving: specialismen.omschrijving,
             regioNaam: regios.naam,
@@ -76,6 +99,7 @@ export default async function handler(
           .leftJoin(regios, eq(waarneemgroepen.idregio, regios.id))
           .where(eq(waarneemgroepen.afgemeld, false))
           .orderBy(asc(waarneemgroepen.naam)),
+        alleCentraleNummers(),
       ]);
 
       const activeWgList = wgRows.filter((r) => r.id != null && r.naam != null);
@@ -96,9 +120,11 @@ export default async function handler(
           naam: r.naam!,
           specialisme: r.specialismeOmschrijving ?? null,
           regio: r.regioNaam ?? null,
-          telnringaand: r.telnringaand ?? null,
+          telnronzecentrale: r.telnronzecentrale ?? null,
+          telnronzecentrale2: r.telnronzecentrale2 ?? null,
           idfacturering: r.idfacturering ?? null,
         })),
+        bezetteTelnrs,
       });
     } catch (err) {
       console.error('GET /api/waarneemgroep-toevoegen error', err);
@@ -121,26 +147,35 @@ export default async function handler(
       return res.status(400).json({ error: 'Naam mag maximaal 50 tekens zijn.' });
     }
 
-    const telnringaand =
-      typeof body.telnringaand === 'string' ? body.telnringaand.trim() || null : null;
+    const normalizePhoneField = (value: unknown, fieldLabel: string): string | null => {
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const normalized = normalizeDutchPhoneToIntl(trimmed);
+      if (!normalized) {
+        throw new Error(`${fieldLabel} is ongeldig. Gebruik bijvoorbeeld 0887732752, 31887732752 of +31887732752.`);
+      }
+      return normalized;
+    };
 
-    // Validate phone format
-    if (telnringaand && !TELNR_REGEX.test(telnringaand)) {
-      return res.status(400).json({
-        error: 'Het telefoonnummer moet het formaat 08800264XX of 318800264XX hebben.',
-      });
-    }
+    const selectedTelnronzecentrale =
+      typeof body.telnronzecentrale2 === 'string'
+        ? body.telnronzecentrale2.trim() || null
+        : typeof body.telnronzecentrale === 'string'
+          ? body.telnronzecentrale.trim() || null
+          : null;
+    const telnronzecentrale2 = selectedTelnronzecentrale
+      ? normalizePhoneField(selectedTelnronzecentrale, 'Telefoonnummer centrale')
+      : null;
+    const telnronzecentrale = telnronzecentrale2;
+    const telnringaand = normalizePhoneField(body.telnringaand, 'Telefoonnummer naar doktersdienst centrale');
+    const telnrnietopgenomen = normalizePhoneField(body.telnrnietopgenomen, 'Telefoonnummer achtervang');
+    const telnrconference = normalizePhoneField(body.telnrconference, 'Telnr conference');
 
-    // Check phone uniqueness
-    if (telnringaand) {
-      const existing = await db
-        .select({ id: waarneemgroepen.id })
-        .from(waarneemgroepen)
-        .where(eq(waarneemgroepen.telnringaand, telnringaand))
-        .limit(1);
-      if (existing.length > 0) {
+    if (telnronzecentrale2) {
+      if (isTelnrOnzeCentraleTaken(telnronzecentrale2, await alleCentraleNummers())) {
         return res.status(400).json({
-          error: `Telefoonnummer ${telnringaand} is al in gebruik door een andere waarneemgroep.`,
+          error: `Telefoonnummer ${telnronzecentrale2} is al in gebruik door een andere waarneemgroep.`,
         });
       }
     }
@@ -164,10 +199,11 @@ export default async function handler(
       idinstelling: num(body.idinstelling),
       regiobeschrijving: str(body.regiobeschrijving, 1024),
       telnringaand,
-      telnrnietopgenomen: str(body.telnrnietopgenomen, 50),
+      telnrnietopgenomen,
       idinvoegendewaarneemgroep: num(body.idinvoegendewaarneemgroep),
-      telnronzecentrale: str(body.telnronzecentrale, 50),
-      telnrconference: str(body.telnrconference, 50),
+      telnronzecentrale,
+      telnronzecentrale2,
+      telnrconference,
       afgemeld: false,
       smsdienstbegin: !!body.smsdienstbegin,
       eigentelwelkomwav: !!body.eigentelwelkomwav,
@@ -177,6 +213,9 @@ export default async function handler(
 
     return res.status(201).json({ success: true, id: newId });
   } catch (err) {
+    if (err instanceof Error && err.message.includes('is ongeldig')) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('POST /api/waarneemgroep-toevoegen error', err);
     return res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' });
   }

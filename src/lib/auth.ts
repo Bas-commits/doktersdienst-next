@@ -1,9 +1,27 @@
+import { APIError } from '@better-auth/core/error';
 import { betterAuth } from 'better-auth';
 import { createAuthMiddleware } from 'better-auth/api';
+import { bearer, magicLink } from 'better-auth/plugins';
 import { Pool } from 'pg';
-import { legacyMD5Verify } from '@/lib/legacy-password';
+import { legacyMD5Hash } from '@/lib/legacy-password';
+import {
+  resolveStoredCredentialHash,
+  verifyStoredCredentialHash,
+} from '@/lib/legacy-credential';
 import { pool as appPool } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import {
+  assertStrongPasswordOrThrow,
+  STRONG_PASSWORD_MAX_LENGTH,
+  STRONG_PASSWORD_MIN_LENGTH,
+} from '@/lib/password-policy';
+import { PASSWORD_UPGRADED_MARKER } from '@/lib/account-password-upgrade';
+import {
+  sendMagicLinkEmailViaResend,
+  sendPasswordResetEmailViaResend,
+  sendVerificationEmailViaResend,
+} from '@/lib/resend-email';
+import { silentInviteResetAls } from '@/lib/silent-invite-reset';
 
 const log = logger.child({ module: 'auth' });
 
@@ -27,65 +45,73 @@ const authDbPool = {
   },
 };
 
-// Placeholder email sending function for password reset
-// TODO: Replace with actual email service (Resend, SendGrid, Nodemailer, etc.)
-async function sendResetPasswordEmail({
-  user,
-  url,
-  token,
-}: {
+async function sendResetPasswordEmail(
+  params: {
+    user: { email: string; name: string | null };
+    url: string;
+    token: string;
+  }
+) {
+  const store = silentInviteResetAls.getStore();
+  if (store) {
+    store.url = params.url;
+    return;
+  }
+  const { user, url } = params;
+  void sendPasswordResetEmailViaResend({
+    to: user.email,
+    url,
+    userName: user.name,
+  }).catch((err) => log.error({ err, to: user.email }, 'password reset email failed'));
+}
+
+async function sendVerificationEmail(arg: {
   user: { email: string; name: string | null };
   url: string;
   token: string;
 }) {
-  // In development, log the email to console
-  // In production, replace this with your email service
-  console.log('📧 Password Reset Email:', {
+  const { user, url } = arg;
+  void sendVerificationEmailViaResend({
     to: user.email,
-    subject: 'Reset your password',
     url,
-    token,
-  });
-
-  // Example implementation with a real service:
-  // await resend.emails.send({
-  //   from: 'noreply@example.com',
-  //   to: user.email,
-  //   subject: 'Reset your password',
-  //   html: `<p>Click <a href="${url}">here</a> to reset your password.</p>`,
-  // });
+    userName: user.name,
+  }).catch((err) =>
+    log.error({ err, to: user.email }, 'verification email failed')
+  );
 }
 
-// Placeholder email sending function for email verification
-// TODO: Replace with actual email service
-async function sendVerificationEmail({
-  user,
-  url,
-  token,
-}: {
-  user: { email: string; name: string | null };
-  url: string;
-  token: string;
-}) {
-  // In development, log the email to console
-  // In production, replace this with your email service
-  console.log('📧 Verification Email:', {
-    to: user.email,
-    subject: 'Verify your email address',
-    url,
-    token,
-  });
-
-  // Example implementation with a real service:
-  // await resend.emails.send({
-  //   from: 'noreply@example.com',
-  //   to: user.email,
-  //   subject: 'Verify your email address',
-  //   html: `<p>Click <a href="${url}">here</a> to verify your email.</p>`,
-  // });
+async function syncDeelnemerPasswordFromAccount(userId: string): Promise<void> {
+  const client = await appPool.connect();
+  try {
+    await client.query('SET search_path TO public');
+    const accountId = `credential-${userId}`;
+    let row = await client.query<{ password: string | null }>(
+      'SELECT password FROM public.account WHERE id = $1 LIMIT 1',
+      [accountId]
+    );
+    let hash = row.rows[0]?.password ?? null;
+    if (!hash) {
+      row = await client.query<{ password: string | null }>(
+        'SELECT password FROM public.account WHERE "userId" = $1 AND "providerId" = $2 LIMIT 1',
+        [userId, 'credential']
+      );
+      hash = row.rows[0]?.password ?? null;
+    }
+    if (!hash) {
+      log.warn({ userId }, 'onPasswordReset: no credential account password found');
+      return;
+    }
+    await client.query(
+      'UPDATE public.deelnemers SET encrypted_password = $1, password = $2 WHERE id = $3::int',
+      [hash, PASSWORD_UPGRADED_MARKER, userId]
+    );
+    log.info({ userId }, 'deelnemers.encrypted_password synced after password reset');
+  } finally {
+    client.release();
+  }
 }
 
-const _authBaseURL = process.env.BETTER_AUTH_URL || 'http://localhost:3000';
+const _authBaseURL = process.env.BETTER_AUTH_URL || 'http://localhost:3005';
 export const auth = betterAuth({
   database: authDbPool,
   baseURL: _authBaseURL,
@@ -93,13 +119,29 @@ export const auth = betterAuth({
   trustedOrigins: [
     'http://localhost:3005',
     'http://127.0.0.1:3005',
+    // Android emulator reaches the host machine at 10.0.2.2
+    'http://10.0.2.2:3005',
     ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL] : []),
+  ],
+  plugins: [
+    magicLink({
+      disableSignUp: true,
+      sendMagicLink: async ({ email, url }) => {
+        void sendMagicLinkEmailViaResend({ to: email, url }).catch((err) =>
+          log.error({ err, to: email }, 'magic link email failed')
+        );
+      },
+    }),
+    bearer(),
   ],
   user: {
     modelName: 'deelnemers',
     fields: {
       email: 'login',
       password: 'encrypted_password',
+      emailVerified: 'email_verified',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
     } as Record<string, string>,
     additionalFields: {
       role: {
@@ -114,11 +156,15 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: false,
     sendResetPassword: sendResetPasswordEmail,
-    minPasswordLength: 8,
-    maxPasswordLength: 128,
+    onPasswordReset: async ({ user }) => {
+      await syncDeelnemerPasswordFromAccount(user.id);
+    },
+    minPasswordLength: STRONG_PASSWORD_MIN_LENGTH,
+    maxPasswordLength: STRONG_PASSWORD_MAX_LENGTH,
     password: {
+      hash: async (password: string) => legacyMD5Hash(password),
       verify: async ({ hash, password }) => {
-        const result = await legacyMD5Verify(hash, password);
+        const result = await verifyStoredCredentialHash(hash, password);
         log.info({ hashPrefix: hash?.slice(0, 6), result }, 'password verify');
         return result;
       },
@@ -144,35 +190,71 @@ export const auth = betterAuth({
     modelName: 'auth_verification',
   },
   emailVerification: {
-    // Optional email verification (can be triggered manually)
+    sendOnSignUp: true,
     sendVerificationEmail: sendVerificationEmail,
+    autoSignInAfterVerification: true,
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      // Ensure credential account exists for deelnemers so Better Auth finds the hash and calls our verify.
-      // Use app pool to avoid connection contention with Better Auth's authDbPool.
-      if (ctx.path === '/sign-in/email' && ctx.body?.email) {
+      if (ctx.path === '/reset-password' && ctx.body?.newPassword != null) {
+        assertStrongPasswordOrThrow(ctx.body.newPassword);
+      } else if (ctx.path === '/sign-up/email' && ctx.body?.password != null) {
+        assertStrongPasswordOrThrow(ctx.body.password);
+      } else if (ctx.path === '/sign-in/email' && ctx.body?.email) {
+        // Ensure credential account exists for deelnemers so Better Auth finds the hash and calls our verify.
+        // Use app pool to avoid connection contention with Better Auth's authDbPool.
         log.info({ email: ctx.body.email }, 'sign-in attempt started');
         const client = await appPool.connect();
         try {
           await client.query('SET search_path TO public');
           // Debug: check which DB we're connected to
-          const dbCheck = await client.query('SELECT current_database(), current_schema(), inet_server_addr(), inet_server_port()');
+          const dbCheck = await client.query(
+            'SELECT current_database(), current_schema(), inet_server_addr(), inet_server_port()'
+          );
           log.info({ db: dbCheck.rows[0] }, 'hook connected to database');
           const countRes = await client.query('SELECT COUNT(*) as cnt FROM deelnemers');
           log.info({ deelnemersCount: countRes.rows[0]?.cnt }, 'total deelnemers in table');
 
-          const deelnemerRes = await client.query<{ id: number; encrypted_password: string | null; name: string | null; email_verified: boolean | null }>(
-            'SELECT id, encrypted_password, name, email_verified FROM deelnemers WHERE login = $1 LIMIT 1',
-            [ctx.body.email]
+          const emailNorm = String(ctx.body.email).trim().toLowerCase();
+          const deelnemerRes = await client.query<{
+            id: number;
+            encrypted_password: string | null;
+            password: string | null;
+            name: string | null;
+            email_verified: boolean | null;
+          }>(
+            'SELECT id, encrypted_password, password, name, email_verified FROM deelnemers WHERE LOWER(TRIM(login)) = $1 LIMIT 1',
+            [emailNorm]
           );
-          log.info({ rowCount: deelnemerRes.rowCount, rows: deelnemerRes.rows }, 'raw deelnemers query result');
-          const row = deelnemerRes.rows?.[0];
           log.info(
-            { email: ctx.body.email, found: !!row, id: row?.id, hasPassword: !!row?.encrypted_password, name: row?.name, emailVerified: row?.email_verified },
+            { rowCount: deelnemerRes.rowCount, rows: deelnemerRes.rows },
+            'raw deelnemers query result'
+          );
+          const row = deelnemerRes.rows?.[0];
+          const credentialHash = row ? resolveStoredCredentialHash(row) : null;
+          const passwordUpgraded = row?.password === PASSWORD_UPGRADED_MARKER;
+          log.info(
+            {
+              email: ctx.body.email,
+              found: !!row,
+              id: row?.id,
+              hasPassword: !!credentialHash,
+              passwordUpgraded,
+              name: row?.name,
+              emailVerified: row?.email_verified,
+            },
             'deelnemers lookup result'
           );
-          if (row?.id != null && row?.encrypted_password) {
+
+          if (row?.id != null && row.email_verified === true && passwordUpgraded && !credentialHash) {
+            throw APIError.from('FORBIDDEN', {
+              message:
+                'U heeft nog geen wachtwoord ingesteld. Open de link in uw uitnodigingsmail om uw wachtwoord te kiezen, of gebruik “wachtwoord vergeten” om een nieuwe link aan te vragen.',
+              code: 'PASSWORD_NOT_SET',
+            });
+          }
+
+          if (row?.id != null && credentialHash) {
             const userId = String(row.id);
             const accountId = `credential-${userId}`;
             // Debug: check constraints from app's perspective
@@ -185,11 +267,14 @@ export const auth = betterAuth({
               `INSERT INTO public.account (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt")
                VALUES ($1, $2, $2, 'credential', $3, now(), now())
                ON CONFLICT ON CONSTRAINT account_pkey DO UPDATE SET password = EXCLUDED.password, "updatedAt" = now()`,
-              [accountId, userId, row.encrypted_password]
+              [accountId, userId, credentialHash]
             );
             log.info({ userId, accountId }, 'account upserted');
           } else {
-            log.warn({ email: ctx.body.email, id: row?.id, hasPassword: !!row?.encrypted_password }, 'skipped account upsert — missing id or password');
+            log.warn(
+              { email: ctx.body.email, id: row?.id, hasPassword: !!credentialHash },
+              'skipped account upsert — missing id or password'
+            );
           }
         } catch (err) {
           log.error({ err, email: ctx.body.email }, 'error in sign-in hook');

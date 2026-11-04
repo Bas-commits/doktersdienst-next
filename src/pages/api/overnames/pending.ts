@@ -3,6 +3,12 @@ import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { alias } from 'drizzle-orm/pg-core';
+import { deelnemerChipInitials, deelnemerRoosterNaam } from '@/lib/deelnemer-display';
+import {
+  formatAmsterdamDateLabelFromUnixSeconds,
+  formatAmsterdamTimeFromUnixSeconds,
+} from '@/lib/amsterdamWallTime';
+import { toOvernameSectie } from '@/lib/overname-sectie';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers, waarneemgroepen } = schema;
 const GROEP_SECRETARIS = 2;
@@ -62,14 +68,34 @@ export default async function handler(
     .map((r) => r.idwaarneemgroep)
     .filter((id): id is number => id != null);
 
-  // Build filter: proposals targeting me OR proposals in my secretaris waarneemgroepen
-  const targetFilter = eq(dienstenTable.iddeelnovern, sql`${doctorId}::integer`);
+  // Build filter:
+  // - pending proposals targeting me (iddeelnovern = self)
+  // - declined proposals where I'm the original "van" arts or sender (so the
+  //   rejection doesn't get forgotten)
+  // - secretaris: all pending/declined proposals in their waarneemgroepen
+  const pendingForTarget = and(
+    eq(dienstenTable.status, 'pending'),
+    eq(dienstenTable.iddeelnovern, sql`${doctorId}::integer`)
+  );
+  const declinedForSender = and(
+    eq(dienstenTable.status, 'declined'),
+    or(
+      eq(dienstenTable.iddeelnemer, sql`${doctorId}::integer`),
+      eq(dienstenTable.senderId, sql`${doctorId}::integer`)
+    )
+  );
+  const ownFilter = or(pendingForTarget, declinedForSender);
   const pendingFilter = and(
     eq(dienstenTable.type, 4),
-    eq(dienstenTable.status, 'pending'),
     secretarisWgIds.length > 0
-      ? or(targetFilter, inArray(dienstenTable.idwaarneemgroep, secretarisWgIds))
-      : targetFilter
+      ? or(
+          ownFilter,
+          and(
+            or(eq(dienstenTable.status, 'pending'), eq(dienstenTable.status, 'declined')),
+            inArray(dienstenTable.idwaarneemgroep, secretarisWgIds)
+          )
+        )
+      : ownFilter
   );
 
   // Aliases for joining original (van) and target (naar) doctor info
@@ -81,19 +107,45 @@ export default async function handler(
 
   const rows = await db
     .select({
+      overnameId: dienstenTable.id,
       iddienstovern: dienstenTable.iddienstovern,
+      status: dienstenTable.status,
+      overnameSectie: dienstenTable.overnameSectie,
       van: dienstenTable.van,
       tot: dienstenTable.tot,
       originalVan: originalDienst.van,
       originalTot: originalDienst.tot,
+      /**
+       * Fallback for deciding partial-ness when iddienstovern does not resolve. Of the 21
+       * real overname rows -- type 4/6 with a non-null status; the other 141 rows of those
+       * types are legacy assignments, see DIENST_TYPES.md -- 9 hold a literal 0, and no
+       * dienst has id 0, so those never find a parent.
+       *
+       * A takeover of a whole shift starts and ends exactly on that shift's boundaries; a
+       * partial one lands inside them, so the window's shape answers the question without
+       * the reference. Cross-checked against the enclosing type-0 assignment of the same
+       * doctor, which finds exactly one parent for all 21, and the two agreed on every row.
+       */
+      alignsWithShiftBoundaries: sql<boolean>`exists (
+        select 1 from diensten s
+        where s.idwaarneemgroep = ${dienstenTable.idwaarneemgroep}
+          and s.van = ${dienstenTable.van}
+          and s.tot = ${dienstenTable.tot}
+          and s.type in (0, 1)
+      )`,
       iddeelnemer: dienstenTable.iddeelnemer,
       iddeelnovern: dienstenTable.iddeelnovern,
       idwaarneemgroep: dienstenTable.idwaarneemgroep,
+      senderId: dienstenTable.senderId,
       originalVoornaam: originalDeelnemer.voornaam,
       originalAchternaam: originalDeelnemer.achternaam,
+      originalVoorletterstussenvoegsel: originalDeelnemer.voorletterstussenvoegsel,
+      originalInitialen: originalDeelnemer.initialen,
       originalColor: originalDeelnemer.color,
       targetVoornaam: targetDeelnemer.voornaam,
       targetAchternaam: targetDeelnemer.achternaam,
+      targetVoorletterstussenvoegsel: targetDeelnemer.voorletterstussenvoegsel,
+      targetInitialen: targetDeelnemer.initialen,
       targetColor: targetDeelnemer.color,
       waarneemgroepNaam: waarneemgroepen.naam,
     })
@@ -105,18 +157,15 @@ export default async function handler(
     .where(pendingFilter);
 
   const verzoeken = rows.map((r) => {
-    const vanDate = new Date(Number(r.van ?? 0) * 1000);
-    const totDate = new Date(Number(r.tot ?? 0) * 1000);
-    const datumVan = vanDate.toLocaleDateString('nl-NL', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    });
-    const datumTot = totDate.toLocaleDateString('nl-NL', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    });
+    const vanUnix = Number(r.van ?? 0);
+    const totUnix = Number(r.tot ?? 0);
+    const vanDate = new Date(vanUnix * 1000);
+    // Formatted in Amsterdam explicitly. These strings are built on the server, so
+    // anything host-zone-dependent renders correctly on a developer machine and two
+    // hours early in the UTC container — which is how the same overname ended up
+    // reading 18:00 here and 20:00 in the shift tooltip.
+    const datumVan = formatAmsterdamDateLabelFromUnixSeconds(vanUnix);
+    const datumTot = formatAmsterdamDateLabelFromUnixSeconds(totUnix);
     // ISO week number
     const d = new Date(vanDate);
     d.setHours(0, 0, 0, 0);
@@ -125,36 +174,77 @@ export default async function handler(
       (d.getTime() - new Date(d.getFullYear(), 0, 4).getTime()) / 86400000 / 7 + 1
     );
 
-    const originalInitialen =
-      ((r.originalVoornaam?.[0] ?? '') + (r.originalAchternaam?.[0] ?? '')).toUpperCase() || '??';
-    const originalNaam = `${r.originalVoornaam ?? ''} ${r.originalAchternaam ?? ''}`.trim() || 'Onbekend';
-    const targetInitialen =
-      ((r.targetVoornaam?.[0] ?? '') + (r.targetAchternaam?.[0] ?? '')).toUpperCase() || '??';
-    const targetNaam = `${r.targetVoornaam ?? ''} ${r.targetAchternaam ?? ''}`.trim() || 'Onbekend';
+    const originalInitialen = deelnemerChipInitials(
+      {
+        initialen: r.originalInitialen,
+        voornaam: r.originalVoornaam,
+        achternaam: r.originalAchternaam,
+      },
+      { fallback: '??' }
+    );
+    const originalNaam = deelnemerRoosterNaam({
+      achternaam: r.originalAchternaam,
+      voornaam: r.originalVoornaam,
+      voorletterstussenvoegsel: r.originalVoorletterstussenvoegsel,
+    });
+    const targetInitialen = deelnemerChipInitials(
+      {
+        initialen: r.targetInitialen,
+        voornaam: r.targetVoornaam,
+        achternaam: r.targetAchternaam,
+      },
+      { fallback: '??' }
+    );
+    const targetNaam = deelnemerRoosterNaam({
+      achternaam: r.targetAchternaam,
+      voornaam: r.targetVoornaam,
+      voorletterstussenvoegsel: r.targetVoorletterstussenvoegsel,
+    });
+    // The parent dienst is authoritative when the reference resolves. When it does not,
+    // fall back on the shape of the window rather than assuming a full takeover: the old
+    // `false` here labelled 4 of the 9 partial takeovers as "volledige dienst".
     const isPartial =
       r.originalVan == null || r.originalTot == null
-        ? false
+        ? !r.alignsWithShiftBoundaries
         : Number(r.van) !== Number(r.originalVan) || Number(r.tot) !== Number(r.originalTot);
 
     return {
-      iddienstovern: r.iddienstovern,
+      overnameId: r.overnameId == null ? null : Number(r.overnameId),
+      iddienstovern: Number(r.iddienstovern ?? 0),
+      idwaarneemgroep: r.idwaarneemgroep == null ? null : Number(r.idwaarneemgroep),
+      iddeelnovern: r.iddeelnovern == null ? null : Number(r.iddeelnovern),
+      iddeelnemer: r.iddeelnemer == null ? null : Number(r.iddeelnemer),
+      senderId: r.senderId == null ? null : Number(r.senderId),
+      status: r.status,
+      /** Lane: 'top' achterwacht, 'bottom' extra dokter, null the ordinary dienst. */
+      sectie: toOvernameSectie(r.overnameSectie),
+      overnameVanUnix: Number(r.van ?? 0),
+      overnameTotUnix: Number(r.tot ?? 0),
+      originalVanUnix: r.originalVan == null ? null : Number(r.originalVan),
+      originalTotUnix: r.originalTot == null ? null : Number(r.originalTot),
       datum: datumVan,
       datumVan,
       datumTot,
-      van: `${String(vanDate.getHours()).padStart(2, '0')}:${String(vanDate.getMinutes()).padStart(2, '0')}`,
-      tot: `${String(totDate.getHours()).padStart(2, '0')}:${String(totDate.getMinutes()).padStart(2, '0')}`,
+      van: formatAmsterdamTimeFromUnixSeconds(vanUnix),
+      tot: formatAmsterdamTimeFromUnixSeconds(totUnix),
       isPartial,
       week,
       waarneemgroep: r.waarneemgroepNaam ?? `Groep ${r.idwaarneemgroep ?? '?'}`,
       vanArts: {
         initialen: originalInitialen,
         naam: originalNaam,
+        voornaam: r.originalVoornaam,
+        achternaam: r.originalAchternaam,
+        voorletterstussenvoegsel: r.originalVoorletterstussenvoegsel,
         color: r.originalColor ?? '#7b2d8e',
         akkoord: true,
       },
       naarArts: {
         initialen: targetInitialen,
         naam: targetNaam,
+        voornaam: r.targetVoornaam,
+        achternaam: r.targetAchternaam,
+        voorletterstussenvoegsel: r.targetVoorletterstussenvoegsel,
         color: r.targetColor ?? '#7b2d8e',
         akkoord: false,
       },

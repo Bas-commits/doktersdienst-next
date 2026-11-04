@@ -1,0 +1,452 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { signJWT } from 'better-auth/crypto';
+import { and, eq, or, sql } from 'drizzle-orm';
+import { db, schema } from '@/db';
+import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
+import {
+  listGroepChoicesForNewDeelnemer,
+  resolveDeelnemerCreatePermission,
+} from '@/lib/deelnemer-nieuw';
+import { resolveInviteEmailAuthApiBase } from '@/lib/better-auth-url';
+import { sendVerificationEmailViaResendWithProof } from '@/lib/resend-email';
+import { normalizeDutchPhoneToIntl } from '@/lib/phone-number';
+
+const { deelnemers, waarneemgroepdeelnemers } = schema;
+
+const MAX_LOGIN_EMAIL = 50;
+const MAX_NAME_FIELD = 50;
+const EMAIL_VERIFICATION_TTL_SEC = 3600;
+/**
+ * Of deze functie bij deze waarneemgroep hoort.
+ *
+ * Stond hier eerder als de vaste verzameling 1 tot en met 4. Elke groep bepaalt nu zelf zijn
+ * functies, dus geldigheid hangt af van de groep.
+ */
+async function functieHoortBijGroep(idfunctie: number, idwaarneemgroep: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.praktijkplannerfuncties.id })
+    .from(schema.praktijkplannerfuncties)
+    .where(
+      and(
+        eq(schema.praktijkplannerfuncties.id, idfunctie),
+        eq(schema.praktijkplannerfuncties.idwaarneemgroep, idwaarneemgroep)
+      )
+    )
+    .limit(1);
+  return row != null;
+}
+const DEFAULT_MEMBERSHIP_FTE = 1;
+
+type WaarneemgroepMembershipExtras = {
+  fte: number;
+  idfunctie: number | null;
+};
+
+function getAuthSecret(): string | null {
+  const s = process.env.BETTER_AUTH_SECRET?.trim() || process.env.AUTH_SECRET?.trim();
+  return s || null;
+}
+
+type PostBody = {
+  email?: unknown;
+  voornaam?: unknown;
+  voorletterstussenvoegsel?: unknown;
+  achternaam?: unknown;
+  initialen?: unknown;
+  geslacht?: unknown;
+  huisadrtelnr?: unknown;
+  idgroep?: unknown;
+  idwaarneemgroep?: unknown;
+  bestaatInAndereWaarneemgroep?: unknown;
+  /** FTE for this waarneemgroep membership (0–2); stored on waarneemgroepdeelnemers.fte */
+  fte?: unknown;
+  /** Functie for this waarneemgroep membership; stored on waarneemgroepdeelnemers.idfunctie */
+  idfunctie?: unknown;
+  /** Browser `window.location.origin`; must agree with server's Host/Forwarded/Origin (`Origin` matches on POST). */
+  inviteInitiatedOrigin?: unknown;
+};
+
+/** Normalize id from Postgres/Drizzle (number, bigint, numeric string). */
+function coerceInsertedDeelnemerId(raw: unknown): number | null {
+  if (raw == null) return null;
+  if (typeof raw === 'bigint') {
+    const n = Number(raw);
+    return Number.isSafeInteger(n) ? n : null;
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw === 'string' && raw !== '') {
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+export type PostDeelnemerNieuwOk = {
+  ok: true;
+  iddeelnemer: number;
+  outcome: 'created' | 'linked' | 'already-linked';
+  message: string;
+};
+export type PostDeelnemerNieuwErr = { error: string };
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse<PostDeelnemerNieuwOk | PostDeelnemerNieuwErr>
+) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const b = req.body as PostBody;
+  const idwaarneemgroep =
+    typeof b.idwaarneemgroep === 'number' ? b.idwaarneemgroep : Number(b.idwaarneemgroep);
+  const idgroep = typeof b.idgroep === 'number' ? b.idgroep : Number(b.idgroep);
+  if (!Number.isFinite(idwaarneemgroep) || !Number.isFinite(idgroep)) {
+    return res
+      .status(400)
+      .json({ error: 'idwaarneemgroep en idgroep zijn verplicht en moeten een getal zijn.' });
+  }
+
+  const perm = await resolveDeelnemerCreatePermission(user, idwaarneemgroep);
+  if (!perm.ok) {
+    return res.status(403).json({ error: perm.forbiddenReason });
+  }
+
+  if (!(await hasGroupManagementAccess(user, idwaarneemgroep))) {
+    return res.status(403).json({ error: 'Geen beheer rechten voor de gekozen waarneemgroep.' });
+  }
+
+  const groepChoices = await listGroepChoicesForNewDeelnemer();
+  const groepIds = new Set(groepChoices.map((g) => g.id));
+  if (!groepIds.has(idgroep)) {
+    return res.status(400).json({ error: 'Geen geldige rol (idgroep) voor uw account gekozen.' });
+  }
+
+  const membershipExtras = parseWaarneemgroepMembershipExtras(b);
+  if ('error' in membershipExtras) {
+    return res.status(400).json({ error: membershipExtras.error });
+  }
+  if (
+    membershipExtras.idfunctie != null &&
+    !(await functieHoortBijGroep(membershipExtras.idfunctie, idwaarneemgroep))
+  ) {
+    return res.status(400).json({ error: 'Deze functie hoort niet bij deze waarneemgroep.' });
+  }
+
+  const emailRaw = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
+
+  if (!emailRaw.includes('@')) {
+    return res.status(400).json({ error: 'Vul een geldig e-mailadres in.' });
+  }
+  if (emailRaw.length > MAX_LOGIN_EMAIL) {
+    return res.status(400).json({
+      error: `E-mailadres mag maximaal ${MAX_LOGIN_EMAIL} tekens zijn (legacy database).`,
+    });
+  }
+
+  const bestaatInAndereWaarneemgroep =
+    b.bestaatInAndereWaarneemgroep === true || b.bestaatInAndereWaarneemgroep === 'true';
+
+  const voornaam = clip((typeof b.voornaam === 'string' ? b.voornaam : '').trim(), MAX_NAME_FIELD);
+  const tussen = clip(
+    (typeof b.voorletterstussenvoegsel === 'string' ? b.voorletterstussenvoegsel : '').trim(),
+    MAX_NAME_FIELD
+  );
+  const achternaam = clip((typeof b.achternaam === 'string' ? b.achternaam : '').trim(), MAX_NAME_FIELD);
+  const initialen = clip((typeof b.initialen === 'string' ? b.initialen : '').trim(), MAX_NAME_FIELD);
+  const mobilInput = clip((typeof b.huisadrtelnr === 'string' ? b.huisadrtelnr : '').trim(), MAX_NAME_FIELD);
+  const mobil = mobilInput ? normalizeDutchPhoneToIntl(mobilInput) : null;
+  if (mobilInput && !mobil) {
+    return res.status(400).json({
+      error: 'Telefoonnummer is ongeldig. Gebruik bijvoorbeeld 0612345678, 31612345678 of +31612345678.',
+    });
+  }
+
+  const [existingDeelnemer] = await db
+    .select({ id: deelnemers.id })
+    .from(deelnemers)
+    .where(or(eq(deelnemers.login, emailRaw), eq(deelnemers.email, emailRaw)))
+    .limit(1);
+
+  const existingDeelnemerId = coerceInsertedDeelnemerId(existingDeelnemer?.id);
+  if (existingDeelnemer?.id != null && existingDeelnemerId == null) {
+    return res.status(500).json({ error: 'Bestaande deelnemer-id kon niet worden gelezen.' });
+  }
+
+  if (existingDeelnemerId != null) {
+    try {
+      const [existingMembership] = await db
+        .select({ id: waarneemgroepdeelnemers.id, aangemeld: waarneemgroepdeelnemers.aangemeld })
+        .from(waarneemgroepdeelnemers)
+        .where(
+          and(
+            eq(waarneemgroepdeelnemers.iddeelnemer, existingDeelnemerId),
+            eq(waarneemgroepdeelnemers.idwaarneemgroep, idwaarneemgroep)
+          )
+        )
+        .limit(1);
+
+      if (existingMembership?.id != null) {
+        if (existingMembership.aangemeld === true) {
+          return res.status(200).json({
+            ok: true,
+            iddeelnemer: existingDeelnemerId,
+            outcome: 'already-linked',
+            message:
+              'Deze deelnemer zit al in deze waarneemgroep en kan daarom niet worden toegevoegd.',
+          });
+        }
+
+        await db
+          .update(waarneemgroepdeelnemers)
+          .set({
+            aangemeld: true,
+            idgroep,
+            fte: membershipExtras.fte,
+            idfunctie: membershipExtras.idfunctie,
+          })
+          .where(eq(waarneemgroepdeelnemers.id, existingMembership.id));
+
+        return res.status(200).json({
+          ok: true,
+          iddeelnemer: existingDeelnemerId,
+          outcome: 'linked',
+          message: 'Bestaande gebruiker opnieuw aangemeld in deze waarneemgroep.',
+        });
+      }
+
+      await db.insert(waarneemgroepdeelnemers).values({
+        iddeelnemer: existingDeelnemerId,
+        idwaarneemgroep,
+        idgroep,
+        aangemeld: true,
+        fte: membershipExtras.fte,
+        idfunctie: membershipExtras.idfunctie,
+      });
+
+      return res.status(200).json({
+        ok: true,
+        iddeelnemer: existingDeelnemerId,
+        outcome: 'linked',
+        message: 'Bestaande gebruiker toegevoegd aan deze waarneemgroep.',
+      });
+    } catch (err) {
+      console.error('deelnemer-nieuw existing-user-link error', err);
+      const code = typeof err === 'object' && err !== null ? (err as { code?: string }).code : '';
+      const cause =
+        err && typeof err === 'object' && 'cause' in err && err.cause && typeof err.cause === 'object'
+          ? (err.cause as { code?: string }).code
+          : undefined;
+      const pgCode = code || cause || '';
+      if (code === '23505' || pgCode === '23505') {
+        return res.status(200).json({
+          ok: true,
+          iddeelnemer: existingDeelnemerId,
+          outcome: 'already-linked',
+          message:
+            'Deze deelnemer zit al in deze waarneemgroep en kan daarom niet worden toegevoegd.',
+        });
+      }
+      const msg = err instanceof Error ? err.message : 'Koppelen deelnemer aan waarneemgroep mislukt.';
+      return res.status(500).json({ error: msg });
+    }
+  }
+
+  if (bestaatInAndereWaarneemgroep) {
+    return res.status(422).json({
+      error: 'Er is geen bestaande deelnemer gevonden met dit e-mailadres.',
+    });
+  }
+
+  if (!voornaam || !achternaam || !initialen) {
+    return res.status(400).json({ error: 'Voornaam, achternaam en initialen zijn verplicht.' });
+  }
+
+  const geslachtRaw = b.geslacht;
+  if (
+    geslachtRaw !== undefined &&
+    geslachtRaw !== 0 &&
+    geslachtRaw !== 1 &&
+    geslachtRaw !== null
+  ) {
+    return res.status(400).json({ error: 'Ongeldige waarde voor geslacht' });
+  }
+  const geslachtDb =
+    geslachtRaw === undefined ? null : geslachtRaw === null ? null : geslachtRaw === 1;
+
+  const displayName = clip(
+    [voornaam, tussen, achternaam].filter(Boolean).join(' '),
+    MAX_NAME_FIELD
+  );
+
+  const authSecret = getAuthSecret();
+  if (!authSecret) {
+    console.error('deelnemer-nieuw: BETTER_AUTH_SECRET / AUTH_SECRET ontbreekt');
+    return res.status(500).json({
+      error: 'Serverconfiguratie ontbreekt voor e-mailverificatie. Neem contact op met de beheerder.',
+    });
+  }
+
+  const inviteOrigin =
+    typeof b.inviteInitiatedOrigin === 'string' ? b.inviteInitiatedOrigin.trim() || undefined : undefined;
+  const inviteBaseResolved = resolveInviteEmailAuthApiBase(req, inviteOrigin);
+  if (!inviteBaseResolved.ok) {
+    return res.status(400).json({ error: inviteBaseResolved.error });
+  }
+  const authApiBase = inviteBaseResolved.authApiBase;
+
+  let verificationUrl: string;
+  try {
+    const token = await signJWT({ email: emailRaw }, authSecret, EMAIL_VERIFICATION_TTL_SEC);
+    verificationUrl = `${authApiBase}/verify-email?token=${encodeURIComponent(token)}&callbackURL=${encodeURIComponent('/api/invite/na-verificatie')}`;
+  } catch (err) {
+    console.error('deelnemer-nieuw: sign verification JWT failed', err);
+    return res.status(500).json({
+      error: 'Kon uitnodigingslink niet aanmaken. Probeer het later opnieuw of neem contact op met de beheerder.',
+    });
+  }
+
+  try {
+    await sendVerificationEmailViaResendWithProof({
+      to: emailRaw,
+      url: verificationUrl,
+      userName: displayName,
+    });
+  } catch (e) {
+    console.error('sendVerificationEmail (strict Resend) voor nieuwe deelnemer', e);
+    const detail = e instanceof Error ? e.message : String(e);
+    return res.status(502).json({
+      error: `De uitnodigingsmail kon niet worden verstuurd: ${detail}`,
+    });
+  }
+
+  let newUserId: number;
+
+  try {
+    newUserId = await db.transaction(async (tx) => {
+      await tx.execute(sql`lock table ${deelnemers} in exclusive mode`);
+      const [nextIdRow] = await tx
+        .select({ id: sql<number>`coalesce(max(${deelnemers.id}), 0) + 1` })
+        .from(deelnemers)
+        .limit(1);
+      const allocatedId = coerceInsertedDeelnemerId(nextIdRow?.id);
+      if (allocatedId == null) {
+        throw new Error('De database kon geen volgend deelnemer-id bepalen.');
+      }
+
+      const insertedRows = await tx
+        .insert(deelnemers)
+        .values({
+          id: allocatedId,
+          voornaam,
+          voorletterstussenvoegsel: tussen || null,
+          achternaam,
+          initialen,
+          geslacht: geslachtDb,
+          name: displayName,
+          login: emailRaw,
+          email: emailRaw,
+          huisemail: emailRaw,
+          huisadrtelnr: mobil,
+          idgroep,
+          idwaarneemgroep,
+          abonnementdd: true,
+          echtedeelnemer: true,
+          afgemeld: false,
+          color: '#9ca3af',
+          emailVerified: false,
+          role: 'user',
+        })
+        .returning({ id: deelnemers.id });
+
+      let id = coerceInsertedDeelnemerId(insertedRows[0]?.id);
+      if (id == null) {
+        const [byLogin] = await tx
+          .select({ id: deelnemers.id })
+          .from(deelnemers)
+          .where(eq(deelnemers.login, emailRaw))
+          .limit(1);
+        id = coerceInsertedDeelnemerId(byLogin?.id);
+      }
+
+      if (id == null || !Number.isFinite(id)) {
+        throw new Error(
+          'De database kon geen deelnemer-id genereren voor insert. Staat kolom id op DEFAULT (SERIAL/identity)?'
+        );
+      }
+      await tx.insert(waarneemgroepdeelnemers).values({
+        iddeelnemer: id,
+        idwaarneemgroep,
+        idgroep,
+        aangemeld: true,
+        fte: membershipExtras.fte,
+        idfunctie: membershipExtras.idfunctie,
+      });
+      return id;
+    });
+  } catch (err) {
+    console.error('deelnemer-nieuw insert-transaction error', err);
+    const code = typeof err === 'object' && err !== null ? (err as { code?: string }).code : '';
+    const cause =
+      err && typeof err === 'object' && 'cause' in err && err.cause && typeof err.cause === 'object'
+        ? (err.cause as { code?: string }).code
+        : undefined;
+    const pgCode = code || cause || '';
+    if (code === '23505' || pgCode === '23505') {
+      return res.status(422).json({ error: 'Er bestaat al een gebruiker met dit e‑mailadres.' });
+    }
+    const msg =
+      err instanceof Error
+        ? err.message
+        : 'Aanmaken deelnemer mislukt.';
+    return res.status(500).json({ error: msg });
+  }
+
+  return res.status(200).json({
+    ok: true,
+    iddeelnemer: newUserId,
+    outcome: 'created',
+    message:
+      'Deelnemer toegevoegd. Er is een e‑mail gestuurd met een link om het adres te bevestigen; daarna wordt direct gevraagd een sterk wachtwoord te kiezen.',
+  });
+}
+
+function clip(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max);
+}
+
+function parseWaarneemgroepMembershipExtras(
+  b: PostBody
+): WaarneemgroepMembershipExtras | { error: string } {
+  let fte = DEFAULT_MEMBERSHIP_FTE;
+  if (b.fte !== undefined && b.fte !== null && b.fte !== '') {
+    const raw =
+      typeof b.fte === 'number'
+        ? b.fte
+        : typeof b.fte === 'string'
+          ? Number(b.fte.trim().replace(',', '.'))
+          : Number.NaN;
+    if (!Number.isFinite(raw) || raw < 0 || raw > 2) {
+      return { error: 'FTE moet tussen 0 en 2 liggen.' };
+    }
+    fte = Math.round(Math.min(2, Math.max(0, raw)) * 100) / 100;
+  }
+
+  let idfunctie: number | null = null;
+  if (b.idfunctie !== undefined && b.idfunctie !== null && b.idfunctie !== '') {
+    const raw =
+      typeof b.idfunctie === 'number' ? b.idfunctie : Number(String(b.idfunctie).trim());
+    if (!Number.isInteger(raw) || raw < 1) {
+      return { error: 'Functie is ongeldig.' };
+    }
+    idfunctie = raw;
+  }
+
+  return { fte, idfunctie };
+}

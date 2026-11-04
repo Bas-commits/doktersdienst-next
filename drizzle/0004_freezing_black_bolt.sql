@@ -1,0 +1,1 @@
+ALTER TABLE "gesprekken" RENAME COLUMN "talkDurationSec" TO "talk_duration_sec";

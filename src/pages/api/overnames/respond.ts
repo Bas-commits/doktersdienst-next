@@ -3,9 +3,19 @@ import { and, eq, or } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db, schema } from '@/db';
 import { logger } from '@/lib/logger';
+import { GROEP_ADMINISTRATOR, GROEP_SECRETARIS } from '@/lib/roles';
+import { buildLegacyOvernameRowConditions, overnameSectieCondition } from '@/lib/overname-legacy-lookup';
+import {
+  parseOvernameSectie,
+  toOvernameSectie,
+  type OvernameSectie,
+} from '@/lib/overname-sectie';
+import {
+  scheduleTelRecordRefresh,
+  shouldRefreshAfterOvernameRespond,
+} from '@/tel-server-sync/refresh-scheduler';
 
 const { diensten: dienstenTable, deelnemers, waarneemgroepdeelnemers } = schema;
-const GROEP_SECRETARIS = 2;
 
 type Data = { success: true } | { error: string };
 
@@ -24,8 +34,13 @@ function toHeaders(incoming: NextApiRequest['headers']): Headers {
  * Accept, decline, or delete an overname voorstel.
  *
  * Body:
- *   iddienstovern  number  — ID of the original dienst (unique key for pending proposals)
+ *   iddienstovern  number  — ID of the original dienst (fallback key for legacy delete flow)
+ *   overnameId     number  — Optional ID of the specific overname row to mutate/delete
+ *   deleteStatus   string  — Optional delete filter: "pending" | "declined" | "accepted"
  *   action         string  — "accept", "decline", or "delete"
+ *   sectie         string  — Optional lane: 'top' | 'bottom' | null (middle). Only filtered on when
+ *                             the key is present; clients that never send it (mobile) keep matching
+ *                             as before.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -41,15 +56,71 @@ export default async function handler(
   }
 
   try {
-    const { iddienstovern, action } = req.body;
+    const { iddienstovern, overnameId, deleteStatus, action, van, tot, idwaarneemgroep, iddeelnemer, iddeelnovern } = req.body;
+    let requestedSectie: OvernameSectie | null | undefined;
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'sectie')) {
+      const parsed = parseOvernameSectie(req.body.sectie);
+      if (!parsed.ok) {
+        return res.status(400).json({ error: 'Invalid sectie' });
+      }
+      requestedSectie = parsed.sectie;
+    }
+    const iddienstovernNum = Number(iddienstovern);
+    const overnameIdNum =
+      overnameId == null ? null : Number(overnameId);
+    const numVan = van == null ? null : Number(van);
+    const numTot = tot == null ? null : Number(tot);
+    const numIdWaarneemgroep =
+      idwaarneemgroep == null ? null : Number(idwaarneemgroep);
+    const numIdDeelnemer =
+      iddeelnemer == null ? null : Number(iddeelnemer);
+    const numIdDeelnOvern =
+      iddeelnovern == null ? null : Number(iddeelnovern);
 
-    if (!iddienstovern || (action !== 'accept' && action !== 'decline' && action !== 'delete')) {
+    const hasOvernameId =
+      overnameIdNum != null && Number.isFinite(overnameIdNum) && overnameIdNum > 0;
+    const hasDienstOvernId =
+      Number.isFinite(iddienstovernNum) && iddienstovernNum > 0;
+    const hasCompositeKey =
+      numVan != null &&
+      numTot != null &&
+      numVan > 0 &&
+      numTot > 0 &&
+      numIdWaarneemgroep != null &&
+      numIdWaarneemgroep > 0;
+
+    if (action !== 'accept' && action !== 'decline' && action !== 'delete') {
       return res.status(400).json({ error: 'Invalid action' });
     }
+    if (
+      (action === 'accept' || action === 'decline') &&
+      !hasOvernameId &&
+      !hasDienstOvernId &&
+      !hasCompositeKey
+    ) {
+      return res.status(400).json({ error: 'Invalid iddienstovern' });
+    }
+    if (
+      action === 'delete' &&
+      !hasOvernameId &&
+      !hasDienstOvernId &&
+      !hasCompositeKey
+    ) {
+      return res.status(400).json({ error: 'Invalid delete target' });
+    }
+    if (
+      action === 'delete' &&
+      deleteStatus != null &&
+      deleteStatus !== 'pending' &&
+      deleteStatus !== 'declined' &&
+      deleteStatus !== 'accepted'
+    ) {
+      return res.status(400).json({ error: 'Invalid delete status filter' });
+    }
 
-    // Get the logged-in doctor's deelnemer ID
+    // Get the logged-in doctor's deelnemer ID and global idgroep (administrator)
     const currentDoctor = await db
-      .select({ id: deelnemers.id })
+      .select({ id: deelnemers.id, idgroep: deelnemers.idgroep })
       .from(deelnemers)
       .where(eq(deelnemers.login, session.user.email))
       .limit(1);
@@ -58,27 +129,65 @@ export default async function handler(
     if (!doctorId) {
       return res.status(403).json({ error: 'Not authorized' });
     }
+    const isGlobalAdmin = currentDoctor[0]?.idgroep === GROEP_ADMINISTRATOR;
 
     // Find the proposal by composite key.
     // Delete can target pending, declined (type=4) and accepted (type=6) proposals.
     // Accept/decline only targets pending (type=4).
-    const lookupCondition = and(
-      eq(dienstenTable.iddienstovern, iddienstovern),
-      action === 'delete'
-        ? or(
-            and(eq(dienstenTable.type, 4), or(eq(dienstenTable.status, 'pending'), eq(dienstenTable.status, 'declined'))),
-            and(eq(dienstenTable.type, 6), eq(dienstenTable.status, 'accepted'))
-          )
-        : and(eq(dienstenTable.type, 4), eq(dienstenTable.status, 'pending'))
+    const deleteStateCondition =
+      deleteStatus === 'pending'
+        ? and(eq(dienstenTable.type, 4), eq(dienstenTable.status, 'pending'))
+        : deleteStatus === 'declined'
+          ? and(eq(dienstenTable.type, 4), eq(dienstenTable.status, 'declined'))
+          : deleteStatus === 'accepted'
+            ? and(eq(dienstenTable.type, 6), eq(dienstenTable.status, 'accepted'))
+            : or(
+                and(eq(dienstenTable.type, 4), or(eq(dienstenTable.status, 'pending'), eq(dienstenTable.status, 'declined'))),
+                and(eq(dienstenTable.type, 6), eq(dienstenTable.status, 'accepted'))
+              );
+    const pendingStateCondition = and(
+      eq(dienstenTable.type, 4),
+      eq(dienstenTable.status, 'pending'),
     );
+
+    const buildTargetCondition = () => {
+      if (hasOvernameId) {
+        return eq(dienstenTable.id, overnameIdNum as number);
+      }
+      if (hasDienstOvernId) {
+        // iddienstovern is often the shared type-1 slot: add the lane so a dienst and an
+        // achterwacht overname on the same slot are not taken for each other.
+        return requestedSectie !== undefined
+          ? and(eq(dienstenTable.iddienstovern, iddienstovernNum), overnameSectieCondition(requestedSectie))!
+          : eq(dienstenTable.iddienstovern, iddienstovernNum);
+      }
+      return buildLegacyOvernameRowConditions({
+        iddienstovern: 0,
+        idwaarneemgroep: numIdWaarneemgroep as number,
+        van: numVan as number,
+        tot: numTot as number,
+        iddeelnemer: numIdDeelnemer,
+        iddeelnovern: numIdDeelnOvern,
+        overnameSectie: requestedSectie,
+      });
+    };
+
+    const lookupCondition = action === 'delete'
+      ? and(buildTargetCondition(), deleteStateCondition)
+      : and(buildTargetCondition(), pendingStateCondition);
 
     const proposal = await db
       .select({
+        id: dienstenTable.id,
         iddienstovern: dienstenTable.iddienstovern,
         iddeelnovern: dienstenTable.iddeelnovern,
+        iddeelnemer: dienstenTable.iddeelnemer,
         senderId: dienstenTable.senderId,
         idwaarneemgroep: dienstenTable.idwaarneemgroep,
         status: dienstenTable.status,
+        van: dienstenTable.van,
+        tot: dienstenTable.tot,
+        overnameSectie: dienstenTable.overnameSectie,
       })
       .from(dienstenTable)
       .where(lookupCondition)
@@ -88,52 +197,118 @@ export default async function handler(
       return res.status(404).json({ error: 'Proposal not found' });
     }
 
-    const { iddeelnovern, senderId, idwaarneemgroep } = proposal[0];
+    const {
+      id: proposalId,
+      iddienstovern: proposalDienstOvernId,
+      iddeelnovern: proposalDeelnOvern,
+      senderId,
+      idwaarneemgroep: proposalWaarneemgroep,
+      van: proposalVan,
+      tot: proposalTot,
+      iddeelnemer: proposalDeelnemer,
+    } = proposal[0];
+    const proposalSectie = toOvernameSectie(proposal[0].overnameSectie);
+
+    const buildMutateCondition = () => {
+      if (proposalId != null && proposalId > 0) {
+        return eq(dienstenTable.id, proposalId);
+      }
+      return buildLegacyOvernameRowConditions({
+        iddienstovern: proposalDienstOvernId ?? 0,
+        idwaarneemgroep: proposalWaarneemgroep ?? 0,
+        van: Number(proposalVan ?? 0),
+        tot: Number(proposalTot ?? 0),
+        iddeelnemer: proposalDeelnemer,
+        iddeelnovern: proposalDeelnOvern,
+        // Rows without an id are mutated by their composite key. Pin the lane of the row we
+        // found, or accepting an achterwacht overname would also accept a dienst proposal with
+        // the same van/tot and doctors.
+        overnameSectie: proposalSectie,
+      });
+    };
 
     // Check if the current user is secretaris of this waarneemgroep
-    const isSecretaris = idwaarneemgroep != null && (await db
+    const isSecretaris = proposalWaarneemgroep != null && (await db
       .select({ idgroep: waarneemgroepdeelnemers.idgroep })
       .from(waarneemgroepdeelnemers)
       .where(
         and(
           eq(waarneemgroepdeelnemers.iddeelnemer, doctorId),
-          eq(waarneemgroepdeelnemers.idwaarneemgroep, idwaarneemgroep)
+          eq(waarneemgroepdeelnemers.idwaarneemgroep, proposalWaarneemgroep)
         )
       )
       .limit(1)
     ).some((r) => r.idgroep === GROEP_SECRETARIS);
 
+    const canManageViaRole = isSecretaris || isGlobalAdmin;
+
+    const proposalStatus = proposal[0].status;
+
     if (action === 'delete') {
-      // Sender or secretaris can delete/cancel a proposal
-      if (senderId !== doctorId && !isSecretaris) {
+      // Sender, secretaris, or administrator can delete/cancel a proposal
+      if (senderId !== doctorId && !canManageViaRole) {
         return res.status(403).json({ error: 'Not authorized' });
       }
-      await db.delete(dienstenTable).where(lookupCondition);
-      logger.info({ msg: 'overname-respond:deleted', iddienstovern, doctorId, isSecretaris });
+      await db.delete(dienstenTable).where(and(buildMutateCondition(), deleteStateCondition));
+      logger.info({
+        msg: 'overname-respond:deleted',
+        proposalId,
+        iddienstovern: proposalDienstOvernId,
+        doctorId,
+        isSecretaris,
+        isGlobalAdmin,
+      });
     } else {
-      // Target doctor or secretaris can accept/decline
-      if (iddeelnovern !== doctorId && !isSecretaris) {
+      // Target doctor, secretaris, or administrator can accept/decline
+      if (proposalDeelnOvern !== doctorId && !canManageViaRole) {
         return res.status(403).json({ error: 'Not authorized' });
       }
-      // Only pending proposals can be accepted/declined (already enforced by lookupCondition)
-      const pendingCondition = and(
-        eq(dienstenTable.iddienstovern, iddienstovern),
-        eq(dienstenTable.type, 4),
-        eq(dienstenTable.status, 'pending')
-      );
+      if (proposalDienstOvernId == null && (proposalId == null || proposalId <= 0)) {
+        logger.error({
+          msg: 'overname-respond:missing-iddienstovern',
+          proposalId,
+          doctorId,
+        });
+        return res.status(500).json({ error: 'Invalid proposal data' });
+      }
+      const pendingCondition = and(buildMutateCondition(), pendingStateCondition);
       if (action === 'accept') {
         await db
           .update(dienstenTable)
           .set({ type: 6, status: 'accepted' })
           .where(pendingCondition);
-        logger.info({ msg: 'overname-respond:accepted', iddienstovern, doctorId, isSecretaris });
+        logger.info({
+          msg: 'overname-respond:accepted',
+          iddienstovern: iddienstovernNum,
+          doctorId,
+          isSecretaris,
+          isGlobalAdmin,
+        });
       } else {
         await db
           .update(dienstenTable)
           .set({ status: 'declined' })
           .where(pendingCondition);
-        logger.info({ msg: 'overname-respond:declined', iddienstovern, doctorId, isSecretaris });
+        logger.info({
+          msg: 'overname-respond:declined',
+          iddienstovern: iddienstovernNum,
+          doctorId,
+          isSecretaris,
+          isGlobalAdmin,
+        });
       }
+    }
+
+    if (
+      shouldRefreshAfterOvernameRespond({
+        action,
+        status: proposalStatus,
+        overnameSectie: proposalSectie,
+        van: Number(proposalVan ?? 0),
+        tot: Number(proposalTot ?? 0),
+      })
+    ) {
+      scheduleTelRecordRefresh();
     }
 
     return res.status(200).json({ success: true });

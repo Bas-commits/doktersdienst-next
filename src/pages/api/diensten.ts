@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { and, eq, gte, lte, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema } from '@/db';
+import { toOvernameSectie } from '@/lib/overname-sectie';
 import { getAuthenticatedUser, getUserWaarneemgroepIds } from '@/lib/api-auth';
 
 const { diensten: dienstenTable, deelnemers, dienstaantekening } = schema;
@@ -21,6 +22,7 @@ type Data =
         id: number | null;
         voornaam: string | null;
         achternaam: string | null;
+        initialen: string | null;
         color: string | null;
       } | null;
     }> }
@@ -119,16 +121,21 @@ export default async function handler(
         idaantekening: dienstenTable.idaantekening,
         aantekeningTekst: dienstaantekening.tekst,
         status: dienstenTable.status,
+        overnameSectie: dienstenTable.overnameSectie,
         iddienstovern: dienstenTable.iddienstovern,
         iddeelnovern: dienstenTable.iddeelnovern,
         senderId: dienstenTable.senderId,
         deelnemerId: deelnemers.id,
         voornaam: deelnemers.voornaam,
         achternaam: deelnemers.achternaam,
+        voorletterstussenvoegsel: deelnemers.voorletterstussenvoegsel,
+        initialen: deelnemers.initialen,
         color: deelnemers.color,
         targetDeelnemerId: targetDeelnemer.id,
         targetVoornaam: targetDeelnemer.voornaam,
         targetAchternaam: targetDeelnemer.achternaam,
+        targetVoorletterstussenvoegsel: targetDeelnemer.voorletterstussenvoegsel,
+        targetInitialen: targetDeelnemer.initialen,
         targetColor: targetDeelnemer.color,
       })
       .from(dienstenTable)
@@ -146,16 +153,22 @@ export default async function handler(
       idwaarneemgroep: r.idwaarneemgroep,
       idaantekening: r.idaantekening,
       aantekeningTekst: r.aantekeningTekst,
-      status: r.status,
+      status:
+        r.status != null && String(r.status).trim() !== ''
+          ? String(r.status).trim().toLowerCase()
+          : null,
       iddienstovern: r.iddienstovern,
       iddeelnovern: r.iddeelnovern,
       senderId: r.senderId,
+      overnameSectie: toOvernameSectie(r.overnameSectie),
       diensten_deelnemers:
         r.deelnemerId != null
           ? {
               id: r.deelnemerId,
               voornaam: r.voornaam,
               achternaam: r.achternaam,
+              voorletterstussenvoegsel: r.voorletterstussenvoegsel,
+              initialen: r.initialen,
               color: r.color,
             }
           : null,
@@ -165,6 +178,8 @@ export default async function handler(
               id: r.targetDeelnemerId,
               voornaam: r.targetVoornaam,
               achternaam: r.targetAchternaam,
+              voorletterstussenvoegsel: r.targetVoorletterstussenvoegsel,
+              initialen: r.targetInitialen,
               color: r.targetColor,
             }
           : null,

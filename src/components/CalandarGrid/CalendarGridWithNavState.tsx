@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { CalendarGrid, type CalendarGridRow } from './CalendarGrid';
 import type { ShiftBlockView } from '@/types/diensten';
 import type { ChipDefinition, VoorkeurItem } from '@/types/voorkeuren';
@@ -26,6 +26,12 @@ export interface CalendarGridWithNavStateProps {
   hideTopStrip?: boolean;
   /** When true, the bottom (Extra Dokter) strip is not rendered. */
   hideBottomStrip?: boolean;
+  /** See CalendarGridProps.shiftStripHeight / shiftMiddleHeight / showEmptyStripBorders. */
+  shiftStripHeight?: number;
+  shiftMiddleHeight?: number;
+  showEmptyStripBorders?: boolean;
+  /** See CalendarGridProps.onEndedShiftClick. */
+  onEndedShiftClick?: (block: ShiftBlockView) => void;
   /** Optional: when set, shift blocks are clickable (e.g. for voorkeuren). */
   onShiftClick?: (block: ShiftBlockView, position: { top: number; left: number }) => void;
   /** Optional: shiftKey -> chip code for pending preference inserts. */
@@ -38,12 +44,18 @@ export interface CalendarGridWithNavStateProps {
   showPreferences?: boolean;
   /** When set, renders voorkeur blocks per user below the shift lane (secretaris view). */
   voorkeuren?: VoorkeurItem[];
+  /** When set, matching user voorkeur row bands get a highlight background (secretaris roster view). */
+  highlightedVoorkeurUserIds?: ReadonlySet<number> | null;
   /** When true, main shift blocks use icon-only filled preference styling (see CalendarGrid). */
   hidePreferenceFillInitialsOnShiftBlocks?: boolean;
   /** Click-and-drag preference assign on middle strips (see CalendarGrid). */
   enablePreferencePaintAssign?: boolean;
   onPreferencePaintSessionStart?: () => void;
   onPreferencePaintSessionEnd?: () => void;
+  /** When true, shift tooltips omit doctor names and show only shift labels. */
+  hideOwnerNameInTooltip?: boolean;
+  /** When true, aantekening text is hidden for unassigned blocks (type=1 slots). */
+  hideUnassignedAantekening?: boolean;
   /**
    * When set, each stripe (top/middle/bottom) is individually clickable for the planning view.
    */
@@ -57,6 +69,10 @@ export interface CalendarGridWithNavStateProps {
   onShiftDelete?: (block: ShiftBlockView) => void;
   /** Optional: public holidays / vakanties (e.g. from useCalendarVakanties). */
   vakanties?: CalendarVakantieItem[];
+  /** When true, shift blocks whose end moment has passed render dimmed and inert. */
+  disableEndedShiftBlocks?: boolean;
+  /** Extra knoppen naast de maandnavigatie. Zie CalendarGridProps.monthNavAside. */
+  monthNavAside?: ReactNode;
 }
 
 /**
@@ -74,20 +90,29 @@ export function CalendarGridWithNavState({
   onViewMonthChange,
   hideTopStrip,
   hideBottomStrip,
+  shiftStripHeight,
+  shiftMiddleHeight,
+  showEmptyStripBorders,
+  onEndedShiftClick,
   onShiftClick,
   pendingInsert,
   pendingDelete,
   getChipByCode,
   showPreferences,
   voorkeuren,
+  highlightedVoorkeurUserIds,
   hidePreferenceFillInitialsOnShiftBlocks,
   enablePreferencePaintAssign,
   onPreferencePaintSessionStart,
   onPreferencePaintSessionEnd,
+  hideOwnerNameInTooltip,
+  hideUnassignedAantekening,
   onSectionShiftClick,
   plannerDoctorPreferenceMap,
   onShiftDelete,
   vakanties,
+  disableEndedShiftBlocks,
+  monthNavAside,
 }: CalendarGridWithNavStateProps) {
   const [internalViewMonth, setInternalViewMonth] = useState(initialViewMonth);
   const [internalViewYear, setInternalViewYear] = useState(initialViewYear);
@@ -118,20 +143,29 @@ export function CalendarGridWithNavState({
       onViewMonthChange={handleViewMonthChange}
       hideTopStrip={hideTopStrip}
       hideBottomStrip={hideBottomStrip}
+      shiftStripHeight={shiftStripHeight}
+      shiftMiddleHeight={shiftMiddleHeight}
+      showEmptyStripBorders={showEmptyStripBorders}
+      onEndedShiftClick={onEndedShiftClick}
       onShiftClick={onShiftClick}
       pendingInsert={pendingInsert}
       pendingDelete={pendingDelete}
       getChipByCode={getChipByCode}
       showPreferences={showPreferences}
       voorkeuren={voorkeuren}
+      highlightedVoorkeurUserIds={highlightedVoorkeurUserIds}
       hidePreferenceFillInitialsOnShiftBlocks={hidePreferenceFillInitialsOnShiftBlocks}
       enablePreferencePaintAssign={enablePreferencePaintAssign}
       onPreferencePaintSessionStart={onPreferencePaintSessionStart}
       onPreferencePaintSessionEnd={onPreferencePaintSessionEnd}
+      hideOwnerNameInTooltip={hideOwnerNameInTooltip}
+      hideUnassignedAantekening={hideUnassignedAantekening}
       onSectionShiftClick={onSectionShiftClick}
       plannerDoctorPreferenceMap={plannerDoctorPreferenceMap}
       onShiftDelete={onShiftDelete}
       vakanties={vakanties}
+      disableEndedShiftBlocks={disableEndedShiftBlocks}
+      monthNavAside={monthNavAside}
     />
   );
 }

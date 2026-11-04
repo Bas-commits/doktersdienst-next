@@ -1,6 +1,7 @@
 'use client';
 
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { FaFilter } from 'react-icons/fa';
@@ -16,12 +17,30 @@ import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgro
 import { useDienstenSubscription, clearCacheByPrefix } from '@/hooks/useDienstenSubscription';
 import { useVoorkeurenSubscription } from '@/hooks/useVoorkeurenSubscription';
 import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
+import {
+  PANEEL_DREMPEL_PX,
+  useBeschikbareBreedte,
+} from '@/hooks/praktijkplanner/useBeschikbareBreedte';
+import { PlannerSplitsToggle } from '@/components/praktijkplanner/PlannerSplitsToggle';
+import { useRoosterMaand } from '@/hooks/useRoosterMaand';
+import { nevenschermTabbladUrl, openNevenschermTabblad } from '@/lib/nevenscherm-tabblad';
+import { UrentellingPanel } from '@/components/UrentellingPanel';
 import type { ShiftBlockView, DoctorInfo } from '@/types/diensten';
 import { shiftKeyFromBlock } from '@/types/voorkeuren';
+import type { VoorkeurItem } from '@/types/voorkeuren';
 import { shiftBlockToastDescription } from '@/utils/shiftToastContext';
 import type { CalendarGridRow } from '@/components/CalandarGrid/CalendarGrid';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { getContrastTextColor } from '@/utils/contrastTextColor';
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
+
+/**
+ * Breedte van de dokters-zijbalk (lg:w-56 = 14rem), afgetrokken van de gemeten rijbreedte om te
+ * bepalen of rooster en Urentelling naast elkaar passen. Zie useBeschikbareBreedte voor waarom
+ * de meting zelf niet om het paneel heen kan meten.
+ */
+const SIDEBAR_BREEDTE_PX = 224;
 
 function vanGteForMonth(viewMonth: number, viewYear: number): number {
   return Math.floor(new Date(viewYear, viewMonth, 1, 0, 0, 0, 0).getTime() / 1000) - TWO_WEEKS_SECONDS;
@@ -34,6 +53,7 @@ function totLteForMonth(viewMonth: number, viewYear: number): number {
 interface Doctor {
   id: number;
   voornaam: string | null;
+  voorletterstussenvoegsel: string | null;
   achternaam: string | null;
   color: string | null;
   initials: string;
@@ -41,12 +61,31 @@ interface Doctor {
   waarneemgroepIds: number[];
 }
 
-function toInitials(voornaam: string | null, achternaam: string | null): string {
-  return ((voornaam?.[0] ?? '') + (achternaam?.[0] ?? '')).toUpperCase();
+/** Same format as lijst deelnemers: achternaam, voornaam, voorletterstussenvoegsel */
+function toFullName(
+  achternaam: string | null,
+  voornaam: string | null,
+  voorletterstussenvoegsel: string | null,
+): string {
+  return [achternaam, voornaam, voorletterstussenvoegsel].filter(Boolean).join(', ') || 'Onbekend';
 }
 
-function toFullName(voornaam: string | null, achternaam: string | null): string {
-  return [voornaam, achternaam].filter(Boolean).join(' ') || 'Onbekend';
+/** Resolve sidebar doctor id + preference iddeelnemer ids (handles duplicate deelnemer records). */
+function buildHighlightedVoorkeurUserIds(
+  selectedDoctor: Doctor | null,
+  voorkeuren: VoorkeurItem[] | null | undefined,
+): ReadonlySet<number> | null {
+  if (!selectedDoctor) return null;
+  const ids = new Set<number>([selectedDoctor.id]);
+  for (const vk of voorkeuren ?? []) {
+    if (vk.iddeelnemer == null) continue;
+    const d = vk.deelnemer;
+    if (!d) continue;
+    if (d.voornaam === selectedDoctor.voornaam && d.achternaam === selectedDoctor.achternaam) {
+      ids.add(vk.iddeelnemer);
+    }
+  }
+  return ids;
 }
 
 function InfoPopover() {
@@ -83,7 +122,7 @@ function InfoPopover() {
           <h2 className="mb-2 text-base font-semibold">Procedure:</h2>
           <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
             <li>Klik op een van de fiches, links in het scherm</li>
-            <li>De fiche kleeft aan de cursor.</li>
+            <li>Het fiche kleeft aan de cursor.</li>
             <li>Klik op de shifts/diensten waarvoor u een voorkeur wilt aangeven.</li>
             <li>Herhaal dit voor andere voorkeuren voor shifts/diensten.</li>
           </ul>
@@ -180,6 +219,7 @@ function FilterPopover({
 }
 
 const GROEP_SECRETARIS = 2;
+const GROEP_ADMINISTRATOR = 5;
 
 /** Section label for toast messages. */
 const SECTION_LABEL: Record<string, string> = {
@@ -286,12 +326,75 @@ function assignInFlightKey(shiftKey: string, section: StripeSection): string {
 }
 
 export default function RoosterMakenSecretarisPage() {
+  const router = useRouter();
   const { activeWaarneemgroepId, waarneemgroepen, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
 
   const now = useMemo(() => new Date(), []);
-  const [viewMonth, setViewMonth] = useState(now.getMonth());
-  const [viewYear, setViewYear] = useState(now.getFullYear());
+
+  // De rij met zijbalk, rooster en Urentelling-paneel. De breedte daarvan hangt niet af van wat
+  // erin komt te staan, dus de meting kan zichzelf niet achterna lopen (zie activiteiten.tsx).
+  const roosterRij = useRef<HTMLDivElement>(null);
+  const beschikbareBreedte = useBeschikbareBreedte(roosterRij);
+  // Kaart dDd: Rooster maken twee schermen naast elkaar, zoals in dPp.
+  // https://trello.com/c/8lHwuHjv/
+  const [toontUrentelling, setToontUrentelling] = useState(false);
+  const magSplitsen = beschikbareBreedte - SIDEBAR_BREEDTE_PX >= PANEEL_DREMPEL_PX;
+  const [gesplitstGewenst, setGesplitstGewenst] = useState(true);
+  const naastElkaar = magSplitsen && gesplitstGewenst;
+  /*
+    Past de Urentelling niet naast het rooster (smal scherm, of de splitsknop staat uit), dan
+    komt hij in de plaats van het rooster - net als het nevenscherm bij de Activiteiten planner.
+    Zo kun je op een klein scherm, of gewoon zonder duo-scherm te willen, nog steeds snel tussen
+    rooster en Urentelling wisselen in plaats van dat de knop dan niets meer doet.
+  */
+  /*
+    Op een te smal scherm opent de splitsknop de Urentelling in een eigen tabblad, en gaat dit
+    tabblad eenmalig terug naar het rooster; daarna kan de Urentelling hier gewoon weer aan. Het
+    losse tabblad toont alleen de Urentelling en volgt de maand van het rooster via
+    useRoosterMaand. Kaart: https://trello.com/c/FHVfCvMC
+
+    Uit router.query en niet uit window.location: deze pagina wordt op de server voorgerenderd,
+    en daar is geen adres. Tot de router klaar is staat heel even de gewone pagina.
+  */
+  const losTabblad = router.isReady && router.query.los === '1';
+  const toontKalender = !losTabblad && (!toontUrentelling || naastElkaar);
+  const toontUrentellingPaneel = losTabblad || toontUrentelling;
+
+  const panelGroupId = useMemo(() => {
+    if (!activeWaarneemgroepId) return null;
+    const parsed = Number(activeWaarneemgroepId);
+    return Number.isNaN(parsed) ? null : parsed;
+  }, [activeWaarneemgroepId]);
+
+  const {
+    month: viewMonth,
+    year: viewYear,
+    setMaand,
+  } = useRoosterMaand(panelGroupId, { month: now.getMonth(), year: now.getFullYear() });
   const calendarVakanties = useCalendarVakanties(viewYear);
+  const losMaand = router.query.maand;
+  const losJaar = router.query.jaar;
+  useEffect(() => {
+    if (!losTabblad) return;
+    const month = Number(losMaand);
+    const year = Number(losJaar);
+    if (Number.isInteger(month) && month >= 0 && month <= 11 && Number.isInteger(year)) {
+      setMaand(month, year);
+    }
+  }, [losTabblad, losMaand, losJaar, setMaand]);
+
+  const panelGroupName = useMemo(() => {
+    if (panelGroupId == null) return 'waarneemgroep';
+    const wg = (waarneemgroepen ?? []).find((g) => g.ID === panelGroupId);
+    return (wg?.naam ?? 'waarneemgroep').replace(/[^\w\-]+/g, '-');
+  }, [panelGroupId, waarneemgroepen]);
+
+  const openDeelnemerGegevens = useCallback(
+    (deelnemerId: number) => {
+      void router.push(`/mijn-gegevens?deelnemerId=${deelnemerId}`);
+    },
+    [router]
+  );
 
   // All doctors fetched from API
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
@@ -312,14 +415,21 @@ export default function RoosterMakenSecretarisPage() {
   /** When null, effective selection is "only header-selected". When set, user has toggled checkboxes. */
   const [selectedIds, setSelectedIds] = useState<Set<number> | null>(null);
 
-  /** Only groups where the current user is a secretaris. Used to filter the popover. */
-  const secretarisWaarneemgroepen = useMemo(
-    () => (waarneemgroepen ?? []).filter((wg) => wg.idgroep === GROEP_SECRETARIS),
+  const isAdmin = useMemo(
+    () => (waarneemgroepen ?? []).some((wg) => wg.idgroep === GROEP_ADMINISTRATOR),
     [waarneemgroepen]
   );
 
+  /** Groups shown in the calendar filter popover (all groups for admin, secretaris-only otherwise). */
+  const filterWaarneemgroepen = useMemo(() => {
+    const all = waarneemgroepen ?? [];
+    if (isAdmin) return all;
+    return all.filter((wg) => wg.idgroep === GROEP_SECRETARIS);
+  }, [isAdmin, waarneemgroepen]);
+
   /** True when the active group exists but the user is not a secretaris for it. */
   const isActiveGroupForbidden = useMemo(() => {
+    if (isAdmin) return false;
     if (!activeWaarneemgroepId) return false;
     const n = Number(activeWaarneemgroepId);
     if (Number.isNaN(n)) return false;
@@ -327,7 +437,7 @@ export default function RoosterMakenSecretarisPage() {
     // Only show the banner once the groups have loaded (otherwise we'd flash it on every mount)
     if (!activeWg && waarneemgroepenLoading) return false;
     return activeWg ? activeWg.idgroep !== GROEP_SECRETARIS : false;
-  }, [activeWaarneemgroepId, waarneemgroepen, waarneemgroepenLoading]);
+  }, [activeWaarneemgroepId, isAdmin, waarneemgroepen, waarneemgroepenLoading]);
 
   const waarneemgroepIds = useMemo(() => {
     if (!waarneemgroepen?.length) return [];
@@ -342,6 +452,17 @@ export default function RoosterMakenSecretarisPage() {
   const vanGte = useMemo(() => vanGteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
   const totLte = useMemo(() => totLteForMonth(viewMonth, viewYear), [viewMonth, viewYear]);
 
+  const idsToShow = useMemo(
+    () => (selectedIds !== null ? selectedIds : defaultSelectedIds(activeWaarneemgroepId, waarneemgroepIds)),
+    [selectedIds, activeWaarneemgroepId, waarneemgroepIds]
+  );
+
+  /** Fetch diensten only for visible groups (avoids huge admin queries; refetches when filter changes). */
+  const dienstenWaarneemgroepIds = useMemo(
+    () => Array.from(idsToShow).sort((a, b) => a - b),
+    [idsToShow]
+  );
+
   // Only fetch assignment types — exclude preference types (2, 3, 9, 10, 5001)
   // so vakantie preferences never leak into the shift block stripes.
   const ASSIGNMENT_TYPES = useMemo(() => [0, 1, 4, 5, 6, 11], []);
@@ -349,7 +470,7 @@ export default function RoosterMakenSecretarisPage() {
   const { data: dienstenResponse, loading: dienstenLoading, error: dienstenError } = useDienstenSubscription(
     vanGte,
     totLte,
-    waarneemgroepIds,
+    dienstenWaarneemgroepIds,
     ASSIGNMENT_TYPES,
     undefined,
     refreshKey
@@ -359,11 +480,6 @@ export default function RoosterMakenSecretarisPage() {
     const blocks = dienstenToShiftBlocks(dienstenResponse ?? null);
     return groupShiftBlocksByWaarneemgroep(blocks);
   }, [dienstenResponse]);
-
-  const idsToShow = useMemo(
-    () => (selectedIds !== null ? selectedIds : defaultSelectedIds(activeWaarneemgroepId, waarneemgroepIds)),
-    [selectedIds, activeWaarneemgroepId, waarneemgroepIds]
-  );
 
   const toggleWaarneemgroep = useCallback(
     (wgId: number, checked: boolean) => {
@@ -398,6 +514,11 @@ export default function RoosterMakenSecretarisPage() {
   const selectedWaarneemgroepIds = useMemo(() => Array.from(idsToShow), [idsToShow]);
   const { data: voorkeuren } = useVoorkeurenSubscription(vanGte, totLte, selectedWaarneemgroepIds);
 
+  const highlightedVoorkeurUserIds = useMemo(
+    () => buildHighlightedVoorkeurUserIds(selectedDoctor, voorkeuren),
+    [selectedDoctor, voorkeuren]
+  );
+
   // Fetch doctors (full DeelnemerWithGroepen) once on mount / when groups change
   useEffect(() => {
     if (!waarneemgroepIds.length) return;
@@ -408,7 +529,9 @@ export default function RoosterMakenSecretarisPage() {
         deelnemers?: Array<{
           id: number;
           voornaam: string | null;
+          voorletterstussenvoegsel: string | null;
           achternaam: string | null;
+          initialen: string | null;
           color: string | null;
           waarneemgroepen: { id: number; naam: string | null; aangemeld: boolean }[];
         }>
@@ -418,10 +541,11 @@ export default function RoosterMakenSecretarisPage() {
             data.deelnemers.map((d) => ({
               id: d.id,
               voornaam: d.voornaam,
+              voorletterstussenvoegsel: d.voorletterstussenvoegsel,
               achternaam: d.achternaam,
               color: d.color,
-              initials: toInitials(d.voornaam, d.achternaam),
-              fullName: toFullName(d.voornaam, d.achternaam),
+              initials: deelnemerChipInitials(d),
+              fullName: toFullName(d.achternaam, d.voornaam, d.voorletterstussenvoegsel),
               waarneemgroepIds: d.waarneemgroepen
                 .filter((wg) => wg.aangemeld)
                 .map((wg) => wg.id),
@@ -605,8 +729,46 @@ export default function RoosterMakenSecretarisPage() {
     [selectedDoctor, deleteMode, callAssign]
   );
 
-  const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
+  const loading = waarneemgroepenLoading || (dienstenWaarneemgroepIds.length > 0 && dienstenLoading);
   const error = waarneemgroepenError ?? dienstenError;
+
+  // Dezelfde knoppen staan naast de maandnavigatie als het rooster te zien is, en boven het
+  // paneel als de Urentelling het rooster heeft vervangen - anders is de weg terug alleen te
+  // vinden door het scherm breder te maken.
+  const urentellingBediening = (
+    <span className="flex items-center gap-2">
+      <button
+        type="button"
+        aria-pressed={toontUrentelling}
+        aria-label={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling'}
+        title={toontUrentelling ? 'Verberg Urentelling' : 'Toon Urentelling'}
+        onClick={() => setToontUrentelling((prev) => !prev)}
+        className={[
+          'inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm font-normal transition',
+          toontUrentelling
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:bg-muted',
+        ].join(' ')}
+      >
+        Urentelling
+      </button>
+      {toontUrentelling ? (
+        <PlannerSplitsToggle
+          aan={gesplitstGewenst}
+          teSmal={!magSplitsen}
+          onChange={setGesplitstGewenst}
+          onNieuwTabblad={() => {
+            openNevenschermTabblad(
+              nevenschermTabbladUrl(router.pathname, { maand: viewMonth, jaar: viewYear }),
+              'doktersdienst-urentelling'
+            );
+            setToontUrentelling(false);
+          }}
+          hoofdscherm="het rooster"
+        />
+      ) : null}
+    </span>
+  );
 
   return (
     <>
@@ -651,7 +813,7 @@ export default function RoosterMakenSecretarisPage() {
             padding: '4px 10px',
             borderRadius: 6,
             backgroundColor: selectedDoctor.color ?? '#6b7280',
-            color: '#fff',
+            color: getContrastTextColor(selectedDoctor.color ?? '#6b7280'),
             fontWeight: 'bold',
             fontSize: 13,
             whiteSpace: 'nowrap',
@@ -662,16 +824,17 @@ export default function RoosterMakenSecretarisPage() {
         </div>
       )}
 
-      <div className="mx-auto max-w-[2000px] space-y-6 px-4 py-8">
-        <Card className="overflow-visible">
+      <div className={`mx-auto space-y-6 px-4 py-8 ${toontUrentellingPaneel ? '' : 'max-w-[2000px]'}`}>
+        {/* Het losse Urentelling-tabblad toont alleen de Urentelling; kop en dokters staan in het rooster-tabblad. */}
+        <Card className={`overflow-visible ${losTabblad ? 'hidden' : ''}`}>
           <CardHeader className="overflow-visible">
             <CardTitle>
               <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
                 <FilterPopover
-                  waarneemgroepen={secretarisWaarneemgroepen}
+                  waarneemgroepen={filterWaarneemgroepen}
                   loading={waarneemgroepenLoading}
                   idsToShow={idsToShow}
-                  totalCount={secretarisWaarneemgroepen.length}
+                  totalCount={filterWaarneemgroepen.length}
                   onToggle={toggleWaarneemgroep}
                 />
                 Rooster maken <InfoPopover />
@@ -687,9 +850,9 @@ export default function RoosterMakenSecretarisPage() {
           )}
         </Card>
 
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div ref={roosterRij} className="flex flex-col gap-6 lg:flex-row lg:items-start">
           {/* Doctor sidebar */}
-          <div ref={sidebarRef} className="sticky top-2 w-full shrink-0 self-start lg:top-4 lg:h-[calc(100vh-1rem)] lg:w-56 lg:flex lg:flex-col">
+          <div ref={sidebarRef} style={losTabblad ? { display: 'none' } : undefined} className="sticky top-2 w-full shrink-0 self-start lg:top-4 lg:h-[calc(100vh-1rem)] lg:w-56 lg:flex lg:flex-col">
             <Card className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Dokters</CardTitle>
@@ -748,8 +911,11 @@ export default function RoosterMakenSecretarisPage() {
                       style={isSelected ? { outline: `2px solid ${doctor.color ?? '#6b7280'}`, outlineOffset: '1px' } : undefined}
                     >
                       <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[11px] font-bold text-white"
-                        style={{ backgroundColor: doctor.color ?? '#6b7280' }}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[11px] font-bold"
+                        style={{
+                          backgroundColor: doctor.color ?? '#6b7280',
+                          color: getContrastTextColor(doctor.color ?? '#6b7280'),
+                        }}
                       >
                         {doctor.initials}
                       </span>
@@ -815,35 +981,58 @@ export default function RoosterMakenSecretarisPage() {
           </div>
 
           {/* Calendar */}
-          <Card className="min-w-0 flex-1">
-            <CardHeader>
-              
-            </CardHeader>
-            <CardContent>
-              {error && (
-                <p className="mb-4 text-sm text-destructive" role="alert">{error}</p>
-              )}
-              {loading && !dienstenResponse && (
-                <p className="mb-4 text-sm text-muted-foreground">Rooster laden…</p>
-              )}
-              <div ref={calendarRef}>
-                <CalendarGridWithNavState
-                  rows={rows}
-                  initialViewMonth={now.getMonth()}
-                  initialViewYear={now.getFullYear()}
+          {toontKalender ? (
+            <Card className="min-w-0 flex-1">
+              <CardHeader>
+
+              </CardHeader>
+              <CardContent>
+                {error && (
+                  <p className="mb-4 text-sm text-destructive" role="alert">{error}</p>
+                )}
+                {loading && !dienstenResponse && (
+                  <p className="mb-4 text-sm text-muted-foreground">Rooster laden…</p>
+                )}
+                <div ref={calendarRef}>
+                  <CalendarGridWithNavState
+                    rows={rows}
+                    initialViewMonth={now.getMonth()}
+                    initialViewYear={now.getFullYear()}
+                    viewMonth={viewMonth}
+                    viewYear={viewYear}
+                    onViewMonthChange={setMaand}
+                    voorkeuren={voorkeuren ?? undefined}
+                    highlightedVoorkeurUserIds={highlightedVoorkeurUserIds}
+                    onSectionShiftClick={handleSectionShiftClick}
+                    vakanties={calendarVakanties}
+                    monthNavAside={urentellingBediening}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {/* Urentelling, naast het rooster of - op een smal scherm of met de splitsknop uit - in de plaats ervan */}
+          {toontUrentellingPaneel ? (
+            <Card className="min-w-0 flex-1">
+              <CardContent className="pt-6">
+                {/*
+                  Staat het rooster er niet naast, dan zou de schakelknop anders verdwijnen
+                  zodra hij het meest nodig is: terug naar het rooster op een klein scherm.
+                */}
+                {!toontKalender && !losTabblad ? (
+                  <div className="mb-4 flex justify-end">{urentellingBediening}</div>
+                ) : null}
+                <UrentellingPanel
+                  idwaarneemgroep={panelGroupId}
                   viewMonth={viewMonth}
                   viewYear={viewYear}
-                  onViewMonthChange={(month, year) => {
-                    setViewMonth(month);
-                    setViewYear(year);
-                  }}
-                  voorkeuren={voorkeuren ?? undefined}
-                  onSectionShiftClick={handleSectionShiftClick}
-                  vakanties={calendarVakanties}
+                  activeGroupName={panelGroupName}
+                  onOpenDeelnemer={openDeelnemerGegevens}
                 />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </div>
     </>

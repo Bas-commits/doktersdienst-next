@@ -1,7 +1,8 @@
 'use client';
 
 import Head from 'next/head';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,10 +12,28 @@ import { useWaarneemgroep } from '@/contexts/WaarneemgroepContext';
 import { dienstenToShiftBlocks, groupShiftBlocksByWaarneemgroep, withWaarneemgroepNames } from '@/hooks/useDienstenSchedule';
 import { useDienstenSubscription } from '@/hooks/useDienstenSubscription';
 import { useCalendarVakanties } from '@/hooks/useCalendarVakanties';
+import type { OvernameSectie } from '@/lib/overname-sectie';
+import { OVERNAME_IN_VERLEDEN_MESSAGE } from '@/lib/shift-window';
+import { computeOvernameCaps, canCurrentUserProposeOvername, OVERNAME_ACTION_FORBIDDEN_TOAST } from '@/lib/overname-ui-access';
+import { deriveEffectiveRoleTier, GROEP_DEELNEMER } from '@/lib/roles';
 import { OvernameModal } from '@/components/OvernameModal';
 import { OvernameDetailModal } from '@/components/OvernameDetailModal';
+import {
+  overnameVerwijzingSleutel,
+  overnameVerwijzingUitQuery,
+  type OvernameVerwijzing,
+} from '@/lib/overname-recreate';
 import type { OvernameDoctor } from '@/components/OvernameModal';
 import type { ShiftBlockView } from '@/types/diensten';
+import { deelnemerChipInitials } from '@/lib/deelnemer-display';
+import { Download } from 'lucide-react';
+import { naamVoorBestandsnaam } from '@/lib/excel-export';
+import { downloadKalender } from '@/lib/kalender-export';
+
+const MAANDNAMEN = [
+  'januari', 'februari', 'maart', 'april', 'mei', 'juni',
+  'juli', 'augustus', 'september', 'oktober', 'november', 'december',
+];
 
 const TWO_WEEKS_SECONDS = 14 * 24 * 60 * 60;
 
@@ -28,19 +47,57 @@ function totLteForMonth(viewMonth: number, viewYear: number): number {
   return Math.floor(new Date(viewYear, viewMonth + 1, 0, 23, 59, 59, 999).getTime() / 1000) + TWO_WEEKS_SECONDS;
 }
 
-/** Type 0 = standard assigned, 1 = unassigned slot, 4 = overname voorstel, 6 = confirmed overname. */
-const OVERNAME_TYPES = [0, 1, 4, 6];
+/**
+ * Type 0 = dienst, 1 = unassigned slot, 4 = overname voorstel, 6 = confirmed overname,
+ * 5 = achterwacht and 11 = extra dokter (their strips can be taken over too).
+ */
+const OVERNAME_TYPES = [0, 1, 4, 5, 6, 11];
+
+/** Doctor on the lane that is being taken over. */
+function laneDoctor(block: ShiftBlockView, sectie: OvernameSectie | null) {
+  if (sectie === 'top') return block.top;
+  if (sectie === 'bottom') return block.bottom;
+  return block.middle;
+}
+
+function timeFromUnix(unixSeconds: number): string {
+  const d = new Date(unixSeconds * 1000);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function buildOvernameRespondPayload(
+  block: ShiftBlockView,
+  action: 'accept' | 'decline' | 'delete'
+) {
+  const iddienstovern = Number(block.iddienstovern ?? 0);
+  const overnameId = Number(block.id);
+  const iddeelnemer = Number(block.iddeelnemer ?? block.originalDoctor?.id ?? 0);
+  const iddeelnovern = Number(block.iddeelnovern ?? block.middle?.id ?? 0);
+
+  return {
+    action,
+    iddienstovern: Number.isFinite(iddienstovern) ? iddienstovern : 0,
+    ...(Number.isFinite(overnameId) && overnameId > 0 ? { overnameId } : {}),
+    van: block.van,
+    tot: block.tot,
+    ...(block.idwaarneemgroep != null ? { idwaarneemgroep: block.idwaarneemgroep } : {}),
+    ...(Number.isFinite(iddeelnemer) && iddeelnemer > 0 ? { iddeelnemer } : {}),
+    ...(Number.isFinite(iddeelnovern) && iddeelnovern > 0 ? { iddeelnovern } : {}),
+    // Always sent from the web, null included: it pins the lookup to this lane, so answering a
+    // dienst overname cannot hit an achterwacht overname with the same van/tot.
+    sectie: block.overnameSectie ?? null,
+  };
+}
 
 export default function OvernamesPage() {
   const { data: session } = authClient.useSession();
-  const name = session?.user?.name ?? session?.user?.email ?? 'daar';
 
   const now = useMemo(() => new Date(), []);
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const calendarVakanties = useCalendarVakanties(viewYear);
 
-  const { waarneemgroepen, activeWaarneemgroepId, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
+  const { waarneemgroepen, activeWaarneemgroepId, activeWaarneemgroep, loading: waarneemgroepenLoading, error: waarneemgroepenError } = useWaarneemgroep();
   const waarneemgroepIds = useMemo(() => {
     if (!activeWaarneemgroepId) return [];
     const id = Number(activeWaarneemgroepId);
@@ -72,18 +129,105 @@ export default function OvernamesPage() {
   const loading = waarneemgroepenLoading || (waarneemgroepIds.length > 0 && dienstenLoading);
   const error = waarneemgroepenError ?? dienstenError;
 
+  const [downloading, setDownloading] = useState(false);
+
+  /** Zet de overnames van de getoonde maand in een Excel-bestand. */
+  async function handleDownload() {
+    const maand = `${MAANDNAMEN[viewMonth]} ${viewYear}`;
+    const groep = activeWaarneemgroep?.naam ?? 'waarneemgroep';
+    setDownloading(true);
+    try {
+      await downloadKalender({
+        bestandsnaam: `overnames-${naamVoorBestandsnaam(groep)}-${viewYear}-${String(viewMonth + 1).padStart(2, '0')}.xlsx`,
+        bladnaam: 'Overnames',
+        kop: `${groep}, ${maand}`,
+        rijen: rows,
+        metOvername: true,
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   // Propose modal state
   const [selectedShift, setSelectedShift] = useState<ShiftBlockView | null>(null);
+  /** Lane of the proposal being made: null the dienst, 'top' achterwacht, 'bottom' extra dokter. */
+  const [selectedSectie, setSelectedSectie] = useState<OvernameSectie | null>(null);
   const [allDoctors, setAllDoctors] = useState<(OvernameDoctor & { waarneemgroepIds: number[] })[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  /*
+    Het afgewezen voorstel dat weg moet zodra het nieuwe verstuurd is. Dit was alleen het
+    nummer van de dienst; dat is 0 op negen van de eenentwintig overnamerijen, en dan wees het
+    naar niets. Nu de hele verwijzing, dezelfde die respond gebruikt om de rij te vinden.
+  */
+  const [pendingRecreateDelete, setPendingRecreateDelete] = useState<OvernameVerwijzing | null>(null);
 
   // Detail/management modal state (for existing overname blocks)
   const [selectedOvernameBlock, setSelectedOvernameBlock] = useState<ShiftBlockView | null>(null);
   const [detailSubmitting, setDetailSubmitting] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [globalIdgroep, setGlobalIdgroep] = useState<number | null | undefined>(undefined);
 
-  // Re-fetch calendar data when any source (header, this page) signals an overname change
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const abortController = new AbortController();
+    fetch('/api/deelnemers/role', {
+      credentials: 'include',
+      signal: abortController.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Kon rol niet ophalen');
+        }
+        return response.json() as Promise<{ idgroep?: number | null }>;
+      })
+      .then((data) => {
+        setGlobalIdgroep(data.idgroep ?? null);
+      })
+      .catch(() => {
+        if (!abortController.signal.aborted) {
+          setGlobalIdgroep(GROEP_DEELNEMER);
+        }
+      });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [session?.user]);
+
+  const roleTier = useMemo(
+    () =>
+      deriveEffectiveRoleTier({
+        globalIdgroep: globalIdgroep ?? null,
+        selectedWaarneemgroepIdgroep: activeWaarneemgroep?.idgroep ?? null,
+      }),
+    [globalIdgroep, activeWaarneemgroep?.idgroep]
+  );
+
+  const currentDeelnemerId = useMemo(() => {
+    if (session?.user?.id == null || session.user.id === '') return NaN;
+    const n = Number(session.user.id);
+    return Number.isFinite(n) ? n : NaN;
+  }, [session?.user?.id]);
+
+  const detailModalCaps = useMemo(() => {
+    if (!selectedOvernameBlock || !Number.isFinite(currentDeelnemerId)) {
+      // Deny by default — never expose actions when session user cannot be resolved to a numeric
+      // deelnemer id (see Better Auth mapping to `deelnemers`). Previously defaulting "true"
+      // unintentionally unlocked delete/accept for every viewer when id parsing failed.
+      return { canRespondPending: false, canManageProposalLifecycle: false };
+    }
+    return computeOvernameCaps({
+      currentDeelnemerId,
+      globalIdgroep,
+      roleTier,
+      middleId: selectedOvernameBlock.middle?.id,
+      senderId: selectedOvernameBlock.senderId,
+    });
+  }, [selectedOvernameBlock, currentDeelnemerId, globalIdgroep, roleTier]);
+
   useEffect(() => {
     const onUpdate = () => setRefreshKey((k) => k + 1);
     window.addEventListener('overname-updated', onUpdate);
@@ -100,6 +244,7 @@ export default function OvernamesPage() {
           id: number;
           voornaam: string | null;
           achternaam: string | null;
+          initialen: string | null;
           color?: string | null;
           waarneemgroepen: { id: number; naam: string | null; aangemeld: boolean }[];
         }>;
@@ -110,7 +255,7 @@ export default function OvernamesPage() {
               id: d.id,
               voornaam: d.voornaam ?? '',
               achternaam: d.achternaam ?? '',
-              initialen: (d.voornaam?.[0] ?? '').toUpperCase() + (d.achternaam?.[0] ?? '').toUpperCase(),
+              initialen: deelnemerChipInitials(d),
               color: d.color ?? undefined,
               waarneemgroepIds: d.waarneemgroepen
                 .filter((wg) => wg.aangemeld)
@@ -129,35 +274,69 @@ export default function OvernamesPage() {
     return allDoctors.filter((d) => d.waarneemgroepIds.includes(wgId));
   }, [allDoctors, activeWaarneemgroepId]);
 
-  const handleShiftClick = useCallback((block: ShiftBlockView) => {
+  const handleSectionShiftClick = useCallback((block: ShiftBlockView, section: 'top' | 'middle' | 'bottom') => {
     // Overname overlay blocks → open detail/management modal
     if (block.overnameType) {
       setSelectedOvernameBlock(block);
       setDetailError(null);
       return;
     }
-    // Assigned shifts (has a middle doctor) → open propose modal
-    if (!block.middle) return;
+    // Clicked lane with a doctor on it → open propose modal for that lane
+    const sectie: OvernameSectie | null = section === 'middle' ? null : section;
+    const vanArts = laneDoctor(block, sectie);
+    if (!vanArts) return;
     // Block overnames for shifts in the past
     const nowSeconds = Math.floor(Date.now() / 1000);
     if (block.van < nowSeconds) {
-      toast.error('Het is niet mogelijk om een overname aan te maken voor een dienst in het verleden.');
+      toast.error(OVERNAME_IN_VERLEDEN_MESSAGE);
       return;
     }
+    if (
+      !canCurrentUserProposeOvername({
+        currentDeelnemerId,
+        globalIdgroep,
+        roleTier,
+        assignedMiddleId: vanArts.id,
+      })
+    ) {
+      toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+      return;
+    }
+    setPendingRecreateDelete(null);
     setSelectedShift(block);
+    setSelectedSectie(sectie);
     setSubmitError(null);
-  }, []);
+  }, [currentDeelnemerId, globalIdgroep, roleTier]);
 
   const handleModalClose = useCallback(() => {
     setSelectedShift(null);
+    setSelectedSectie(null);
     setSubmitError(null);
+    setPendingRecreateDelete(null);
   }, []);
 
   const handleModalSubmit = useCallback(
     async (data: { iddeelnovern: number; van: number; tot: number; isPartial: boolean }) => {
       if (!selectedShift || !activeWaarneemgroepId) return;
+      if (
+        !canCurrentUserProposeOvername({
+          currentDeelnemerId,
+          globalIdgroep,
+          roleTier,
+          assignedMiddleId: laneDoctor(selectedShift, selectedSectie)?.id,
+        })
+      ) {
+        toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+        return;
+      }
+      // Match mobile: prefer assigned type=0 id, else type=1 slot id, else 0 and let the API
+      // resolve via van/tot/idwaarneemgroep (legacy rows may have NULL ids). For the achterwacht
+      // or extra dokter the type=0 id would point at the wrong lane; the slot id lets the API find
+      // the type 5/11 row itself.
       const resolvedDienstOvernId =
-        (selectedShift.assignedDienstId != null && selectedShift.assignedDienstId > 0)
+        selectedSectie === null &&
+        selectedShift.assignedDienstId != null &&
+        selectedShift.assignedDienstId > 0
           ? selectedShift.assignedDienstId
           : (selectedShift.id > 0 ? selectedShift.id : 0);
 
@@ -165,10 +344,6 @@ export default function OvernamesPage() {
       setSubmitError(null);
 
       try {
-        if (!resolvedDienstOvernId || resolvedDienstOvernId <= 0) {
-          setSubmitError('Kon de originele dienst niet bepalen');
-          return;
-        }
         const res = await fetch('/api/overnames/propose', {
           method: 'POST',
           credentials: 'include',
@@ -179,6 +354,7 @@ export default function OvernamesPage() {
             van: data.van,
             tot: data.tot,
             idwaarneemgroep: Number(activeWaarneemgroepId),
+            ...(selectedSectie ? { sectie: selectedSectie } : {}),
           }),
         });
 
@@ -189,7 +365,25 @@ export default function OvernamesPage() {
           return;
         }
 
+        if (pendingRecreateDelete != null) {
+          const deleteRes = await fetch('/api/overnames/respond', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...pendingRecreateDelete,
+              action: 'delete',
+              deleteStatus: 'declined',
+            }),
+          });
+          if (!deleteRes.ok) {
+            toast.warning('Nieuw voorstel gemaakt, maar het oude voorstel kon niet automatisch worden verwijderd.');
+          }
+        }
+
+        setPendingRecreateDelete(null);
         setSelectedShift(null);
+        setSelectedSectie(null);
         // Notify all listeners (header + this page's calendar) to refresh
         window.dispatchEvent(new Event('overname-updated'));
       } catch {
@@ -198,12 +392,37 @@ export default function OvernamesPage() {
         setSubmitting(false);
       }
     },
-    [selectedShift, activeWaarneemgroepId]
+    [selectedShift, selectedSectie, activeWaarneemgroepId, pendingRecreateDelete, currentDeelnemerId, globalIdgroep, roleTier]
   );
 
   const handleOvernameRespond = useCallback(
     async (action: 'accept' | 'decline' | 'delete') => {
-      if (!selectedOvernameBlock?.iddienstovern) return;
+      if (!selectedOvernameBlock) return;
+
+      if (Number.isFinite(currentDeelnemerId)) {
+        const caps = computeOvernameCaps({
+          currentDeelnemerId,
+          globalIdgroep,
+          roleTier,
+          middleId: selectedOvernameBlock.middle?.id,
+          senderId: selectedOvernameBlock.senderId,
+        });
+        if (action === 'delete' && !caps.canManageProposalLifecycle) {
+          toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+          return;
+        }
+        if (
+          (action === 'accept' || action === 'decline') &&
+          !caps.canRespondPending
+        ) {
+          toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+          return;
+        }
+      } else {
+        toast.warning(OVERNAME_ACTION_FORBIDDEN_TOAST);
+        return;
+      }
+
       setDetailSubmitting(true);
       setDetailError(null);
       try {
@@ -211,7 +430,7 @@ export default function OvernamesPage() {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ iddienstovern: selectedOvernameBlock.iddienstovern, action }),
+          body: JSON.stringify(buildOvernameRespondPayload(selectedOvernameBlock, action)),
         });
         const result = await res.json();
         if (!res.ok) {
@@ -226,45 +445,170 @@ export default function OvernamesPage() {
         setDetailSubmitting(false);
       }
     },
-    [selectedOvernameBlock]
+    [selectedOvernameBlock, currentDeelnemerId, globalIdgroep, roleTier]
   );
 
-  const handleOvernameRecreate = useCallback(async () => {
-    if (!selectedOvernameBlock?.iddienstovern) return;
-    setDetailSubmitting(true);
+  /**
+   * Opent het voorstelscherm opnieuw voor de dienst waar een afgewezen voorstel bij hoort.
+   *
+   * De dienst wordt op drie manieren gezocht, van zeker naar behelpen: op het nummer van de
+   * dienst als de rij dat heeft, anders op overlap in de geladen maand, en anders uit de lijst
+   * openstaande verzoeken. Die laatste zocht op het nummer van de dienst en dus op 0, wat de
+   * eerste de beste oude rij opleverde in plaats van deze; nu op groep, begin en eind, en die
+   * drie samen wijzen een rij aan.
+   */
+  const startOvernameOpnieuw = useCallback(async (
+    verwijzing: OvernameVerwijzing,
+    /*
+      Waar een melding terechtkomt. Vanuit het rooster staat de popup nog open en hoort hij
+      daarin; vanuit de knop bovenin het scherm is er geen popup, en daar ging een melding
+      eerder verloren: het scherm sprong naar deze pagina en er gebeurde zichtbaar niets.
+    */
+    melding: 'popup' | 'toast' = 'popup',
+  ) => {
+    const meld = (tekst: string) => {
+      if (melding === 'toast') toast.error(tekst);
+      else setDetailError(tekst);
+    };
     setDetailError(null);
-    try {
-      // Delete the old declined proposal first
-      const res = await fetch('/api/overnames/respond', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ iddienstovern: selectedOvernameBlock.iddienstovern, action: 'delete' }),
-      });
-      if (!res.ok) {
-        const result = await res.json();
-        setDetailError(result.error || 'Er is een fout opgetreden');
-        return;
+    const allBlocks = rows.flatMap((r) => r.shiftBlocks);
+    const overlapt = (b: ShiftBlockView) =>
+      (b.idwaarneemgroep == null || b.idwaarneemgroep === verwijzing.idwaarneemgroep) &&
+      b.van < verwijzing.tot &&
+      b.tot > verwijzing.van;
+
+    let originalBlock =
+      (verwijzing.iddienstovern > 0
+        ? allBlocks.find(
+            (b) =>
+              !b.overnameType &&
+              (b.assignedDienstId === verwijzing.iddienstovern ||
+                b.id === verwijzing.iddienstovern)
+          )
+        : undefined) ?? allBlocks.find((b) => !b.overnameType && overlapt(b));
+
+    if (!originalBlock) {
+      setDetailSubmitting(true);
+      try {
+        const pendingRes = await fetch('/api/overnames/pending', { credentials: 'include' });
+        const pendingJson = await pendingRes.json();
+        const verzoeken = Array.isArray(pendingJson?.verzoeken) ? pendingJson.verzoeken : [];
+        const fallback = verzoeken.find((v: {
+          status?: string | null;
+          idwaarneemgroep?: number | null;
+          originalVanUnix?: number | null;
+          originalTotUnix?: number | null;
+          overnameVanUnix?: number;
+          overnameTotUnix?: number;
+          vanArts?: { initialen?: string; naam?: string; color?: string };
+        }) =>
+          Number(v.idwaarneemgroep ?? 0) === verwijzing.idwaarneemgroep &&
+          Number(v.overnameVanUnix ?? 0) === verwijzing.van &&
+          Number(v.overnameTotUnix ?? 0) === verwijzing.tot &&
+          (v.status == null || String(v.status).toLowerCase() === 'declined')
+        );
+
+        if (fallback) {
+          // Bij voorkeur de grenzen van de oorspronkelijke dienst. Die ontbreken als de rij
+          // geen dienst aanwijst, en dan zijn de grenzen van het voorstel het enige dat er is;
+          // bij een gedeeltelijke overname is dat smaller dan de dienst zelf.
+          const startUnix =
+            typeof fallback.originalVanUnix === 'number' && fallback.originalVanUnix > 0
+              ? fallback.originalVanUnix
+              : Number(fallback.overnameVanUnix ?? 0);
+          const endUnix =
+            typeof fallback.originalTotUnix === 'number' && fallback.originalTotUnix > 0
+              ? fallback.originalTotUnix
+              : Number(fallback.overnameTotUnix ?? 0);
+          if (startUnix > 0 && endUnix > startUnix) {
+            const startDate = new Date(startUnix * 1000);
+            const fallbackArts = fallback.vanArts
+              ? {
+                  id: verwijzing.iddeelnemer ?? 0,
+                  name: fallback.vanArts.naam ?? 'Onbekend',
+                  shortName: fallback.vanArts.initialen ?? '??',
+                  color: fallback.vanArts.color ?? '#7b2d8e',
+                }
+              : null;
+            originalBlock = {
+              id: verwijzing.iddienstovern,
+              assignedDienstId: verwijzing.iddienstovern,
+              day: startDate.getDate(),
+              month: startDate.getMonth(),
+              year: startDate.getFullYear(),
+              van: startUnix,
+              tot: endUnix,
+              startTime: timeFromUnix(startUnix),
+              endTime: timeFromUnix(endUnix),
+              currentDate: startDate.toISOString().slice(0, 19).replace('T', ' '),
+              nextDate: new Date(endUnix * 1000).toISOString().slice(0, 19).replace('T', ' '),
+              middle: verwijzing.sectie ? null : fallbackArts,
+              top: verwijzing.sectie === 'top' ? fallbackArts : null,
+              bottom: verwijzing.sectie === 'bottom' ? fallbackArts : null,
+              idwaarneemgroep: verwijzing.idwaarneemgroep,
+            };
+          }
+        }
+      } catch {
+        // Best-effort fallback; final error is shown below if no block could be constructed.
+      } finally {
+        setDetailSubmitting(false);
       }
-      // Find the underlying assigned shift block by matching the iddienstovern.
-      // b.id is the type=1 slot id; the assigned dienst id is stored in b.assignedDienstId.
-      const allBlocks = rows.flatMap((r) => r.shiftBlocks);
-      const originalBlock = allBlocks.find(
-        (b) => !b.overnameType && b.assignedDienstId === selectedOvernameBlock.iddienstovern
-      );
-      setSelectedOvernameBlock(null);
-      window.dispatchEvent(new Event('overname-updated'));
-      // Open the propose modal for the original shift
-      if (originalBlock) {
-        setSelectedShift(originalBlock);
-        setSubmitError(null);
-      }
-    } catch {
-      setDetailError('Er is een fout opgetreden');
-    } finally {
-      setDetailSubmitting(false);
     }
-  }, [selectedOvernameBlock, rows]);
+
+    if (!originalBlock) {
+      meld('Kon de oorspronkelijke dienst niet vinden om opnieuw voor te stellen.');
+      return;
+    }
+
+    // Dezelfde grens als bij het aanklikken van een dienst. Een overname voor een dienst die
+    // al geweest is kan daar niet, dus hier ook niet; anders is de knop een sluiproute.
+    if (originalBlock.van < Math.floor(Date.now() / 1000)) {
+      meld(OVERNAME_IN_VERLEDEN_MESSAGE);
+      return;
+    }
+
+    setSelectedOvernameBlock(null);
+    setSelectedShift(originalBlock);
+    setSelectedSectie(verwijzing.sectie ?? null);
+    setSubmitError(null);
+    setPendingRecreateDelete(verwijzing);
+  }, [rows]);
+
+  const handleOvernameRecreate = useCallback(async () => {
+    const block = selectedOvernameBlock;
+    if (!block) return;
+    await startOvernameOpnieuw({
+      iddienstovern: Number(block.iddienstovern ?? 0),
+      ...(Number(block.id) > 0 ? { overnameId: Number(block.id) } : {}),
+      idwaarneemgroep: Number(block.idwaarneemgroep ?? activeWaarneemgroepId ?? 0),
+      van: block.van,
+      tot: block.tot,
+      ...(Number(block.iddeelnemer ?? block.originalDoctor?.id ?? 0) > 0
+        ? { iddeelnemer: Number(block.iddeelnemer ?? block.originalDoctor?.id) }
+        : {}),
+      ...(Number(block.iddeelnovern ?? block.middle?.id ?? 0) > 0
+        ? { iddeelnovern: Number(block.iddeelnovern ?? block.middle?.id) }
+        : {}),
+      ...(block.overnameSectie ? { sectie: block.overnameSectie } : {}),
+    });
+  }, [selectedOvernameBlock, activeWaarneemgroepId, startOvernameOpnieuw]);
+
+  // De knop bovenin het scherm komt hier binnen met de verwijzing in de adresbalk.
+  const router = useRouter();
+  const recreateHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    const verwijzing = overnameVerwijzingUitQuery(router.query);
+    if (!verwijzing) return;
+    // Op de sleutel en niet op het nummer van de dienst: dat is vaak 0 en zou de tweede
+    // opdracht voor een andere dienst als al afgehandeld aanzien.
+    const sleutel = overnameVerwijzingSleutel(verwijzing);
+    if (recreateHandledRef.current === sleutel) return;
+    recreateHandledRef.current = sleutel;
+    void startOvernameOpnieuw(verwijzing, 'toast');
+    // Strip the query param so it doesn't re-trigger on reload
+    router.replace('/overnames', undefined, { shallow: true });
+  }, [router, startOvernameOpnieuw]);
 
   return (
     <>
@@ -281,7 +625,24 @@ export default function OvernamesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            
+            {/*
+              De knop pakt de maand die in de kalender staat. Een eigen periodekeuze zou hier
+              een tweede plek zijn waar de maand gekozen wordt, naast de kalender zelf.
+            */}
+            <button
+              type="button"
+              onClick={() => void handleDownload()}
+              disabled={loading || downloading || rows.length === 0}
+              className="inline-flex h-9 items-center gap-2 rounded border bg-background px-3 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              title={
+                rows.length === 0
+                  ? 'Geen overnames in deze maand'
+                  : 'Download deze maand als Excel-bestand'
+              }
+            >
+              <Download className="size-4" aria-hidden />
+              Download Excel
+            </button>
           </CardContent>
         </Card>
         <Card>
@@ -307,10 +668,13 @@ export default function OvernamesPage() {
                 setViewMonth(month);
                 setViewYear(year);
               }}
-              hideTopStrip
-              hideBottomStrip
               showPreferences={false}
-              onShiftClick={handleShiftClick}
+              onSectionShiftClick={handleSectionShiftClick}
+              // Taller strips so the overname icon fits on an achterwacht or extra dokter, and a
+              // lower middle so a day keeps its height (18+30+18 against the default 12+42+12).
+              shiftStripHeight={18}
+              shiftMiddleHeight={30}
+              showEmptyStripBorders={false}
               vakanties={calendarVakanties}
             />
           </CardContent>
@@ -320,6 +684,7 @@ export default function OvernamesPage() {
       {selectedShift && (
         <OvernameModal
           shift={selectedShift}
+          sectie={selectedSectie}
           doctors={doctors}
           onSubmit={handleModalSubmit}
           onClose={handleModalClose}
@@ -336,6 +701,9 @@ export default function OvernamesPage() {
           onClose={() => { setSelectedOvernameBlock(null); setDetailError(null); }}
           submitting={detailSubmitting}
           error={detailError}
+          canRespondPending={detailModalCaps.canRespondPending}
+          canManageProposalLifecycle={detailModalCaps.canManageProposalLifecycle}
+          waarneemgroepNaam={activeWaarneemgroep?.naam ?? null}
         />
       )}
     </>

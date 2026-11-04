@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { and, eq, gte } from 'drizzle-orm';
+import { and, eq, gte, sql } from 'drizzle-orm';
 import { db, schema } from '@/db';
 import { getAuthenticatedUser, hasGroupManagementAccess } from '@/lib/api-auth';
 
@@ -74,6 +74,21 @@ export default async function handler(
             eq(dienstenTable.iddienstherhalen, iddienstherhalen),
             gte(dienstenTable.van, van),
             eq(dienstenTable.type, 1)
+          )
+        );
+      return res.status(200).json({ success: true, message: 'Shift en toekomstige herhalingen verwijderd.' });
+    }
+    if (deleteFutureRecurrences && iddienstherhalen == null) {
+      const durationSecs = tot - van;
+      await db
+        .delete(dienstenTable)
+        .where(
+          and(
+            eq(dienstenTable.idwaarneemgroep, idwaarneemgroep),
+            eq(dienstenTable.type, 1),
+            gte(dienstenTable.van, van),
+            sql`${dienstenTable.tot} - ${dienstenTable.van} = ${durationSecs}`,
+            sql`(${dienstenTable.van} - ${van}) % ${7 * 24 * 3600} = 0`
           )
         );
       return res.status(200).json({ success: true, message: 'Shift en toekomstige herhalingen verwijderd.' });

@@ -184,7 +184,7 @@ export default function WaarneemgroepGegevensPage() {
 
                 {gegevens.telnronzecentrale && (
                   <div className="flex flex-col gap-1">
-                    <Label>Telnr onze centrale</Label>
+                    <Label>Telefoonnummer centrale</Label>
                     <p className="text-sm text-muted-foreground">{gegevens.telnronzecentrale}</p>
                   </div>
                 )}
@@ -200,7 +200,7 @@ export default function WaarneemgroepGegevensPage() {
                     />
                     <Label htmlFor="smsdienstbegin" className="cursor-pointer text-sm font-normal">SMS begin dienst</Label>
                   </div>
-                  <div className="flex items-center gap-2">
+                  {/* <div className="flex items-center gap-2">
                     <Checkbox
                       id="gebruiktVoicemail"
                       checked={gebruiktVoicemail}
@@ -208,7 +208,7 @@ export default function WaarneemgroepGegevensPage() {
                       disabled={isSubmitting}
                     />
                     <Label htmlFor="gebruiktVoicemail" className="cursor-pointer text-sm font-normal">Gebruikt voicemail</Label>
-                  </div>
+                  </div> */}
                 </div>
 
                 <div className="flex flex-col gap-2">

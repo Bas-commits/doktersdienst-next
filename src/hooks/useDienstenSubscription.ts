@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { cachedGetJson } from '@/lib/cached-fetch';
+import { cachedGetJson, clearCacheByPrefix } from '@/lib/cached-fetch';
 export { clearCacheByPrefix } from '@/lib/cached-fetch';
 import type { DienstenResponse, Dienst } from '@/types/diensten';
+import { toOvernameSectie } from '@/lib/overname-sectie';
 
 export type UseDienstenSubscriptionResult = {
   data: DienstenResponse | null;
@@ -13,20 +14,25 @@ export type UseDienstenSubscriptionResult = {
   refreshKey?: number;
 };
 
+type ApiDienstDeelnemer = {
+  id: number | null;
+  voornaam: string | null;
+  achternaam: string | null;
+  voorletterstussenvoegsel?: string | null;
+  initialen?: string | null;
+  color: string | null;
+};
+
 /** API returns diensten with van/tot as number and diensten_deelnemers; normalize to our type. */
-function toDienstenResponse(diensten: Array<{
+export function toDienstenResponse(diensten: Array<{
   id: number | null;
   iddeelnemer: number | null;
   van: number;
   tot: number;
   type: number | null;
   idwaarneemgroep: number | null;
-  diensten_deelnemers: {
-    id: number | null;
-    voornaam: string | null;
-    achternaam: string | null;
-    color: string | null;
-  } | null;
+  diensten_deelnemers: ApiDienstDeelnemer | null;
+  target_deelnemers?: ApiDienstDeelnemer | null;
 }>): DienstenResponse {
   const list: Dienst[] = diensten.map((d: Record<string, unknown> & (typeof diensten)[number]) => ({
     id: d.id ?? 0,
@@ -40,6 +46,8 @@ function toDienstenResponse(diensten: Array<{
     iddeelnovern: (d as { iddeelnovern?: number }).iddeelnovern ?? undefined,
        senderId: (d as { senderId?: number }).senderId ?? undefined,
     isPartial: (d as { isPartial?: boolean }).isPartial ?? undefined,
+    // Without this an achterwacht overname arrives as a dienst overname and is drawn in the middle.
+    overnameSectie: toOvernameSectie((d as { overnameSectie?: string | null }).overnameSectie),
     idaantekening: (d as { idaantekening?: number | null }).idaantekening ?? undefined,
     aantekeningTekst: (d as { aantekeningTekst?: string | null }).aantekeningTekst ?? undefined,
     diensten_deelnemers: d.diensten_deelnemers
@@ -47,13 +55,22 @@ function toDienstenResponse(diensten: Array<{
           id: d.diensten_deelnemers.id ?? 0,
           voornaam: d.diensten_deelnemers.voornaam ?? '',
           achternaam: d.diensten_deelnemers.achternaam ?? '',
+          voorletterstussenvoegsel: d.diensten_deelnemers.voorletterstussenvoegsel ?? null,
+          initialen: d.diensten_deelnemers.initialen ?? null,
           color: d.diensten_deelnemers.color ?? '',
         }
       : null,
     target_deelnemers: (() => {
-      const td = (d as unknown as { target_deelnemers?: typeof d.diensten_deelnemers }).target_deelnemers;
+      const td = (d as unknown as { target_deelnemers?: ApiDienstDeelnemer | null }).target_deelnemers;
       return td
-        ? { id: td.id ?? 0, voornaam: td.voornaam ?? '', achternaam: td.achternaam ?? '', color: td.color ?? '' }
+        ? {
+            id: td.id ?? 0,
+            voornaam: td.voornaam ?? '',
+            achternaam: td.achternaam ?? '',
+            voorletterstussenvoegsel: td.voorletterstussenvoegsel ?? null,
+            initialen: td.initialen ?? null,
+            color: td.color ?? '',
+          }
         : null;
     })(),
   }));
@@ -77,6 +94,19 @@ export function useDienstenSubscription(
   const [data, setData] = useState<DienstenResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [externalRefresh, setExternalRefresh] = useState(0);
+
+  // Re-fetch when another component signals an overname mutation (e.g. the
+  // header popover accept/decline/delete). Also invalidate the cache so the
+  // next fetch hits the API, not the 2s in-memory cache.
+  useEffect(() => {
+    const onUpdate = () => {
+      clearCacheByPrefix('/api/diensten');
+      setExternalRefresh((k) => k + 1);
+    };
+    window.addEventListener('overname-updated', onUpdate);
+    return () => window.removeEventListener('overname-updated', onUpdate);
+  }, []);
 
   useEffect(() => {
     if (idwaarneemgroepen.length === 0) {
@@ -132,7 +162,7 @@ export function useDienstenSubscription(
     return () => {
       cancelled = true;
     };
-  }, [vanGte, totLte, idwaarneemgroepen.join(','), typeIn?.join(',') ?? '', iddeelnemer ?? '', _refreshKey ?? 0]);
+  }, [vanGte, totLte, idwaarneemgroepen.join(','), typeIn?.join(',') ?? '', iddeelnemer ?? '', _refreshKey ?? 0, externalRefresh]);
 
   return { data, error, loading };
 }
